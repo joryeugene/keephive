@@ -1,0 +1,197 @@
+"""Tests for session command (commands/session.py)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+
+class TestResolveMode:
+    def test_no_args_returns_default(self, hive_env):
+        from keephive.commands.session import _resolve_mode
+
+        mode, prompt = _resolve_mode([])
+        assert mode == "default"
+        assert "keephive context" in prompt.lower()
+
+    def test_builtin_todo_mode(self, hive_env):
+        from keephive.commands.session import _resolve_mode
+
+        mode, prompt = _resolve_mode(["todo"])
+        assert mode == "todo"
+        assert "TODO" in prompt
+
+    def test_builtin_verify_mode(self, hive_env):
+        from keephive.commands.session import _resolve_mode
+
+        mode, prompt = _resolve_mode(["verify"])
+        assert mode == "verify"
+        assert "stale" in prompt.lower()
+
+    def test_builtin_learn_mode(self, hive_env):
+        from keephive.commands.session import _resolve_mode
+
+        mode, prompt = _resolve_mode(["learn"])
+        assert mode == "learn"
+        assert "recall" in prompt.lower()
+
+    def test_builtin_reflect_mode(self, hive_env):
+        from keephive.commands.session import _resolve_mode
+
+        mode, prompt = _resolve_mode(["reflect"])
+        assert mode == "reflect"
+        assert "pattern" in prompt.lower()
+
+    def test_case_insensitive(self, hive_env):
+        from keephive.commands.session import _resolve_mode
+
+        mode, _prompt = _resolve_mode(["TODO"])
+        assert mode == "todo"
+
+    def test_custom_prompt_file(self, hive_env):
+        """Loads prompt from knowledge/prompts/ when mode matches filename."""
+        pd = hive_env / "knowledge" / "prompts"
+        (pd / "code-review.md").write_text("Review the code for security issues.")
+
+        from keephive.commands.session import _resolve_mode
+
+        mode, prompt = _resolve_mode(["code-review"])
+        assert mode == "code-review"
+        assert "security" in prompt.lower()
+
+    def test_custom_prompt_prefix_match(self, hive_env):
+        """Prefix-matches prompt filenames."""
+        pd = hive_env / "knowledge" / "prompts"
+        (pd / "architecture-review.md").write_text("Review the architecture.")
+
+        from keephive.commands.session import _resolve_mode
+
+        mode, prompt = _resolve_mode(["arch"])
+        assert mode == "architecture-review"
+        assert "architecture" in prompt.lower()
+
+    def test_freeform_prompt_fallback(self, hive_env):
+        """Unrecognized args become a freeform prompt."""
+        from keephive.commands.session import _resolve_mode
+
+        mode, prompt = _resolve_mode(["help", "me", "debug", "this"])
+        assert mode == "custom"
+        assert prompt == "help me debug this"
+
+
+class TestBuildSessionPrompt:
+    def test_includes_context_and_prompt(self, hive_env):
+        from keephive.commands.session import _build_session_prompt
+
+        result = _build_session_prompt("todo", "Walk through TODOs", "Memory content here")
+        assert "Memory content here" in result
+        assert "Walk through TODOs" in result
+        assert "todo" in result.lower()
+
+    def test_includes_mode_header(self, hive_env):
+        from keephive.commands.session import _build_session_prompt
+
+        result = _build_session_prompt("verify", "Check facts", "ctx")
+        assert "Session mode: verify" in result
+
+
+class TestCmdSession:
+    def test_exits_if_claude_not_found(self, hive_env, monkeypatch):
+        """Exits with error when claude CLI isn't available."""
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        from keephive.commands.session import cmd_session
+
+        with pytest.raises(SystemExit) as exc_info:
+            cmd_session([])
+        assert exc_info.value.code == 1
+
+    def test_builds_context_from_sessionstart(self, hive_env, monkeypatch):
+        """Verifies session reuses build_context from sessionstart."""
+        captured_args = {}
+
+        def mock_execvpe(file, args, env):
+            captured_args["file"] = file
+            captured_args["args"] = args
+            captured_args["env"] = env
+            raise SystemExit(0)  # Prevent actual exec
+
+        monkeypatch.setattr("os.execvpe", mock_execvpe)
+        monkeypatch.setattr("shutil.which", lambda x: "/usr/local/bin/claude")
+
+        from keephive.commands.session import cmd_session
+
+        with pytest.raises(SystemExit):
+            cmd_session([])
+
+        assert captured_args["file"] == "claude"
+        assert captured_args["args"][0] == "claude"
+        # The prompt should contain context from build_context
+        prompt = captured_args["args"][1]
+        assert "Working Memory" in prompt
+        assert "keephive session context" in prompt
+
+    def test_strips_claudecode_env(self, hive_env, monkeypatch):
+        """CLAUDECODE env var is stripped to avoid blocking nested sessions."""
+        captured_env = {}
+
+        def mock_execvpe(file, args, env):
+            captured_env.update(env)
+            raise SystemExit(0)
+
+        monkeypatch.setenv("CLAUDECODE", "1")
+        monkeypatch.setattr("os.execvpe", mock_execvpe)
+        monkeypatch.setattr("shutil.which", lambda x: "/usr/local/bin/claude")
+
+        from keephive.commands.session import cmd_session
+
+        with pytest.raises(SystemExit):
+            cmd_session([])
+
+        assert "CLAUDECODE" not in captured_env
+
+    def test_mode_passed_to_prompt(self, hive_env, monkeypatch):
+        """Mode-specific prompt is included in the session."""
+        captured_args = {}
+
+        def mock_execvpe(file, args, env):
+            captured_args["args"] = args
+            raise SystemExit(0)
+
+        monkeypatch.setattr("os.execvpe", mock_execvpe)
+        monkeypatch.setattr("shutil.which", lambda x: "/usr/local/bin/claude")
+
+        from keephive.commands.session import cmd_session
+
+        with pytest.raises(SystemExit):
+            cmd_session(["todo"])
+
+        prompt = captured_args["args"][1]
+        assert "TODO" in prompt
+        assert "Session mode: todo" in prompt
+
+
+class TestCliDispatch:
+    def test_session_in_commands(self):
+        from keephive.cli import COMMANDS
+
+        assert "session" in COMMANDS
+        assert "sess" in COMMANDS
+        assert "go" in COMMANDS
+
+    def test_all_point_to_session_module(self):
+        from keephive.cli import COMMANDS
+
+        for alias in ("session", "sess", "go"):
+            module, func = COMMANDS[alias]
+            assert module == "keephive.commands.session"
+            assert func == "cmd_session"
+
+    def test_help_mentions_session(self, hive_env, capsys):
+        from keephive.cli import main
+
+        main(["help"])
+        out = capsys.readouterr().out
+        assert "session" in out.lower()
+        assert "go" in out

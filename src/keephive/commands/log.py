@@ -1,0 +1,74 @@
+"""hive l: view daily log with date navigation."""
+
+from __future__ import annotations
+
+from datetime import date
+
+from keephive.output import console
+from keephive.storage import daily_dir, daily_file, ensure_daily, count_daily_entries, parse_date_arg
+
+
+# Re-export for backwards compatibility (used by mcp_server.py)
+_parse_date_arg = parse_date_arg
+
+
+def _nearby_logs(limit: int = 5) -> list[tuple[str, int]]:
+    """Find the most recent daily logs with entry counts.
+
+    Returns list of (date_str, entry_count), most recent first.
+    """
+    dd = daily_dir()
+    if not dd.exists():
+        return []
+
+    files = sorted(dd.glob("*.md"), reverse=True)
+    results = []
+    for f in files[:limit]:
+        day_str = f.stem
+        count = count_daily_entries(day_str)
+        results.append((day_str, count))
+    return results
+
+
+def cmd_log(args: list[str]) -> None:
+    ensure_daily()
+
+    date_arg = args[0] if args else ""
+    target_date = _parse_date_arg(date_arg)
+
+    df = daily_file(target_date)
+    if df.exists():
+        # Show stats header if available
+        try:
+            from keephive.storage import read_stats
+
+            stats = read_stats()
+            day_data = stats.get("days", {}).get(target_date, {})
+            if day_data:
+                projects = day_data.get("projects", {})
+                if projects:
+                    proj_parts = [f"{k} ({v.get('commands', 0)} commands)" for k, v in projects.items()]
+                    console.print(f"[dim]{', '.join(proj_parts)}[/dim]")
+                hooks_count = sum(day_data.get("hooks", {}).values())
+                sessions = sum(p.get("sessions", 0) for p in projects.values())
+                if sessions or hooks_count:
+                    console.print(f"[dim]Sessions: {sessions} | Hooks: {hooks_count}[/dim]")
+                console.print()
+        except Exception:
+            pass
+
+        print(df.read_text())
+        console.print("  -> [dim]hive r \"insight\"[/dim] to add  |  [dim]hive rf[/dim] to reflect on recent logs")
+    else:
+        console.print(f"[dim]No log for {target_date}[/dim]")
+        console.print()
+
+        nearby = _nearby_logs()
+        if nearby:
+            console.print("  Nearby:")
+            for day_str, count in nearby:
+                entry_word = "entry" if count == 1 else "entries"
+                console.print(f"    {day_str}  ({count} {entry_word})")
+            console.print()
+
+        console.print("  -> [dim]hive r \"insight\"[/dim] to start logging")

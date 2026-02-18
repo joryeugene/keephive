@@ -1,0 +1,17 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.coverage
+
+# Virtual environments
+.venv
+
+# LLM E2E test outputs
+tests/e2e_outputs/
+
+# Claude Code project settings
+.claude/

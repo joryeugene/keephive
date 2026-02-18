@@ -1,0 +1,52 @@
+[project]
+name = "keephive"
+version = "0.9.0"
+description = "A knowledge sidecar for Claude Code"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Jory", email = "jory@pestorious.com" }
+]
+requires-python = ">=3.12"
+keywords = ["claude", "memory", "verification", "claude-code", "mcp", "agent"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "pydantic>=2.12.5",
+    "rich>=14.3.2",
+    "mcp>=1.8.0",
+    "anthropic>=0.40",
+]
+
+[project.urls]
+Homepage = "https://github.com/joryeugene/keephive"
+Repository = "https://github.com/joryeugene/keephive"
+Issues = "https://github.com/joryeugene/keephive/issues"
+Changelog = "https://github.com/joryeugene/keephive/blob/main/CHANGELOG.md"
+
+[project.scripts]
+keephive = "keephive.cli:main"
+hive = "keephive.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.5,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+markers = [
+    "llm: real claude -p calls (slow, requires claude CLI)",
+]
+addopts = "-m 'not llm' --strict-markers"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+]

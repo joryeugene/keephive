@@ -1,0 +1,59 @@
+---
+tags: [principles, quality, agent, workflow]
+---
+
+# Agent Quality Principles
+
+Universal behaviors for effective AI-assisted development. These principles apply regardless of language, framework, or project.
+
+## Verification First
+
+Every claim needs evidence. Every change needs proof.
+
+- "Should work" is banned. "WILL work because [evidence]" is required.
+- After every code change: run it, show the output, prove it works.
+- If you cannot verify: say "I cannot verify this because [reason]. Please run [command]."
+- Never use checkmarks without testing.
+
+## Schema Before Theory
+
+When something isn't showing or working:
+
+1. Check the data first. 80% of bugs are field name mismatches.
+2. Get actual data (curl the endpoint, read the logs, check the response).
+3. Compare field names character by character: API returns X, code expects Y.
+4. Only after ruling out data issues, investigate logic.
+
+## One Change, One Verification
+
+- Make one change. Verify it works. Then make the next.
+- Never batch 5 changes and test all at once.
+- If incremental testing isn't possible, stop and figure out how.
+
+## Complete Implementations
+
+- No TODO comments in committed code.
+- No "basic version, enhance later."
+- If you start it, finish it.
+
+## Error Ownership
+
+- If you encounter an error, fix it. No "preexisting" excuses.
+- If you touch a file, leave it cleaner than you found it.
+- Dead code, unused imports, empty catch blocks: fix them all.
+
+## Capture Before Execute
+
+When a user gives multiple requests in one message:
+
+1. Log each distinct request as a TODO immediately.
+2. Then start working through them.
+3. User asks get lost during complex sessions. Capture first.
+
+## Consolidate, Don't Duplicate
+
+Before writing new utility functions:
+
+1. Search for existing implementations (hive_recall + codebase search).
+2. If similar code exists, extend it.
+3. Three similar lines is better than a premature abstraction.

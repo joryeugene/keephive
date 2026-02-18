@@ -1,0 +1,419 @@
+"""SessionStart hook handler.
+
+Called by Claude Code at the start of each session.
+Outputs additionalContext JSON to inject working memory,
+rules, TODOs, warnings, and recent entries into context.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from datetime import datetime
+from pathlib import Path
+
+from keephive.storage import (
+    backup_and_write,
+    count_stale_facts,
+    due_recurring,
+    get_key_entries_past_days,
+    get_meaningful_entries,
+    get_stale_facts,
+    guides_dir,
+    hive_dir,
+    memory_file,
+    open_todos,
+    read_memory,
+    read_rules,
+)
+
+
+def hook_sessionstart(args: list[str]) -> None:
+    """Main entry point for SessionStart hook."""
+    raw = sys.stdin.read()
+    try:
+        input_data = json.loads(raw)
+    except json.JSONDecodeError:
+        input_data = {}
+
+    cwd = input_data.get("cwd", "")
+    project_name = Path(cwd).name if cwd else ""
+
+    # Track usage
+    try:
+        from keephive.storage import track_event
+        track_event("hooks", "sessionstart", project=cwd, source="hook")
+    except Exception:
+        pass
+
+    # Build context
+    context = build_context(cwd, project_name)
+
+    # Output as JSON for additionalContext
+    output = {
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": context,
+        }
+    }
+
+    try:
+        sys.stdout.write(json.dumps(output))
+    except Exception:
+        debug_log = hive_dir() / ".hook-debug.log"
+        with open(debug_log, "a") as f:
+            f.write(f"[{datetime.now().isoformat()}] sessionstart encoding FAILED\n")
+        sys.stdout.write(json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": "SessionStart",
+                "additionalContext": "hive: encoding failed, see .hook-debug.log",
+            }
+        }))
+
+
+def build_context(cwd: str, project_name: str) -> str:
+    """Build the context string injected into Claude Code."""
+    parts: list[str] = []
+
+    # 0. Auto-reverify stale facts (deterministic, no LLM)
+    reverified = _auto_reverify()
+
+    # 1. Working memory
+    mem = read_memory()
+    if mem:
+        parts.append(mem)
+
+    # 2. Rules (actionable section only)
+    rules = read_rules()
+    if rules:
+        # Try to extract just the actionable part
+        lines = rules.splitlines()
+        start_idx = 0
+        for i, line in enumerate(lines):
+            if line.startswith("## When"):
+                start_idx = i
+                break
+        if start_idx > 0:
+            parts.append("\n".join(lines[start_idx:]))
+        else:
+            parts.append(rules)
+
+    # 3. Auto-change summary + stale fact warning
+    if reverified:
+        parts.append(f"Memory auto-updated: re-verified {len(reverified)} fact(s) from recent activity")
+
+    stale = count_stale_facts()
+    if stale > 0:
+        parts.append(f"Warning: {stale} stale fact(s) need verification. Run: hive v")
+
+    # 3b. Accumulation warnings
+    acc_warnings = _accumulation_warnings(mem)
+    if acc_warnings:
+        parts.extend(acc_warnings)
+
+    # 4. Open TODOs
+    todos = open_todos()
+    if todos:
+        from datetime import date, timedelta
+        t = date.today()
+        todo_lines = ["## Open TODOs"]
+        for d, ts, text in reversed(todos[-5:]):
+            try:
+                td = date.fromisoformat(d)
+                age = (t - td).days
+                if age == 0:
+                    age_s = "today"
+                elif age == 1:
+                    age_s = "1d"
+                else:
+                    age_s = f"{age}d"
+                time_part = f" {ts}" if ts else ""
+                # Mark old TODOs as critical
+                prefix = "CRITICAL: " if age > 3 else ""
+                todo_lines.append(f"- [{age_s}{time_part}] {prefix}{text}")
+            except ValueError:
+                todo_lines.append(f"- [?] {text}")
+        parts.append("\n".join(todo_lines))
+
+    # 5. Due recurring tasks
+    due = due_recurring()
+    if due:
+        recurring_lines = ["## Due Recurring Tasks"]
+        for freq, text, overdue in due:
+            over_s = f"+{overdue}d overdue" if overdue > 0 else "due today"
+            recurring_lines.append(f"- [{freq}] {text} ({over_s})")
+        parts.append("\n".join(recurring_lines))
+
+    # 6. Quality Pulse score (when concerning)
+    try:
+        from keephive.commands.audit import (
+            _analyze_cleaner,
+            _analyze_strategist,
+            _analyze_vault,
+            _check_previous_play,
+            _compute_score,
+        )
+        vault = _analyze_vault()
+        cleaner = _analyze_cleaner()
+        strategist = _analyze_strategist()
+        pulse_score = _compute_score(vault, cleaner, strategist)
+
+        if pulse_score < 70:
+            parts.append(f"Quality Pulse: {pulse_score}/100. Run: hive audit")
+
+        # Check for unfinished Play from previous audit
+        prev_play = _check_previous_play()
+        if prev_play and not prev_play["completed"] and prev_play["age_days"] >= 2:
+            parts.append(
+                f"Unfinished Play from {prev_play['date']}: {prev_play['action']}"
+            )
+    except Exception:
+        pass  # Audit is optional, never block session start
+
+    # 7. Data quality warnings
+    warnings = _data_quality_warnings()
+    if warnings:
+        warn_lines = ["## Warnings"]
+        warn_lines.extend(f"- {w}" for w in warnings)
+        parts.append("\n".join(warn_lines))
+
+    # 8. Recent entries from today
+    entries = get_meaningful_entries(limit=3)
+    if entries:
+        entry_lines = ["## Recent (today)"]
+        entry_lines.extend(entries)
+        parts.append("\n".join(entry_lines))
+
+    # 8.5 Key entries from past week
+    past_entries = get_key_entries_past_days(days=7, limit=10)
+    if past_entries:
+        past_lines = ["## This Week"]
+        for day_str, entry in past_entries:
+            past_lines.append(f"  ({day_str}) {entry}")
+        parts.append("\n".join(past_lines))
+
+    # 9. Smart guide injection based on cwd
+    if cwd and project_name:
+        guide_text = _match_guides(project_name)
+        if guide_text:
+            parts.append(guide_text)
+
+    # 10. Workflows (MCP + CLI dual references, hygiene, quality standards)
+    from keephive.identity import render_workflows
+    parts.append(render_workflows())
+
+    return "\n\n".join(parts)
+
+
+def _data_quality_warnings() -> list[str]:
+    """Generate lightweight data quality warnings."""
+    from difflib import SequenceMatcher
+    from datetime import date, timedelta
+    from keephive.storage import collect_todos
+
+    todos_all, dones_set = collect_todos()
+    ot = [(d, t, text) for d, t, text in todos_all if text.lower() not in dones_set]
+    warnings = []
+
+    # Duplicate detection
+    texts = [text for _, _, text in ot]
+    dupe_count = 0
+    for i in range(len(texts)):
+        for j in range(i + 1, len(texts)):
+            if SequenceMatcher(None, texts[i].lower(), texts[j].lower()).ratio() > 0.7:
+                dupe_count += 1
+    if dupe_count:
+        warnings.append(f"{dupe_count} duplicate TODO pair(s) found. Run: hive doctor")
+
+    # Stale TODOs
+    t = date.today()
+    stale = [text for d, _, text in ot if d < (t - timedelta(days=7)).isoformat()]
+    if stale:
+        warnings.append(f"{len(stale)} TODO(s) older than 7 days")
+
+    # Accumulation
+    if len(ot) > 10:
+        warnings.append(f"{len(ot)} open TODOs. Consider consolidating.")
+
+    return warnings
+
+
+def _match_guides(project_name: str) -> str:
+    """Find guides matching the current project."""
+    gd = guides_dir()
+    if not gd.exists():
+        return ""
+
+    matched_parts: list[str] = []
+    total_words = 0
+    max_words = 1500
+    max_guides = 3
+    count = 0
+
+    for guide in sorted(gd.glob("*.md")):
+        if count >= max_guides:
+            break
+
+        text = guide.read_text()
+        matched = False
+
+        # Check tags/projects in front matter
+        if text.startswith("---"):
+            fm_lines = []
+            for line in text.splitlines()[1:]:
+                if line.startswith("---"):
+                    break
+                fm_lines.append(line)
+            fm_text = " ".join(fm_lines).lower()
+            if project_name.lower() in fm_text:
+                matched = True
+
+        # Fallback: filename matches project
+        if not matched and project_name.lower() in guide.stem.lower():
+            matched = True
+
+        if matched:
+            # Strip front matter for injection
+            content = text
+            if text.startswith("---"):
+                lines = text.splitlines()
+                end_idx = 0
+                for i, line in enumerate(lines[1:], 1):
+                    if line.startswith("---"):
+                        end_idx = i + 1
+                        break
+                content = "\n".join(lines[end_idx:])
+
+            words = len(content.split())
+            if total_words + words <= max_words:
+                matched_parts.append(f"--- Guide: {guide.stem} ---\n{content}")
+                total_words += words
+                count += 1
+
+    if matched_parts:
+        return "## Relevant Knowledge Guides\n" + "\n".join(matched_parts)
+    return ""
+
+
+def _auto_reverify() -> list[str]:
+    """Deterministic re-verification of stale facts using recent daily logs.
+
+    Checks if stale facts have matching entries in the last 7 days of daily logs.
+    If word overlap > 50%, refreshes the [verified:YYYY-MM-DD] date.
+    No LLM call. Runs in <100ms.
+
+    Returns list of re-verified fact descriptions for the summary line.
+    """
+    import re
+    from datetime import date, timedelta
+
+    stale = get_stale_facts()
+    if not stale:
+        return []
+
+    # Collect recent daily entries (7 days)
+    recent_entries: list[str] = []
+    today = date.today()
+    for days_ago in range(7):
+        day_str = (today - timedelta(days=days_ago)).isoformat()
+        entries = get_meaningful_entries(day=day_str, limit=50)
+        for entry in entries:
+            # Strip formatting prefixes
+            clean = re.sub(r"^\s*~?\s*\[[\d:]+\]\s*", "", entry)
+            clean = re.sub(r"^(FACT|DECISION|CORRECTION|INSIGHT|TODO):\s*", "", clean)
+            recent_entries.append(clean.lower())
+
+    if not recent_entries:
+        return []
+
+    # Match stale facts against recent entries by word overlap
+    mem_path = memory_file()
+    if not mem_path.exists():
+        return []
+
+    content = mem_path.read_text()
+    lines = content.split("\n")
+    reverified: list[str] = []
+    today_str = today.isoformat()
+    changed = False
+
+    for line_num, fact_text, _raw_line in stale:
+        fact_words = set(w.lower() for w in fact_text.split() if len(w) > 3)
+        if not fact_words:
+            continue
+
+        # Check against recent daily entries
+        for entry in recent_entries:
+            entry_words = set(w.lower() for w in entry.split() if len(w) > 3)
+            if not entry_words:
+                continue
+            overlap = len(fact_words & entry_words) / len(fact_words)
+            if overlap > 0.5:
+                # Update the verified date in-place
+                idx = line_num - 1  # 1-based to 0-based
+                if idx < len(lines):
+                    updated = re.sub(
+                        r"\[verified:\d{4}-\d{2}-\d{2}\]",
+                        f"[verified:{today_str}]",
+                        lines[idx],
+                    )
+                    if updated != lines[idx]:
+                        lines[idx] = updated
+                        reverified.append(fact_text[:80])
+                        changed = True
+                break
+
+    if changed:
+        backup_and_write(mem_path, "\n".join(lines))
+
+    return reverified
+
+
+def _accumulation_warnings(mem_content: str) -> list[str]:
+    """Generate accumulation warnings for memory.md.
+
+    Returns actionable warning strings when memory.md grows large
+    or has too many auto-captured facts.
+    """
+    import re
+    from datetime import date, timedelta
+
+    warnings: list[str] = []
+    if not mem_content:
+        return warnings
+
+    # Count total facts (lines starting with "- ")
+    fact_count = sum(1 for line in mem_content.splitlines() if line.startswith("- "))
+    if fact_count > 40:
+        warnings.append(f"Memory has {fact_count} facts. Consider consolidating: hive rf")
+
+    # Count auto-captured facts
+    in_auto = False
+    auto_count = 0
+    for line in mem_content.splitlines():
+        if line.strip() == "## Auto-Captured":
+            in_auto = True
+            continue
+        if line.startswith("#") and in_auto:
+            break
+        if in_auto and line.startswith("- "):
+            auto_count += 1
+
+    if auto_count > 5:
+        warnings.append(
+            f"{auto_count} auto-captured facts pending review. Curate: hive rf apply"
+        )
+
+    # Check for critically stale facts (>60 days)
+    cutoff_60 = (date.today() - timedelta(days=60)).isoformat()
+    critical_stale = 0
+    for line in mem_content.splitlines():
+        m = re.search(r"\[verified:(\d{4}-\d{2}-\d{2})\]", line)
+        if m and m.group(1) < cutoff_60:
+            critical_stale += 1
+    if critical_stale > 0:
+        warnings.append(
+            f"CRITICAL: {critical_stale} fact(s) unverified for 60+ days. Run: hive v"
+        )
+
+    return warnings
