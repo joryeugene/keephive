@@ -121,8 +121,39 @@ keephive uses the three extension points Claude Code exposes:
 | `hive log [date]`      | `hive l`          | View daily log                             |
 | `hive note`            | `hive n`          | Multi-slot scratchpad ($EDITOR)            |
 | `hive knowledge`       | `hive k`          | List/view knowledge guides                 |
+| `hive prompt`          | `hive p`          | List/use prompt templates                  |
 | `hive doctor`          | `hive dr`         | Health check                               |
 | `hive gc`              | `hive g`          | Archive old logs                           |
+
+### Features in depth
+
+#### Reflect
+
+`hive rf` scans daily logs for recurring patterns across multiple days. When it finds a theme, `hive rf draft <topic>` generates a knowledge guide from the matching entries. This is how scattered daily notes become structured reference material.
+
+#### Audit
+
+`hive a` runs three parallel LLM analyses on your memory state (fact accuracy, data hygiene, strategic gaps), then synthesizes them into a quality score with actionable suggestions.
+
+#### Standup
+
+`hive su` generates a standup summary from recent daily log activity and optionally includes GitHub PR data.
+
+#### Notes
+
+`hive n` is a multi-slot scratchpad. Each slot persists across sessions, auto-copies to clipboard on save, and can be initialized from a prompt template (`hive n <template>`). Use `hive n.2` to switch slots.
+
+#### Prompts
+
+`hive p` lists reusable prompt templates stored in `knowledge/prompts/`. Use them to start notes (`hive n <template>`) or launch custom sessions (`hive session <template>`).
+
+#### Stats
+
+`hive st` shows usage statistics with per-project breakdown, session streaks, and activity sparklines.
+
+#### Edit
+
+`hive e <target>` opens files in `$EDITOR`. Targets: memory, rules, todo (with diff-on-save), CLAUDE.md, settings, daily log, notes. Run `hive e` with no arguments to see all targets.
 
 ### Sessions
 
