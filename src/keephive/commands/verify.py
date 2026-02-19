@@ -14,9 +14,9 @@ from keephive.models import VerifyResponse
 from keephive.output import console
 from keephive.storage import (
     backup_and_write,
+    get_all_verified_facts,
     get_stale_facts,
     memory_file,
-    stale_days,
     today,
     version_context,
 )
@@ -43,30 +43,39 @@ def cmd_verify(args: list[str]) -> None:
         console.print("[warn]No working memory to verify[/warn]")
         return
 
-    stale_facts = get_stale_facts()
-    stale_count = len(stale_facts)
-
+    # --check mode: quick stale count, no LLM
     if check_mode:
-        sys.exit(1 if stale_count > 0 else 0)
-
-    if stale_count == 0:
-        if json_mode:
-            print(json.dumps({"stale_count": 0, "message": "All facts are current"}))
+        stale_count = len(get_stale_facts())
+        if stale_count > 0:
+            console.print(f"{stale_count} stale")
+            sys.exit(1)
         else:
-            console.print(f"[ok]All facts are current[/ok] (verified within {stale_days()} days)")
+            all_count = len(get_all_verified_facts())
+            console.print(f"All current ({all_count} facts)")
+            sys.exit(0)
+
+    # Main path: verify ALL facts regardless of age
+    all_facts = get_all_verified_facts()
+    fact_count = len(all_facts)
+
+    if fact_count == 0:
+        if json_mode:
+            print(json.dumps({"fact_count": 0, "message": "No verified facts found"}))
+        else:
+            console.print("[dim]No verified facts to check[/dim]")
         return
 
-    console.print(f"[bold]Verifying {stale_count} stale fact(s) against codebase...[/bold]")
+    console.print(f"[bold]Verifying {fact_count} fact(s) against codebase...[/bold]")
     console.print("[dim](This uses claude -p with tool access and takes 10-20 seconds)[/dim]")
     console.print()
 
-    for _, fact_text, _ in stale_facts:
+    for _, fact_text, _ in all_facts:
         console.print(f"  [dim]* {fact_text}[/dim]")
     console.print()
 
     # Build the prompt with tool-based investigation
     versions = version_context()
-    facts_text = "\n".join(f"{i+1}. {fact}" for i, (_, fact, _) in enumerate(stale_facts))
+    facts_text = "\n".join(f"{i+1}. {fact}" for i, (_, fact, _) in enumerate(all_facts))
 
     prompt = f"""You are a fact-checking investigator with access to tools.
 
@@ -114,7 +123,7 @@ For STALE verdicts, correction must contain the full replacement fact text."""
     # Backup before write
     backup_and_write(mem, mem.read_text())
 
-    updated, refreshed = apply_verdicts(response, stale_facts, mem, today())
+    updated, refreshed = apply_verdicts(response, all_facts, mem, today())
 
     console.print(f"[dim]Updated {updated} fact(s), refreshed {refreshed} in working/memory.md[/dim]")
 
@@ -124,7 +133,7 @@ For STALE verdicts, correction must contain the full replacement fact text."""
 
 def apply_verdicts(
     response: VerifyResponse,
-    stale_facts: list[tuple[int, str, str]],
+    facts: list[tuple[int, str, str]],
     mem_path: Path,
     today_str: str,
 ) -> tuple[int, int]:
@@ -132,7 +141,7 @@ def apply_verdicts(
 
     Args:
         response: VerifyResponse with verdicts.
-        stale_facts: List of (line_num, fact_text, raw_line) tuples.
+        facts: List of (line_num, fact_text, raw_line) tuples.
         mem_path: Path to memory.md file.
         today_str: Today's date string (YYYY-MM-DD).
 
@@ -144,11 +153,11 @@ def apply_verdicts(
     refreshed = 0
 
     for v in response.verdicts:
-        idx = v.index - 1  # 0-based into stale_facts
-        if idx < 0 or idx >= len(stale_facts):
+        idx = v.index - 1  # 0-based into facts list
+        if idx < 0 or idx >= len(facts):
             continue
 
-        line_num, fact_text, raw_line = stale_facts[idx]
+        line_num, fact_text, _raw_line = facts[idx]
         target = line_num - 1  # 0-based line index
 
         if target < 0 or target >= len(lines):

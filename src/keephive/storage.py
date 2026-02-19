@@ -241,6 +241,29 @@ def get_stale_facts() -> list[tuple[int, str, str]]:
     return results
 
 
+def get_all_verified_facts() -> list[tuple[int, str, str]]:
+    """Get ALL facts with [verified:] tags, regardless of age.
+
+    Returns list of (line_number_1based, fact_text, raw_line).
+    """
+    mem = memory_file()
+    if not mem.exists():
+        return []
+
+    results = []
+
+    for i, line in enumerate(mem.read_text().splitlines(), 1):
+        m = re.search(r"\[verified:(\d{4}-\d{2}-\d{2})\]", line)
+        if m:
+            try:
+                date.fromisoformat(m.group(1))  # validate date
+                fact = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line).lstrip("- ").strip()
+                results.append((i, fact, line))
+            except ValueError:
+                pass
+    return results
+
+
 def count_daily_entries(day: str | None = None, exclude_noise: bool = True) -> int:
     """Count meaningful entries in a daily log file."""
     path = daily_file(day)

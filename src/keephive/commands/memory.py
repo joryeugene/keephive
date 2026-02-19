@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from keephive.output import console
 from keephive.storage import (
     backup_and_write,
@@ -31,7 +33,7 @@ def cmd_mem(args: list[str]) -> None:
         _remove_line(memory_file(), " ".join(args[1:]), "memory.md")
         return
 
-    fact_text = " ".join(args)
+    fact_text = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", " ".join(args))
     ensure_dirs()
     mem = memory_file()
 

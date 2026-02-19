@@ -307,11 +307,19 @@ def _sync_global_install() -> None:
         return
 
     console.print(f"  [warn]STALE[/warn] Missing deps: {', '.join(missing)}")
-    console.print("  [dim]Running: uv tool install --force .[/dim]")
+
+    # Detect install source: use local path if in keephive repo, otherwise git URL
+    pyproject = Path.cwd() / "pyproject.toml"
+    if pyproject.exists() and "keephive" in pyproject.read_text()[:500]:
+        source = "."
+    else:
+        source = "keephive@git+https://github.com/joryeugene/keephive.git"
+
+    console.print(f"  [dim]Running: uv tool install --force {source}[/dim]")
 
     try:
         result = subprocess.run(
-            ["uv", "tool", "install", "--force", "."],
+            ["uv", "tool", "install", "--force", source],
             capture_output=True, text=True, timeout=60,
         )
         if result.returncode == 0:

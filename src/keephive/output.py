@@ -30,13 +30,30 @@ console = Console(theme=_theme, no_color=_no_color, force_terminal=not _no_color
 
 
 def prompt_choice(prompt: str, valid: list[str]) -> str:
-    """Prompt user for a single-char choice. Returns lowercase."""
-    while True:
+    """Prompt for single-char choice. Instant keypress on TTY, no Enter needed."""
+    import sys
+
+    if not sys.stdin.isatty():
+        # Piped input: fall back to input()
         try:
             answer = input(prompt).strip().lower()
         except (EOFError, KeyboardInterrupt):
             return valid[-1]
-        if answer in valid:
-            return answer
-        if not answer:
-            return valid[-1]
+        return answer if answer in valid else valid[-1]
+
+    import termios
+    import tty
+
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1).lower()
+    except (EOFError, KeyboardInterrupt):
+        ch = valid[-1]
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    sys.stdout.write(ch + "\n")
+    return ch if ch in valid else valid[-1]

@@ -259,14 +259,12 @@ def _reflect_apply(args: list[str]) -> None:
     analyze_path = hd / ".last-analyze.json"
 
     if not analyze_path.exists():
-        console.print("[warn]No analysis found.[/warn]")
-        console.print("  -> [dim]hive rf analyze[/dim] to analyze recent logs first")
+        console.print("[warn]No pending analysis.[/warn] Run: [dim]hive rf analyze[/dim] (~20s)")
         return
 
     # Show freshness
     mtime = analyze_path.stat().st_mtime
     age_hours = (time.time() - mtime) / 3600
-    mtime_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
 
     try:
         data = json.loads(analyze_path.read_text())
@@ -291,7 +289,15 @@ def _reflect_apply(args: list[str]) -> None:
         console.print("[dim]Analysis has no additions or contradictions to review.[/dim]")
         return
 
-    console.print(f"  Reviewing analysis from {mtime_str}")
+    add_count = len(response.additions)
+    contra_count = len(response.contradictions)
+    parts = []
+    if add_count:
+        parts.append(f"{add_count} addition{'s' if add_count != 1 else ''}")
+    if contra_count:
+        parts.append(f"{contra_count} contradiction{'s' if contra_count != 1 else ''}")
+    analysis_date = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+    console.print(f"  Reviewing {', '.join(parts)} (from {analysis_date} analysis)")
     if age_hours > 24 and not auto:
         console.print(f"  [warn]Analysis is {age_hours:.0f}h old. Consider re-running: hive rf analyze[/warn]")
     if auto:
@@ -310,67 +316,69 @@ def _reflect_apply(args: list[str]) -> None:
     from keephive.storage import append_to_daily, ensure_daily
 
     # Walk additions
+    total_items = add_count + contra_count
+    item_num = 0
     if response.additions:
-        console.print(f"[bold]Additions ({len(response.additions)}):[/bold]")
-        console.print()
-        for i, a in enumerate(response.additions, 1):
-            console.print(f"  [{i}] + {a.fact}")
-            console.print(f"      source: {a.source}")
+        for a in response.additions:
+            item_num += 1
+            console.print(f"  [{item_num}/{total_items}] + \"{a.fact}\"")
+            console.print(f"         from: {a.source}")
+            console.print(f"         to:   working/memory.md")
 
             if auto:
                 choice = "y"
             else:
-                choice = prompt_choice("      (y)es  (n)o  (e)dit ? ", ["y", "n", "e"])
+                choice = prompt_choice("         (y)es  (n)o  (e)dit ? ", ["y", "n", "e"])
             if choice == "y":
                 line = f"- {a.fact} [verified:{today_str}]"
                 mem_content = _append_to_memory(mem_content, line)
                 if auto:
-                    console.print("      [ok]Auto-added to memory.md[/ok]")
+                    console.print("         [ok]Added to memory.md[/ok]")
                     ensure_daily()
                     ts = datetime.now().strftime("%H:%M:%S")
                     append_to_daily(f"- [{ts}] AUTO-PROMOTED: [reflect] {a.fact}")
                 else:
-                    console.print("      [ok]Added to memory.md[/ok]")
+                    console.print("         [ok]Added to memory.md[/ok]")
                 added += 1
             elif choice == "e":
-                edited = input("      Edit text: ").strip()
+                edited = input("         Edit text: ").strip()
                 if edited:
                     line = f"- {edited} [verified:{today_str}]"
                     mem_content = _append_to_memory(mem_content, line)
-                    console.print("      [ok]Added to memory.md[/ok]")
+                    console.print("         [ok]Added to memory.md[/ok]")
                     added += 1
                 else:
-                    console.print("      [dim]Skipped (empty edit)[/dim]")
+                    console.print("         [dim]Skipped (empty edit)[/dim]")
                     skipped += 1
             else:
-                console.print("      [dim]Skipped.[/dim]")
+                console.print("         [dim]Skipped[/dim]")
                 skipped += 1
             console.print()
 
     # Walk contradictions
     if response.contradictions:
-        console.print(f"[bold]Contradictions ({len(response.contradictions)}):[/bold]")
-        console.print()
-        for i, c in enumerate(response.contradictions, 1):
-            console.print(f"  [{i}] ! Memory says: {c.memory}")
-            console.print(f"      Log says ({c.date}): {c.log}")
+        for c in response.contradictions:
+            item_num += 1
+            console.print(f"  [{item_num}/{total_items}] ! Memory says: \"{c.memory}\"")
+            console.print(f"         Log says ({c.date}): \"{c.log}\"")
+            console.print(f"         Action: update memory.md line")
 
             if auto:
                 choice = "u"
             else:
-                choice = prompt_choice("      (u)pdate  (s)kip ? ", ["u", "s"])
+                choice = prompt_choice("         (u)pdate  (s)kip ? ", ["u", "s"])
             if choice == "u":
                 mem_content = _update_contradiction(mem_content, c.memory, c.log, today_str)
                 if auto:
-                    console.print("      [ok]Auto-updated in memory.md[/ok]")
+                    console.print("         [ok]Updated in memory.md[/ok]")
                     ensure_daily()
                     ts = datetime.now().strftime("%H:%M:%S")
                     append_to_daily(f"- [{ts}] AUTO-PROMOTED: [reflect] Corrected: {c.memory} -> {c.log}")
                 else:
-                    console.print("      [ok]Updated in memory.md[/ok]")
+                    console.print("         [ok]Updated in memory.md[/ok]")
                 updated += 1
             else:
-                console.print("      [dim]Skipped.[/dim]")
+                console.print("         [dim]Skipped[/dim]")
                 skipped += 1
             console.print()
 
@@ -378,7 +386,7 @@ def _reflect_apply(args: list[str]) -> None:
     if added > 0 or updated > 0:
         backup_and_write(mem_path, mem_content)
 
-    console.print(f"  Done: {added} added, {updated} updated, {skipped} skipped")
+    console.print(f"  Done: {added} added, {updated} updated, {skipped} skipped. View: [dim]hive m[/dim]")
 
 
 def _append_to_memory(mem_content: str, line: str) -> str:

@@ -182,14 +182,15 @@ def _knowledge_view(name: str) -> None:
     else:
         console.print(f"[err]Guide not found:[/err] {name}")
         console.print()
-        all_files = []
-        for d in [gd, pd]:
-            if d.exists():
-                all_files.extend(f.stem for f in d.glob("*.md"))
-        if all_files:
+        all_items: list[tuple[str, str]] = []
+        if gd.exists():
+            all_items.extend((f.stem, "guide") for f in gd.glob("*.md"))
+        if pd.exists():
+            all_items.extend((f.stem, "prompt") for f in pd.glob("*.md"))
+        if all_items:
             console.print("Available:")
-            for n in sorted(all_files):
-                console.print(f"  {n}")
+            for n, kind in sorted(all_items):
+                console.print(f"  {n} [dim]({kind})[/dim]")
 
 
 def _knowledge_rm(args: list[str], directory: Path) -> None:

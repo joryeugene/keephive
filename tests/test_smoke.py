@@ -463,7 +463,7 @@ def test_reflect_apply_no_analysis(hive_env):
     """hive rf apply with no prior analysis gives guidance."""
     r = _run(["rf", "apply"], hive_home=str(hive_env))
     assert r.returncode == 0
-    assert "No analysis found" in r.stdout
+    assert "No pending analysis" in r.stdout
 
 
 def test_reflect_apply_empty(hive_env):

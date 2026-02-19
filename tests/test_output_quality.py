@@ -736,7 +736,7 @@ class TestReflectApply:
         from keephive.commands.reflect import cmd_reflect
         cmd_reflect(["apply"])
         out = capsys.readouterr().out
-        assert "No analysis found" in out
+        assert "No pending analysis" in out
         assert "hive rf analyze" in out
 
     def test_apply_empty_analysis(self, hive_env, capsys):

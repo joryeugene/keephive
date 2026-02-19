@@ -100,7 +100,7 @@ keephive uses the three extension points Claude Code exposes:
 | SessionStart     | New session           | Injects memory, rules, TODOs, stale warnings           |
 | PreCompact       | Conversation compacts | Extracts insights from transcript, writes to daily log |
 | PostToolUse      | After Edit/Write      | Periodic nudge to record decisions                     |
-| UserPromptSubmit | User sends prompt     | Periodic nudge + auto-captures TODO: from prompts      |
+| UserPromptSubmit | User sends prompt     | Periodic nudge to record decisions                     |
 
 ## Commands
 
