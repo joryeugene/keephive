@@ -45,7 +45,7 @@ After a few sessions, `hive s` shows what your agent has learned:
 
 ```console
 $ hive s
-keephive v0.9.0
+keephive v0.10.0
   ● hooks  ● mcp  ● data
 
   4 facts (4 ok) | 12 today | 8 yesterday | 2 guides | 48K
