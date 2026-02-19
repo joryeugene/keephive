@@ -32,6 +32,7 @@ def cmd_edit(args: list[str]) -> None:
         console.print("  local      ~/.claude/settings.local.json")
         console.print("  today      today's daily log")
         console.print("  note       active note slot")
+        console.print("  todo       open TODOs (diff on save)")
         console.print()
         console.print("Usage: [dim]hive e <target>[/dim]")
         return
@@ -44,6 +45,11 @@ def cmd_edit(args: list[str]) -> None:
         "settings": Path.home() / ".claude" / "settings.json",
         "local": Path.home() / ".claude" / "settings.local.json",
     }
+
+    if target == "todo":
+        from keephive.commands.todo import edit_todos
+        edit_todos()
+        return
 
     if target in shortcuts:
         _open_editor(editor, shortcuts[target])

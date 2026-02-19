@@ -69,6 +69,21 @@ class TestCmdEdit:
             args = mock_run.call_args[0][0]
             assert "my-guide.md" in args[1]
 
+    def test_todo_target_calls_edit_todos(self, hive_env):
+        """'todo' target delegates to edit_todos()."""
+        with patch("keephive.commands.todo.edit_todos") as mock_edit:
+            from keephive.commands.edit import cmd_edit
+            cmd_edit(["todo"])
+            mock_edit.assert_called_once()
+
+    def test_default_shows_todo_target(self, hive_env, capsys):
+        """Help output lists 'todo' as an edit target."""
+        with patch("subprocess.run"):
+            from keephive.commands.edit import cmd_edit
+            cmd_edit([])
+        out = capsys.readouterr().out
+        assert "todo" in out
+
     def test_unknown_shows_error(self, hive_env, capsys):
         """Unknown target shows error message."""
         with patch("subprocess.run") as mock_run:

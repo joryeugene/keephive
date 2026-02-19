@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 from datetime import date, datetime
 
 from keephive.output import console
@@ -10,6 +12,7 @@ from keephive.storage import (
     ensure_daily,
     open_todos,
     recent_dones,
+    working_dir,
 )
 
 
@@ -91,6 +94,71 @@ def cmd_t(args: list[str]) -> None:
     try:
         from keephive.storage import track_event
         track_event("meta", "todos_created")
+    except Exception:
+        pass
+
+
+def edit_todos() -> None:
+    """Open TODOs in $EDITOR. Removals become DONE, additions become new TODOs."""
+    todos = open_todos()
+    edit_path = working_dir() / ".todo-edit.md"
+
+    # Build editable file
+    lines = [
+        "# Open TODOs",
+        "# Remove lines to mark done. Add lines for new TODOs.",
+        "",
+    ]
+    before = set()
+    for _, _, text in todos:
+        lines.append(f"- {text}")
+        before.add(text)
+
+    edit_path.write_text("\n".join(lines) + "\n")
+
+    editor = os.environ.get("EDITOR", "vi")
+    subprocess.run([editor, str(edit_path)])
+
+    # Parse result
+    after = set()
+    after_list: list[str] = []
+    for line in edit_path.read_text().splitlines():
+        line = line.strip()
+        if line.startswith("- "):
+            item = line[2:].strip()
+            if item:
+                after.add(item)
+                after_list.append(item)
+
+    # Diff
+    removed = before - after
+    added = after - before
+
+    if not removed and not added:
+        console.print("  No changes.")
+        edit_path.unlink(missing_ok=True)
+        return
+
+    ensure_daily()
+    ts = datetime.now().strftime("%H:%M:%S")
+
+    for text in sorted(removed):
+        append_to_daily(f"- [{ts}] DONE: {text}")
+        console.print(f"  [ok]Done:[/ok] {text}")
+
+    for text in after_list:
+        if text in added:
+            append_to_daily(f"- [{ts}] TODO: {text}")
+            console.print(f"  [bold]Added:[/bold] {text}")
+
+    edit_path.unlink(missing_ok=True)
+
+    try:
+        from keephive.storage import track_event
+        if removed:
+            track_event("meta", "todos_completed")
+        if added:
+            track_event("meta", "todos_created")
     except Exception:
         pass
 

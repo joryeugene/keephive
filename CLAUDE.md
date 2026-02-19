@@ -19,11 +19,17 @@ A knowledge sidecar for Claude Code.
 - `cli.py`: Dispatch table. Maps command names to (module, function) tuples.
 - `claude.py`: ALL claude -p interaction. One function, Pydantic validation. THE critical module.
 - `models.py`: Pydantic models for every structured response (VerifyResponse, PreCompactResponse, ReflectAnalyzeResponse, VaultPerspective, CleanerPerspective, StrategistPerspective, AuditSynthesis).
+- `output.py`: Console markup, `prompt_yn()`, `prompt_choice()`. Shared output helpers.
 - `nudge.py`: Shared nudge infrastructure (counter-based, status-aware, rotating messages).
-- `commands/session.py`: Interactive session launcher. Reuses `build_context()` from sessionstart, replaces process with `claude` via `os.execvpe`.
-- `commands/audit.py`: Three-perspective LLM audit (parallel) + Cook synthesis. Uses `run_claude_pipe()` for all 4 calls.
-- `commands/stats.py`: Usage statistics with per-project breakdown, streaks, and activity sparklines.
 - `storage.py`: All file I/O for ~/.claude/hive/ directory. Includes stats tracking.
+- `commands/audit.py`: Three-perspective LLM audit (parallel) + Cook synthesis. Uses `run_claude_pipe()` for all 4 calls.
+- `commands/edit.py`: `hive e` targets (memory, rules, claude, today, todo, etc.). Opens `$EDITOR`.
+- `commands/knowledge.py`: List, view, create/edit knowledge guides and prompt templates.
+- `commands/note.py`: Multi-slot scratchpad. Open, copy, clear, list, restore, template start.
+- `commands/session.py`: Interactive session launcher. Reuses `build_context()` from sessionstart, replaces process with `claude` via `os.execvpe`.
+- `commands/skill.py`: Plugin/skill system for extensible commands.
+- `commands/stats.py`: Usage statistics with per-project breakdown, streaks, and activity sparklines.
+- `commands/todo.py`: TODO lifecycle: list, add, done, edit, recurring.
 - `hooks/sessionstart.py`: Injects context at session start. No LLM call.
 - `hooks/precompact.py`: Layer 1 extraction (deterministic) + Layer 2 auto-write to daily log (claude -p).
 - `hooks/posttooluse.py`: Counter-based periodic nudge after Edit/Write tool use.
@@ -62,7 +68,7 @@ Empty output is the most dangerous failure mode because it looks like success.
 
 1. `uv run pytest` passes
 2. If you changed claude.py: run `keephive v` against real data
-3. If you changed sessionstart.py: run `echo '{"source":"test","cwd":"/tmp"}' | keephive hook-sessionstart | python -m json.tool`
+3. If you changed sessionstart.py: run `echo '{"source":"test","cwd":"/home/test"}' | keephive hook-sessionstart | python -m json.tool`
 4. If you changed nudge.py or hooks: verify counter files in `~/.claude/hive/.{name}-counter`
 5. If you changed stats.py: run `hive stats` and `hive stats --json` against real data
 6. If you changed audit.py: run `hive a` with real LLM (no HIVE_SKIP_LLM) and verify output is non-empty

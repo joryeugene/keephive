@@ -1,12 +1,12 @@
 # keephive
 
-A knowledge sidecar for Claude Code. Captures what you learn, verifies it stays true, surfaces it when relevant.
+A knowledge sidecar for Claude Code. It captures what you learn, verifies it stays true, and surfaces it when relevant.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/mascot.png" width="320" />
 </p>
 
-Claude Code forgets everything between sessions. keephive rides alongside it using hooks, an MCP server, and CLAUDE.md injection to give it persistent, verified memory.
+Claude Code forgets everything between sessions. keephive rides alongside it using hooks, an MCP server, and context injection to give it persistent, verified memory.
 
 ## Install
 
@@ -68,9 +68,9 @@ keephive uses the three extension points Claude Code exposes:
 
 1. **Hooks** fire on events (session start, conversation compact, user prompt). They capture insights and inject context without any agent action.
 2. **MCP server** gives Claude Code native tool access (`hive_remember`, `hive_recall`, etc.) so the agent can read and write memory directly.
-3. **CLAUDE.md** injection puts behavioral rules and verified facts into every session's system prompt.
+3. **Context injection** surfaces verified facts, behavioral rules, stale warnings, matching knowledge guides, and open TODOs at the start of every session via the SessionStart hook's `additionalContext` field.
 
-### The loop
+### The capture/verify/correct loop
 
 ```
   capture --> store --> verify --> correct
@@ -78,10 +78,10 @@ keephive uses the three extension points Claude Code exposes:
      +-------------------------------+
 ```
 
-- **Capture**: PreCompact hook extracts FACT/DECISION/TODO/INSIGHT entries when conversations compact
-- **Store**: Entries land in daily logs, get promoted to working memory
-- **Verify**: Facts carry `[verified:YYYY-MM-DD]` timestamps. After 30 days they're flagged stale. `hive v` checks them against the codebase with LLM analysis.
-- **Correct**: Invalid facts get replaced. Valid facts get re-stamped.
+- **Capture**: The PreCompact hook extracts FACT/DECISION/TODO/INSIGHT entries when conversations compact. It reads the full transcript, classifies insights via LLM, and writes them to today's daily log.
+- **Store**: Entries land in daily logs and get promoted to working memory. Knowledge guides hold deep reference on specific topics.
+- **Verify**: Facts carry `[verified:YYYY-MM-DD]` timestamps. After 30 days (configurable), they are flagged stale. `hive v` checks them against the codebase with LLM analysis and tool access.
+- **Correct**: Invalid facts get replaced with corrected versions. Valid facts get re-stamped. Uncertain facts get flagged for human review.
 
 ### Memory tiers
 
@@ -113,6 +113,7 @@ keephive uses the three extension points Claude Code exposes:
 | `hive session [mode]`  | `hive go`         | Launch interactive session                 |
 | `hive todo`            | `hive td`         | Open TODOs with ages                       |
 | `hive todo done <pat>` |                   | Mark TODO complete                         |
+| `hive edit <target>`   | `hive e`          | Edit memory, rules, todos, etc.            |
 | `hive reflect`         | `hive rf`         | Pattern scan across daily logs             |
 | `hive audit`           | `hive a`          | Quality Pulse: 3 perspectives + synthesis  |
 | `hive standup`         | `hive su`         | Standup summary with GitHub PR integration |
@@ -144,22 +145,20 @@ All commands are also available as MCP tools for Claude Code to call directly:
 
 ## Configuration
 
-| Variable              | Default          | Description                                         |
-| --------------------- | ---------------- | --------------------------------------------------- |
-| `HIVE_HOME`           | `~/.claude/hive` | Data directory                                      |
-| `HIVE_STALE_DAYS`     | `30`             | Days before a fact is flagged stale                 |
-| `HIVE_CAPTURE_BUDGET` | `4000`           | Characters to extract from transcripts              |
-| `ANTHROPIC_API_KEY`   | (unset)          | Enables direct API calls (works inside Claude Code) |
-| `NO_COLOR`            | (unset)          | Disable terminal colors                             |
-
-When `ANTHROPIC_API_KEY` is set, keephive calls the Anthropic API directly. Without it, keephive falls back to `claude -p` subprocess (terminal only). Inside Claude Code without an API key, LLM calls fail fast with guidance instead of hanging.
+| Variable              | Default          | Description                            |
+| --------------------- | ---------------- | -------------------------------------- |
+| `HIVE_HOME`           | `~/.claude/hive` | Data directory                         |
+| `HIVE_STALE_DAYS`     | `30`             | Days before a fact is flagged stale    |
+| `HIVE_CAPTURE_BUDGET` | `4000`           | Characters to extract from transcripts |
+| `ANTHROPIC_API_KEY`   | (unset)          | Direct API calls instead of claude -p  |
+| `NO_COLOR`            | (unset)          | Disable terminal colors                |
 
 ## Development
 
 ```bash
-uv run pytest              # all tests (~660, <3s)
-uv run pytest -m llm -v    # LLM E2E tests (slow, real API calls)
-uv run pytest -x           # stop on first failure
+uv run pytest                          # all tests
+uv run pytest -m llm -v -o "addopts="  # LLM E2E tests (slow, real API calls)
+uv run pytest -x                       # stop on first failure
 ```
 
 See [CLAUDE.md](CLAUDE.md) for architecture details.

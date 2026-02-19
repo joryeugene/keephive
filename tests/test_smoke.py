@@ -98,6 +98,37 @@ def test_todo_quick(hive_env):
     assert "Remembered" in r.stdout
 
 
+def test_edit_todos_diff(hive_env, daily_with_entries):
+    """edit_todos: removals become DONE, additions become TODO."""
+    from datetime import date
+    from unittest.mock import patch
+
+    # Add a fresh open TODO
+    today = date.today().isoformat()
+    daily = hive_env / "daily" / f"{today}.md"
+    content = daily.read_text()
+    content += "- [11:00:00] TODO: Write integration tests\n"
+    content += "- [11:01:00] TODO: Update README\n"
+    daily.write_text(content)
+
+    def fake_editor(cmd):
+        """Simulate editor: remove 'Update README', add 'Deploy to staging'."""
+        path = cmd[1]
+        text = open(path).read()
+        lines = text.splitlines()
+        new_lines = [l for l in lines if "Update README" not in l]
+        new_lines.append("- Deploy to staging")
+        open(path, "w").write("\n".join(new_lines) + "\n")
+
+    with patch("subprocess.run", side_effect=fake_editor):
+        from keephive.commands.todo import edit_todos
+        edit_todos()
+
+    final = daily.read_text()
+    assert "DONE: Update README" in final
+    assert "TODO: Deploy to staging" in final
+
+
 def test_gc_dry_run(hive_env):
     r = _run(["gc", "--dry-run"], hive_home=str(hive_env))
     assert r.returncode == 0

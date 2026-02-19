@@ -91,6 +91,28 @@ def llm_hive_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setenv("HIVE_HOME", str(hive_dir))
     monkeypatch.delenv("HIVE_SKIP_LLM", raising=False)
+    # Strip CLAUDECODE so tool-using commands (verify, reflect) don't refuse
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_ENTRYPOINT", raising=False)
+
+    # Auto-approve Y/n prompts so tests don't block on TTY input.
+    # Must patch at each import site since modules use `from keephive.output import prompt_yn`.
+    _auto_yes = lambda *a, **kw: True  # noqa: E731
+    monkeypatch.setattr("keephive.output.prompt_yn", _auto_yes)
+    for mod in [
+        "keephive.commands.verify",
+        "keephive.commands.reflect",
+        "keephive.commands.doctor",
+        "keephive.commands.audit",
+        "keephive.commands.standup",
+        "keephive.commands.remember",
+        "keephive.commands.knowledge",
+        "keephive.commands.note",
+    ]:
+        try:
+            monkeypatch.setattr(f"{mod}.prompt_yn", _auto_yes)
+        except AttributeError:
+            pass  # Module not yet imported
 
     (hive_dir / "working").mkdir()
     (hive_dir / "daily").mkdir()
