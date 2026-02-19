@@ -13,11 +13,14 @@ from keephive.storage import (
     archive_dir,
     daily_dir,
     ensure_dirs,
+    get_all_verified_facts,
     guides_dir,
     hive_dir,
     index_file,
     knowledge_dir,
     prompts_dir,
+    rebuild_fts_index,
+    score_fact_decay,
     stale_days,
     working_dir,
 )
@@ -125,13 +128,53 @@ def cmd_gc(args: list[str]) -> None:
     else:
         console.print("  [ok]Nothing to archive[/ok]")
 
-    # 3. Rebuild index
+    # 3. Rebuild index + FTS
     if not dry_run:
         _rebuild_index()
         console.print("  [ok]Index rebuilt[/ok]")
+        try:
+            rebuild_fts_index()
+            console.print("  [ok]FTS index rebuilt[/ok]")
+        except Exception as e:
+            console.print(f"  [warn]FTS rebuild failed:[/warn] {e}")
+
+    # 4. Memory decay check
+    if not dry_run:
+        _memory_decay_check()
 
     console.print()
     console.print("  -> [dim]hive s[/dim] to check status")
+
+
+def _memory_decay_check() -> None:
+    """Score all verified facts and show the bottom 5 as archive candidates."""
+    import re
+
+    facts = get_all_verified_facts()
+    if not facts:
+        return
+
+    scored: list[tuple[float, int, str]] = []
+    for _line_num, fact_text, raw_line in facts:
+        m = re.search(r"\[verified:(\d{4}-\d{2}-\d{2})\]", raw_line)
+        vdate_str = m.group(1) if m else ""
+        s = score_fact_decay(fact_text, vdate_str)
+        scored.append((s, _line_num, fact_text))
+
+    scored.sort(key=lambda x: x[0])
+    candidates = scored[:5]
+
+    if not candidates:
+        return
+
+    console.print()
+    console.print("[bold]Memory Decay Candidates[/bold]  [dim](lowest score = archive first)[/dim]")
+    console.print()
+    for score, _, fact_text in candidates:
+        console.print(f"  [dim][{score:.2f}][/dim] {fact_text[:100]}")
+
+    console.print()
+    console.print("  [dim]Run: hive e memory  to archive manually[/dim]")
 
 
 def _rebuild_index() -> None:

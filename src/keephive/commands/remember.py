@@ -11,13 +11,14 @@ from datetime import date, timedelta
 from keephive.output import console, prompt_yn
 from keephive.storage import (
     append_to_daily,
+    archive_dir,
     daily_dir,
     daily_file,
     ensure_daily,
+    fts_search,
+    knowledge_dir,
     stale_days,
     working_dir,
-    knowledge_dir,
-    archive_dir,
 )
 
 
@@ -209,35 +210,38 @@ def _search_all_tiers(query: str) -> list[dict]:
                 if q_lower in line.lower():
                     results.append({"tier": "knowledge", "score": 80, "line": line})
 
-    # Tier 3: Daily logs (last 30 days)
-    dd = daily_dir()
-    if dd.exists():
-        files = sorted(dd.glob("*.md"), reverse=True)[:30]
-        for f in files:
-            fname = f.stem
-            for line in f.read_text().splitlines():
-                if q_lower in line.lower():
-                    try:
-                        d = date.fromisoformat(fname)
-                        days_ago = (today_d - d).days
-                    except ValueError:
-                        days_ago = 30
-                    score = max(10, 70 - days_ago)
-                    results.append({
-                        "tier": "daily",
-                        "score": score,
-                        "line": line,
-                        "file": str(f),
-                        "date": fname,
-                    })
+    # Tier 3: Daily logs + archive — try FTS first, fall back to grep
+    fts_hits = fts_search(query)
+    if fts_hits:
+        results.extend(fts_hits)
+    else:
+        dd = daily_dir()
+        if dd.exists():
+            files = sorted(dd.glob("*.md"), reverse=True)[:30]
+            for f in files:
+                fname = f.stem
+                for line in f.read_text().splitlines():
+                    if q_lower in line.lower():
+                        try:
+                            d = date.fromisoformat(fname)
+                            days_ago = (today_d - d).days
+                        except ValueError:
+                            days_ago = 30
+                        score = max(10, 70 - days_ago)
+                        results.append({
+                            "tier": "daily",
+                            "score": score,
+                            "line": line,
+                            "file": str(f),
+                            "date": fname,
+                        })
 
-    # Tier 4: Archive
-    ad = archive_dir()
-    if ad.exists():
-        for f in ad.rglob("*.md"):
-            for line in f.read_text().splitlines():
-                if q_lower in line.lower():
-                    results.append({"tier": "archive", "score": 5, "line": line})
+        ad = archive_dir()
+        if ad.exists():
+            for f in ad.rglob("*.md"):
+                for line in f.read_text().splitlines():
+                    if q_lower in line.lower():
+                        results.append({"tier": "archive", "score": 5, "line": line})
 
     results.sort(key=lambda x: x["score"], reverse=True)
 

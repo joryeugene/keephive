@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.11.0
+
+### Features
+
+- **Smart Recall (FTS5)**: `hive rc <query>` uses SQLite FTS5 for ranked full-text search over daily logs and archive. `hive gc` rebuilds the index. Falls back to grep when the index is absent.
+- **Log Summarize**: `hive l summarize` pipes today's log to claude-haiku and prints 3-5 bullet highlights.
+- **Memory Decay Scoring**: `hive gc` scores all working memory facts (recency + references + importance) and lists the bottom 5 as archive candidates with interactive (a)rchive/(k)eep prompts.
+- **Path-Aware Guide Injection**: Knowledge guides with `paths: [/fragment]` front matter now inject only when the session cwd matches, not just on project name.
+- **Anthropic Memory Awareness**: `hive dr` and `hive s` detect active Anthropic official memory and surface it as informational context.
+- **MCP `hive_fts_search`**: New MCP tool exposes FTS5 search directly to Claude Code.
+
+### Fixes
+
+- `check_data()` no longer requires `rules.md` to exist (was a false negative in `hive dr`)
+- `backup_and_write()` is now atomic: writes to `.tmp` then `os.replace()` (was a non-atomic overwrite)
+- `apply_verdicts()` and `_auto_reverify()` now strip-then-append verified tags, making them idempotent regardless of starting state (was producing duplicate tags on repeated runs)
+
+### Tests
+
+- 728 tests total (up from 669)
+- New: `tests/test_skill.py` (17 tests, full skill system coverage)
+- New: `tests/test_recurring.py` (19 tests, `parse_freq`, `due_recurring`, `mark_recurring_done`)
+- New: `tests/test_log_summarize.py` (3 fast + 1 real LLM test via `@pytest.mark.llm`)
+- Extended: `tests/test_reflect_logic.py` (reflect apply loop with `--auto` flag)
+- Extended: `tests/test_stats.py` (display function coverage)
+- Extended: `CLAUDE.md` with LLM Test Rule (fast vs LLM test patterns)
+
 ## v0.10.0
 
 ### UX

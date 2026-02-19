@@ -194,7 +194,7 @@ def build_context(cwd: str, project_name: str) -> str:
 
     # 9. Smart guide injection based on cwd
     if cwd and project_name:
-        guide_text = _match_guides(project_name)
+        guide_text = _match_guides(project_name, cwd)
         if guide_text:
             parts.append(guide_text)
 
@@ -238,8 +238,10 @@ def _data_quality_warnings() -> list[str]:
     return warnings
 
 
-def _match_guides(project_name: str) -> str:
-    """Find guides matching the current project."""
+def _match_guides(project_name: str, cwd: str = "") -> str:
+    """Find guides matching the current project or working directory path."""
+    import re as _re
+
     gd = guides_dir()
     if not gd.exists():
         return ""
@@ -256,6 +258,7 @@ def _match_guides(project_name: str) -> str:
 
         text = guide.read_text()
         matched = False
+        paths_patterns: list[str] = []
 
         # Check tags/projects in front matter
         if text.startswith("---"):
@@ -267,6 +270,21 @@ def _match_guides(project_name: str) -> str:
             fm_text = " ".join(fm_lines).lower()
             if project_name.lower() in fm_text:
                 matched = True
+
+            # Extract paths: [...] from front matter for cwd matching
+            paths_match = _re.search(r"paths:\s*\[([^\]]+)\]", " ".join(fm_lines))
+            if paths_match:
+                paths_patterns = [
+                    p.strip().strip("'\"")
+                    for p in paths_match.group(1).split(",")
+                ]
+
+        # Check cwd against paths patterns
+        if not matched and cwd and paths_patterns:
+            for pattern in paths_patterns:
+                if pattern and pattern in cwd:
+                    matched = True
+                    break
 
         # Fallback: filename matches project
         if not matched and project_name.lower() in guide.stem.lower():
@@ -352,13 +370,10 @@ def _auto_reverify() -> list[str]:
                 # Update the verified date in-place
                 idx = line_num - 1  # 1-based to 0-based
                 if idx < len(lines):
-                    updated = re.sub(
-                        r"\[verified:\d{4}-\d{2}-\d{2}\]",
-                        f"[verified:{today_str}]",
-                        lines[idx],
-                    )
-                    if updated != lines[idx]:
-                        lines[idx] = updated
+                    clean = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", lines[idx]).rstrip("\n")
+                    new_line = f"{clean} [verified:{today_str}]\n"
+                    if new_line != lines[idx]:
+                        lines[idx] = new_line
                         reverified.append(fact_text[:80])
                         changed = True
                 break

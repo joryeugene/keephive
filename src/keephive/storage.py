@@ -170,10 +170,12 @@ def read_rules() -> str:
 
 
 def backup_and_write(path: Path, content: str) -> None:
-    """Backup a file then write new content."""
+    """Backup a file then atomically write new content."""
     if path.exists():
         shutil.copy2(path, path.with_suffix(path.suffix + ".bak"))
-    path.write_text(content)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(content)
+    os.replace(str(tmp), str(path))
 
 
 def append_to_daily(text: str, day: str | None = None) -> Path:
@@ -812,3 +814,110 @@ def track_event(
         _write_stats(data)
     except Exception:
         pass  # Never block hooks or commands
+
+
+# ---- FTS5 full-text search ----
+
+def fts_db_path() -> Path:
+    return hive_dir() / ".fts.db"
+
+
+def rebuild_fts_index() -> None:
+    """Build or rebuild FTS5 index from daily logs and archive."""
+    import sqlite3
+
+    db = fts_db_path()
+    con = sqlite3.connect(str(db))
+    try:
+        con.execute("CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(line, date, tier)")
+        con.execute("DELETE FROM fts")
+        for tier, directory in [("daily", daily_dir()), ("archive", archive_dir())]:
+            if directory.exists():
+                for f in directory.rglob("*.md"):
+                    for line in safe_read_text(f).splitlines():
+                        if line.strip():
+                            con.execute(
+                                "INSERT INTO fts VALUES (?, ?, ?)",
+                                (line, f.stem, tier),
+                            )
+        con.commit()
+    finally:
+        con.close()
+
+
+def fts_search(query: str, limit: int = 10) -> list[dict]:
+    """FTS5 search over daily logs and archive. Falls back to [] on failure."""
+    import sqlite3
+
+    db = fts_db_path()
+    if not db.exists():
+        try:
+            rebuild_fts_index()
+        except Exception:
+            return []
+    try:
+        con = sqlite3.connect(str(db))
+        try:
+            rows = con.execute(
+                "SELECT line, date, tier, rank FROM fts WHERE fts MATCH ? ORDER BY rank LIMIT ?",
+                (query, limit),
+            ).fetchall()
+        finally:
+            con.close()
+        results = []
+        for line, date_str, tier, rank in rows:
+            # rank is negative in FTS5; more negative = better match
+            score = max(1, int(60 + rank * 5))
+            results.append({"tier": tier, "line": line, "date": date_str, "score": score})
+        return results
+    except Exception:
+        return []
+
+
+# ---- Memory decay scoring ----
+
+IMPORTANCE_WEIGHTS = {"CORRECTION": 1.5, "DECISION": 1.2, "FACT": 1.0, "INSIGHT": 1.0}
+
+
+def _count_fact_references(fact_text: str) -> int:
+    """Count how many times this fact is referenced in the last 30 daily log files."""
+    keywords = [w.lower() for w in fact_text.split() if len(w) > 4]
+    if not keywords:
+        return 0
+    dd = daily_dir()
+    if not dd.exists():
+        return 0
+    files = sorted(dd.glob("*.md"), reverse=True)[:30]
+    count = 0
+    for f in files:
+        text = safe_read_text(f).lower()
+        if any(kw in text for kw in keywords):
+            count += 1
+    return count
+
+
+def score_fact_decay(fact_text: str, verified_date_str: str) -> float:
+    """Score a fact for decay. Lower score = better candidate for archiving.
+
+    Components:
+      recency (0.0-1.0, weight 0.5): 1.0 = today, 0.0 = 60+ days ago
+      references (0.0-1.0, weight 0.3): how often it appears in daily logs
+      importance (weight 0.2): by category prefix (CORRECTION > DECISION > FACT/INSIGHT)
+    """
+    try:
+        vdate = date.fromisoformat(verified_date_str)
+        days_old = (date.today() - vdate).days
+        recency = max(0.0, 1.0 - days_old / 60.0)
+    except ValueError:
+        recency = 0.0
+
+    refs = _count_fact_references(fact_text)
+    ref_score = min(1.0, refs / 10.0)
+
+    importance = 1.0
+    for cat, weight in IMPORTANCE_WEIGHTS.items():
+        if fact_text.upper().startswith(cat):
+            importance = weight
+            break
+
+    return recency * 0.5 + ref_score * 0.3 + importance * 0.2

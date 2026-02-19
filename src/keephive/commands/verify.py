@@ -171,11 +171,8 @@ def apply_verdicts(
 
         if v.verdict.value == "VALID":
             console.print(f"    [ok]VALID[/ok]: {v.reason}")
-            lines[target] = re.sub(
-                r"\[verified:\d{4}-\d{2}-\d{2}\]",
-                f"[verified:{today_str}]",
-                lines[target],
-            )
+            clean = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", lines[target]).rstrip("\n")
+            lines[target] = f"{clean} [verified:{today_str}]\n"
             updated += 1
         elif v.verdict.value == "STALE":
             console.print(f"    [err]STALE[/err]: {v.reason}")
@@ -189,11 +186,8 @@ def apply_verdicts(
         else:
             console.print(f"    [warn]UNCERTAIN[/warn]: {v.reason}")
             console.print(f"    [dim]-> Refreshed (not disproven)[/dim]")
-            lines[target] = re.sub(
-                r"\[verified:\d{4}-\d{2}-\d{2}\]",
-                f"[verified:{today_str}]",
-                lines[target],
-            )
+            clean = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", lines[target]).rstrip("\n")
+            lines[target] = f"{clean} [verified:{today_str}]\n"
             refreshed += 1
         console.print()
 

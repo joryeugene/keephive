@@ -15,7 +15,7 @@ HELP: dict[str, str] = {
     "recall": "Usage: hive rc <query> [--deep] [--json]\n  Search all memory tiers\n  --deep  Expand search with AI when few results found",
     "verify": "Usage: hive v [--check] [--json] [--verbose]\n  Verify facts against codebase using LLM\n  --check  Quick stale count, exit code 1 if stale\n  --verbose  Show raw LLM output",
     "reflect": "Usage: hive rf [scan|analyze|apply|draft <topic>]\n  scan     Quick log scan (no AI)\n  analyze  Pattern detection with AI (~20s)\n  apply    Review and graduate analysis to memory\n  draft    Draft a knowledge guide from logs",
-    "log": "Usage: hive l [date]\n  View daily log. Date: today, yesterday, N (days ago), YYYY-MM-DD",
+    "log": "Usage: hive l [date|summarize]\n  View daily log. Date: today, yesterday, N (days ago), YYYY-MM-DD\n  summarize  AI summary of today's entries (3-5 bullets)",
     "edit": "Usage: hive e [target]\n  Targets: memory, rules, claude, settings, local, today, note\n  No args: show available targets",
     "todo": "Usage: hive todo [done <pat>] [repeat [freq] [text]]\n  todo         List open TODOs\n  todo done X  Mark TODO matching X complete\n  todo repeat  List/add recurring tasks",
     "note": "Usage: hive n [show|copy|clear|list|<slot>|<template>]\n  n          Open active slot in $EDITOR\n  n.3        Switch to slot 3 (1-9, 0=10)\n  n show     Print content\n  n copy     Copy to clipboard\n  n clear    Archive and clear\n  n list     Show all slots",

@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 
-from keephive.storage import hive_dir, memory_file, rules_file
+from keephive.storage import hive_dir, memory_file
 
 
 def find_global_keephive() -> Path | None:
@@ -123,11 +123,26 @@ def check_mcp() -> bool:
 
 def check_data() -> bool:
     """Check if essential data files exist."""
-    return (
-        hive_dir().exists()
-        and memory_file().exists()
-        and rules_file().exists()
-    )
+    return hive_dir().exists() and memory_file().exists()
+
+
+def check_anthropic_memory() -> str:
+    """Detect if Anthropic official memory is active.
+
+    Returns 'active', 'inactive', or 'unknown'.
+    """
+    claude_json = Path.home() / ".claude.json"
+    if claude_json.exists():
+        try:
+            data = json.loads(claude_json.read_text())
+            if data.get("memories") or data.get("memory"):
+                return "active"
+        except (json.JSONDecodeError, OSError):
+            pass
+    memories_dir = Path.home() / ".claude" / "memories"
+    if memories_dir.exists() and any(memories_dir.iterdir()):
+        return "active"
+    return "inactive"
 
 
 def health_summary() -> tuple[bool, bool, bool]:

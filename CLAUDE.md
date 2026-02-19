@@ -48,6 +48,12 @@ Every claude -p callsite uses `run_claude_pipe()` with a Pydantic response model
 
 Tests must catch real bugs. `test_claude_pipe.py` uses the ACTUAL response format from production (including system init messages in the array). If a test passes but production fails, the test is wrong, not the code.
 
+## LLM Test Rule
+
+LLM-dependent tests use `llm_hive_env` fixture + `@pytest.mark.llm`.
+Run: `uv run pytest -m llm -v -o "addopts="`
+`HIVE_SKIP_LLM=1` is ONLY for fast-path fixtures. NEVER use it to "test" an LLM feature — that skips the feature entirely and proves nothing.
+
 ## Silent Output = Failed Verification
 
 When a command produces NO output (empty stdout AND stderr), that is NOT success. It means something is broken silently. NEVER skip past empty output.

@@ -149,3 +149,9 @@ class RecallExpandResponse(BaseModel):
     terms: list[str]
 
 
+# ---- Log Summarize ----
+
+class DailySummaryResponse(BaseModel):
+    bullets: list[str]  # 3-5 summary points
+
+

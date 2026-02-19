@@ -10,27 +10,34 @@ Claude Code forgets everything between sessions. keephive rides alongside it usi
 
 ## Install
 
-One line (requires [uv](https://docs.astral.sh/uv/)):
-
 ```bash
-curl -fsSL https://raw.githubusercontent.com/joryeugene/keephive/main/install.sh | bash
-```
-
-This installs the package, registers the MCP server, and configures Claude Code hooks.
-
-Or manually:
-
-```bash
-uv tool install keephive@git+https://github.com/joryeugene/keephive.git
+uv tool install keephive
 keephive setup
 ```
 
-From a local clone:
+Requires [uv](https://docs.astral.sh/uv/). This installs from [PyPI](https://pypi.org/project/keephive/), registers the MCP server, and configures Claude Code hooks.
+
+Via pip:
+
+```bash
+pip install keephive
+keephive setup
+```
+
+From source:
 
 ```bash
 git clone https://github.com/joryeugene/keephive.git
 cd keephive && uv tool install . && keephive setup
 ```
+
+### Stay up to date
+
+```bash
+uv tool upgrade keephive  # then: keephive setup
+```
+
+Run `keephive setup` again after upgrading to sync hooks and the MCP server registration to the new binary path.
 
 ## Quick start
 
@@ -121,7 +128,7 @@ keephive uses the three extension points Claude Code exposes:
 | `hive audit`            | `hive a`          | Quality Pulse: 3 perspectives + synthesis  |
 | `hive standup`          | `hive su`         | Standup summary with GitHub PR integration |
 | `hive stats`            | `hive st`         | Usage statistics                           |
-| `hive log [date]`       | `hive l`          | View daily log                             |
+| `hive log [date]`       | `hive l`          | View daily log; `hive l summarize` for LLM summary |
 | `hive note`             | `hive n`          | Multi-slot scratchpad ($EDITOR)            |
 | `hive knowledge`        | `hive k`          | List/view knowledge guides                 |
 | `hive prompt`           | `hive p`          | List/use prompt templates                  |
@@ -156,6 +163,14 @@ keephive uses the three extension points Claude Code exposes:
 
 `hive st` shows usage statistics with per-project breakdown, session streaks, and activity sparklines.
 
+#### Smart Recall
+
+`hive rc <query>` uses an SQLite FTS5 index over all daily logs and the archive for ranked full-text search. Run `hive gc` to rebuild the index. Falls back to grep if the index is absent.
+
+#### Log Summarize
+
+`hive l summarize` pipes today's log entries to claude-haiku and prints 3-5 bullet-point highlights. Useful after long sessions before compaction.
+
 #### Edit
 
 `hive e <target>` opens files in `$EDITOR`. Targets: memory, rules, todo (with diff-on-save), CLAUDE.md, settings, daily log, notes. Run `hive e` with no arguments to see all targets.
@@ -177,7 +192,7 @@ keephive uses the three extension points Claude Code exposes:
 
 All commands are also available as MCP tools for Claude Code to call directly:
 
-`hive_remember`, `hive_recall`, `hive_status`, `hive_todo`, `hive_todo_done`, `hive_knowledge`, `hive_knowledge_write`, `hive_prompt_write`, `hive_mem`, `hive_rule`, `hive_log`, `hive_audit`, `hive_recurring`, `hive_stats`
+`hive_remember`, `hive_recall`, `hive_status`, `hive_todo`, `hive_todo_done`, `hive_knowledge`, `hive_knowledge_write`, `hive_prompt_write`, `hive_mem`, `hive_rule`, `hive_log`, `hive_audit`, `hive_recurring`, `hive_stats`, `hive_fts_search`
 
 ## Configuration
 

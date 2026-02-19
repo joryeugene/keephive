@@ -58,8 +58,9 @@ def cmd_status(args: list[str]) -> None:
         pass
 
     # Health indicators
-    from keephive.health import health_summary
+    from keephive.health import check_anthropic_memory, health_summary
     hooks_ok, mcp_ok, data_ok = health_summary()
+    anthropic_mem = check_anthropic_memory()
 
     if json_mode:
         print(json.dumps({
@@ -75,6 +76,7 @@ def cmd_status(args: list[str]) -> None:
             "hooks_ok": hooks_ok,
             "mcp_ok": mcp_ok,
             "data_ok": data_ok,
+            "anthropic_memory": anthropic_mem,
         }))
         return
 
@@ -85,7 +87,10 @@ def cmd_status(args: list[str]) -> None:
     def _dot(ok: bool, label: str) -> str:
         return f"[ok]\u25cf[/ok] {label}" if ok else f"[dim]\u25cb[/dim] {label}"
 
-    health_line = f"  {_dot(hooks_ok, 'hooks')}  {_dot(mcp_ok, 'mcp')}  {_dot(data_ok, 'data')}"
+    health_parts = [_dot(hooks_ok, "hooks"), _dot(mcp_ok, "mcp"), _dot(data_ok, "data")]
+    if anthropic_mem == "active":
+        health_parts.append("[dim]anthropic-mem[/dim]")
+    health_line = f"  {'  '.join(health_parts)}"
     console.print(health_line)
     if not all([hooks_ok, mcp_ok, data_ok]):
         console.print("  Run: [bold]hive setup[/bold]")

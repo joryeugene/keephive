@@ -11,6 +11,7 @@ from difflib import SequenceMatcher
 from pathlib import Path
 
 from keephive.health import (
+    check_anthropic_memory,
     check_installed_deps as _check_installed_deps,
     get_installed_version as _get_installed_version,
 )
@@ -84,6 +85,17 @@ def cmd_doctor(args: list[str]) -> None:
         if os.environ.get("CLAUDECODE"):
             console.print("  [warn]WARN[/warn] Inside Claude Code without API key: LLM features disabled")
             console.print("  [dim]  Set ANTHROPIC_API_KEY for audit, verify, standup, reflect[/dim]")
+
+    # 3.7. Anthropic Memory
+    console.print()
+    console.print("[bold]Anthropic Memory[/bold]")
+    anthropic_mem = check_anthropic_memory()
+    if anthropic_mem == "active":
+        console.print("  [warn]ACTIVE[/warn]  Both Anthropic memory and keephive are active.")
+        console.print("  [dim]  keephive = structured + auditable; Anthropic = opaque + session-aware[/dim]")
+        console.print("  [dim]  They complement, not conflict. Use both.[/dim]")
+    else:
+        console.print("  [dim]Not detected (inactive or unknown)[/dim]")
 
     # 4. Hooks
     console.print()

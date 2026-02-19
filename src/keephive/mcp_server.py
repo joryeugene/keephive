@@ -13,6 +13,7 @@ from keephive.storage import (
     daily_file,
     ensure_daily,
     ensure_dirs,
+    fts_search,
     get_meaningful_entries,
     guides_dir,
     memory_file,
@@ -520,6 +521,23 @@ def hive_rule(action: str = "list", text: str = "") -> str:
         return f"Removed: {removed}"
 
     return f"Unknown action: {action}. Use 'list', 'add', or 'rm'."
+
+
+@mcp.tool()
+def hive_fts_search(query: str, limit: int = 10) -> str:
+    """Full-text search over daily logs and archive using SQLite FTS5.
+
+    Returns ranked results from daily logs and archived entries.
+    Falls back gracefully if index not built yet."""
+    _track_mcp("fts_search")
+    results = fts_search(query, limit=limit)
+    if not results:
+        return f"No FTS results for: {query}"
+    lines = [f"FTS results for: {query} ({len(results)} found)\n"]
+    for r in results:
+        date_str = f" {r.get('date', '')}" if r.get("date") else ""
+        lines.append(f"[{r['score']:>3}] ({r['tier']}){date_str} {r['line']}")
+    return "\n".join(lines)
 
 
 def main() -> None:

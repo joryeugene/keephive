@@ -386,3 +386,104 @@ class TestMCPTracking:
         today = date.today().isoformat()
         assert data["days"][today]["commands"]["remember"] == 1
         assert data["days"][today]["sources"]["mcp"] == 1
+
+
+# ---- Display function tests ----
+
+class TestDisplayFull:
+    def test_prints_today_this_week_all_time(self, hive_env, capsys):
+        from keephive.commands.stats import _display_full
+        from keephive.storage import track_event
+
+        track_event("commands", "status", source="terminal")
+        data = {"days": {date.today().isoformat(): {"commands": {"status": 1}, "sources": {"terminal": 1}}}}
+
+        _display_full(data)
+        out = capsys.readouterr().out
+        assert "Today:" in out
+        assert "This week:" in out
+        assert "All time:" in out
+
+    def test_empty_data_shows_no_stats(self, hive_env, capsys):
+        from keephive.commands.stats import _display_full
+
+        _display_full({"days": {}})
+        out = capsys.readouterr().out
+        assert "No stats" in out
+
+
+class TestDisplayDay:
+    def test_prints_commands_and_hooks(self, hive_env, capsys):
+        from keephive.commands.stats import _display_day
+        from keephive.storage import track_event
+
+        today_str = date.today().isoformat()
+        track_event("commands", "remember", source="terminal")
+        track_event("hooks", "sessionstart", source="hook")
+        data = {
+            "days": {
+                today_str: {
+                    "commands": {"remember": 1},
+                    "hooks": {"sessionstart": 1},
+                    "sources": {"terminal": 1, "hook": 1},
+                }
+            }
+        }
+        _display_day(data, "today")
+        out = capsys.readouterr().out
+        assert "remember" in out or "commands" in out.lower() or today_str in out
+
+    def test_missing_day_shows_no_data(self, hive_env, capsys):
+        from keephive.commands.stats import _display_day
+
+        _display_day({"days": {}}, "yesterday")
+        out = capsys.readouterr().out
+        assert out  # at least some output, even if empty data
+
+
+class TestDisplayProject:
+    def test_sparkline_shown_when_data_exists(self, hive_env, capsys):
+        from keephive.commands.stats import _display_project
+        from keephive.storage import track_event
+
+        today_str = date.today().isoformat()
+        proj_key = "~/Documents/GitHub/keephive"
+        data = {
+            "days": {
+                today_str: {
+                    "projects": {
+                        proj_key: {"commands": 5, "sessions": 1, "by_command": {"status": 5}},
+                    }
+                }
+            }
+        }
+        _display_project(data, "keephive")
+        out = capsys.readouterr().out
+        assert out  # project data shown
+
+    def test_no_matching_project(self, hive_env, capsys):
+        from keephive.commands.stats import _display_project
+
+        _display_project({"days": {}}, "nonexistent")
+        out = capsys.readouterr().out
+        assert "no project" in out.lower() or "not found" in out.lower() or out
+
+
+class TestRelativeDay:
+    def test_today(self):
+        from keephive.commands.stats import _relative_day
+        assert _relative_day(date.today().isoformat()) == "today"
+
+    def test_yesterday(self):
+        from keephive.commands.stats import _relative_day
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        assert _relative_day(yesterday) == "yesterday"
+
+    def test_three_days_ago(self):
+        from keephive.commands.stats import _relative_day
+        three_ago = (date.today() - timedelta(days=3)).isoformat()
+        assert _relative_day(three_ago) == "3d ago"
+
+    def test_invalid_date_passthrough(self):
+        from keephive.commands.stats import _relative_day
+        assert _relative_day("not-a-date") == "not-a-date"

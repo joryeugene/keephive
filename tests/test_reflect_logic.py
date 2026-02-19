@@ -241,3 +241,113 @@ class TestGetPendingAnalysis:
 
         result = get_pending_analysis()
         assert result is None
+
+
+# ---- _reflect_apply (auto mode) ----
+
+class TestReflectApplyAuto:
+    def _write_analysis(self, hive_env: Path, response) -> None:
+        from keephive.storage import hive_dir
+        analyze_path = hive_dir() / ".last-analyze.json"
+        analyze_path.write_text(response.model_dump_json(indent=2))
+
+    def test_auto_writes_additions_to_memory(self, hive_env):
+        from keephive.commands.reflect import _reflect_apply
+        from keephive.models import Addition, ReflectAnalyzeResponse
+        from keephive.storage import memory_file
+
+        response = ReflectAnalyzeResponse(
+            patterns=[],
+            additions=[
+                Addition(fact="FTS5 search is faster than grep", source="2026-02-19"),
+            ],
+            contradictions=[],
+            actions=[],
+        )
+        self._write_analysis(hive_env, response)
+
+        # --auto skips interactive prompts
+        _reflect_apply(["--auto"])
+
+        mem = memory_file().read_text()
+        assert "FTS5 search is faster than grep" in mem
+
+    def test_auto_writes_multiple_additions(self, hive_env):
+        from keephive.commands.reflect import _reflect_apply
+        from keephive.models import Addition, ReflectAnalyzeResponse
+        from keephive.storage import memory_file
+
+        response = ReflectAnalyzeResponse(
+            patterns=[],
+            additions=[
+                Addition(fact="Fact one about testing", source="2026-02-19"),
+                Addition(fact="Fact two about storage", source="2026-02-19"),
+            ],
+            contradictions=[],
+            actions=[],
+        )
+        self._write_analysis(hive_env, response)
+        _reflect_apply(["--auto"])
+
+        mem = memory_file().read_text()
+        assert "Fact one about testing" in mem
+        assert "Fact two about storage" in mem
+
+    def test_auto_stale_analysis_warns(self, hive_env, capsys):
+        import os
+
+        from keephive.commands.reflect import _reflect_apply
+        from keephive.models import Addition, ReflectAnalyzeResponse
+        from keephive.storage import hive_dir
+
+        response = ReflectAnalyzeResponse(
+            patterns=[],
+            additions=[Addition(fact="Some old fact", source="2026-01-01")],
+            contradictions=[],
+            actions=[],
+        )
+        analyze_path = hive_dir() / ".last-analyze.json"
+        analyze_path.write_text(response.model_dump_json(indent=2))
+
+        # Make the analysis file 26 hours old
+        old_time = time.time() - 26 * 3600
+        os.utime(analyze_path, (old_time, old_time))
+
+        _reflect_apply(["--auto"])
+        out = capsys.readouterr().out
+        assert "old" in out.lower() or "h old" in out.lower() or "analyze" in out.lower()
+
+    def test_auto_contradictions_only_no_additions(self, hive_env):
+        from keephive.commands.reflect import _reflect_apply
+        from keephive.models import Contradiction, ReflectAnalyzeResponse
+        from keephive.storage import memory_file
+
+        # Set up memory with the fact that will be contradicted
+        mem_path = memory_file()
+        mem_path.write_text("- Python is slow [verified:2026-01-01]\n")
+
+        response = ReflectAnalyzeResponse(
+            patterns=[],
+            additions=[],
+            contradictions=[
+                Contradiction(
+                    memory="Python is slow",
+                    log="Python is actually fast with PyPy",
+                    date="2026-02-19",
+                ),
+            ],
+            actions=[],
+        )
+        self._write_analysis(hive_env, response)
+        _reflect_apply(["--auto"])
+
+        # Contradiction should update memory, no additions processed
+        mem = memory_file().read_text()
+        assert "Python is actually fast with PyPy" in mem
+
+    def test_no_analysis_file_exits_gracefully(self, hive_env, capsys):
+        from keephive.commands.reflect import _reflect_apply
+
+        _reflect_apply(["--auto"])
+        out = capsys.readouterr().out
+        assert "no pending" in out.lower() or "analyze" in out.lower()

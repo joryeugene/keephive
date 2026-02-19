@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import date
-
 from keephive.output import console
 from keephive.storage import daily_dir, daily_file, ensure_daily, count_daily_entries, parse_date_arg
 
@@ -30,8 +28,49 @@ def _nearby_logs(limit: int = 5) -> list[tuple[str, int]]:
     return results
 
 
+def _log_summarize() -> None:
+    """Summarize today's log via LLM."""
+    import os
+    import sys
+
+    from keephive.storage import daily_file, today
+
+    df = daily_file()
+    if not df.exists() or not df.read_text().strip():
+        console.print("[dim]No entries today to summarize[/dim]")
+        return
+
+    if os.environ.get("HIVE_SKIP_LLM"):
+        console.print("[dim]HIVE_SKIP_LLM set, skipping summarize[/dim]")
+        return
+
+    from keephive.claude import ClaudePipeError, run_claude_pipe
+    from keephive.models import DailySummaryResponse
+
+    log_text = df.read_text()
+    prompt = (
+        f"Summarize the following daily log in 3-5 concise bullet points. "
+        f"Focus on decisions made, facts learned, and tasks completed. "
+        f"Be specific, not generic.\n\n{log_text}"
+    )
+    try:
+        with console.status("  Summarizing...", spinner="dots"):
+            resp = run_claude_pipe(prompt, DailySummaryResponse, model="haiku")
+    except ClaudePipeError as e:
+        print(f"[keephive] summarize failed: {e}", file=sys.stderr)
+        return
+
+    console.print(f"[bold]Today ({today()}) — summary:[/bold]")
+    for bullet in resp.bullets:
+        console.print(f"  • {bullet}")
+
+
 def cmd_log(args: list[str]) -> None:
     ensure_daily()
+
+    if args and args[0] == "summarize":
+        _log_summarize()
+        return
 
     date_arg = args[0] if args else ""
     target_date = _parse_date_arg(date_arg)
