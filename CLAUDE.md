@@ -30,6 +30,11 @@ A knowledge sidecar for Claude Code.
 - `commands/skill.py`: Plugin/skill system for extensible commands.
 - `commands/stats.py`: Usage statistics with per-project breakdown, streaks, and activity sparklines.
 - `commands/todo.py`: TODO lifecycle: list, add, done, edit, recurring.
+- `commands/verify.py`: LLM-powered fact verification. Checks facts against codebase, auto-corrects when deterministic.
+- `commands/reflect.py`: Four-stage flow: scan (deterministic) → analyze (LLM) → apply (interactive review) → draft (generate guide).
+- `commands/standup.py`: Standup generation from daily logs + GitHub PR data. Weekend-aware cutoff, clipboard copy.
+- `commands/doctor.py`: Health check (hooks, MCP, deps, data). Uses LLM for semantic TODO deduplication.
+- `commands/setup.py`: Registers MCP server in ~/.claude.json and hooks in ~/.claude/settings.json. Auto-syncs global install.
 - `hooks/sessionstart.py`: Injects context at session start. No LLM call.
 - `hooks/precompact.py`: Layer 1 extraction (deterministic) + Layer 2 auto-write to daily log (claude -p).
 - `hooks/posttooluse.py`: Counter-based periodic nudge after Edit/Write tool use.

@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.10.0
+
+### UX
+
+- Y/n confirmation prompts on all destructive and LLM operations
+- Per-command `--help` for every command
+- `hive e todo` opens the TODO file with diff-on-save to detect external changes
+- `hive v` now supports `--all` to verify every fact (not just stale ones)
+- `hive rf apply` interactive review with accept/skip/edit per pattern
+- Knowledge guide prefix matching (`hive k str` matches `strategy`)
+
+### Fixes
+
+- `keephive setup` auto-syncs global install when source is newer
+- `prompt_yn()` returns default when stdin is not a TTY (fixes scripted usage)
+
+### Docs
+
+- README rewrite with feature descriptions, status example, install options
+- CLAUDE.md architecture section expanded
+
 ## v0.9.0
 
 First public release.

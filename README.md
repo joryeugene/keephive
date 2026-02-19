@@ -104,26 +104,31 @@ keephive uses the three extension points Claude Code exposes:
 
 ## Commands
 
-| Command                | Short             | What                                       |
-| ---------------------- | ----------------- | ------------------------------------------ |
-| `hive status`          | `hive s`          | Status overview                            |
-| `hive remember "text"` | `hive r "text"`   | Save to daily log                          |
-| `hive recall <query>`  | `hive rc <query>` | Search all tiers                           |
-| `hive verify`          | `hive v`          | Verify stale facts                         |
-| `hive session [mode]`  | `hive go`         | Launch interactive session                 |
-| `hive todo`            | `hive td`         | Open TODOs with ages                       |
-| `hive todo done <pat>` |                   | Mark TODO complete                         |
-| `hive edit <target>`   | `hive e`          | Edit memory, rules, todos, etc.            |
-| `hive reflect`         | `hive rf`         | Pattern scan across daily logs             |
-| `hive audit`           | `hive a`          | Quality Pulse: 3 perspectives + synthesis  |
-| `hive standup`         | `hive su`         | Standup summary with GitHub PR integration |
-| `hive stats`           | `hive st`         | Usage statistics                           |
-| `hive log [date]`      | `hive l`          | View daily log                             |
-| `hive note`            | `hive n`          | Multi-slot scratchpad ($EDITOR)            |
-| `hive knowledge`       | `hive k`          | List/view knowledge guides                 |
-| `hive prompt`          | `hive p`          | List/use prompt templates                  |
-| `hive doctor`          | `hive dr`         | Health check                               |
-| `hive gc`              | `hive g`          | Archive old logs                           |
+| Command                 | Short             | What                                       |
+| ----------------------- | ----------------- | ------------------------------------------ |
+| `hive status`           | `hive s`          | Status overview                            |
+| `hive remember "text"`  | `hive r "text"`   | Save to daily log                          |
+| `hive recall <query>`   | `hive rc <query>` | Search all tiers                           |
+| `hive mem [rm] <text>`  | `hive m`          | Add/remove working memory facts            |
+| `hive rule [rm] <text>` |                   | Add/remove behavioral rules                |
+| `hive verify`           | `hive v`          | Verify stale facts                         |
+| `hive session [mode]`   | `hive go`         | Launch interactive session                 |
+| `hive todo`             | `hive td`         | Open TODOs with ages                       |
+| `hive todo done <pat>`  |                   | Mark TODO complete                         |
+| `hive t <text>`         |                   | Quick-add a TODO                           |
+| `hive edit <target>`    | `hive e`          | Edit memory, rules, todos, etc.            |
+| `hive reflect`          | `hive rf`         | Pattern scan across daily logs             |
+| `hive audit`            | `hive a`          | Quality Pulse: 3 perspectives + synthesis  |
+| `hive standup`          | `hive su`         | Standup summary with GitHub PR integration |
+| `hive stats`            | `hive st`         | Usage statistics                           |
+| `hive log [date]`       | `hive l`          | View daily log                             |
+| `hive note`             | `hive n`          | Multi-slot scratchpad ($EDITOR)            |
+| `hive knowledge`        | `hive k`          | List/view knowledge guides                 |
+| `hive prompt`           | `hive p`          | List/use prompt templates                  |
+| `hive skill`            | `hive sk`         | Manage skill plugins                       |
+| `hive doctor`           | `hive dr`         | Health check                               |
+| `hive gc`               | `hive g`          | Archive old logs                           |
+| `hive setup`            |                   | Register hooks and MCP server              |
 
 ### Features in depth
 
