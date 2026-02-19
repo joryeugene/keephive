@@ -57,3 +57,19 @@ def prompt_choice(prompt: str, valid: list[str]) -> str:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
     sys.stdout.write(ch + "\n")
     return ch if ch in valid else valid[-1]
+
+
+def prompt_yn(prompt: str, default_yes: bool = True) -> bool:
+    """Y/n confirmation. Returns True for yes. Instant keypress on TTY."""
+    import sys
+
+    if not sys.stdin.isatty():
+        return default_yes
+
+    hint = "(Y/n)" if default_yes else "(y/N)"
+    choice = prompt_choice(f"{prompt} {hint} ", ["y", "n"])
+    if choice == "y":
+        return True
+    if choice == "n":
+        return False
+    return default_yes

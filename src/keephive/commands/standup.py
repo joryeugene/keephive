@@ -9,7 +9,7 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
-from keephive.output import console
+from keephive.output import console, prompt_yn
 from keephive.storage import collect_todos, daily_dir, get_meaningful_entries, safe_read_text, today
 
 
@@ -385,6 +385,8 @@ def cmd_standup(args: list[str]) -> None:
 
     # LLM mode vs deterministic
     if os.environ.get("HIVE_SKIP_LLM"):
+        standup_text = _display_deterministic(data)
+    elif not prompt_yn("  Format with LLM?"):
         standup_text = _display_deterministic(data)
     else:
         standup_text = _display_llm(data)

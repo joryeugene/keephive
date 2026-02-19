@@ -23,8 +23,20 @@ def cmd_edit(args: list[str]) -> None:
     target = args[0] if args else ""
     editor = os.environ.get("EDITOR", "vi")
 
+    if not target:
+        console.print("[bold]Edit targets:[/bold]")
+        console.print("  memory     working/memory.md")
+        console.print("  rules      working/rules.md")
+        console.print("  claude     nearest CLAUDE.md (walks up from cwd)")
+        console.print("  settings   ~/.claude/settings.json")
+        console.print("  local      ~/.claude/settings.local.json")
+        console.print("  today      today's daily log")
+        console.print("  note       active note slot")
+        console.print()
+        console.print("Usage: [dim]hive e <target>[/dim]")
+        return
+
     shortcuts = {
-        "": working_dir() / "memory.md",
         "memory": working_dir() / "memory.md",
         "rules": working_dir() / "rules.md",
         "note": slot_file(active_slot()),

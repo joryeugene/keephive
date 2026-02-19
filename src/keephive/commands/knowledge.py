@@ -6,7 +6,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from keephive.output import console
+from keephive.output import console, prompt_yn
 from keephive.storage import ensure_dirs, guides_dir, prompts_dir
 
 
@@ -64,6 +64,8 @@ def cmd_knowledge_edit(args: list[str]) -> None:
     if match:
         fpath = match
     else:
+        if not prompt_yn(f"  Create new guide '{name}'?"):
+            return
         safe_name = name.lower().replace(" ", "-")
         safe_name = "".join(c for c in safe_name if c.isalnum() or c == "-")
         fpath = guides_dir() / f"{safe_name}.md"
@@ -102,6 +104,8 @@ def cmd_prompt_edit(args: list[str]) -> None:
     if match:
         fpath = match
     else:
+        if not prompt_yn(f"  Create new prompt '{name}'?"):
+            return
         safe_name = name.lower().replace(" ", "-")
         safe_name = "".join(c for c in safe_name if c.isalnum() or c == "-")
         fpath = prompts_dir() / f"{safe_name}.md"

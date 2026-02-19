@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
 
-from keephive.output import console
+from keephive.output import console, prompt_yn
 from keephive.storage import (
     append_to_daily,
     collect_todos,
@@ -884,7 +884,11 @@ def cmd_audit(args: list[str]) -> None:
         _display_metrics(score, vault, cleaner, strategist, previous_play)
         return
 
-    # JSON mode without LLM skip still needs LLM
+    # Confirm before LLM calls
+    if not prompt_yn("  Run 3-perspective LLM analysis?"):
+        _display_metrics(score, vault, cleaner, strategist, previous_play)
+        return
+
     console.print("\n  Running 3 perspectives in parallel...")
 
     # 2. Run 3 perspective LLM calls in parallel

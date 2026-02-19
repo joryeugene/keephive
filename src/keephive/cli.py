@@ -8,6 +8,40 @@ import sys
 from keephive import __version__
 
 
+# Per-command help strings, keyed by canonical command name.
+HELP: dict[str, str] = {
+    "status": "Usage: hive s\n  Status overview (facts, TODOs, stale warnings)",
+    "remember": "Usage: hive r <text>\n  Save insight to daily log\n  Prefix with FACT:/DECISION:/TODO:/INSIGHT:/CORRECTION: for categorization",
+    "recall": "Usage: hive rc <query> [--deep] [--json]\n  Search all memory tiers\n  --deep  Expand search with AI when few results found",
+    "verify": "Usage: hive v [--check] [--json] [--verbose]\n  Verify facts against codebase using LLM\n  --check  Quick stale count, exit code 1 if stale\n  --verbose  Show raw LLM output",
+    "reflect": "Usage: hive rf [scan|analyze|apply|draft <topic>]\n  scan     Quick log scan (no AI)\n  analyze  Pattern detection with AI (~20s)\n  apply    Review and graduate analysis to memory\n  draft    Draft a knowledge guide from logs",
+    "log": "Usage: hive l [date]\n  View daily log. Date: today, yesterday, N (days ago), YYYY-MM-DD",
+    "edit": "Usage: hive e [target]\n  Targets: memory, rules, claude, settings, local, today, note\n  No args: show available targets",
+    "todo": "Usage: hive todo [done <pat>] [repeat [freq] [text]]\n  todo         List open TODOs\n  todo done X  Mark TODO matching X complete\n  todo repeat  List/add recurring tasks",
+    "note": "Usage: hive n [show|copy|clear|list|<slot>|<template>]\n  n          Open active slot in $EDITOR\n  n.3        Switch to slot 3 (1-9, 0=10)\n  n show     Print content\n  n copy     Copy to clipboard\n  n clear    Archive and clear\n  n list     Show all slots",
+    "knowledge": "Usage: hive k [name|edit <name>|rm <name>]\n  k           List all guides and prompts\n  k <name>    View guide (prefix match)\n  k edit X    Create/edit guide\n  k rm X      Remove guide",
+    "audit": "Usage: hive a [-v] [--json]\n  Quality Pulse: 3-perspective LLM analysis + synthesis\n  -v      Show full perspective essays\n  --json  Machine-readable output",
+    "doctor": "Usage: hive dr\n  Health check: hooks, MCP, deps, data integrity\n  Uses LLM for semantic TODO dedup (deterministic fallback if unavailable)",
+    "gc": "Usage: hive gc [--dry-run]\n  Archive daily logs older than 30 days\n  --dry-run  Show what would be archived without doing it",
+    "standup": "Usage: hive su\n  Generate standup summary from daily logs + GitHub PRs\n  Uses LLM for formatting. Copies to clipboard.",
+    "stats": "Usage: hive st [-p <project>] [date]\n  Usage statistics. Date: today, N (days ago), YYYY-MM-DD",
+    "mem": "Usage: hive m [rm] <text>\n  Add or remove working memory facts\n  hive m <text>      Add fact to memory.md\n  hive m rm <pat>    Remove line matching pattern",
+    "rule": "Usage: hive rule [rm] <text>\n  Add or remove behavioral rules\n  hive rule <text>      Add rule\n  hive rule rm <pat>    Remove matching rule",
+    "session": "Usage: hive go [mode|prompt]\n  Modes: todo, verify, learn, reflect\n  Or load a custom prompt from knowledge/prompts/",
+    "skill": "Usage: hive sk [publish <name>|unpublish <name>|sync|find <q>]\n  Manage skill plugins",
+}
+
+# Map aliases to canonical names for help lookup
+_CANONICAL: dict[str, str] = {
+    "s": "status", "r": "remember", "rc": "recall", "v": "verify",
+    "rf": "reflect", "l": "log", "e": "edit", "n": "note", "d": "note",
+    "nc": "note", "dc": "note", "m": "mem", "td": "todo", "t": "todo",
+    "su": "standup", "k": "knowledge", "ke": "knowledge", "p": "knowledge",
+    "pe": "knowledge", "sk": "skill", "a": "audit", "g": "gc", "dr": "doctor",
+    "st": "stats", "go": "session", "sess": "session",
+}
+
+
 def _help() -> None:
     """Print help text."""
     print(f"""keephive v{__version__}  -  a knowledge sidecar for Claude Code
@@ -139,7 +173,7 @@ def main(args: list[str] | None = None) -> None:
         _help()
         return
 
-    if cmd == "--version":
+    if cmd in ("--version", "-v"):
         print(f"keephive v{__version__}")
         return
 
@@ -173,8 +207,17 @@ def main(args: list[str] | None = None) -> None:
 
     if cmd not in COMMANDS:
         print(f"Unknown command: {cmd}")
-        print("Run 'keephive help' for usage")
+        print("Run 'hive help' for usage")
         sys.exit(1)
+
+    # Per-command help
+    if any(a in ("--help", "-h") for a in args[1:]):
+        canonical = _CANONICAL.get(cmd, cmd)
+        if canonical in HELP:
+            print(HELP[canonical])
+        else:
+            _help()
+        return
 
     module_path, func_name = COMMANDS[cmd]
 

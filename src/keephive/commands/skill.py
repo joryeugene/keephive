@@ -92,8 +92,8 @@ def _skill_list() -> None:
 
 def _skill_publish(args: list[str]) -> None:
     if not args:
-        # Publish all
-        _skill_sync()
+        console.print("[warn]Specify a guide to publish, or use 'sync' to publish all[/warn]")
+        console.print("Usage: hive sk publish <name>  |  hive sk sync")
         return
 
     name = args[0]

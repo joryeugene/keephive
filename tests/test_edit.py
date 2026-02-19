@@ -9,14 +9,16 @@ import pytest
 
 
 class TestCmdEdit:
-    def test_default_opens_memory(self, hive_env):
-        """No args opens memory.md."""
+    def test_default_shows_targets(self, hive_env, capsys):
+        """No args shows available targets instead of opening editor."""
         with patch("subprocess.run") as mock_run:
             from keephive.commands.edit import cmd_edit
             cmd_edit([])
-            mock_run.assert_called_once()
-            args = mock_run.call_args[0][0]
-            assert args[1].endswith("memory.md")
+            mock_run.assert_not_called()
+        out = capsys.readouterr().out
+        assert "Edit targets:" in out
+        assert "memory" in out
+        assert "hive e" in out
 
     def test_memory_shortcut(self, hive_env):
         with patch("subprocess.run") as mock_run:

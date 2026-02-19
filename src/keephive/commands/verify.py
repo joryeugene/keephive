@@ -11,7 +11,7 @@ from pathlib import Path
 
 from keephive.claude import ClaudePipeError, run_claude_pipe
 from keephive.models import VerifyResponse
-from keephive.output import console
+from keephive.output import console, prompt_yn
 from keephive.storage import (
     backup_and_write,
     get_all_verified_facts,
@@ -72,6 +72,9 @@ def cmd_verify(args: list[str]) -> None:
     for _, fact_text, _ in all_facts:
         console.print(f"  [dim]* {fact_text}[/dim]")
     console.print()
+
+    if not prompt_yn("  Verify with LLM?"):
+        return
 
     # Build the prompt with tool-based investigation
     versions = version_context()

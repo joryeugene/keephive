@@ -8,7 +8,7 @@ import re
 import sys
 from datetime import date, timedelta
 
-from keephive.output import console
+from keephive.output import console, prompt_yn
 from keephive.storage import (
     append_to_daily,
     daily_dir,
@@ -80,9 +80,10 @@ def cmd_recall(args: list[str]) -> None:
         return
 
     if deep_mode and not os.environ.get("HIVE_SKIP_LLM") and len(results) < 5:
-        expanded = _expand_and_search(query, results)
-        if expanded is not None:
-            results = expanded
+        if prompt_yn("  Expand search with AI?"):
+            expanded = _expand_and_search(query, results)
+            if expanded is not None:
+                results = expanded
 
     _display_results(query, results)
 
@@ -110,6 +111,9 @@ def _display_results(query: str, results: list[dict]) -> None:
             line = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line)
         date_str = f" {r.get('date', '')}" if r.get("date") else ""
         console.print(f"[{style}]{score_str} {tier_str}{date_str}[/{style}] {line}")
+
+    if len(results) > 20:
+        console.print(f"\n  [dim]Showing 20 of {len(results)} results[/dim]")
 
     console.print(f"\n  -> hive e to edit working memory  |  hive k <name> to view a guide")
 

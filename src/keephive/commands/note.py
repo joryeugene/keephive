@@ -7,7 +7,7 @@ import subprocess
 import os
 from pathlib import Path
 
-from keephive.output import console
+from keephive.output import console, prompt_yn
 from keephive.storage import (
     active_slot,
     drafts_dir,
@@ -232,9 +232,12 @@ def _note_show(slot: int | None = None) -> None:
 def _note_clear(slot: int | None = None) -> None:
     """Clear the note slot."""
     path = _note_file(slot)
+    slot_num = slot or active_slot()
+    if path.exists() and path.read_text().strip():
+        if not prompt_yn(f"  Clear note [{slot_num}]?"):
+            return
     if path.exists():
         path.write_text("")
-    slot_num = slot or active_slot()
     console.print(f"[ok]Note \\[{slot_num}] cleared[/ok]")
     _print_slot_bar()
 

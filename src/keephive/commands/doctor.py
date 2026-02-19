@@ -14,7 +14,7 @@ from keephive.health import (
     check_installed_deps as _check_installed_deps,
     get_installed_version as _get_installed_version,
 )
-from keephive.output import console
+from keephive.output import console, prompt_yn
 from keephive.storage import (
     archive_dir,
     collect_todos,
@@ -180,6 +180,8 @@ def _data_quality_checks() -> int:
 
     # Duplicate detection: LLM or deterministic
     if os.environ.get("HIVE_SKIP_LLM"):
+        _detect_duplicates_deterministic(ot)
+    elif not prompt_yn("  Check for semantic duplicates with LLM?"):
         _detect_duplicates_deterministic(ot)
     else:
         extra_issues += _detect_duplicates_llm(ot)

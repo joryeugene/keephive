@@ -569,3 +569,19 @@ def test_setup_userpromptsubmit_hook(tmp_path):
 def test_unknown_command():
     r = _run(["nonexistent"])
     assert r.returncode != 0
+    assert "hive help" in r.stdout
+
+
+def test_per_command_help():
+    """--help flag shows per-command help for known commands."""
+    r = _run(["todo", "--help"])
+    assert r.returncode == 0
+    assert "Usage:" in r.stdout
+    assert "todo" in r.stdout
+
+
+def test_version_short_flag():
+    """-v shows version."""
+    r = _run(["-v"])
+    assert r.returncode == 0
+    assert "keephive v" in r.stdout

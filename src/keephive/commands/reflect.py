@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from datetime import date, datetime
 
 from keephive.claude import ClaudePipeError, run_claude_pipe
 from keephive.models import GuideDraftResponse, ReflectAnalyzeResponse
-from keephive.output import console, prompt_choice
+from keephive.output import console, prompt_choice, prompt_yn
 from keephive.storage import (
     backup_and_write,
     daily_dir,
@@ -125,6 +126,13 @@ def _reflect_analyze(args: list[str]) -> None:
 
     console.print(f"Reading {entry_count} entries across {len(files)} days...")
 
+    if os.environ.get("HIVE_SKIP_LLM"):
+        console.print("[dim]Skipping LLM analysis (HIVE_SKIP_LLM=1)[/dim]")
+        return
+
+    if not prompt_yn("  Analyze with LLM? (~20s)"):
+        return
+
     current_memory = read_memory()
     existing_guides = ""
     gd = guides_dir()
@@ -198,13 +206,6 @@ Rules:
         for action in response.actions:
             console.print(f"  [info]-> {action}[/info]")
         console.print()
-
-        # Save actions as TODOs in daily log
-        from keephive.storage import append_to_daily, ensure_daily
-        ensure_daily()
-        ts = datetime.now().strftime("%H:%M:%S")
-        for action in response.actions:
-            append_to_daily(f"- [{ts}] ACTION: [reflect] {action}")
 
     if not response.patterns and not response.additions and not response.contradictions and not response.actions:
         console.print("No significant patterns found in recent logs.")
@@ -471,6 +472,13 @@ def _reflect_draft(args: list[str]) -> None:
 
     day_count = len(set(d for d, _ in unique_entries))
     console.print(f"  Found {len(unique_entries)} entries across {day_count} days")
+
+    if os.environ.get("HIVE_SKIP_LLM"):
+        console.print("[dim]Skipping LLM draft (HIVE_SKIP_LLM=1)[/dim]")
+        return
+
+    if not prompt_yn("  Draft guide with LLM?"):
+        return
 
     # Build input for LLM
     entry_text = ""
