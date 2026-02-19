@@ -41,6 +41,27 @@ hive go                                            # launch interactive session
 hive todo                                          # open TODOs
 ```
 
+After a few sessions, `hive s` shows what your agent has learned:
+
+```console
+$ hive s
+keephive v0.9.0
+  ● hooks  ● mcp  ● data
+
+  4 facts (4 ok) | 12 today | 8 yesterday | 2 guides | 48K
+
+  1 open TODO(s):
+    [today] Add rate limiting to the /upload endpoint.
+
+  Today:
+  ~ [10:42:15] FACT: Auth service uses JWT with RS256, tokens expire after 1h.
+  ~ [10:38:01] DECISION: Chose Postgres over SQLite for multi-user support.
+  ~ [09:15:44] INSIGHT: The retry logic in api_client.py silently swallows 429s.
+  [09:12:30] DONE: Migrate user table to new schema.
+
+  hive go (session) | hive l (log) | hive rf (reflect) | hive help
+```
+
 ## How it works
 
 keephive uses the three extension points Claude Code exposes:
