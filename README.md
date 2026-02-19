@@ -2,7 +2,9 @@
 
 A knowledge sidecar for Claude Code. Captures what you learn, verifies it stays true, surfaces it when relevant.
 
-<img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/mascot.png" width="200" />
+<p align="center">
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/mascot.png" width="320" />
+</p>
 
 Claude Code forgets everything between sessions. keephive rides alongside it using hooks, an MCP server, and CLAUDE.md injection to give it persistent, verified memory.
 
