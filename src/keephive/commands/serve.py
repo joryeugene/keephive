@@ -223,7 +223,7 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .acc-header:hover{background:#262c36}
 .acc-toggle{color:#6e7681;font-size:10px;width:10px;flex-shrink:0;display:inline-block;transition:transform .15s}
 .acc-header.open .acc-toggle{transform:rotate(90deg)}
-.acc-name{flex:1}
+.acc-name{flex:0 0 auto}.acc-preview{flex:1;font-size:11px;color:#6e7681;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 4px}.acc-header.open .acc-preview{display:none}
 .acc-meta{font-size:11px;color:#6e7681}
 .acc-type{font-size:10px;padding:1px 6px;border-radius:10px;background:#21262d;color:#8b949e}
 .acc-body{padding:12px 14px;display:none;font-size:13px}
@@ -268,6 +268,14 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .standup-label{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px}
 .standup-item{font-size:12px;color:#c9d1d9;padding:2px 0}
 .done-item{color:#3fb950}.pr-item{color:#79c0ff}
+.panel-input{display:flex;gap:6px;padding:8px 12px 4px;border-top:1px solid #21262d}
+.panel-input input{flex:1;background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:5px 8px;color:#e6edf3;font-size:12px;outline:none}
+.panel-input input:focus{border-color:#58a6ff}
+.panel-input input.input-error{border-color:#f85149}
+.panel-input button{background:#238636;border:none;border-radius:4px;color:#fff;padding:5px 10px;cursor:pointer;font-size:13px;font-weight:600}
+.panel-input button:hover{background:#2ea043}
+.todo-done-btn{background:transparent;border:1px solid #30363d;border-radius:3px;color:#7d8590;padding:1px 5px;cursor:pointer;font-size:11px;margin-left:auto;flex-shrink:0}
+.todo-done-btn:hover{border-color:#238636;color:#3fb950}
 #search-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:200;background:rgba(0,0,0,0.6);justify-content:center;align-items:flex-start;padding-top:80px}
 .search-panel{background:#161b22;border:1px solid #30363d;border-radius:8px;width:600px;max-width:92vw;max-height:70vh;overflow-y:auto}
 .search-header{padding:10px 14px;border-bottom:1px solid #30363d;display:flex;justify-content:space-between;align-items:center}
@@ -279,6 +287,19 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .search-result:last-child{border-bottom:none}
 .search-date{color:#6e7681;font-size:11px;margin-right:8px;font-family:monospace}
 .search-line{color:#c9d1d9;word-break:break-word}
+.sparkline{display:flex;align-items:flex-end;gap:2px;height:32px;padding:8px 12px 4px;border-bottom:1px solid #21262d}
+.spark-bar{flex:1;background:#1f6feb;border-radius:2px 2px 0 0;min-height:2px;cursor:default;transition:opacity .15s}
+.spark-bar:hover{opacity:.65}
+.spark-bar.today{background:#3fb950}
+.log-filter{display:flex;gap:4px;padding:5px 12px;border-bottom:1px solid #21262d;flex-wrap:wrap}
+.log-filter-btn{font-size:11px;padding:1px 7px;border-radius:10px;cursor:pointer;border:1px solid #30363d;background:#21262d;color:#8b949e}
+.log-filter-btn.active{border-color:#58a6ff;color:#58a6ff;background:#122131}
+.log-filter-btn:hover:not(.active){border-color:#6e7681;color:#c9d1d9}
+.log-entry.filtered{display:none}
+.slot-switcher{display:flex;gap:4px;padding:5px 12px;border-bottom:1px solid #21262d}
+.slot-btn{background:#21262d;border:1px solid #30363d;border-radius:3px;color:#8b949e;padding:1px 7px;cursor:pointer;font-size:11px}
+.slot-btn.active{border-color:#58a6ff;color:#58a6ff}
+.slot-btn:hover:not(.active){border-color:#6e7681;color:#c9d1d9}
 """
 
 _JS = """
@@ -418,6 +439,58 @@ _JS = """
   });
   var sc=document.getElementById('search-close');
   if(sc)sc.addEventListener('click',closeSearch);
+
+  // --- CRUD panel inputs ---
+  document.addEventListener('submit',function(e){
+    var f=e.target.closest('.panel-input');
+    if(!f)return;
+    e.preventDefault();
+    var inp=f.querySelector('input');
+    var btn=f.querySelector('button');
+    var val=inp.value.trim();
+    if(!val)return;
+    btn.disabled=true;btn.textContent='\u2026';
+    var action=f.dataset.action;
+    var field=f.dataset.field;
+    var body={};body[field]=val;
+    fetch(action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        btn.disabled=false;btn.textContent='+';
+        if(d.ok){inp.value='';refresh();}
+        else{inp.classList.add('input-error');setTimeout(function(){inp.classList.remove('input-error');},2000);}
+      })
+      .catch(function(){btn.disabled=false;btn.textContent='+';});
+  });
+  document.addEventListener('click',function(e){
+    var btn=e.target.closest('.todo-done-btn');
+    if(!btn)return;
+    var pattern=btn.dataset.pattern;
+    fetch('/api/todo/done',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pattern:pattern})})
+      .then(function(r){return r.json();})
+      .then(function(d){if(d.ok)refresh();});
+  });
+
+  // --- Log type filter ---
+  document.addEventListener('click',function(e){
+    var btn=e.target.closest('.log-filter-btn');
+    if(!btn)return;
+    var type=btn.dataset.type;
+    var container=btn.closest('.card');
+    if(!container)return;
+    container.querySelectorAll('.log-filter-btn').forEach(function(b){b.classList.toggle('active',b===btn);});
+    container.querySelectorAll('.log-entry').forEach(function(entry){
+      if(!type){entry.classList.remove('filtered');}
+      else{entry.classList.toggle('filtered',entry.dataset.type!==type);}
+    });
+  });
+
+  // --- Note slot switcher ---
+  window.switchNote=function(n){
+    fetch('/api/note/switch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slot:n})})
+      .then(function(r){return r.json();})
+      .then(function(d){if(d.ok)refresh();});
+  };
 
   // --- Split pane drag ---
   document.addEventListener('mousedown',function(e){
@@ -577,7 +650,9 @@ def _get_knowledge_data() -> dict:
     skills_base = Path.home() / ".claude" / "skills"
     if skills_base.exists():
         for d in sorted(p for p in skills_base.iterdir() if p.is_dir()):
-            skills.append(d.name)
+            skill_md = d / "SKILL.md"
+            content = safe_read_text(skill_md) if skill_md.exists() else ""
+            skills.append({"name": d.name, "content": content})
     return {"guides": guides, "prompts": prompts, "skills": skills}
 
 
@@ -643,6 +718,14 @@ def _get_stats_data() -> dict:
         )._calculate_streak(days)
     ) or (0, 0)
 
+    # 14-day per-day command totals for sparkline
+    daily_spark: list[tuple[str, int]] = []
+    for i in range(13, -1, -1):
+        d = date.today() - timedelta(days=i)
+        day_s = d.isoformat()
+        total_cmds = sum(days.get(day_s, {}).get("commands", {}).values())
+        daily_spark.append((d.strftime("%b %d"), total_cmds))
+
     return {
         "commands": top,
         "today": cmd_today,
@@ -651,6 +734,7 @@ def _get_stats_data() -> dict:
         "projects": top_projects,
         "curr_streak": curr_streak,
         "longest_streak": longest_streak,
+        "daily_spark": daily_spark,
     }
 
 
@@ -852,7 +936,7 @@ def _render_log_panel(data: dict, limit: int = 0, show_nav: bool = True, see_mor
             if text.upper().startswith(pfx):
                 text = text[len(pfx):].lstrip()
         rows += (
-            f'<div class="log-entry">'
+            f'<div class="log-entry" data-type="{_e(cat)}">'
             f'<span class="log-time">{_e(e["time"])}</span>'
             f'<span class="log-text{cat_cls}">{badge}{_e(text)}</span>'
             f"</div>"
@@ -866,9 +950,31 @@ def _render_log_panel(data: dict, limit: int = 0, show_nav: bool = True, see_mor
     elif truncated:
         see_more_html = f'<div class="empty" style="text-align:center;padding-top:6px">{total - limit} more entries \u2014 visit /daily</div>'
 
+    # Filter bar: only when enough entries with type diversity
+    filter_html = ""
+    all_entries = data.get("entries", [])
+    cats_present = {e.get("cat", "") for e in all_entries} - {""}
+    if total > 10 and len(cats_present) > 1:
+        _FILTER_LABELS = [
+            ("", "All"), ("fact", "FACT"), ("todo", "TODO"), ("done", "DONE"),
+            ("insight", "INS"), ("decision", "DEC"), ("correction", "COR"), ("auto", "AUTO"),
+        ]
+        btns = ""
+        for cat_key, label in _FILTER_LABELS:
+            if cat_key == "" or cat_key in cats_present:
+                active_cls = " active" if cat_key == "" else ""
+                btns += f'<button class="log-filter-btn{active_cls}" data-type="{_e(cat_key)}">{label}</button>'
+        filter_html = f'<div class="log-filter">{btns}</div>'
+
     data_panel_attr = ' data-panel="log"' if show_nav else ""
     title = "Today's Log" if not date_str or date_str == _date.today().isoformat() else "Log"
     log_hints = _cmd_hints(['hive r "FACT: ..."', "hive l", "hive l summarize"])
+    log_input = (
+        '<form class="panel-input" data-action="/api/remember" data-field="text">'
+        '<input type="text" placeholder="hive r \u2014 fact or note..." autocomplete="off">'
+        '<button type="submit">+</button>'
+        '</form>'
+    )
     return (
         f'<div class="card"{data_panel_attr}>'
         f'<div class="card-header">'
@@ -877,6 +983,8 @@ def _render_log_panel(data: dict, limit: int = 0, show_nav: bool = True, see_mor
         f'<span class="card-meta">{meta}</span>'
         f'</div>'
         f'{log_hints}'
+        f'{filter_html}'
+        f'{log_input}'
         f'<div class="card-body">{rows}{see_more_html}</div>'
         f"</div>"
     )
@@ -913,15 +1021,23 @@ def _render_todo_panel(data: dict, limit: int = 0) -> str:
             f'<div class="todo-item">'
             f'<span class="todo-age {age_cls}">{age_label}</span>'
             f'<span class="todo-text">{_e(text)}</span>'
+            f'<button class="todo-done-btn" data-pattern="{_e(text)}" title="Mark done">&#10003;</button>'
             f"</div>"
         )
     if not rows:
         rows = '<div class="empty">No open TODOs</div>'
     meta = f"{total}" if total else ""
+    todo_input = (
+        '<form class="panel-input" data-action="/api/todo/add" data-field="text">'
+        '<input type="text" placeholder="Add a TODO..." autocomplete="off">'
+        '<button type="submit">+</button>'
+        '</form>'
+    )
     return (
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Open TODOs</span><span class="card-meta">{meta}</span></div>'
         f'{_cmd_hints(["hive t <text>", "hive todo done <pat>", "hive todo"])}'
+        f'{todo_input}'
         f'<div class="card-body">{rows}</div>'
         f"</div>"
     )
@@ -991,13 +1107,23 @@ def _render_knowledge_panel(data: dict) -> str:
     if skills:
         rows += '<div class="know-divider">Skills</div>'
     for s in skills:
+        name = s["name"]
+        content = s.get("content", "")
+        if content:
+            body = f'<div class="acc-body md">{render_md(content)}</div>'
+            toggle = "&#9654;"
+            toggle_style = ""
+        else:
+            body = ""
+            toggle = "&#8212;"
+            toggle_style = ' style="color:#30363d"'
         rows += (
             f'<div class="accordion">'
             f'<div class="acc-header">'
-            f'<span class="acc-toggle" style="color:#30363d">&#8212;</span>'
-            f'<span class="acc-name">{_e(s)}</span>'
+            f'<span class="acc-toggle"{toggle_style}>{toggle}</span>'
+            f'<span class="acc-name">{_e(name)}</span>'
             f'<span class="acc-type">skill</span>'
-            f"</div></div>"
+            f"</div>{body}</div>"
         )
     if not rows:
         rows = '<div class="empty">No knowledge guides yet — hive ke &lt;name&gt;</div>'
@@ -1052,23 +1178,50 @@ def _render_notes_panel(data: dict) -> str:
     for s in slots:
         active_cls = " active" if s["active"] else ""
         badge = f'<span class="slot-badge{active_cls}">Slot {s["slot"]}{" \u2605" if s["active"] else ""}</span>'
-        body = f'<div class="acc-body md">{badge}<br>{render_md(s["content"])}</div>'
+        # Strip the "Slot N ★" storage marker from rendered body — it's shown via badge
+        content_lines = s["content"].splitlines()
+        body_lines = [ln for ln in content_lines if not re.match(r"^Slot \d+", ln)]
+        content_body = "\n".join(body_lines).strip()
+        body = f'<div class="acc-body md">{badge}<br>{render_md(content_body)}</div>'
         meta = f'{s["lines"]}L'
+        # Build 1-line preview for collapsed state (first non-empty, non-slot-header line)
+        preview_lines = [ln.strip() for ln in content_lines if ln.strip() and not re.match(r"^Slot \d+", ln)]
+        preview_text = preview_lines[0][:68] + "\u2026" if preview_lines and len(preview_lines[0]) > 68 else (preview_lines[0] if preview_lines else "")
+        preview_html = f'<span class="acc-preview">{_e(preview_text)}</span>' if preview_text else ""
         rows += (
             f'<div class="accordion">'
             f'<div class="acc-header">'
             f'<span class="acc-toggle">&#9654;</span>'
             f'<span class="acc-name">Note {s["slot"]}{" (active)" if s["active"] else ""}</span>'
+            f'{preview_html}'
             f'<span class="acc-meta">{meta}</span>'
             f"</div>{body}</div>"
         )
     if not rows:
         rows = '<div class="empty">No notes — hive n</div>'
     meta = f"{len(slots)} slots" if slots else ""
+
+    # Slot switcher buttons
+    max_slot = max((s["slot"] for s in slots), default=4)
+    slot_btns = ""
+    for n in range(1, max_slot + 1):
+        is_active = any(s["slot"] == n and s["active"] for s in slots)
+        active_cls = " active" if is_active else ""
+        slot_btns += f'<button class="slot-btn{active_cls}" onclick="switchNote({n})">{n}</button>'
+    slot_switcher = f'<div class="slot-switcher">{slot_btns}</div>' if slot_btns else ""
+
+    note_input = (
+        '<form class="panel-input" data-action="/api/note/append" data-field="text">'
+        '<input type="text" placeholder="Append to active note..." autocomplete="off">'
+        '<button type="submit">+</button>'
+        '</form>'
+    )
     return (
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Notes</span><span class="card-meta">{meta}</span></div>'
         f'{_cmd_hints(["hive n", "hive n show", "hive nc", "hive n.3"])}'
+        f'{slot_switcher}'
+        f'{note_input}'
         f'<div class="card-body">{rows}</div>'
         f"</div>"
     )
@@ -1081,6 +1234,17 @@ def _render_stats_panel(data: dict) -> str:
     total_days = data.get("total_days", 0)
     curr_streak = data.get("curr_streak", 0)
     longest_streak = data.get("longest_streak", 0)
+    daily_spark = data.get("daily_spark", [])
+
+    sparkline_html = ""
+    if daily_spark and any(c > 0 for _, c in daily_spark):
+        max_c = max(c for _, c in daily_spark) or 1
+        bars = ""
+        for i, (label, count) in enumerate(daily_spark):
+            h = max(2, round(count / max_c * 28)) if count > 0 else 2
+            today_cls = " today" if i == len(daily_spark) - 1 else ""
+            bars += f'<div class="spark-bar{today_cls}" style="height:{h}px" title="{_e(label)}: {count} cmds"></div>'
+        sparkline_html = f'<div class="sparkline">{bars}</div>'
 
     streak_html = ""
     if total_days > 0:
@@ -1110,6 +1274,7 @@ def _render_stats_panel(data: dict) -> str:
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Usage Stats</span><span class="card-meta">{meta}</span></div>'
         f'{_cmd_hints(["hive st", "hive st -p <project>", "hive st yesterday"])}'
+        f'{sparkline_html}'
         f'<div class="card-body">{streak_html}{rows}</div>'
         f"</div>"
     )
@@ -1237,8 +1402,8 @@ VIEWS: dict[str, dict] = {
             ["status", "ps"],
             ["log-home"],
             ["todos"],
-            ["knowledge-limited", "notes"],
-            ["memory"],
+            ["knowledge-limited"],
+            ["memory", "notes"],
         ],
     },
     "daily": {
@@ -1256,7 +1421,7 @@ VIEWS: dict[str, dict] = {
         "title": "Dev",
         "rows": [
             ["status-brief"],
-            ["knowledge", "memory"],
+            ["knowledge-limited", "memory"],
             ["facts"],
         ],
     },
@@ -1276,17 +1441,17 @@ VIEWS: dict[str, dict] = {
     "know": {
         "path": "/know",
         "title": "Know",
-        "rows": [["knowledge"]],
+        "rows": [["status-brief"], ["knowledge"]],
     },
     "mem": {
         "path": "/mem",
         "title": "Mem",
-        "rows": [["memory"]],
+        "rows": [["status-brief"], ["memory"]],
     },
     "notes": {
         "path": "/notes",
         "title": "Notes",
-        "rows": [["notes"]],
+        "rows": [["status-brief"], ["notes"]],
     },
 }
 
@@ -1472,11 +1637,6 @@ class _HiveHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self) -> None:
-        if self.path != "/ui-feedback":
-            self.send_response(404)
-            self.end_headers()
-            return
-
         length = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(length)
         try:
@@ -1487,14 +1647,106 @@ class _HiveHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
-        try:
-            from keephive.storage import ui_queue_path
+        ok = True
+        error = ""
 
-            ui_queue_path(self.__class__.project_name or None).write_text(json.dumps(data, indent=2))
-        except Exception:
-            pass
+        if self.path == "/ui-feedback":
+            try:
+                from keephive.storage import ui_queue_path
 
-        resp = json.dumps({"ok": True}).encode()
+                ui_queue_path(self.__class__.project_name or None).write_text(json.dumps(data, indent=2))
+            except Exception as exc:
+                ok = False
+                error = str(exc)
+
+        elif self.path == "/api/remember":
+            text = (data.get("text") or "").strip()
+            if not text:
+                ok = False
+                error = "text required"
+            else:
+                try:
+                    from datetime import datetime
+
+                    from keephive.storage import append_to_daily
+
+                    ts = datetime.now().strftime("%H:%M:%S")
+                    append_to_daily(f"- [{ts}] {text}")
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/todo/add":
+            text = (data.get("text") or "").strip()
+            if not text:
+                ok = False
+                error = "text required"
+            else:
+                try:
+                    from datetime import datetime
+
+                    from keephive.storage import append_to_daily
+
+                    ts = datetime.now().strftime("%H:%M:%S")
+                    append_to_daily(f"- [{ts}] TODO: {text}")
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/todo/done":
+            pattern = (data.get("pattern") or "").strip()
+            if not pattern:
+                ok = False
+                error = "pattern required"
+            else:
+                try:
+                    from keephive.commands.todo import _todo_done
+
+                    _todo_done(pattern)
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/note/append":
+            text = (data.get("text") or "").strip()
+            if not text:
+                ok = False
+                error = "text required"
+            else:
+                try:
+                    from keephive.storage import active_slot, slot_file
+
+                    f = slot_file(active_slot())
+                    with f.open("a") as fh:
+                        fh.write(text + "\n")
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/note/switch":
+            slot = data.get("slot")
+            if not isinstance(slot, int) or not 1 <= slot <= 10:
+                ok = False
+                error = "slot must be integer 1-10"
+            else:
+                try:
+                    from keephive.storage import set_active_slot
+
+                    set_active_slot(slot)
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        else:
+            self.send_response(404)
+            self._cors()
+            self.end_headers()
+            return
+
+        if ok:
+            resp = json.dumps({"ok": True}).encode()
+        else:
+            resp = json.dumps({"ok": False, "error": error}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self._cors()
@@ -1507,7 +1759,7 @@ class _HiveHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
-    def log_message(self, format: str, *args) -> None:  # noqa: A002
+    def log_message(self, format: str, *args: object) -> None:  # noqa: A002
         pass  # Silence request logging
 
 

@@ -906,7 +906,7 @@ def test_knowledge_panel_shows_all_dividers(hive_env):
     data = {
         "guides": [{"name": "g1", "content": "guide"}],
         "prompts": [{"name": "p1", "content": "prompt"}],
-        "skills": ["skill-one"],
+        "skills": [{"name": "skill-one", "content": ""}],
     }
     html = _render_knowledge_panel(data)
     assert html.count('know-divider') == 3
@@ -1283,3 +1283,764 @@ def test_serve_is_registered():
     assert "ws" in COMMANDS
     assert COMMANDS["serve"] == ("keephive.commands.serve", "cmd_serve")
     assert COMMANDS["ws"] == ("keephive.commands.serve", "cmd_serve")
+
+
+# ---- Part 1: Layout fix — memory+notes paired, knowledge full-width ----
+
+
+def test_all_view_memory_notes_paired():
+    """In the All view, memory and notes share a row (2 items)."""
+    from keephive.commands.serve import VIEWS
+
+    all_rows = VIEWS["all"]["rows"]
+    memory_notes_row = next((r for r in all_rows if "memory" in r and "notes" in r), None)
+    assert memory_notes_row is not None, "No row with both 'memory' and 'notes' in All view"
+    assert len(memory_notes_row) == 2
+
+
+def test_all_view_knowledge_full_width():
+    """In the All view, knowledge-limited is alone in its row (full-width)."""
+    from keephive.commands.serve import VIEWS
+
+    all_rows = VIEWS["all"]["rows"]
+    know_row = next((r for r in all_rows if any("knowledge" in p for p in r)), None)
+    assert know_row is not None, "No knowledge row in All view"
+    assert len(know_row) == 1
+
+
+# ---- Part 2: Web CRUD — POST endpoints ----
+
+
+def test_http_post_remember(hive_env):
+    """POST /api/remember appends entry to daily log."""
+    import os
+
+    os.environ["HIVE_HOME"] = str(hive_env)
+
+    from keephive.commands.serve import _HiveHandler, HTTPServer
+
+    port = 13870
+    _HiveHandler.server_port = port
+    httpd = HTTPServer(("localhost", port), _HiveHandler)
+
+    t = threading.Thread(target=httpd.handle_request, daemon=True)
+    t.start()
+    time.sleep(0.1)
+
+    payload = json.dumps({"text": "FACT: test from web"})
+    conn = HTTPConnection("localhost", port, timeout=3)
+    conn.request("POST", "/api/remember", body=payload, headers={"Content-Type": "application/json"})
+    resp = conn.getresponse()
+    body = resp.read()
+    conn.close()
+    httpd.server_close()
+
+    assert resp.status == 200
+    data = json.loads(body)
+    assert data["ok"] is True
+
+    # Entry should appear in today's daily log
+    from keephive.storage import daily_file
+    log_text = daily_file().read_text()
+    assert "FACT: test from web" in log_text
+
+
+def test_http_post_todo_add(hive_env):
+    """POST /api/todo/add appends TODO entry to daily log."""
+    import os
+
+    os.environ["HIVE_HOME"] = str(hive_env)
+
+    from keephive.commands.serve import _HiveHandler, HTTPServer
+
+    port = 13871
+    _HiveHandler.server_port = port
+    httpd = HTTPServer(("localhost", port), _HiveHandler)
+
+    t = threading.Thread(target=httpd.handle_request, daemon=True)
+    t.start()
+    time.sleep(0.1)
+
+    payload = json.dumps({"text": "fix the widget"})
+    conn = HTTPConnection("localhost", port, timeout=3)
+    conn.request("POST", "/api/todo/add", body=payload, headers={"Content-Type": "application/json"})
+    resp = conn.getresponse()
+    body = resp.read()
+    conn.close()
+    httpd.server_close()
+
+    assert resp.status == 200
+    data = json.loads(body)
+    assert data["ok"] is True
+
+    from keephive.storage import daily_file
+    log_text = daily_file().read_text()
+    assert "TODO: fix the widget" in log_text
+
+
+def test_http_post_todo_done(hive_env):
+    """POST /api/todo/done marks a matching TODO as complete."""
+    import os
+
+    os.environ["HIVE_HOME"] = str(hive_env)
+
+    # Pre-populate a TODO in the daily log
+    from datetime import datetime
+
+    from keephive.storage import append_to_daily, daily_file
+
+    ts = datetime.now().strftime("%H:%M:%S")
+    append_to_daily(f"- [{ts}] TODO: complete this specific task")
+
+    from keephive.commands.serve import _HiveHandler, HTTPServer
+
+    port = 13872
+    _HiveHandler.server_port = port
+    httpd = HTTPServer(("localhost", port), _HiveHandler)
+
+    t = threading.Thread(target=httpd.handle_request, daemon=True)
+    t.start()
+    time.sleep(0.1)
+
+    payload = json.dumps({"pattern": "complete this specific task"})
+    conn = HTTPConnection("localhost", port, timeout=3)
+    conn.request("POST", "/api/todo/done", body=payload, headers={"Content-Type": "application/json"})
+    resp = conn.getresponse()
+    body = resp.read()
+    conn.close()
+    httpd.server_close()
+
+    assert resp.status == 200
+    data = json.loads(body)
+    assert data["ok"] is True
+
+    # DONE entry should be in the log
+    log_text = daily_file().read_text()
+    assert "DONE: complete this specific task" in log_text
+
+
+def test_http_post_note_append(hive_env):
+    """POST /api/note/append appends text to the active note slot."""
+    import os
+
+    os.environ["HIVE_HOME"] = str(hive_env)
+
+    from keephive.commands.serve import _HiveHandler, HTTPServer
+
+    port = 13873
+    _HiveHandler.server_port = port
+    httpd = HTTPServer(("localhost", port), _HiveHandler)
+
+    t = threading.Thread(target=httpd.handle_request, daemon=True)
+    t.start()
+    time.sleep(0.1)
+
+    payload = json.dumps({"text": "a new note line"})
+    conn = HTTPConnection("localhost", port, timeout=3)
+    conn.request("POST", "/api/note/append", body=payload, headers={"Content-Type": "application/json"})
+    resp = conn.getresponse()
+    body = resp.read()
+    conn.close()
+    httpd.server_close()
+
+    assert resp.status == 200
+    data = json.loads(body)
+    assert data["ok"] is True
+
+    from keephive.storage import active_slot, slot_file
+    note_text = slot_file(active_slot()).read_text()
+    assert "a new note line" in note_text
+
+
+def test_http_post_remember_empty_text(hive_env):
+    """POST /api/remember with empty text returns ok=False."""
+    import os
+
+    os.environ["HIVE_HOME"] = str(hive_env)
+
+    from keephive.commands.serve import _HiveHandler, HTTPServer
+
+    port = 13874
+    _HiveHandler.server_port = port
+    httpd = HTTPServer(("localhost", port), _HiveHandler)
+
+    t = threading.Thread(target=httpd.handle_request, daemon=True)
+    t.start()
+    time.sleep(0.1)
+
+    payload = json.dumps({"text": ""})
+    conn = HTTPConnection("localhost", port, timeout=3)
+    conn.request("POST", "/api/remember", body=payload, headers={"Content-Type": "application/json"})
+    resp = conn.getresponse()
+    body = resp.read()
+    conn.close()
+    httpd.server_close()
+
+    assert resp.status == 200
+    data = json.loads(body)
+    assert data["ok"] is False
+
+
+def test_http_post_unknown_path(hive_env):
+    """POST to unknown path returns 404."""
+    import os
+
+    os.environ["HIVE_HOME"] = str(hive_env)
+
+    from keephive.commands.serve import _HiveHandler, HTTPServer
+
+    port = 13875
+    _HiveHandler.server_port = port
+    httpd = HTTPServer(("localhost", port), _HiveHandler)
+
+    t = threading.Thread(target=httpd.handle_request, daemon=True)
+    t.start()
+    time.sleep(0.1)
+
+    payload = json.dumps({"text": "hello"})
+    conn = HTTPConnection("localhost", port, timeout=3)
+    conn.request("POST", "/api/nonexistent", body=payload, headers={"Content-Type": "application/json"})
+    resp = conn.getresponse()
+    resp.read()
+    conn.close()
+    httpd.server_close()
+
+    assert resp.status == 404
+
+
+# ---- Part 2: Frontend forms in HTML ----
+
+
+def test_log_panel_has_quick_remember_form(hive_env):
+    """Log panel HTML includes the quick-remember input form."""
+    from keephive.commands.serve import _get_log_data, _render_log_panel
+
+    data = _get_log_data()
+    html = _render_log_panel(data)
+    assert "panel-input" in html
+    assert "/api/remember" in html
+    assert 'placeholder' in html
+
+
+def test_todo_panel_has_add_form(hive_env):
+    """TODO panel HTML includes the add-todo input form."""
+    from keephive.commands.serve import _get_todo_data, _render_todo_panel
+
+    data = _get_todo_data()
+    html = _render_todo_panel(data)
+    assert "panel-input" in html
+    assert "/api/todo/add" in html
+
+
+def test_todo_panel_has_done_buttons(hive_env):
+    """TODO panel renders ✓ button for each TODO item."""
+    from keephive.commands.serve import _render_todo_panel
+
+    from datetime import date
+    today = date.today().isoformat()
+    data = {
+        "todos": [(today, "10:00", "fix the thing"), (today, "10:01", "do the other")],
+        "due": [],
+    }
+    html = _render_todo_panel(data)
+    assert "todo-done-btn" in html
+    assert "fix the thing" in html
+    assert "do the other" in html
+
+
+def test_notes_panel_has_append_form(hive_env):
+    """Notes panel HTML includes the note-append input form."""
+    from keephive.commands.serve import _get_notes_data, _render_notes_panel
+
+    data = _get_notes_data()
+    html = _render_notes_panel(data)
+    assert "panel-input" in html
+    assert "/api/note/append" in html
+
+
+def test_css_has_panel_input_styles():
+    """CSS includes panel-input and todo-done-btn rules."""
+    from keephive.commands.serve import _CSS
+
+    assert ".panel-input{" in _CSS
+    assert ".panel-input input{" in _CSS
+    assert ".todo-done-btn{" in _CSS
+
+
+def test_js_has_crud_form_handler():
+    """JS includes form submission handler for panel-input forms."""
+    from keephive.commands.serve import _JS
+
+    assert "panel-input" in _JS
+    assert "/api/remember" not in _JS  # generic handler, not hardcoded URL
+    assert "dataset.action" in _JS  # reads action from form's data-action attribute
+    assert "dataset.field" in _JS
+
+
+def test_js_has_todo_done_handler():
+    """JS includes click handler for todo-done-btn."""
+    from keephive.commands.serve import _JS
+
+    assert "todo-done-btn" in _JS
+    assert "/api/todo/done" in _JS
+    assert "dataset.pattern" in _JS
+
+
+# ---- Part 3: Skill content — expandable skills with SKILL.md ----
+
+
+def test_knowledge_data_reads_skill_md(hive_env, monkeypatch, tmp_path):
+    """_get_knowledge_data reads SKILL.md from skill directories."""
+    from pathlib import Path
+
+    skills_dir = tmp_path / ".claude" / "skills"
+    skills_dir.mkdir(parents=True)
+    skill = skills_dir / "my-skill"
+    skill.mkdir()
+    (skill / "SKILL.md").write_text("# My Skill\nDoes things.")
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    from keephive.commands.serve import _get_knowledge_data
+
+    data = _get_knowledge_data()
+    skill_item = next((s for s in data["skills"] if s["name"] == "my-skill"), None)
+    assert skill_item is not None
+    assert "Does things" in skill_item["content"]
+
+
+def test_knowledge_data_skill_without_skill_md(hive_env, monkeypatch, tmp_path):
+    """Skills without SKILL.md get empty content string."""
+    from pathlib import Path
+
+    skills_dir = tmp_path / ".claude" / "skills"
+    skills_dir.mkdir(parents=True)
+    skill = skills_dir / "bare-skill"
+    skill.mkdir()
+    # No SKILL.md
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    from keephive.commands.serve import _get_knowledge_data
+
+    data = _get_knowledge_data()
+    skill_item = next((s for s in data["skills"] if s["name"] == "bare-skill"), None)
+    assert skill_item is not None
+    assert skill_item["content"] == ""
+
+
+def test_knowledge_panel_skills_expandable_with_content(hive_env):
+    """Skills with content render with chevron toggle and body."""
+    from keephive.commands.serve import _render_knowledge_panel
+
+    data = {
+        "guides": [],
+        "prompts": [],
+        "skills": [
+            {"name": "chrome-devtools", "content": "# Chrome DevTools\nUse for testing."},
+        ],
+    }
+    html = _render_knowledge_panel(data)
+    assert "Chrome DevTools" in html
+    assert "&#9654;" in html  # chevron toggle
+    assert "acc-body" in html  # expandable body present
+
+
+def test_knowledge_panel_skills_no_content_greyed(hive_env):
+    """Skills without content render with greyed em-dash (non-expandable)."""
+    from keephive.commands.serve import _render_knowledge_panel
+
+    data = {
+        "guides": [],
+        "prompts": [],
+        "skills": [
+            {"name": "no-content-skill", "content": ""},
+        ],
+    }
+    html = _render_knowledge_panel(data)
+    assert "no-content-skill" in html
+    assert "&#8212;" in html  # em-dash for non-expandable
+    # No acc-body since content is empty
+    assert "acc-body" not in html
+
+
+def test_knowledge_panel_mixed_skills(hive_env):
+    """Panel handles mix of skills with and without content."""
+    from keephive.commands.serve import _render_knowledge_panel
+
+    data = {
+        "guides": [],
+        "prompts": [],
+        "skills": [
+            {"name": "rich-skill", "content": "# Rich\nHas content."},
+            {"name": "bare-skill", "content": ""},
+        ],
+    }
+    html = _render_knowledge_panel(data)
+    assert "rich-skill" in html
+    assert "bare-skill" in html
+    assert "&#9654;" in html   # expandable chevron for rich-skill
+    assert "&#8212;" in html   # em-dash for bare-skill
+
+
+# ---- UX fixes: Dev layout, status bars, note preview ----
+
+
+def test_dev_view_uses_knowledge_limited():
+    """Dev view uses knowledge-limited (not full knowledge) to avoid height imbalance."""
+    from keephive.commands.serve import VIEWS
+
+    dev_rows = VIEWS["dev"]["rows"]
+    know_row = next((r for r in dev_rows if any("knowledge" in p for p in r)), None)
+    assert know_row is not None, "No knowledge panel in Dev view"
+    assert "knowledge-limited" in know_row, "Dev view should use knowledge-limited, not full knowledge"
+    assert "knowledge" not in [p for p in know_row if p != "knowledge-limited"], \
+        "Dev view must not use the full 'knowledge' panel"
+
+
+def test_know_view_has_status_bar():
+    """Know view includes status-brief row for context."""
+    from keephive.commands.serve import VIEWS
+
+    rows = VIEWS["know"]["rows"]
+    assert any("status-brief" in r for r in rows), "/know should have status-brief row"
+
+
+def test_mem_view_has_status_bar():
+    """Mem view includes status-brief row for context."""
+    from keephive.commands.serve import VIEWS
+
+    rows = VIEWS["mem"]["rows"]
+    assert any("status-brief" in r for r in rows), "/mem should have status-brief row"
+
+
+def test_notes_view_has_status_bar():
+    """Notes view includes status-brief row for context."""
+    from keephive.commands.serve import VIEWS
+
+    rows = VIEWS["notes"]["rows"]
+    assert any("status-brief" in r for r in rows), "/notes should have status-brief row"
+
+
+def test_notes_panel_preview_in_header(hive_env, tmp_path):
+    """Collapsed note accordions show a text preview snippet in the header."""
+    from keephive.commands.serve import _render_notes_panel
+
+    data = {
+        "slots": [
+            {
+                "slot": 1,
+                "content": "Slot 1 ★\nThis is the important content line.",
+                "lines": 2,
+                "active": True,
+            },
+            {
+                "slot": 2,
+                "content": "Slot 2\nAnother note here.",
+                "lines": 2,
+                "active": False,
+            },
+        ]
+    }
+    html = _render_notes_panel(data)
+    # Preview class is present
+    assert "acc-preview" in html
+    # First non-header line used as preview
+    assert "This is the important content line" in html
+    assert "Another note here" in html
+
+
+def test_notes_panel_strips_slot_header_from_body(hive_env):
+    """Note body strips 'Slot N ★' metadata line; badge still shows it."""
+    from keephive.commands.serve import _render_notes_panel
+
+    data = {
+        "slots": [
+            {
+                "slot": 1,
+                "content": "Slot 1 ★\nReal user content here.",
+                "lines": 2,
+                "active": True,
+            }
+        ]
+    }
+    html = _render_notes_panel(data)
+    # The slot-badge shows "Slot 1 ★" (via badge span)
+    assert "slot-badge" in html
+    # "Slot 1 ★" should NOT appear as raw text in the markdown body
+    # (It appears in badge only, not duplicated in acc-body)
+    # Count occurrences — badge = 1, body = 0 → total exactly 1
+    badge_count = html.count("Slot 1")
+    # Once in the badge span, not duplicated in the rendered markdown body
+    assert badge_count == 1, f"'Slot 1' appeared {badge_count} times, expected 1 (badge only)"
+
+
+def test_css_has_acc_preview_styles():
+    """CSS includes acc-preview rule for collapsed note slot previews."""
+    from keephive.commands.serve import _CSS
+
+    assert ".acc-preview{" in _CSS
+    assert ".acc-header.open .acc-preview{display:none}" in _CSS
+
+
+# ---- P5: Activity sparkline ----
+
+
+def test_stats_data_has_daily_spark(hive_env):
+    """_get_stats_data returns 14-day daily_spark list."""
+    from keephive.commands.serve import _get_stats_data
+
+    data = _get_stats_data()
+    assert "daily_spark" in data
+    spark = data["daily_spark"]
+    assert len(spark) == 14
+    # Each entry is (label, count)
+    for label, count in spark:
+        assert isinstance(label, str)
+        assert isinstance(count, int)
+        assert count >= 0
+    # Last entry is today
+    from datetime import date
+
+    assert date.today().strftime("%b %d") in spark[-1][0]
+
+
+def test_stats_panel_renders_sparkline_when_data(hive_env):
+    """_render_stats_panel renders sparkline bars when daily_spark has nonzero counts."""
+    from keephive.commands.serve import _render_stats_panel
+
+    data = {
+        "commands": [],
+        "today": {},
+        "week": {},
+        "total_days": 5,
+        "curr_streak": 3,
+        "longest_streak": 5,
+        "projects": [],
+        "daily_spark": [("Feb 01", 0), ("Feb 02", 10), ("Feb 03", 5), ("Feb 04", 0), ("Feb 05", 20)],
+    }
+    html = _render_stats_panel(data)
+    assert "spark-bar" in html
+    assert "spark-bar today" in html
+    # Today bar (last item) should be green
+    assert "today" in html
+
+
+def test_stats_panel_no_sparkline_when_all_zero(hive_env):
+    """_render_stats_panel skips sparkline when all counts are 0."""
+    from keephive.commands.serve import _render_stats_panel
+
+    data = {
+        "commands": [],
+        "today": {},
+        "week": {},
+        "total_days": 0,
+        "curr_streak": 0,
+        "longest_streak": 0,
+        "projects": [],
+        "daily_spark": [("Feb 01", 0), ("Feb 02", 0)],
+    }
+    html = _render_stats_panel(data)
+    assert "spark-bar" not in html
+
+
+def test_css_has_sparkline_styles():
+    """CSS includes sparkline and spark-bar rules."""
+    from keephive.commands.serve import _CSS
+
+    assert ".sparkline{" in _CSS
+    assert ".spark-bar{" in _CSS
+    assert ".spark-bar.today{" in _CSS
+
+
+# ---- P6: Log type filter ----
+
+
+def test_log_panel_entries_have_data_type_attribute(hive_env):
+    """Log entries include data-type attribute for client-side filtering."""
+    from keephive.commands.serve import _render_log_panel
+
+    data = {
+        "entries": [
+            {"time": "10:00:00", "text": "FACT: something", "cat": "fact"},
+            {"time": "10:01:00", "text": "TODO: do it", "cat": "todo"},
+        ],
+        "date": "2026-02-20",
+    }
+    html = _render_log_panel(data)
+    assert 'data-type="fact"' in html
+    assert 'data-type="todo"' in html
+
+
+def test_log_panel_filter_bar_shown_when_diverse_and_large(hive_env):
+    """Filter bar appears when > 10 entries with multiple types."""
+    from keephive.commands.serve import _render_log_panel
+
+    entries = []
+    for i in range(6):
+        entries.append({"time": f"10:0{i}:00", "text": f"FACT: f{i}", "cat": "fact"})
+    for i in range(6):
+        entries.append({"time": f"11:0{i}:00", "text": f"TODO: t{i}", "cat": "todo"})
+
+    data = {"entries": entries, "date": "2026-02-20"}
+    html = _render_log_panel(data)
+    assert "log-filter" in html
+    assert "log-filter-btn" in html
+    # All button is active initially
+    assert 'log-filter-btn active" data-type=""' in html
+
+
+def test_log_panel_filter_bar_hidden_when_few_entries(hive_env):
+    """Filter bar is absent when <= 10 entries."""
+    from keephive.commands.serve import _render_log_panel
+
+    data = {
+        "entries": [
+            {"time": "10:00:00", "text": "FACT: x", "cat": "fact"},
+            {"time": "10:01:00", "text": "TODO: y", "cat": "todo"},
+        ],
+        "date": "2026-02-20",
+    }
+    html = _render_log_panel(data)
+    assert "log-filter" not in html
+
+
+def test_log_panel_filter_bar_hidden_when_single_type(hive_env):
+    """Filter bar is absent when all entries are same type."""
+    from keephive.commands.serve import _render_log_panel
+
+    entries = [{"time": f"10:0{i}:00", "text": f"FACT: x{i}", "cat": "fact"} for i in range(12)]
+    data = {"entries": entries, "date": "2026-02-20"}
+    html = _render_log_panel(data)
+    assert "log-filter" not in html
+
+
+def test_css_has_log_filter_styles():
+    """CSS includes log-filter and log-filter-btn rules."""
+    from keephive.commands.serve import _CSS
+
+    assert ".log-filter{" in _CSS
+    assert ".log-filter-btn{" in _CSS
+    assert ".log-entry.filtered{" in _CSS
+
+
+def test_js_has_log_filter_handler():
+    """JS includes log-filter-btn click handler."""
+    from keephive.commands.serve import _JS
+
+    assert "log-filter-btn" in _JS
+    assert "filtered" in _JS
+
+
+# ---- P7: Note slot switcher ----
+
+
+def test_notes_panel_renders_slot_switcher(hive_env):
+    """Notes panel includes slot switcher buttons."""
+    from keephive.commands.serve import _render_notes_panel
+
+    data = {
+        "slots": [
+            {"slot": 1, "content": "active note", "lines": 1, "active": True},
+            {"slot": 2, "content": "second note", "lines": 1, "active": False},
+        ]
+    }
+    html = _render_notes_panel(data)
+    assert "slot-switcher" in html
+    assert "slot-btn" in html
+    assert "switchNote(1)" in html
+    assert "switchNote(2)" in html
+
+
+def test_notes_panel_active_slot_button_has_active_class(hive_env):
+    """Active slot button has 'active' CSS class."""
+    from keephive.commands.serve import _render_notes_panel
+
+    data = {
+        "slots": [
+            {"slot": 1, "content": "content", "lines": 1, "active": False},
+            {"slot": 2, "content": "active", "lines": 1, "active": True},
+        ]
+    }
+    html = _render_notes_panel(data)
+    # slot-btn active should appear for slot 2
+    assert 'slot-btn active" onclick="switchNote(2)"' in html
+    # slot 1 should not be active
+    assert 'slot-btn" onclick="switchNote(1)"' in html
+
+
+def test_api_note_switch_sets_active_slot(hive_env):
+    """POST /api/note/switch calls set_active_slot and returns ok."""
+    import os
+
+    os.environ["HIVE_HOME"] = str(hive_env)
+
+    from keephive.commands.serve import _HiveHandler, HTTPServer
+
+    port = 13876
+    _HiveHandler.server_port = port
+    httpd = HTTPServer(("localhost", port), _HiveHandler)
+    t = threading.Thread(target=httpd.handle_request, daemon=True)
+    t.start()
+    time.sleep(0.1)
+
+    payload = json.dumps({"slot": 2})
+    conn = HTTPConnection("localhost", port, timeout=3)
+    conn.request("POST", "/api/note/switch", body=payload, headers={"Content-Type": "application/json"})
+    resp = conn.getresponse()
+    body = resp.read()
+    conn.close()
+    httpd.server_close()
+
+    assert resp.status == 200
+    data = json.loads(body)
+    assert data["ok"] is True
+
+    # Verify the active slot was actually switched
+    from keephive.storage import active_slot
+    assert active_slot() == 2
+
+
+def test_api_note_switch_rejects_invalid_slot(hive_env):
+    """POST /api/note/switch rejects slot=0."""
+    import os
+
+    os.environ["HIVE_HOME"] = str(hive_env)
+
+    from keephive.commands.serve import _HiveHandler, HTTPServer
+
+    port = 13877
+    _HiveHandler.server_port = port
+    httpd = HTTPServer(("localhost", port), _HiveHandler)
+    t = threading.Thread(target=httpd.handle_request, daemon=True)
+    t.start()
+    time.sleep(0.1)
+
+    payload = json.dumps({"slot": 0})
+    conn = HTTPConnection("localhost", port, timeout=3)
+    conn.request("POST", "/api/note/switch", body=payload, headers={"Content-Type": "application/json"})
+    resp = conn.getresponse()
+    body = resp.read()
+    conn.close()
+    httpd.server_close()
+
+    assert resp.status == 200
+    data = json.loads(body)
+    assert data["ok"] is False
+
+
+def test_css_has_slot_switcher_styles():
+    """CSS includes slot-switcher and slot-btn rules."""
+    from keephive.commands.serve import _CSS
+
+    assert ".slot-switcher{" in _CSS
+    assert ".slot-btn{" in _CSS
+    assert ".slot-btn.active{" in _CSS
+
+
+def test_js_has_switch_note_function():
+    """JS includes switchNote function calling /api/note/switch."""
+    from keephive.commands.serve import _JS
+
+    assert "switchNote" in _JS
+    assert "/api/note/switch" in _JS
