@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.14.0
+## v0.15.0
 
 ### Dashboard
 
@@ -29,6 +29,19 @@
 ### Hooks
 
 - **UserPromptSubmit**: Reads `.ui-queue` before nudge logic. When a bookmarklet submission is pending, injects `[UI Feedback]` element context as `additionalContext` and clears the queue, skipping the nudge for that turn.
+
+## v0.14.0
+
+### Features
+
+- **Context-aware memory decay**: `score_fact_decay()` weights facts by recency, reference count, and importance tier. `hive gc` uses these scores to surface archive candidates. Frequently recalled facts decay slower.
+- **Verification evidence**: `hive v` now records evidence summaries alongside verdicts, showing what codebase data confirmed or contradicted each fact.
+- **Recall frequency tracking**: FTS5 search hits bump a per-fact counter. Frequently accessed facts get a decay bonus, keeping actively used knowledge from going stale.
+- **Context injection diet**: SessionStart hook no longer injects maintenance noise (Quality Pulse scores, accumulation warnings, data quality notes, guide notifications, recent entry previews). These moved to `hive s` CLI output, reducing token overhead and improving model focus.
+
+### Tests
+
+- 31 new tests in `test_audit_features.py`. 912 tests passing.
 
 ## v0.13.2
 

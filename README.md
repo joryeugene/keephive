@@ -57,7 +57,7 @@ After a few sessions, `hive` shows what your agent has learned:
 
 ```console
 $ hive
-keephive v0.14.0
+keephive v0.15.0
   ● hooks  ● mcp  ● data
 
   4 facts (4 ok) | 12 today | 8 yesterday | 2 guides | 48K
@@ -106,7 +106,7 @@ flowchart TD
         direction LR
         START([New session]) -->|SessionStart:\ninjects context| WORK([Working\nwith Claude])
         WORK -->|PostToolUse:\nperiodic nudge| WORK
-        WORK -->|UserPromptSubmit:\nTODO detection| WORK
+        WORK -->|"UserPromptSubmit:\nTODO detection\n+ .ui-queue injection"| WORK
         WORK -->|context near limit| PC[PreCompact:\nextract → classify\n→ daily log]
         PC -->|next session\nhas more context| START
     end
@@ -124,8 +124,7 @@ flowchart TD
         REM["hive r / hive_remember\ncapture a fact"]
         RCL["hive rc / hive_recall\nsearch all tiers"]
         VRF["hive v / verify\nauto-correct stale facts"]
-        DASH["hive serve\nweb dashboard"]
-        BOOK["bookmarklet\ncapture → POST"]
+        DASH["hive serve\nweb dashboard\n+ bookmarklet → .ui-queue"]
     end
 
     START -->|reads| MEM & GUIDES & RULES & TODOS
@@ -138,8 +137,6 @@ flowchart TD
     RCL -.->|searches| MEM & GUIDES & LOG
     VRF --> MEM
     DASH -.->|reads all| STORE
-    BOOK -->|"/ui-feedback"| DASH
-    DASH -->|".ui-queue"| WORK
 ```
 
 ### Memory tiers
