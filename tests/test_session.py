@@ -80,6 +80,58 @@ class TestResolveMode:
         assert prompt == "help me debug this"
 
 
+class TestParseArgs:
+    def test_no_flags(self):
+        from keephive.commands.session import _parse_args
+
+        flags, remaining = _parse_args(["todo"])
+        assert flags == []
+        assert remaining == ["todo"]
+
+    def test_continue_flag(self):
+        from keephive.commands.session import _parse_args
+
+        flags, remaining = _parse_args(["-c", "fix the auth bug"])
+        assert flags == ["--continue"]
+        assert remaining == ["fix the auth bug"]
+
+    def test_continue_long_flag(self):
+        from keephive.commands.session import _parse_args
+
+        flags, remaining = _parse_args(["--continue", "keep going"])
+        assert flags == ["--continue"]
+        assert remaining == ["keep going"]
+
+    def test_resume_with_id(self):
+        from keephive.commands.session import _parse_args
+
+        flags, remaining = _parse_args(["-r", "abc-123-uuid", "resume prompt"])
+        assert flags == ["--resume", "abc-123-uuid"]
+        assert remaining == ["resume prompt"]
+
+    def test_resume_without_id(self):
+        """When -r is the last flag before the prompt, prompt stays in remaining."""
+        from keephive.commands.session import _parse_args
+
+        flags, remaining = _parse_args(["-r", "just the prompt"])
+        assert flags == ["--resume"]
+        assert remaining == ["just the prompt"]
+
+    def test_continue_with_mode(self):
+        from keephive.commands.session import _parse_args
+
+        flags, remaining = _parse_args(["-c", "todo"])
+        assert flags == ["--continue"]
+        assert remaining == ["todo"]
+
+    def test_no_flags_empty(self):
+        from keephive.commands.session import _parse_args
+
+        flags, remaining = _parse_args([])
+        assert flags == []
+        assert remaining == []
+
+
 class TestBuildSessionPrompt:
     def test_includes_context_and_prompt(self, hive_env):
         from keephive.commands.session import _build_session_prompt
@@ -94,6 +146,19 @@ class TestBuildSessionPrompt:
 
         result = _build_session_prompt("verify", "Check facts", "ctx")
         assert "Session mode: verify" in result
+
+    def test_piped_content_injected(self, hive_env):
+        from keephive.commands.session import _build_session_prompt
+
+        result = _build_session_prompt("custom", "review this", "ctx", piped="error log content")
+        assert "Piped input" in result
+        assert "error log content" in result
+
+    def test_no_piped_content(self, hive_env):
+        from keephive.commands.session import _build_session_prompt
+
+        result = _build_session_prompt("custom", "review this", "ctx", piped=None)
+        assert "Piped input" not in result
 
 
 class TestCmdSession:
@@ -150,6 +215,77 @@ class TestCmdSession:
             cmd_session([])
 
         assert "CLAUDECODE" not in captured_env
+
+    def test_continue_flag_passed_to_claude(self, hive_env, monkeypatch):
+        """-c flag is forwarded to claude argv before the prompt."""
+        captured = {}
+
+        def mock_execvpe(file, args, env):
+            captured["args"] = args
+            raise SystemExit(0)
+
+        monkeypatch.setattr("os.execvpe", mock_execvpe)
+        monkeypatch.setattr("shutil.which", lambda x: "/usr/local/bin/claude")
+        monkeypatch.setattr(
+            "keephive.commands.session._read_stdin_if_piped", lambda: None
+        )
+
+        from keephive.commands.session import cmd_session
+
+        with pytest.raises(SystemExit):
+            cmd_session(["-c", "fix the bug"])
+
+        args = captured["args"]
+        assert "--continue" in args
+        assert args.index("--continue") < args.index(args[-1])  # flag before prompt
+        assert "fix the bug" in args[-1]
+
+    def test_resume_flag_passed_to_claude(self, hive_env, monkeypatch):
+        """-r flag is forwarded to claude argv."""
+        captured = {}
+
+        def mock_execvpe(file, args, env):
+            captured["args"] = args
+            raise SystemExit(0)
+
+        monkeypatch.setattr("os.execvpe", mock_execvpe)
+        monkeypatch.setattr("shutil.which", lambda x: "/usr/local/bin/claude")
+        monkeypatch.setattr(
+            "keephive.commands.session._read_stdin_if_piped", lambda: None
+        )
+
+        from keephive.commands.session import cmd_session
+
+        with pytest.raises(SystemExit):
+            cmd_session(["-r", "abc-uuid", "resume task"])
+
+        args = captured["args"]
+        assert "--resume" in args
+        assert "abc-uuid" in args
+
+    def test_piped_stdin_injected_into_prompt(self, hive_env, monkeypatch):
+        """Piped stdin content appears in the session prompt."""
+        captured = {}
+
+        def mock_execvpe(file, args, env):
+            captured["args"] = args
+            raise SystemExit(0)
+
+        monkeypatch.setattr("os.execvpe", mock_execvpe)
+        monkeypatch.setattr("shutil.which", lambda x: "/usr/local/bin/claude")
+        monkeypatch.setattr(
+            "keephive.commands.session._read_stdin_if_piped",
+            lambda: "ERROR: segfault at 0x00",
+        )
+
+        from keephive.commands.session import cmd_session
+
+        with pytest.raises(SystemExit):
+            cmd_session(["diagnose this"])
+
+        prompt = captured["args"][-1]
+        assert "ERROR: segfault at 0x00" in prompt
+        assert "Piped input" in prompt
 
     def test_mode_passed_to_prompt(self, hive_env, monkeypatch):
         """Mode-specific prompt is included in the session."""

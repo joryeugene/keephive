@@ -51,6 +51,60 @@ _MODE_PROMPTS: dict[str, str] = {
 }
 
 
+def _parse_args(args: list[str]) -> tuple[list[str], list[str]]:
+    """Split claude pass-through flags from session mode/prompt args.
+
+    Recognized flags:
+      -c / --continue          → pass -c to claude
+      -r / --resume [id]       → pass --resume [id] to claude
+
+    Returns (claude_flags, remaining_args).
+    """
+    claude_flags: list[str] = []
+    remaining: list[str] = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in ("-c", "--continue"):
+            claude_flags.append("--continue")
+            i += 1
+        elif arg in ("-r", "--resume"):
+            claude_flags.append("--resume")
+            i += 1
+            # Optional session ID: next arg that doesn't start with "-"
+            # and comes before any remaining positional args
+            if i < len(args) and not args[i].startswith("-"):
+                # If there are still more args after this one, treat it as an ID.
+                # If it's the last arg, it's the prompt, not an ID.
+                if i + 1 < len(args):
+                    claude_flags.append(args[i])
+                    i += 1
+                # else: fall through, last arg goes to remaining as the prompt
+        else:
+            remaining.append(arg)
+            i += 1
+    return claude_flags, remaining
+
+
+def _read_stdin_if_piped() -> str | None:
+    """Read stdin if it's a pipe. Returns content or None.
+
+    After reading, redirects fd 0 to /dev/tty so the child claude
+    process gets an interactive terminal.
+    """
+    if sys.stdin.isatty():
+        return None
+    try:
+        content = sys.stdin.read()
+        # Reattach stdin to the controlling terminal so claude is interactive
+        tty_fd = os.open("/dev/tty", os.O_RDONLY)
+        os.dup2(tty_fd, 0)
+        os.close(tty_fd)
+        return content.strip() or None
+    except OSError:
+        return None
+
+
 def _resolve_mode(args: list[str]) -> tuple[str, str]:
     """Resolve session mode from args.
 
@@ -85,7 +139,7 @@ def _resolve_mode(args: list[str]) -> tuple[str, str]:
     return "custom", " ".join(args)
 
 
-def _build_session_prompt(mode: str, prompt: str, context: str) -> str:
+def _build_session_prompt(mode: str, prompt: str, context: str, piped: str | None = None) -> str:
     """Combine context and mode prompt into the session opening."""
     parts = [
         "# keephive session context\n",
@@ -94,32 +148,41 @@ def _build_session_prompt(mode: str, prompt: str, context: str) -> str:
         f"# Session mode: {mode}\n",
         prompt,
     ]
+    if piped:
+        parts += [
+            "\n\n---\n",
+            "# Piped input\n",
+            "```\n",
+            piped,
+            "\n```",
+        ]
     return "\n".join(parts)
 
 
 def cmd_session(args: list[str]) -> None:
     """Launch an interactive claude session with keephive context."""
-    # Verify claude is available
     if not shutil.which("claude"):
         print("Error: 'claude' CLI not found in PATH.")
         print("Install Claude Code: https://docs.anthropic.com/en/docs/claude-code")
         sys.exit(1)
 
+    # Read piped stdin before anything touches it
+    piped_content = _read_stdin_if_piped()
+
+    # Split flags from mode/prompt args
+    claude_flags, remaining = _parse_args(args)
+
     cwd = os.getcwd()
     project_name = Path(cwd).name
 
-    # Reuse sessionstart's context builder
     from keephive.hooks.sessionstart import build_context
 
     context = build_context(cwd, project_name)
 
-    # Resolve mode and prompt
-    mode, prompt = _resolve_mode(args)
+    mode, prompt = _resolve_mode(remaining)
 
-    # Build the full session prompt
-    session_prompt = _build_session_prompt(mode, prompt, context)
+    session_prompt = _build_session_prompt(mode, prompt, context, piped_content)
 
-    # Track usage
     try:
         from keephive.storage import track_event
 
@@ -127,11 +190,11 @@ def cmd_session(args: list[str]) -> None:
     except Exception:
         pass
 
-    print(f"Launching {mode} session...")
+    flag_desc = " ".join(claude_flags) + " " if claude_flags else ""
+    print(f"Launching {mode} session... {flag_desc}")
 
-    # Strip CLAUDECODE env var so nested session isn't blocked
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
 
-    # Replace process with interactive claude
-    # Positional arg = first message in interactive mode (not -p which is pipe/non-interactive)
-    os.execvpe("claude", ["claude", session_prompt], env)
+    # Build claude argv: flags go before the prompt positional arg
+    claude_argv = ["claude"] + claude_flags + [session_prompt]
+    os.execvpe("claude", claude_argv, env)
