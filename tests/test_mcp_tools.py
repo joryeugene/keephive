@@ -371,7 +371,9 @@ def test_recurring_unknown_action(mcp_env: Path):
 def prompt_env(hive_env: Path):
     """Extend hive_env with a seeded prompt template."""
     prompt = hive_env / "knowledge" / "prompts" / "code-review.md"
-    prompt.write_text("Review this code:\n\n{{code}}\n\nFocus on: correctness, clarity, edge cases.")
+    prompt.write_text(
+        "Review this code:\n\n{{code}}\n\nFocus on: correctness, clarity, edge cases."
+    )
     return hive_env
 
 

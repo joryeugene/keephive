@@ -186,7 +186,7 @@ def recurring_list_text() -> str:
     """Return all recurring tasks as plain text (for MCP)."""
     rf = recurring_file()
     if not rf.exists():
-        return "No recurring tasks. Add one: hive todo repeat daily \"task\""
+        return 'No recurring tasks. Add one: hive todo repeat daily "task"'
 
     content = safe_read_text(rf)
     tasks: list[tuple[str, str]] = []
@@ -196,7 +196,7 @@ def recurring_list_text() -> str:
             tasks.append((m.group(1), m.group(2).strip()))
 
     if not tasks:
-        return "No recurring tasks. Add one: hive todo repeat daily \"task\""
+        return 'No recurring tasks. Add one: hive todo repeat daily "task"'
 
     due = due_recurring()
     due_texts = {text.lower() for _, text, _ in due}
@@ -211,7 +211,7 @@ def recurring_list_text() -> str:
 def recurring_add_text(freq: str, text: str) -> str:
     """Add a recurring task, return result message (no console output)."""
     if not text:
-        return f"Error: specify task text. Usage: hive todo repeat {freq} \"task description\""
+        return f'Error: specify task text. Usage: hive todo repeat {freq} "task description"'
 
     _ensure_recurring()
     rf = recurring_file()
@@ -260,7 +260,7 @@ def recurring_rm_text(pattern: str) -> str:
     if removed:
         rf.write_text("".join(new_lines))
         return f"Removed: {removed}"
-    return f"No recurring task matching \"{pattern}\""
+    return f'No recurring task matching "{pattern}"'
 
 
 def _recurring_done(pattern: str) -> bool:
