@@ -169,7 +169,7 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .split-divider::after{content:'';position:absolute;top:20%;bottom:20%;left:3px;width:2px;background:#30363d;border-radius:1px}
 .split-divider:hover::after,.split-divider.dragging::after{background:#58a6ff}
 .card{background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:hidden;margin-bottom:16px}
-.card-header{padding:9px 14px;background:#1c2128;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.card-header{padding:9px 14px;background:#1e252e;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .card-title{font-weight:600;font-size:13px;color:#f0f6fc}
 .card-meta{color:#6e7681;font-size:12px}
 .card-body{padding:12px 14px}
@@ -193,8 +193,9 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .date-nav-btn:hover:not([disabled]){color:#c9d1d9;border-color:#58a6ff}
 .date-nav-btn:disabled{opacity:0.3;cursor:default}
 .log-date-label{font-size:12px;color:#6e7681;min-width:82px;text-align:center}
-.log-entry{display:flex;gap:8px;padding:4px 0;border-bottom:1px solid #21262d;font-size:12px}
+.log-entry{display:flex;gap:8px;padding:6px 10px;border-bottom:1px solid #21262d;font-size:12px;border-radius:4px;transition:background .15s}
 .log-entry:last-child{border-bottom:none}
+.log-entry:hover{background:#1c2128}
 .log-time{color:#6e7681;font-family:monospace;min-width:52px;flex-shrink:0}
 .log-text{flex:1;color:#c9d1d9;word-break:break-word}
 .log-tag{display:inline-block;padding:0 5px;border-radius:3px;font-size:10px;font-weight:600;letter-spacing:.03em;margin-right:5px;vertical-align:middle;line-height:1.6}
@@ -209,13 +210,15 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .todo-color{color:#e3b341}.correction{color:#ffa657}.done-cat{color:#3fb950}.auto-cat{color:#8b949e}
 .log-see-more{display:block;padding:6px 0;font-size:12px;color:#58a6ff;text-decoration:none;text-align:center}
 .log-see-more:hover{color:#79c0ff}
-.todo-item{padding:5px 0;border-bottom:1px solid #21262d;display:flex;gap:8px;align-items:baseline;font-size:12px}
+.todo-item{padding:7px 10px;border-bottom:1px solid #21262d;display:flex;gap:8px;align-items:baseline;font-size:12px;border-radius:4px;transition:background .15s}
 .todo-item:last-child{border-bottom:none}
+.todo-item:hover{background:#1c2128}
 .todo-age{color:#6e7681;font-size:11px;min-width:36px;text-align:right;flex-shrink:0}
 .todo-age.old{color:#e3b341}.todo-age.vold{color:#f85149}
 .todo-text{flex:1;color:#c9d1d9}
-.recurring-item{display:flex;gap:8px;padding:4px 0;border-bottom:1px solid #21262d;font-size:12px}
+.recurring-item{display:flex;gap:8px;padding:6px 10px;border-bottom:1px solid #21262d;font-size:12px;border-radius:4px;transition:background .15s}
 .recurring-item:last-child{border-bottom:none}
+.recurring-item:hover{background:#1c2128}
 .recurring-freq{color:#8b949e;font-family:monospace;min-width:54px;flex-shrink:0}
 .recurring-text{flex:1;color:#c9d1d9}
 .recurring-due{color:#e3b341;font-size:11px}.recurring-due.overdue{color:#f85149}
@@ -230,11 +233,25 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .acc-body{padding:12px 14px;display:none;font-size:13px}
 .acc-body.open{display:block}
 .acc-body.md{max-height:480px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#30363d #1c2128}
-.know-item{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;border-bottom:1px solid #21262d}
+.know-item{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:12px;border-bottom:1px solid #21262d;border-radius:4px;cursor:pointer;transition:background .15s}
 .know-item:last-child{border-bottom:none}
+.know-item:hover{background:#1c2128}
 .know-name{color:#c9d1d9}
 .know-divider{padding:5px 12px 3px;font-size:10px;color:#6e7681;text-transform:uppercase;letter-spacing:.05em;background:#0d1117;border-top:1px solid #21262d;margin-top:2px}
 .know-divider:first-child{border-top:none;margin-top:0}
+.note-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));grid-auto-flow:dense;gap:10px}
+.note-tile{padding:12px 16px;font-size:12px;background:#1c2128;border:1px solid #30363d;border-radius:6px;cursor:pointer;transition:border-color .15s,background .15s}
+.note-tile:hover{border-color:#58a6ff;background:#1a2332}
+.note-tile.active{border-color:#58a6ff;background:#1c2230}
+.note-tile.expanded{grid-column:1/-1;order:-1;cursor:default}
+.note-tile.expanded .note-tile-header{cursor:pointer}
+.note-tile-header{display:flex;align-items:center;gap:8px}
+.note-tile-slot{font-weight:700;color:#58a6ff;min-width:14px;font-size:13px}
+.note-tile-preview{color:#c9d1d9;font-size:12px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.note-tile.expanded .note-tile-preview{display:none}
+.note-tile-meta{color:#6e7681;font-size:11px;white-space:nowrap}
+.note-tile-body{display:none;padding:8px 0 0;border-top:1px solid #30363d;margin-top:8px;max-height:480px;overflow-y:auto}
+.note-tile.expanded .note-tile-body{display:block}
 .md h1,.md h2,.md h3,.md h4{color:#f0f6fc;margin:10px 0 5px}
 .md h1{font-size:16px}.md h2{font-size:14px;padding-bottom:4px;border-bottom:1px solid #30363d}
 .md h3{font-size:13px;color:#c9d1d9}.md p{margin-bottom:7px;color:#c9d1d9}
@@ -260,14 +277,15 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .stats-table td:last-child{text-align:right;color:#58a6ff;font-weight:600}
 .mem-line{padding:3px 0;font-size:12px;border-bottom:1px solid #21262d;font-family:monospace;white-space:pre-wrap;word-break:break-word;color:#c9d1d9}
 .mem-line:last-child{border-bottom:none}
-.fact-item{padding:4px 0;border-bottom:1px solid #21262d;font-size:12px}
+.fact-item{padding:6px 10px;border-bottom:1px solid #21262d;font-size:12px;border-radius:4px;transition:background .15s}
 .fact-item:last-child{border-bottom:none}
+.fact-item:hover{background:#1c2128}
 .fact-date{color:#6e7681;font-size:11px}
 .fact-text{color:#c9d1d9}
-.empty{color:#6e7681;font-size:12px;padding:6px 0;font-style:italic}
+.empty{color:#8b949e;font-size:12px;padding:16px 20px;font-style:italic;text-align:center;background:#0d1117;border:1px dashed #30363d;border-radius:6px;margin:4px 0}
 .cmd-hints{display:flex;flex-wrap:wrap;gap:5px;padding:6px 12px;border-bottom:1px solid #21262d;background:#0a0e13}
-.cmd-hint{font-family:monospace;font-size:11px;color:#8b949e;background:#161b22;border:1px solid #30363d;border-radius:3px;padding:2px 7px;cursor:default;user-select:all;transition:border-color .15s}
-.cmd-hint:hover{border-color:#58a6ff;color:#c9d1d9}
+.cmd-hint{font-family:monospace;font-size:11px;color:#8b949e;background:#161b22;border:1px solid #30363d;border-radius:3px;padding:2px 7px;cursor:copy;user-select:all;transition:border-color .15s,background .15s}
+.cmd-hint:hover{border-color:#58a6ff;color:#c9d1d9;background:#1c2128}
 .standup-section{margin-bottom:8px}
 .standup-label{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px}
 .standup-item{font-size:12px;color:#c9d1d9;padding:2px 0}
@@ -278,8 +296,8 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .panel-input input.input-error{border-color:#f85149}
 .panel-input button{background:#238636;border:none;border-radius:4px;color:#fff;padding:5px 10px;cursor:pointer;font-size:13px;font-weight:600}
 .panel-input button:hover{background:#2ea043}
-.todo-done-btn{background:transparent;border:1px solid #30363d;border-radius:3px;color:#7d8590;padding:1px 5px;cursor:pointer;font-size:11px;margin-left:auto;flex-shrink:0}
-.todo-done-btn:hover{border-color:#238636;color:#3fb950}
+.todo-done-btn{background:#0d1117;border:1px solid #30363d;border-radius:3px;color:#7d8590;padding:2px 7px;cursor:pointer;font-size:11px;margin-left:auto;flex-shrink:0;transition:border-color .15s,color .15s,background .15s}
+.todo-done-btn:hover{border-color:#238636;color:#3fb950;background:#0d2818}
 #main-content{transition:opacity .12s}
 #main-content.is-loading{opacity:.45;pointer-events:none}
 #search-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:200;background:rgba(0,0,0,0.6);justify-content:center;align-items:flex-start;padding-top:80px}
@@ -289,8 +307,9 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .search-close{background:none;border:none;color:#8b949e;font-size:16px;cursor:pointer;padding:0 4px;line-height:1}
 .search-close:hover{color:#c9d1d9}
 .search-body{padding:12px 14px}
-.search-result{padding:5px 0;border-bottom:1px solid #21262d;font-size:12px}
+.search-result{padding:8px 10px;border-bottom:1px solid #21262d;font-size:12px;border-radius:4px;transition:background .15s}
 .search-result:last-child{border-bottom:none}
+.search-result:hover{background:#1c2128}
 .search-date{color:#6e7681;font-size:11px;margin-right:8px;font-family:monospace}
 .search-line{color:#c9d1d9;word-break:break-word}
 .sparkline-wrap{padding:4px 12px 0;border-bottom:1px solid #21262d}
@@ -313,17 +332,19 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .summary-stat{text-align:center}
 .summary-stat .stat-value{font-size:18px;font-weight:700;color:#e6edf3;display:block}
 .summary-stat .stat-label{font-size:10px;color:#8b949e}
-.summary-link{display:block;text-align:center;padding:4px;font-size:11px;color:#58a6ff;text-decoration:none;border-top:1px solid #21262d}
-.summary-link:hover{color:#79c0ff}
+.summary-link{display:block;text-align:center;padding:8px 12px;font-size:12px;color:#58a6ff;text-decoration:none;border-top:1px solid #21262d;background:#111820;font-weight:500;letter-spacing:.02em;transition:background .15s,color .15s}
+.summary-link:hover{color:#79c0ff;background:#122131}
 .log-filter{display:flex;gap:4px;padding:5px 12px;border-bottom:1px solid #21262d;flex-wrap:wrap}
 .log-filter-btn{font-size:11px;padding:1px 7px;border-radius:10px;cursor:pointer;border:1px solid #30363d;background:#21262d;color:#8b949e}
-.log-filter-btn.active{border-color:#58a6ff;color:#58a6ff;background:#122131}
+.log-filter-btn.active{border-color:#58a6ff;color:#fff;background:#1a3a5c;font-weight:600}
 .log-filter-btn:hover:not(.active){border-color:#6e7681;color:#c9d1d9}
 .log-entry.filtered{display:none}
 .slot-switcher{display:flex;gap:4px;padding:5px 12px;border-bottom:1px solid #21262d}
 .slot-btn{background:#21262d;border:1px solid #30363d;border-radius:3px;color:#8b949e;padding:1px 7px;cursor:pointer;font-size:11px}
 .slot-btn.active{border-color:#58a6ff;color:#58a6ff}
 .slot-btn:hover:not(.active){border-color:#6e7681;color:#c9d1d9}
+a.know-item{text-decoration:none;color:inherit;display:flex}
+mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 """
 
 _JS = """
@@ -411,6 +432,18 @@ _JS = """
     }
   });
 
+  // --- Note tile expand (single-open accordion) ---
+  document.addEventListener('click',function(e){
+    if(e.target.closest('.note-tile-body')) return;
+    var tile=e.target.closest('.note-tile');
+    if(!tile)return;
+    var wasExpanded=tile.classList.contains('expanded');
+    document.querySelectorAll('.note-tile.expanded').forEach(function(t){
+      t.classList.remove('expanded');
+    });
+    if(!wasExpanded) tile.classList.add('expanded');
+  });
+
   // --- Auto-expand first accordion on /mem and /notes ---
   if(view==='mem'||view==='notes'){
     var firstBody=document.querySelector('.acc-body');
@@ -443,10 +476,14 @@ _JS = """
             if(!results.length){
               html='<div class="empty">No results for \u201c'+escHtml(rawQ)+'\u201d</div>';
             } else {
+              var safeQ=escHtml(rawQ).replace(/[.*+?^${}()|\\[\\]\\\\]/g,'\\\\$&');
+              var hlRe=new RegExp('('+safeQ+')','gi');
               results.forEach(function(r){
+                var safeLine=escHtml(r.line||'');
+                var hlLine=safeLine.replace(hlRe,'<mark>$1</mark>');
                 html+='<div class="search-result">'
                   +'<span class="search-date">'+escHtml(r.date||'')+'</span>'
-                  +'<span class="search-line">'+escHtml(r.line||'')+'</span>'
+                  +'<span class="search-line">'+hlLine+'</span>'
                   +'</div>';
               });
             }
@@ -905,10 +942,12 @@ def _render_status_panel(data: dict) -> str:
             for f in stale_facts
         )
         label = f'{stale} stale fact{"s" if stale != 1 else ""} &#9658;'
+        verify_hint = '<div style="margin-top:6px"><span class="cmd-hint">hive v</span></div>'
         stale_accordion = (
             f'<details class="stale-accordion">'
             f'<summary class="stale-summary">{label}</summary>'
             f'<div style="margin-top:6px">{items_html}</div>'
+            f'{verify_hint}'
             f"</details>"
         )
 
@@ -1244,11 +1283,11 @@ def _render_knowledge_compact_panel(data: dict) -> str:
     total = len(guides) + len(prompts) + len(skills)
     rows = ""
     for g in guides:
-        rows += f'<div class="know-item"><span class="acc-type">guide</span> <span class="know-name">{_e(g["name"])}</span></div>'
+        rows += f'<a class="know-item" href="/know"><span class="acc-type">guide</span> <span class="know-name">{_e(g["name"])}</span></a>'
     for p in prompts:
-        rows += f'<div class="know-item"><span class="acc-type">prompt</span> <span class="know-name">{_e(p["name"])}</span></div>'
+        rows += f'<a class="know-item" href="/know"><span class="acc-type">prompt</span> <span class="know-name">{_e(p["name"])}</span></a>'
     for s in skills:
-        rows += f'<div class="know-item"><span class="acc-type">skill</span> <span class="know-name">{_e(s["name"])}</span></div>'
+        rows += f'<a class="know-item" href="/know"><span class="acc-type">skill</span> <span class="know-name">{_e(s["name"])}</span></a>'
     if not rows:
         rows = '<div class="empty">No knowledge items</div>'
     meta = f"{total} items" if total else ""
@@ -1257,6 +1296,41 @@ def _render_knowledge_compact_panel(data: dict) -> str:
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Knowledge</span><span class="card-meta">{meta}</span></div>'
         f'<div class="card-body">{rows}</div>'
+        f'{link}'
+        f'</div>'
+    )
+
+
+def _render_notes_compact_panel(data: dict) -> str:
+    """Compact tile grid: one tile per populated slot. Click to expand inline."""
+    slots = data.get("slots", [])
+    tiles = ""
+    for s in slots:
+        active_cls = " active" if s["active"] else ""
+        # Preview: first non-slot-header line, truncated
+        content_lines = s["content"].splitlines()
+        body_lines = [ln for ln in content_lines if not re.match(r"^Slot \d+", ln)]
+        content_body = "\n".join(body_lines).strip()
+        preview_lines = [ln.strip() for ln in content_lines if ln.strip() and not re.match(r"^Slot \d+", ln)]
+        preview = (preview_lines[0][:60] + "\u2026") if (preview_lines and len(preview_lines[0]) > 60) else (preview_lines[0] if preview_lines else "")
+        tiles += (
+            f'<div class="note-tile{active_cls}">'
+            f'<div class="note-tile-header">'
+            f'<span class="note-tile-slot">{s["slot"]}</span>'
+            f'<span class="note-tile-meta">{s["lines"]}L</span>'
+            f'</div>'
+            f'<div class="note-tile-preview">{_e(preview)}</div>'
+            f'<div class="note-tile-body md">{render_md(content_body)}</div>'
+            f'</div>'
+        )
+    if not tiles:
+        tiles = '<div class="empty">No notes \u2014 hive n</div>'
+    meta = f"{len(slots)} slots" if slots else ""
+    link = '<a class="summary-link" href="/notes">All notes &rarr;</a>'
+    return (
+        f'<div class="card">'
+        f'<div class="card-header"><span class="card-title">Notes</span><span class="card-meta">{meta}</span></div>'
+        f'<div class="card-body note-tiles">{tiles}</div>'
         f'{link}'
         f'</div>'
     )
@@ -1666,6 +1740,7 @@ PANELS: dict[str, tuple] = {
     "knowledge-compact": (_get_knowledge_data, _render_knowledge_compact_panel),
     "memory": (_get_memory_data, _render_memory_panel),
     "notes": (_get_notes_data, _render_notes_panel),
+    "notes-compact": (_get_notes_data, _render_notes_compact_panel),
     "stats": (_get_stats_data, _render_stats_panel),
     "stats-commands": (_get_stats_data, _render_stats_commands_panel),
     "ps": (_get_ps_data, _render_ps_panel),
@@ -1684,8 +1759,9 @@ VIEWS: dict[str, dict] = {
             ["status", "ps"],
             ["log-home"],
             ["todos"],
+            ["notes-compact"],
             ["knowledge-limited"],
-            ["memory", "notes"],
+            ["memory"],
         ],
     },
     "daily": {

@@ -1288,14 +1288,25 @@ def test_serve_is_registered():
 # ---- Part 1: Layout fix — memory+notes paired, knowledge full-width ----
 
 
-def test_all_view_memory_notes_paired():
-    """In the All view, memory and notes share a row (2 items)."""
+def test_all_view_notes_compact_above_knowledge():
+    """Notes-compact appears before knowledge-limited in All view (dynamic above static)."""
     from keephive.commands.serve import VIEWS
 
     all_rows = VIEWS["all"]["rows"]
-    memory_notes_row = next((r for r in all_rows if "memory" in r and "notes" in r), None)
-    assert memory_notes_row is not None, "No row with both 'memory' and 'notes' in All view"
-    assert len(memory_notes_row) == 2
+    flat = [p for row in all_rows for p in row]
+    notes_idx = flat.index("notes-compact")
+    know_idx = flat.index("knowledge-limited")
+    assert notes_idx < know_idx
+
+
+def test_all_view_memory_is_last_row():
+    """Memory (most stable) is the last content row in All view."""
+    from keephive.commands.serve import VIEWS
+
+    all_rows = VIEWS["all"]["rows"]
+    flat = [p for row in all_rows for p in row]
+    mem_idx = flat.index("memory")
+    assert mem_idx == len(flat) - 1
 
 
 def test_all_view_knowledge_full_width():
@@ -2430,3 +2441,157 @@ def test_focused_views_status_before_content():
         assert len(rows) >= 2, f"{view_name} should have at least 2 rows"
         assert "status-brief" in rows[0], f"{view_name} first row should contain status-brief"
         assert "status-brief" not in rows[1], f"{view_name} second row should be content, not status-brief"
+
+
+# ---- Notes compact panel ----
+
+
+def test_render_notes_compact_only_populated(hive_env):
+    """Notes-compact renders only slots with content."""
+    from keephive.commands.serve import _render_notes_compact_panel
+
+    data = {
+        "slots": [
+            {"slot": 1, "content": "Slot 1\nContent here.", "lines": 2, "active": True},
+            {"slot": 3, "content": "Slot 3\nOther content.", "lines": 2, "active": False},
+        ]
+    }
+    html = _render_notes_compact_panel(data)
+    assert "note-tile" in html
+    assert "2 slots" in html
+    # Only slots 1 and 3, not 2 or 4
+    assert html.count("note-tile-slot") == 2
+
+
+def test_render_notes_compact_empty(hive_env):
+    """Notes-compact shows empty state when no slots populated."""
+    from keephive.commands.serve import _render_notes_compact_panel
+
+    html = _render_notes_compact_panel({"slots": []})
+    assert "No notes" in html
+    assert "note-tile-slot" not in html
+
+
+def test_render_notes_compact_active_highlight(hive_env):
+    """Active slot tile has .active class."""
+    from keephive.commands.serve import _render_notes_compact_panel
+
+    data = {"slots": [{"slot": 1, "content": "text", "lines": 1, "active": True}]}
+    html = _render_notes_compact_panel(data)
+    assert 'note-tile active' in html
+
+
+def test_render_notes_compact_links_to_notes(hive_env):
+    """Notes-compact has summary link to /notes."""
+    from keephive.commands.serve import _render_notes_compact_panel
+
+    data = {"slots": [{"slot": 1, "content": "text", "lines": 1, "active": True}]}
+    html = _render_notes_compact_panel(data)
+    assert "/notes" in html
+    assert "summary-link" in html
+
+
+def test_css_has_note_tile_styles():
+    """CSS includes .note-tile rules."""
+    from keephive.commands.serve import _CSS
+
+    assert ".note-tile{" in _CSS
+    assert ".note-tile.active{" in _CSS
+    assert ".note-tile-preview{" in _CSS
+
+
+# ---- Notes compact: tile grid + inline expand ----
+
+
+def test_render_notes_compact_has_tile_body(hive_env):
+    """Each note tile contains rendered markdown body for inline expansion."""
+    from keephive.commands.serve import _render_notes_compact_panel
+
+    data = {
+        "slots": [
+            {"slot": 1, "content": "Slot 1\n**bold content** here.", "lines": 2, "active": True},
+            {"slot": 3, "content": "Slot 3\n- list item one\n- list item two", "lines": 3, "active": False},
+        ]
+    }
+    html = _render_notes_compact_panel(data)
+    # Each tile has a note-tile-body with rendered markdown
+    assert html.count("note-tile-body") == 2
+    assert "<strong>bold content</strong>" in html
+    assert "<li>" in html
+    assert "list item one" in html
+
+
+def test_render_notes_compact_tiles_are_divs(hive_env):
+    """Tiles are <div> elements, not <a> links."""
+    from keephive.commands.serve import _render_notes_compact_panel
+
+    data = {"slots": [{"slot": 1, "content": "Slot 1\ntext", "lines": 1, "active": True}]}
+    html = _render_notes_compact_panel(data)
+    assert '<div class="note-tile' in html
+    assert '<a class="note-tile' not in html
+
+
+def test_render_notes_compact_strips_slot_header_from_body(hive_env):
+    """Tile body strips 'Slot N' header line from rendered content."""
+    from keephive.commands.serve import _render_notes_compact_panel
+
+    data = {"slots": [{"slot": 1, "content": "Slot 1\nReal content.", "lines": 2, "active": True}]}
+    html = _render_notes_compact_panel(data)
+    # The body should contain the real content, not the Slot header
+    assert "Real content" in html
+    # note-tile-body should not contain the "Slot 1" line
+    body_start = html.index("note-tile-body")
+    body_section = html[body_start:body_start + 200]
+    assert "Slot 1" not in body_section
+
+
+def test_render_notes_compact_has_tile_header(hive_env):
+    """Each tile has a note-tile-header with slot number and meta."""
+    from keephive.commands.serve import _render_notes_compact_panel
+
+    data = {"slots": [{"slot": 2, "content": "Slot 2\nSome text.", "lines": 2, "active": False}]}
+    html = _render_notes_compact_panel(data)
+    assert "note-tile-header" in html
+    assert "note-tile-slot" in html
+    assert "note-tile-meta" in html
+
+
+def test_css_note_tile_grid_layout():
+    """CSS uses grid layout with 280px min tiles and dense packing."""
+    from keephive.commands.serve import _CSS
+
+    assert ".note-tiles{display:grid" in _CSS
+    assert "minmax(280px" in _CSS
+    assert "grid-auto-flow:dense" in _CSS
+
+
+def test_css_note_tile_body_styles():
+    """CSS includes note-tile-body expand/collapse rules and full-width expanded span."""
+    from keephive.commands.serve import _CSS
+
+    assert ".note-tile-body{display:none" in _CSS
+    assert ".note-tile.expanded .note-tile-body{display:block}" in _CSS
+    assert ".note-tile.expanded .note-tile-preview{display:none}" in _CSS
+    assert ".note-tile.expanded{grid-column:1/-1;order:-1;cursor:default}" in _CSS
+    assert ".note-tile.expanded .note-tile-header{cursor:pointer}" in _CSS
+    assert "max-height:480px" in _CSS
+
+
+def test_css_no_a_note_tile_rule():
+    """CSS no longer has a.note-tile rule (tiles are divs now)."""
+    from keephive.commands.serve import _CSS
+
+    assert "a.note-tile{" not in _CSS
+
+
+def test_js_note_tile_expand_handler():
+    """JS includes single-open accordion click handler for note tiles."""
+    from keephive.commands.serve import _JS
+
+    assert ".note-tile" in _JS
+    assert "expanded" in _JS
+    # Body-click guard: clicking inside body content doesn't toggle
+    assert ".note-tile-body" in _JS
+    # Single-open: collapses all before toggling
+    assert "querySelectorAll" in _JS
+    assert "wasExpanded" in _JS

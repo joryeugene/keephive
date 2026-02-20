@@ -241,11 +241,12 @@ All (/)                 Daily (/daily)
 +------------------+    +------------------+
 | todos            |    | todos | recurring|
 +------------------+    +------------------+
-| knowledge-limited|    | standup          |
+| notes-compact    |    | standup          |
 +------------------+    +------------------+
-| memory  | notes  |
+| knowledge-limited|
 +------------------+    Dev (/dev)
-                        +------------------+
+| memory           |
++------------------+    +------------------+
 Stats (/stats)          | status-brief     |
 +------------------+    +------------------+
 | stats   |   ps   |    | todos  | log     |

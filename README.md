@@ -98,6 +98,47 @@ keephive uses the three extension points Claude Code exposes:
 - **Verify**: Facts carry `[verified:YYYY-MM-DD]` timestamps. After 30 days (configurable), they are flagged stale. `hive v` checks them against the codebase with LLM analysis and tool access.
 - **Correct**: Invalid facts get replaced with corrected versions. Valid facts get re-stamped. Uncertain facts get flagged for human review.
 
+### Architecture
+
+```mermaid
+flowchart TD
+    subgraph CYCLE["Session Cycle (automatic)"]
+        direction LR
+        START([New session]) -->|SessionStart:\ninjects context| WORK([Working\nwith Claude])
+        WORK -->|PostToolUse:\nperiodic nudge| WORK
+        WORK -->|UserPromptSubmit:\nTODO detection| WORK
+        WORK -->|context near limit| PC[PreCompact:\nextract → classify\n→ daily log]
+        PC -->|next session\nhas more context| START
+    end
+
+    subgraph STORE["Knowledge Store (stable → ephemeral)"]
+        MEM[("Working memory\n30–90d TTL")]
+        GUIDES[("Knowledge guides\nper-topic docs")]
+        RULES[("Rules\nsession nudges")]
+        LOG[("Daily log\nraw stream")]
+        TODOS[("TODOs / Notes\n7d stale TTL")]
+    end
+
+    subgraph MANUAL["On-demand (CLI · MCP)"]
+        direction LR
+        REM["hive r / hive_remember\ncapture a fact"]
+        RCL["hive rc / hive_recall\nsearch all tiers"]
+        VRF["hive v / verify\nauto-correct stale facts"]
+        DASH["hive serve\nweb dashboard"]
+    end
+
+    START -->|reads| MEM & GUIDES & RULES & TODOS
+    PC --> LOG
+    LOG -->|"hive rf → promote"| MEM
+    LOG -->|"hive rf → promote"| GUIDES
+    MEM -->|"hive v → re-stamp or correct"| MEM
+
+    REM --> LOG
+    RCL -.->|searches| MEM & GUIDES & LOG
+    VRF --> MEM
+    DASH -.->|reads all| STORE
+```
+
 ### Memory tiers
 
 | Tier             | Path                                 | Purpose                           |
