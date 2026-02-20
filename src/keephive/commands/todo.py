@@ -241,7 +241,7 @@ def _todo_done(pattern: str) -> None:
     ensure_daily()
     ts = datetime.now().strftime("%H:%M:%S")
     append_to_daily(f"- [{ts}] DONE: {match}")
-    console.print(f"  [ok]Completed:[/ok] {match}")
+    console.print(f"  [ok]Completed:[/ok] {match}  [dim](td undo to reopen)[/dim]")
 
     try:
         from keephive.storage import track_event

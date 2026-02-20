@@ -193,5 +193,5 @@ def _recurring_done(pattern: str) -> bool:
     ensure_daily()
     ts = datetime.now().strftime("%H:%M:%S")
     append_to_daily(f"- [{ts}] DONE: {match_text}")
-    console.print(f"[ok]Done[/ok] {match_text} (next due per schedule)")
+    console.print(f"[ok]Done[/ok] {match_text} (next due per schedule)  [dim](td undo to reopen)[/dim]")
     return True
