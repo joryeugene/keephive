@@ -160,8 +160,14 @@ select.refresh-select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;
 #search-input:focus{border-color:#58a6ff}
 #search-input::placeholder{color:#6e7681}
 main{max-width:1400px;margin:0 auto;padding:16px}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;align-items:start}
 @media(max-width:900px){.grid-2{grid-template-columns:1fr}}
+.split-pane{display:flex;gap:0;margin-bottom:16px;align-items:start}
+.split-left{flex:1;min-width:200px}
+.split-right{flex:1;min-width:200px}
+.split-divider{width:8px;cursor:col-resize;background:transparent;flex-shrink:0;position:relative;margin:0 4px}
+.split-divider::after{content:'';position:absolute;top:20%;bottom:20%;left:3px;width:2px;background:#30363d;border-radius:1px}
+.split-divider:hover::after,.split-divider.dragging::after{background:#58a6ff}
 .card{background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:hidden;margin-bottom:16px}
 .card-header{padding:9px 14px;background:#1c2128;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .card-title{font-weight:600;font-size:13px;color:#f0f6fc}
@@ -190,8 +196,16 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .log-entry:last-child{border-bottom:none}
 .log-time{color:#6e7681;font-family:monospace;min-width:52px;flex-shrink:0}
 .log-text{flex:1;color:#c9d1d9;word-break:break-word}
+.log-tag{display:inline-block;padding:0 5px;border-radius:3px;font-size:10px;font-weight:600;letter-spacing:.03em;margin-right:5px;vertical-align:middle;line-height:1.6}
+.log-tag-fact{background:#1c3552;color:#79c0ff}
+.log-tag-decision{background:#2c1f52;color:#d2a8ff}
+.log-tag-insight{background:#0d2e1a;color:#56d364}
+.log-tag-todo{background:#3d2e00;color:#e3b341}
+.log-tag-correction{background:#3d1a00;color:#ffa657}
+.log-tag-done{background:#0d2e1a;color:#3fb950}
+.log-tag-auto{background:#1c2128;color:#8b949e}
 .fact{color:#79c0ff}.decision{color:#d2a8ff}.insight{color:#56d364}
-.todo-color{color:#e3b341}.correction{color:#ffa657}
+.todo-color{color:#e3b341}.correction{color:#ffa657}.done-cat{color:#3fb950}.auto-cat{color:#8b949e}
 .log-see-more{display:block;padding:6px 0;font-size:12px;color:#58a6ff;text-decoration:none;text-align:center}
 .log-see-more:hover{color:#79c0ff}
 .todo-item{padding:5px 0;border-bottom:1px solid #21262d;display:flex;gap:8px;align-items:baseline;font-size:12px}
@@ -207,15 +221,16 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .accordion{border:1px solid #30363d;border-radius:6px;overflow:hidden;margin-bottom:8px}
 .acc-header{padding:8px 12px;background:#1c2128;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px;color:#c9d1d9;user-select:none}
 .acc-header:hover{background:#262c36}
-.acc-toggle{color:#6e7681;font-size:10px;width:10px;flex-shrink:0}
+.acc-toggle{color:#6e7681;font-size:10px;width:10px;flex-shrink:0;display:inline-block;transition:transform .15s}
+.acc-header.open .acc-toggle{transform:rotate(90deg)}
 .acc-name{flex:1}
 .acc-meta{font-size:11px;color:#6e7681}
 .acc-type{font-size:10px;padding:1px 6px;border-radius:10px;background:#21262d;color:#8b949e}
 .acc-body{padding:12px 14px;display:none;font-size:13px}
 .acc-body.open{display:block}
-.guide-overflow{display:none}
-.show-more-btn{background:none;border:1px solid #30363d;color:#8b949e;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;width:100%;margin-top:4px;text-align:center}
-.show-more-btn:hover{color:#c9d1d9;border-color:#58a6ff}
+.acc-body.md{max-height:480px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#30363d #1c2128}
+.know-divider{padding:5px 12px 3px;font-size:10px;color:#6e7681;text-transform:uppercase;letter-spacing:.05em;background:#0d1117;border-top:1px solid #21262d;margin-top:2px}
+.know-divider:first-child{border-top:none;margin-top:0}
 .md h1,.md h2,.md h3,.md h4{color:#f0f6fc;margin:10px 0 5px}
 .md h1{font-size:16px}.md h2{font-size:14px;padding-bottom:4px;border-bottom:1px solid #30363d}
 .md h3{font-size:13px;color:#c9d1d9}.md p{margin-bottom:7px;color:#c9d1d9}
@@ -343,20 +358,19 @@ _JS = """
     if(!h)return;
     var b=h.nextElementSibling;
     if(b&&b.classList.contains('acc-body')){
-      b.classList.toggle('open');
-      var t=h.querySelector('.acc-toggle');
-      if(t)t.textContent=b.classList.contains('open')?'\u25bc':'\u25b6';
+      var isOpen=b.classList.contains('open');
+      b.classList.toggle('open',!isOpen);
+      h.classList.toggle('open',!isOpen);
     }
   });
 
-  // --- Guide show-more ---
-  document.addEventListener('click',function(e){
-    if(!e.target.classList.contains('show-more-btn'))return;
-    var btn=e.target;
-    var ov=btn.previousElementSibling;
-    if(ov&&ov.classList.contains('guide-overflow'))ov.style.display='';
-    btn.style.display='none';
-  });
+  // --- Auto-expand first accordion on /mem and /notes ---
+  if(view==='mem'||view==='notes'){
+    var firstBody=document.querySelector('.acc-body');
+    var firstHdr=document.querySelector('.acc-header');
+    if(firstBody){firstBody.classList.add('open');}
+    if(firstHdr){firstHdr.classList.add('open');}
+  }
 
   // --- Search overlay ---
   function escHtml(s){
@@ -372,14 +386,15 @@ _JS = """
   if(si){
     si.addEventListener('keydown',function(e){
       if(e.key==='Enter'&&this.value.trim()){
-        var q=encodeURIComponent(this.value.trim());
+        var rawQ=this.value.trim();
+        var q=encodeURIComponent(rawQ);
         fetch('/api/search?q='+q)
           .then(function(r){return r.json();})
           .then(function(data){
             var results=data.results||[];
             var html='';
             if(!results.length){
-              html='<div class="empty">No results</div>';
+              html='<div class="empty">No results for \u201c'+escHtml(rawQ)+'\u201d</div>';
             } else {
               results.forEach(function(r){
                 html+='<div class="search-result">'
@@ -403,6 +418,33 @@ _JS = """
   });
   var sc=document.getElementById('search-close');
   if(sc)sc.addEventListener('click',closeSearch);
+
+  // --- Split pane drag ---
+  document.addEventListener('mousedown',function(e){
+    var d=e.target.closest('.split-divider');
+    if(!d)return;
+    e.preventDefault();
+    var left=d.previousElementSibling;
+    var right=d.nextElementSibling;
+    var startX=e.clientX;
+    var startLeft=left.getBoundingClientRect().width;
+    var startRight=right.getBoundingClientRect().width;
+    var total=startLeft+startRight;
+    d.classList.add('dragging');
+    function move(ev){
+      var dx=ev.clientX-startX;
+      var newLeft=Math.max(200,Math.min(total-200,startLeft+dx));
+      left.style.flex='0 0 '+newLeft+'px';
+      right.style.flex='0 0 '+(total-newLeft)+'px';
+    }
+    function up(){
+      d.classList.remove('dragging');
+      document.removeEventListener('mousemove',move);
+      document.removeEventListener('mouseup',up);
+    }
+    document.addEventListener('mousemove',move);
+    document.addEventListener('mouseup',up);
+  });
 })();
 """
 
@@ -452,15 +494,27 @@ def _get_status_data() -> dict:
             date_part = f" [{m.group(1)}]" if m else ""
             stale_facts.append(f"{fact[:80]}{date_part}")
 
+    try:
+        from keephive.storage import open_todos as _open_todos
+
+        todo_count = len(_open_todos())
+    except Exception:
+        todo_count = 0
+
+    from datetime import date as _date, timedelta as _timedelta
+
+    yesterday = (_date.today() - _timedelta(days=1)).isoformat()
     return {
         "stale": stale,
         "total_verified": total_verified,
         "guide_count": guide_count,
         "today_entries": count_daily_entries(),
+        "yesterday_entries": count_daily_entries(yesterday),
         "hooks_ok": hooks_ok,
         "mcp_ok": mcp_ok,
         "data_ok": data_ok,
         "stale_facts": stale_facts,
+        "todo_count": todo_count,
     }
 
 
@@ -488,6 +542,11 @@ def _get_log_data(date_str: str | None = None) -> dict:
                 if rest.upper().startswith(c + ":"):
                     cat = c.lower()
                     break
+            if not cat:
+                if rest.upper().startswith("DONE:"):
+                    cat = "done"
+                elif rest.upper().startswith("AUTO-PROMOTED:"):
+                    cat = "auto"
             entries.append({"time": ts[:5], "text": rest, "cat": cat})
     from datetime import date
 
@@ -653,20 +712,22 @@ def _render_status_panel(data: dict) -> str:
     stale = data.get("stale", 0)
     total = data.get("total_verified", 0)
     today_entries = data.get("today_entries", 0)
-    guides = data.get("guide_count", 0)
+    yesterday_entries = data.get("yesterday_entries", 0)
     hooks_ok = data.get("hooks_ok", False)
     mcp_ok = data.get("mcp_ok", False)
     data_ok = data.get("data_ok", True)
     stale_facts = data.get("stale_facts", [])
+    todo_count = data.get("todo_count", 0)
 
     stale_cls = "warn" if stale > 0 else "ok"
     stale_val = f'<span class="stat-value {stale_cls}">{stale}</span>'
     rows = (
         f'<div class="stat-row">'
-        f'<div class="stat-item"><span class="stat-value">{total}</span><span class="stat-label">facts</span></div>'
-        f'<div class="stat-item">{stale_val}<span class="stat-label">stale</span></div>'
-        f'<div class="stat-item"><span class="stat-value">{today_entries}</span><span class="stat-label">today</span></div>'
-        f'<div class="stat-item"><span class="stat-value">{guides}</span><span class="stat-label">guides</span></div>'
+        f'<div class="stat-item"><span class="stat-value">{total}</span><span class="stat-label">verified facts</span></div>'
+        f'<div class="stat-item">{stale_val}<span class="stat-label">stale facts</span></div>'
+        f'<div class="stat-item"><span class="stat-value">{todo_count}</span><span class="stat-label">open todos</span></div>'
+        f'<div class="stat-item"><span class="stat-value">{today_entries}</span><span class="stat-label">logged today</span></div>'
+        f'<div class="stat-item"><span class="stat-value">{yesterday_entries}</span><span class="stat-label">logged yesterday</span></div>'
         f"</div>"
     )
 
@@ -716,15 +777,15 @@ def _render_status_brief_panel(data: dict) -> str:
     stale = data.get("stale", 0)
     total = data.get("total_verified", 0)
     today_entries = data.get("today_entries", 0)
-    guides = data.get("guide_count", 0)
-    stale_str = f' <span style="color:#e3b341">{stale} stale</span>' if stale > 0 else ""
+    todo_count = data.get("todo_count", 0)
+    stale_str = f' <span style="color:#e3b341">({stale} stale)</span>' if stale > 0 else ""
     return (
         f'<div class="card">'
         f'<div class="card-body">'
         f'<div class="status-brief">'
-        f"<span>{total}</span> facts{stale_str} &nbsp;|&nbsp; "
-        f"<span>{today_entries}</span> today &nbsp;|&nbsp; "
-        f"<span>{guides}</span> guides"
+        f"<span>{total}</span> verified facts{stale_str} &nbsp;|&nbsp; "
+        f"<span>{today_entries}</span> logged today &nbsp;|&nbsp; "
+        f"<span>{todo_count}</span> open todos"
         f"</div></div></div>"
     )
 
@@ -762,14 +823,38 @@ def _render_log_panel(data: dict, limit: int = 0, show_nav: bool = True, see_mor
             f'</div>'
         )
 
+    _CAT_LABELS = {
+        "fact": "FACT", "decision": "DEC", "insight": "INS",
+        "todo": "TODO", "correction": "COR", "done": "DONE", "auto": "AUTO",
+    }
+    # done and auto use separate CSS class names to avoid collisions
+    _CAT_CLS = {"done": "done-cat", "auto": "auto-cat", "todo": "todo-color"}
+    # Prefixes to strip from display text when the badge already shows the category
+    _CAT_PREFIX = {
+        "fact": "FACT:",
+        "decision": "DECISION:",
+        "insight": "INSIGHT:",
+        "todo": "TODO:",
+        "correction": "CORRECTION:",
+        "done": "DONE:",
+        "auto": "AUTO-PROMOTED:",
+    }
     rows = ""
     for e in reversed(entries):
         cat = e.get("cat", "")
-        cat_cls = f" {cat}" if cat else ""
+        badge = ""
+        if cat and cat in _CAT_LABELS:
+            badge = f'<span class="log-tag log-tag-{cat}">{_CAT_LABELS[cat]}</span>'
+        cat_cls = f" {_CAT_CLS.get(cat, cat)}" if cat else ""
+        text = e["text"]
+        if cat and cat in _CAT_PREFIX:
+            pfx = _CAT_PREFIX[cat]
+            if text.upper().startswith(pfx):
+                text = text[len(pfx):].lstrip()
         rows += (
             f'<div class="log-entry">'
             f'<span class="log-time">{_e(e["time"])}</span>'
-            f'<span class="log-text{cat_cls}">{_e(e["text"])}</span>'
+            f'<span class="log-text{cat_cls}">{badge}{_e(text)}</span>'
             f"</div>"
         )
     if not rows:
@@ -871,16 +956,15 @@ def _render_recurring_panel(data: dict) -> str:
     )
 
 
-def _render_knowledge_panel(data: dict, guide_limit: int = 0, prompt_limit: int = 0) -> str:
+def _render_knowledge_panel(data: dict) -> str:
     guides = data.get("guides", [])
     prompts = data.get("prompts", [])
     skills = data.get("skills", [])
     rows = ""
 
-    # Guides: apply limit if specified
-    shown_guides = guides if guide_limit <= 0 else guides[:guide_limit]
-    hidden_guides = [] if guide_limit <= 0 else guides[guide_limit:]
-    for g in shown_guides:
+    if guides:
+        rows += '<div class="know-divider">Guides</div>'
+    for g in guides:
         body = f'<div class="acc-body md">{render_md(g["content"])}</div>'
         rows += (
             f'<div class="accordion">'
@@ -890,28 +974,10 @@ def _render_knowledge_panel(data: dict, guide_limit: int = 0, prompt_limit: int 
             f'<span class="acc-type">guide</span>'
             f"</div>{body}</div>"
         )
-    if hidden_guides:
-        overflow_html = ""
-        for g in hidden_guides:
-            body = f'<div class="acc-body md">{render_md(g["content"])}</div>'
-            overflow_html += (
-                f'<div class="accordion">'
-                f'<div class="acc-header">'
-                f'<span class="acc-toggle">&#9654;</span>'
-                f'<span class="acc-name">{_e(g["name"])}</span>'
-                f'<span class="acc-type">guide</span>'
-                f"</div>{body}</div>"
-            )
-        n_hidden = len(hidden_guides)
-        rows += (
-            f'<div class="guide-overflow">{overflow_html}</div>'
-            f'<button class="show-more-btn">Show {n_hidden} more guide{"s" if n_hidden != 1 else ""}</button>'
-        )
 
-    # Prompts: apply limit if specified
-    shown_prompts = prompts if prompt_limit <= 0 else prompts[:prompt_limit]
-    hidden_prompts = [] if prompt_limit <= 0 else prompts[prompt_limit:]
-    for p in shown_prompts:
+    if prompts:
+        rows += '<div class="know-divider">Prompts</div>'
+    for p in prompts:
         body = f'<div class="acc-body md">{render_md(p["content"])}</div>'
         rows += (
             f'<div class="accordion">'
@@ -921,24 +987,9 @@ def _render_knowledge_panel(data: dict, guide_limit: int = 0, prompt_limit: int 
             f'<span class="acc-type">prompt</span>'
             f"</div>{body}</div>"
         )
-    if hidden_prompts:
-        overflow_html = ""
-        for p in hidden_prompts:
-            body = f'<div class="acc-body md">{render_md(p["content"])}</div>'
-            overflow_html += (
-                f'<div class="accordion">'
-                f'<div class="acc-header">'
-                f'<span class="acc-toggle">&#9654;</span>'
-                f'<span class="acc-name">{_e(p["name"])}</span>'
-                f'<span class="acc-type">prompt</span>'
-                f"</div>{body}</div>"
-            )
-        n_hidden = len(hidden_prompts)
-        rows += (
-            f'<div class="guide-overflow">{overflow_html}</div>'
-            f'<button class="show-more-btn">Show {n_hidden} more prompt{"s" if n_hidden != 1 else ""}</button>'
-        )
 
+    if skills:
+        rows += '<div class="know-divider">Skills</div>'
     for s in skills:
         rows += (
             f'<div class="accordion">'
@@ -962,21 +1013,15 @@ def _render_knowledge_panel(data: dict, guide_limit: int = 0, prompt_limit: int 
 
 
 def _render_knowledge_limited_panel(data: dict) -> str:
-    """Knowledge panel with guide/prompt limits for the 'all' overview."""
-    return _render_knowledge_panel(data, guide_limit=3, prompt_limit=2)
+    """Knowledge panel - shows all guides/prompts as collapsed accordions."""
+    return _render_knowledge_panel(data)
 
 
 def _render_memory_panel(data: dict) -> str:
     memory = data.get("memory", "")
     rules = data.get("rules", "")
-    mem_html = ""
-    for line in memory.splitlines():
-        if line.strip():
-            mem_html += f'<div class="mem-line">{_e(line)}</div>'
-    rules_html = ""
-    for line in rules.splitlines():
-        if line.strip():
-            rules_html += f'<div class="mem-line">{_e(line)}</div>'
+    mem_html = f'<div class="md">{render_md(memory)}</div>' if memory.strip() else ""
+    rules_html = f'<div class="md">{render_md(rules)}</div>' if rules.strip() else ""
     _empty_div = '<div class="empty">Empty</div>'
     mem_section = (
         f'<div class="accordion">'
@@ -1191,7 +1236,7 @@ VIEWS: dict[str, dict] = {
         "rows": [
             ["status", "ps"],
             ["log-home"],
-            ["todos", "recurring"],
+            ["todos"],
             ["knowledge-limited", "notes"],
             ["memory"],
         ],
@@ -1278,6 +1323,16 @@ def render_fragment(view_name: str, extra_params: dict | None = None) -> str:
     for row in view_def.get("rows", []):
         if len(row) == 1:
             parts.append(_render_panel_safe(row[0], extra_params))
+        elif len(row) == 2:
+            left = _render_panel_safe(row[0], extra_params)
+            right = _render_panel_safe(row[1], extra_params)
+            parts.append(
+                f'<div class="split-pane">'
+                f'<div class="split-left">{left}</div>'
+                f'<div class="split-divider" title="Drag to resize"></div>'
+                f'<div class="split-right">{right}</div>'
+                f'</div>'
+            )
         else:
             cols = "".join(_render_panel_safe(name, extra_params) for name in row)
             parts.append(f'<div class="grid-2">{cols}</div>')
@@ -1339,6 +1394,7 @@ def render_page(view_name: str, port: int) -> str:
 
 class _HiveHandler(BaseHTTPRequestHandler):
     server_port: int = DEFAULT_PORT
+    project_name: str = ""
 
     def do_OPTIONS(self) -> None:
         self.send_response(204)
@@ -1385,6 +1441,13 @@ class _HiveHandler(BaseHTTPRequestHandler):
                     results = fts_search(query, limit=20)
                 except Exception:
                     pass
+            # Filter out session/compaction lines — raw and meaningless as memory search
+            _session_pat = re.compile(r"\bsession\b|\bcompact", re.I)
+            results = [r for r in results if not _session_pat.search(r.get("line", ""))]
+            # Strip the raw log timestamp prefix `- [HH:MM:SS] ` from displayed text
+            _prefix_pat = re.compile(r"^- \[\d{2}:\d{2}:\d{2}\]\s*")
+            for r in results:
+                r["line"] = _prefix_pat.sub("", r.get("line", ""))
             resp_data = json.dumps({"results": results}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -1427,7 +1490,7 @@ class _HiveHandler(BaseHTTPRequestHandler):
         try:
             from keephive.storage import ui_queue_path
 
-            ui_queue_path().write_text(json.dumps(data, indent=2))
+            ui_queue_path(self.__class__.project_name or None).write_text(json.dumps(data, indent=2))
         except Exception:
             pass
 
@@ -1552,6 +1615,7 @@ def cmd_serve(args: list[str]) -> None:
         return
 
     _HiveHandler.server_port = port
+    _HiveHandler.project_name = os.path.basename(os.getcwd())
 
     try:
         httpd = HTTPServer(("localhost", port), _HiveHandler)

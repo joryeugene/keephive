@@ -1178,8 +1178,15 @@ def _count_fact_references(fact_text: str) -> int:
     return count
 
 
-def ui_queue_path() -> "Path":
-    """Path to the UI feedback queue file (written by bookmarklet, read by UserPromptSubmit)."""
+def ui_queue_path(project: str | None = None) -> "Path":
+    """Path to the UI feedback queue file.
+
+    When project is provided, returns a project-scoped path (.ui-queue-{project})
+    so multiple concurrent hive serve instances don't consume each other's feedback.
+    Falls back to the global .ui-queue when project is None.
+    """
+    if project:
+        return hive_dir() / f".ui-queue-{project}"
     return hive_dir() / ".ui-queue"
 
 

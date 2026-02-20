@@ -57,9 +57,15 @@ def hook_userpromptsubmit(args: list[str]) -> None:
 
     # Check UI feedback queue first — inject before nudge
     try:
+        from pathlib import Path
+
         from keephive.storage import ui_queue_path
 
-        queue = ui_queue_path()
+        cwd = input_data.get("cwd", "")
+        project_name = Path(cwd).name if cwd else ""
+        queue = ui_queue_path(project_name) if project_name else ui_queue_path()
+        if not queue.exists() and project_name:
+            queue = ui_queue_path()  # fall back to legacy global queue
         if queue.exists():
             data = json.loads(queue.read_text())
             context = _format_ui_context(data)

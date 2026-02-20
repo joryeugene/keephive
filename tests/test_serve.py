@@ -727,6 +727,551 @@ def test_hot_flag_worker_env_skips_watcher(hive_env, monkeypatch):
     assert not watcher_called, "Watcher should not be called in worker mode"
 
 
+# ---- Fix 7: DONE/AUTO-PROMOTED log classification ----
+
+
+def test_log_data_classifies_done(hive_env):
+    from datetime import date
+
+    from keephive.commands.serve import _get_log_data
+    from keephive.storage import daily_file
+
+    today = date.today().isoformat()
+    daily_file().write_text(
+        f"- [10:00:00] DONE: finished the auth module\n"
+        f"- [10:01:00] AUTO-PROMOTED: old fact promoted\n"
+    )
+    data = _get_log_data()
+    cats = {e["cat"] for e in data["entries"]}
+    assert "done" in cats
+    assert "auto" in cats
+
+
+def test_log_data_done_cat_not_blank(hive_env):
+    from datetime import date
+
+    from keephive.commands.serve import _get_log_data
+    from keephive.storage import daily_file
+
+    daily_file().write_text("- [09:00:00] DONE: shipped feature\n")
+    data = _get_log_data()
+    assert data["entries"][0]["cat"] == "done"
+
+
+# ---- Fix 1: Accordion toggle animation ----
+
+
+def test_css_has_accordion_transition(hive_env):
+    from keephive.commands.serve import _CSS
+
+    assert "transition:transform" in _CSS
+    assert ".acc-header.open .acc-toggle" in _CSS
+    assert "rotate(90deg)" in _CSS
+
+
+def test_js_toggles_open_class_on_header(hive_env):
+    from keephive.commands.serve import _JS
+
+    # JS must toggle 'open' on the header element, not just the body
+    assert "h.classList.toggle" in _JS
+    assert "isOpen" in _JS
+
+
+# ---- Fix 5: Auto-expand first accordion on /mem and /notes ----
+
+
+def test_js_auto_expand_mem_notes(hive_env):
+    from keephive.commands.serve import _JS
+
+    assert "view==='mem'" in _JS or "view==\\'mem\\'" in _JS
+    assert "firstBody" in _JS
+    assert "firstHdr" in _JS
+
+
+# ---- Fix 2: Memory panel uses markdown rendering ----
+
+
+def test_memory_panel_uses_md_class(hive_env):
+    """Memory panel renders content via render_md, not raw mem-line divs."""
+    from keephive.commands.serve import _render_memory_panel
+
+    data = {"memory": "## User Preferences\n- Use uv\n- Research first", "rules": ""}
+    html = _render_memory_panel(data)
+    assert 'class="md"' in html
+    # render_md should produce h2 for ##
+    assert "<h2>" in html
+    assert "mem-line" not in html
+
+
+def test_memory_panel_rules_use_md_class(hive_env):
+    from keephive.commands.serve import _render_memory_panel
+
+    data = {"memory": "", "rules": "- Always verify\n- No assumptions"}
+    html = _render_memory_panel(data)
+    assert 'class="md"' in html
+    assert "mem-line" not in html
+
+
+def test_memory_panel_empty_shows_empty_div(hive_env):
+    from keephive.commands.serve import _render_memory_panel
+
+    data = {"memory": "", "rules": ""}
+    html = _render_memory_panel(data)
+    assert "Empty" in html
+
+
+# ---- Fix 3: Log entry type badges ----
+
+
+def test_log_panel_fact_shows_badge():
+    from keephive.commands.serve import _render_log_panel
+
+    data = {"entries": [{"time": "10:00", "text": "FACT: the sky is blue", "cat": "fact"}], "date": "2026-01-01"}
+    html = _render_log_panel(data, show_nav=False)
+    assert 'log-tag-fact' in html
+    assert 'FACT' in html
+    # Text span has category class for line coloring AND badge inside
+    assert 'class="log-text fact"' in html
+
+
+def test_log_panel_decision_badge():
+    from keephive.commands.serve import _render_log_panel
+
+    data = {"entries": [{"time": "10:01", "text": "DECISION: chose X", "cat": "decision"}], "date": "2026-01-01"}
+    html = _render_log_panel(data, show_nav=False)
+    assert 'log-tag-decision' in html
+    assert 'DEC' in html
+
+
+def test_log_panel_done_badge():
+    from keephive.commands.serve import _render_log_panel
+
+    data = {"entries": [{"time": "10:02", "text": "DONE: finished it", "cat": "done"}], "date": "2026-01-01"}
+    html = _render_log_panel(data, show_nav=False)
+    assert 'log-tag-done' in html
+    assert 'DONE' in html
+
+
+def test_log_panel_auto_badge():
+    from keephive.commands.serve import _render_log_panel
+
+    data = {"entries": [{"time": "10:03", "text": "AUTO-PROMOTED: old fact", "cat": "auto"}], "date": "2026-01-01"}
+    html = _render_log_panel(data, show_nav=False)
+    assert 'log-tag-auto' in html
+    assert 'AUTO' in html
+
+
+def test_log_panel_no_cat_no_badge():
+    from keephive.commands.serve import _render_log_panel
+
+    data = {"entries": [{"time": "10:04", "text": "some plain note", "cat": ""}], "date": "2026-01-01"}
+    html = _render_log_panel(data, show_nav=False)
+    assert 'log-tag' not in html
+
+
+def test_css_has_both_badge_and_line_color_classes():
+    """Both badge classes AND line-color classes should exist (badge + colored line)."""
+    from keephive.commands.serve import _CSS
+
+    # Badge classes for the pill
+    assert "log-tag-fact" in _CSS
+    assert "log-tag-decision" in _CSS
+    # Line-color classes are restored (badge + color = best scannability)
+    assert ".fact{color:" in _CSS
+    assert ".decision{color:" in _CSS
+    # New categories also covered
+    assert "done-cat" in _CSS
+    assert "auto-cat" in _CSS
+
+
+# ---- Fix 4: Knowledge section dividers ----
+
+
+def test_knowledge_panel_shows_guide_divider(hive_env):
+    from keephive.commands.serve import _render_knowledge_panel
+
+    data = {
+        "guides": [{"name": "my-guide", "content": "# Guide"}],
+        "prompts": [],
+        "skills": [],
+    }
+    html = _render_knowledge_panel(data)
+    assert 'know-divider' in html
+    assert 'Guides' in html
+
+
+def test_knowledge_panel_shows_all_dividers(hive_env):
+    from keephive.commands.serve import _render_knowledge_panel
+
+    data = {
+        "guides": [{"name": "g1", "content": "guide"}],
+        "prompts": [{"name": "p1", "content": "prompt"}],
+        "skills": ["skill-one"],
+    }
+    html = _render_knowledge_panel(data)
+    assert html.count('know-divider') == 3
+    assert 'Guides' in html
+    assert 'Prompts' in html
+    assert 'Skills' in html
+
+
+def test_knowledge_panel_no_divider_for_empty_section(hive_env):
+    from keephive.commands.serve import _render_knowledge_panel
+
+    data = {"guides": [], "prompts": [], "skills": []}
+    html = _render_knowledge_panel(data)
+    assert 'know-divider' not in html
+
+
+# ---- Fix 6: Search result cleanup ----
+
+
+def test_search_filters_session_lines(hive_env):
+    """Session log lines are filtered from search results server-side."""
+    import os
+
+    os.environ["HIVE_HOME"] = str(hive_env)
+    import threading
+    import time
+    from http.client import HTTPConnection
+
+    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.storage import fts_search
+
+    # Monkey-patch fts_search to return a mix of real and session results
+    import keephive.commands.serve as serve_mod
+    orig_search = None
+
+    def fake_search(query, limit=20):
+        return [
+            {"date": "2026-01-01", "line": "- [10:00:00] FACT: useful memory"},
+            {"date": "2026-01-01", "line": "- [13:31:47] session [proj] /Users/test"},
+        ]
+
+    port = 13860
+    _HiveHandler.server_port = port
+    httpd = HTTPServer(("localhost", port), _HiveHandler)
+    t = threading.Thread(target=httpd.handle_request, daemon=True)
+    t.start()
+    time.sleep(0.1)
+
+    import unittest.mock as mock
+    with mock.patch("keephive.storage.fts_search", fake_search):
+        conn = HTTPConnection("localhost", port, timeout=3)
+        conn.request("GET", "/api/search?q=test")
+        resp = conn.getresponse()
+        body = resp.read().decode()
+    conn.close()
+    httpd.server_close()
+
+    import json as _json
+    data = _json.loads(body)
+    lines = [r["line"] for r in data["results"]]
+    assert all("session" not in ln for ln in lines), f"Session line leaked: {lines}"
+    assert any("FACT" in ln for ln in lines)
+
+
+def test_search_strips_log_prefix(hive_env):
+    """Search results strip the `- [HH:MM:SS] ` prefix."""
+    import os
+    import threading
+    import time
+    import unittest.mock as mock
+    from http.client import HTTPConnection
+
+    import json as _json
+
+    os.environ["HIVE_HOME"] = str(hive_env)
+
+    from keephive.commands.serve import _HiveHandler, HTTPServer
+
+    def fake_search(query, limit=20):
+        return [{"date": "2026-01-01", "line": "- [10:00:00] FACT: clean result"}]
+
+    port = 13861
+    _HiveHandler.server_port = port
+    httpd = HTTPServer(("localhost", port), _HiveHandler)
+    t = threading.Thread(target=httpd.handle_request, daemon=True)
+    t.start()
+    time.sleep(0.1)
+
+    with mock.patch("keephive.storage.fts_search", fake_search):
+        conn = HTTPConnection("localhost", port, timeout=3)
+        conn.request("GET", "/api/search?q=fact")
+        resp = conn.getresponse()
+        body = resp.read().decode()
+    conn.close()
+    httpd.server_close()
+
+    data = _json.loads(body)
+    assert data["results"]
+    line = data["results"][0]["line"]
+    assert not line.startswith("- ["), f"Prefix not stripped: {line!r}"
+    assert "FACT: clean result" in line
+
+
+# ---- Status panel metric improvements ----
+
+
+def test_status_data_has_todo_count(hive_env):
+    from keephive.commands.serve import _get_status_data
+
+    data = _get_status_data()
+    assert "todo_count" in data
+    assert isinstance(data["todo_count"], int)
+
+
+def test_render_status_panel_shows_open_todos(hive_env):
+    from keephive.commands.serve import _render_status_panel
+
+    data = {
+        "stale": 0, "total_verified": 5, "today_entries": 3,
+        "guide_count": 2, "hooks_ok": True, "mcp_ok": True, "data_ok": True,
+        "stale_facts": [], "todo_count": 7,
+    }
+    html = _render_status_panel(data)
+    assert "open todos" in html
+    assert "7" in html
+
+
+def test_render_status_panel_clearer_labels(hive_env):
+    from keephive.commands.serve import _render_status_panel
+
+    data = {
+        "stale": 0, "total_verified": 10, "today_entries": 4,
+        "guide_count": 3, "hooks_ok": True, "mcp_ok": True, "data_ok": True,
+        "stale_facts": [], "todo_count": 2,
+    }
+    html = _render_status_panel(data)
+    assert "verified facts" in html
+    assert "stale facts" in html
+    assert "logged today" in html
+    # Old cryptic single-word labels should be gone from the metric cells
+    assert '<span class="stat-label">facts</span>' not in html
+    assert '<span class="stat-label">today</span>' not in html
+    assert '<span class="stat-label">guides</span>' not in html
+
+
+def test_render_status_brief_panel_clearer_labels(hive_env):
+    from keephive.commands.serve import _render_status_brief_panel
+
+    data = {
+        "stale": 0, "total_verified": 8, "today_entries": 2,
+        "guide_count": 1, "todo_count": 3,
+    }
+    html = _render_status_brief_panel(data)
+    assert "verified facts" in html
+    assert "logged today" in html
+    assert "open todos" in html
+
+
+# ---- logged yesterday hero stat ----
+
+
+def test_status_panel_shows_logged_yesterday(hive_env):
+    """Status panel must show a 'logged yesterday' stat box."""
+    from keephive.commands.serve import _render_status_panel
+
+    data = {
+        "stale": 0, "total_verified": 30, "today_entries": 66,
+        "yesterday_entries": 42, "guide_count": 12, "todo_count": 15,
+        "hooks_ok": True, "mcp_ok": True, "data_ok": True, "stale_facts": [],
+    }
+    html = _render_status_panel(data)
+    assert "logged yesterday" in html
+    assert "42" in html
+
+
+def test_status_data_has_yesterday_entries(hive_env):
+    """_get_status_data must include 'yesterday_entries' key."""
+    from keephive.commands.serve import _get_status_data
+
+    data = _get_status_data()
+    assert "yesterday_entries" in data
+    assert isinstance(data["yesterday_entries"], int)
+
+
+def test_all_view_todos_full_width():
+    """In the All view, 'todos' is a single-item row (full-width, no height imbalance)."""
+    from keephive.commands.serve import VIEWS
+
+    all_rows = VIEWS["all"]["rows"]
+    # Find the row containing "todos"
+    todos_row = next((r for r in all_rows if "todos" in r), None)
+    assert todos_row is not None, "No row with 'todos' in All view"
+    assert len(todos_row) == 1, f"'todos' should be full-width in All view, got row: {todos_row}"
+
+
+# ---- Round 3: Fix 1 - accordion animation (no textContent swap) ----
+
+
+def test_js_no_textcontent_swap_in_accordion():
+    """JS must not swap ▶/▼ characters — CSS rotation handles the visual."""
+    from keephive.commands.serve import _JS
+
+    # The textContent swap was the broken approach; CSS rotate(90deg) is correct
+    assert "t.textContent" not in _JS
+    assert "\\u25bc" not in _JS or "acc-toggle" not in _JS  # no ▼ assignment
+
+
+# ---- Round 3: Fix 2 - knowledge guide height cap ----
+
+
+def test_css_acc_body_md_max_height():
+    """acc-body.md must have max-height so expanded guides stay bounded."""
+    from keephive.commands.serve import _CSS
+
+    assert ".acc-body.md{" in _CSS
+    assert "max-height:480px" in _CSS
+    assert "overflow-y:auto" in _CSS
+
+
+# ---- Round 3: Fix 3 - align-items:start on grid-2 ----
+
+
+def test_css_grid2_align_items_start():
+    """grid-2 must use align-items:start to prevent dead space below short panels."""
+    from keephive.commands.serve import _CSS
+
+    assert "align-items:start" in _CSS
+
+
+# ---- Round 3: Fix 4 - split-pane ----
+
+
+def test_render_fragment_two_col_uses_split_pane(hive_env):
+    """Two-column rows must emit split-pane structure, not grid-2."""
+    from keephive.commands.serve import render_fragment
+
+    html = render_fragment("stats")  # stats view has ["stats", "ps"] — a 2-col row
+    assert "split-pane" in html
+    assert "split-left" in html
+    assert "split-right" in html
+    assert "split-divider" in html
+
+
+def test_render_fragment_split_pane_not_grid2(hive_env):
+    """Two-column rows must NOT use grid-2."""
+    from keephive.commands.serve import render_fragment
+
+    html = render_fragment("stats")
+    assert "grid-2" not in html
+
+
+def test_css_has_split_pane_rules():
+    from keephive.commands.serve import _CSS
+
+    assert ".split-pane{" in _CSS
+    assert ".split-divider{" in _CSS
+    assert ".split-divider::after{" in _CSS
+
+
+def test_js_has_split_pane_drag():
+    from keephive.commands.serve import _JS
+
+    assert "split-divider" in _JS
+    assert "mousedown" in _JS
+    assert "mousemove" in _JS
+    assert "mouseup" in _JS
+
+
+# ---- Round 3: Fix 6 - no show-more ----
+
+
+def test_knowledge_panel_no_show_more_btn(hive_env):
+    """Knowledge panel must never emit show-more-btn buttons."""
+    from keephive.commands.serve import _render_knowledge_panel
+
+    data = {
+        "guides": [{"name": f"guide-{i}", "content": f"# Guide {i}"} for i in range(10)],
+        "prompts": [{"name": f"prompt-{i}", "content": "text"} for i in range(5)],
+        "skills": [],
+    }
+    html = _render_knowledge_panel(data)
+    assert "show-more-btn" not in html
+    assert "guide-overflow" not in html
+
+
+def test_knowledge_panel_shows_all_guides(hive_env):
+    """All guides are rendered without truncation."""
+    from keephive.commands.serve import _render_knowledge_panel
+
+    data = {
+        "guides": [{"name": f"guide-{i}", "content": f"# Guide {i}"} for i in range(5)],
+        "prompts": [],
+        "skills": [],
+    }
+    html = _render_knowledge_panel(data)
+    for i in range(5):
+        assert f"guide-{i}" in html
+
+
+def test_css_no_show_more_btn_rule():
+    from keephive.commands.serve import _CSS
+
+    assert "show-more-btn" not in _CSS
+    assert "guide-overflow" not in _CSS
+
+
+def test_js_no_show_more_handler():
+    from keephive.commands.serve import _JS
+
+    assert "show-more-btn" not in _JS
+
+
+# ---- Round 3: badge prefix stripping ----
+
+
+def test_log_panel_strips_fact_prefix():
+    """When FACT badge is shown, 'FACT: ' prefix is stripped from display text."""
+    from keephive.commands.serve import _render_log_panel
+
+    data = {"entries": [{"time": "10:00", "text": "FACT: the sky is blue", "cat": "fact"}], "date": "2026-01-01"}
+    html = _render_log_panel(data, show_nav=False)
+    assert "log-tag-fact" in html  # badge present
+    assert "FACT: the sky is blue" not in html  # full prefixed text gone
+    assert "the sky is blue" in html  # payload preserved
+
+
+def test_log_panel_strips_todo_prefix():
+    from keephive.commands.serve import _render_log_panel
+
+    data = {"entries": [{"time": "10:00", "text": "TODO: fix the thing", "cat": "todo"}], "date": "2026-01-01"}
+    html = _render_log_panel(data, show_nav=False)
+    assert "log-tag-todo" in html
+    assert "TODO: fix the thing" not in html
+    assert "fix the thing" in html
+
+
+def test_log_panel_strips_done_prefix():
+    from keephive.commands.serve import _render_log_panel
+
+    data = {"entries": [{"time": "10:00", "text": "DONE: shipped feature", "cat": "done"}], "date": "2026-01-01"}
+    html = _render_log_panel(data, show_nav=False)
+    assert "log-tag-done" in html
+    assert "DONE: shipped feature" not in html
+    assert "shipped feature" in html
+
+
+def test_log_panel_strips_auto_promoted_prefix():
+    from keephive.commands.serve import _render_log_panel
+
+    data = {"entries": [{"time": "10:00", "text": "AUTO-PROMOTED: old fact text", "cat": "auto"}], "date": "2026-01-01"}
+    html = _render_log_panel(data, show_nav=False)
+    assert "log-tag-auto" in html
+    assert "AUTO-PROMOTED: old fact text" not in html
+    assert "old fact text" in html
+
+
+def test_log_panel_no_cat_no_strip():
+    """Entries without a category keep their text unchanged."""
+    from keephive.commands.serve import _render_log_panel
+
+    data = {"entries": [{"time": "10:00", "text": "plain note text", "cat": ""}], "date": "2026-01-01"}
+    html = _render_log_panel(data, show_nav=False)
+    assert "plain note text" in html
+
+
 # ---- CLI dispatch test ----
 
 

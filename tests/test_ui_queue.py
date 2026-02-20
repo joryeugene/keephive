@@ -224,3 +224,91 @@ def test_hook_queue_injection_skips_nudge(hive_env, capsys):
     # Nudge output has hookSpecificOutput.suppressOutput or similar — distinct format
     # Most importantly: only ONE JSON object written (queue consumed, nudge skipped)
     assert out.count("{") == out.count("}")  # balanced JSON, not two concatenated objects
+
+
+# ---- Queue session scoping (Fix 5) ----
+
+
+def test_ui_queue_path_with_project_name(hive_env):
+    """ui_queue_path(project) returns a project-scoped filename."""
+    from keephive.storage import ui_queue_path
+
+    path = ui_queue_path("myproject")
+    assert path.name == ".ui-queue-myproject"
+    assert path.parent == hive_env
+
+
+def test_ui_queue_path_no_project_returns_global(hive_env):
+    """ui_queue_path() with no arg returns the legacy global .ui-queue."""
+    from keephive.storage import ui_queue_path
+
+    path = ui_queue_path()
+    assert path.name == ".ui-queue"
+    assert path.parent == hive_env
+
+
+def test_ui_queue_path_none_returns_global(hive_env):
+    """ui_queue_path(None) also returns the legacy global .ui-queue."""
+    from keephive.storage import ui_queue_path
+
+    path = ui_queue_path(None)
+    assert path.name == ".ui-queue"
+
+
+def test_hook_reads_project_scoped_queue(hive_env, capsys):
+    """Hook reads .ui-queue-{project} when cwd is provided matching the project."""
+    from keephive.storage import ui_queue_path
+
+    # Write to project-scoped queue
+    project_queue = ui_queue_path("keephive-serve")
+    project_queue.write_text(
+        json.dumps({"page": "http://localhost:3847", "selector": ".card", "note": "scoped feedback"})
+    )
+
+    _call_hook({"session_id": "s1", "cwd": "/Users/jory/Documents/GitHub/keephive-serve"})
+
+    out = capsys.readouterr().out
+    assert out.strip(), "Expected output from project-scoped queue"
+    obj = json.loads(out.strip())
+    ctx = obj["hookSpecificOutput"]["additionalContext"]
+    assert "scoped feedback" in ctx
+    assert not project_queue.exists(), "Project-scoped queue should be deleted after injection"
+
+
+def test_hook_falls_back_to_global_queue(hive_env, capsys):
+    """Hook falls back to global .ui-queue when no project-scoped queue exists."""
+    from keephive.storage import ui_queue_path
+
+    # Write to global queue only (no project-scoped one)
+    global_queue = ui_queue_path()
+    global_queue.write_text(
+        json.dumps({"page": "http://localhost", "selector": "body", "note": "global fallback"})
+    )
+
+    _call_hook({"session_id": "s2", "cwd": "/Users/jory/Documents/GitHub/someproject"})
+
+    out = capsys.readouterr().out
+    assert out.strip()
+    obj = json.loads(out.strip())
+    ctx = obj["hookSpecificOutput"]["additionalContext"]
+    assert "global fallback" in ctx
+
+
+def test_hook_ignores_other_project_queue(hive_env, capsys):
+    """Hook does not consume a queue for a different project."""
+    from keephive.storage import ui_queue_path
+
+    # Write to a different project's queue
+    other_queue = ui_queue_path("other-project")
+    other_queue.write_text(
+        json.dumps({"page": "http://other", "selector": ".x", "note": "wrong project"})
+    )
+
+    # This hook call is for 'myproject' — should not consume 'other-project' queue
+    # No global queue exists, no myproject queue exists — hook should produce no queue output
+    with patch("sys.stdout", StringIO()) as mock_stdout:
+        _call_hook({"session_id": "s3", "cwd": "/Users/jory/myproject"})
+        output = mock_stdout.getvalue()
+
+    # The other-project queue must still exist (not consumed)
+    assert other_queue.exists(), "Queue for a different project must not be consumed"

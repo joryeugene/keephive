@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.13.0
+## v0.14.0
 
 ### Dashboard
 
@@ -13,6 +13,20 @@
 ### Hooks
 
 - **UserPromptSubmit**: Reads `.ui-queue` before nudge logic. When a bookmarklet submission is pending, injects `[UI Feedback]` element context as `additionalContext` and clears the queue, skipping the nudge for that turn.
+
+## v0.13.2
+
+### Fixes
+
+- **Seed-only session start**: `_seed_bundled_content` no longer overwrites user-customized guides on every session start. Overwrites happen only when the installed guide is absent or when `hive setup` is run explicitly.
+
+## v0.13.1
+
+### Features
+
+- **Auto-sync bundled guides on session start**: Bundled guides are synced to `~/.claude/hive/guides/` on every session start, keeping them current after upgrades without requiring a manual `hive setup`.
+
+## v0.13.0
 
 ### Features
 
