@@ -25,7 +25,7 @@ A knowledge sidecar for Claude Code.
 - `commands/audit.py`: Three-perspective LLM audit (parallel) + Cook synthesis. Uses `run_claude_pipe()` for all 4 calls.
 - `commands/edit.py`: `hive e` targets (memory, rules, claude, today, todo, etc.). Opens `$EDITOR`.
 - `commands/knowledge.py`: List, view, create/edit knowledge guides and prompt templates.
-- `commands/note.py`: Multi-slot scratchpad. Open, copy, clear, list, restore, template start.
+- `commands/note.py`: Multi-slot scratchpad. Open, copy, clear, list, restore, template start. `hive n todo` extracts TODOs via edit-buffer (full note, candidates pre-marked `- `, mtime cancel detection). `hive 4 "text"` quick-appends without editor.
 - `commands/session.py`: Interactive session launcher. Reuses `build_context()` from sessionstart, replaces process with `claude` via `os.execvpe`.
 - `commands/skill.py`: Plugin/skill system for extensible commands.
 - `commands/stats.py`: Usage statistics with per-project breakdown, streaks, and activity sparklines.
@@ -53,4 +53,30 @@ Tests must catch real bugs. `test_claude_pipe.py` uses the ACTUAL response forma
 LLM-dependent tests use `llm_hive_env` fixture + `@pytest.mark.llm`.
 Run: `uv run pytest -m llm -v -o "addopts="`
 `HIVE_SKIP_LLM=1` is ONLY for fast-path fixtures. NEVER use it to "test" an LLM feature — that skips the feature entirely and proves nothing.
+
+## Editor Mock Pattern
+
+Functions that open `$EDITOR` via `subprocess.run([editor, path])` use mtime to detect cancel (no write = mtime unchanged). Test mocks must account for this:
+
+```python
+# WRONG — no-op mock looks like cancel, 0 TODOs added
+monkeypatch.setattr("subprocess.run", lambda *a, **kw: None)
+
+# RIGHT — touch updates mtime, content (already written) is read back
+def accept_all(*args, **kwargs):
+    Path(args[0][1]).touch()
+monkeypatch.setattr("subprocess.run", accept_all)
+
+# RIGHT — test cancel explicitly with no-op
+monkeypatch.setattr("subprocess.run", lambda *a, **kw: None)
+# assert nothing was added
+
+# RIGHT — delete a specific line
+def delete_first_todo(*args, **kwargs):
+    path = Path(args[0][1])
+    lines = [ln for ln in path.read_text().splitlines() if not ln.startswith("- ")][:1_000]
+    path.write_text("\n".join(lines))
+```
+
+`args[0]` is the command list `[editor, str(path)]`, so `args[0][1]` is the file path.
 
