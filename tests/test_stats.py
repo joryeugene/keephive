@@ -368,7 +368,7 @@ class TestCLIStats:
         r = _run(["stats"], hive_home=str(hive_env))
         assert r.returncode == 0
         # Running 'stats' itself creates a tracking entry, so output won't be empty
-        assert "keephive stats" in r.stdout or "No stats" in r.stdout
+        assert "keephive" in r.stdout or "No stats" in r.stdout
 
     def test_stats_json(self, hive_env):
         r = _run(["stats", "--json"], hive_home=str(hive_env))
@@ -426,9 +426,9 @@ class TestDisplayFull:
 
         _display_full(data)
         out = capsys.readouterr().out
-        assert "Today:" in out
-        assert "This week:" in out
-        assert "All time:" in out
+        assert "today" in out
+        assert "week" in out
+        assert "all time" in out
 
     def test_empty_data_shows_no_stats(self, hive_env, capsys):
         from keephive.commands.stats import _display_full

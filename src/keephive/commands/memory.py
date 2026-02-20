@@ -77,6 +77,10 @@ def cmd_rule(args: list[str]) -> None:
             console.print('  -> hive rule "your first rule" to start')
         return
 
+    if args[0] == "review":
+        _rule_review()
+        return
+
     if args[0] == "rm":
         _remove_line(rules_file(), " ".join(args[1:]), "rules.md")
         return
@@ -99,6 +103,65 @@ def cmd_rule(args: list[str]) -> None:
 
     console.print("[ok]Saved[/ok] to working/rules.md")
     console.print("[dim]Backup: rules.md.bak[/dim]")
+
+
+def _rule_review() -> None:
+    """Review and accept/reject pending rule suggestions from .pending-rules.md."""
+    from keephive.storage import hive_dir
+
+    pending_path = hive_dir() / ".pending-rules.md"
+    if not pending_path.exists() or not pending_path.read_text().strip():
+        console.print("[dim]No pending rule suggestions.[/dim]")
+        return
+
+    lines = [l for l in pending_path.read_text().splitlines() if l.strip().startswith("- ")]
+    if not lines:
+        console.print("[dim]No pending rule suggestions.[/dim]")
+        pending_path.write_text("")
+        return
+
+    accepted = []
+    remaining = []
+    for line in lines:
+        rule_text = line.lstrip("- ").strip()
+        console.print(f"\n  Suggested rule:")
+        console.print(f"  [bold]{rule_text}[/bold]")
+        console.print()
+        response = input("  Add to rules.md? [y/N/e(dit)]: ").strip().lower()
+        if response == "y":
+            accepted.append(rule_text)
+        elif response.startswith("e"):
+            edited = input(f"  Edit rule: ").strip()
+            if edited:
+                accepted.append(edited)
+            else:
+                remaining.append(line)
+        else:
+            remaining.append(line)
+
+    # Apply accepted rules
+    if accepted:
+        rf = rules_file()
+        ensure_dirs()
+        if not rf.exists():
+            rf.write_text("# Working Rules\n\n")
+        backup_and_write(rf, rf.read_text())
+        with open(rf, "a") as f:
+            with open(rf, "rb") as check:
+                check.seek(-1, 2)
+                if check.read(1) != b"\n":
+                    f.write("\n")
+            for rule in accepted:
+                f.write(f"- {rule}\n")
+        console.print(f"\n[ok]Added {len(accepted)} rule(s).[/ok]")
+
+    # Write back remaining
+    if remaining:
+        pending_path.write_text("\n".join(remaining) + "\n")
+        console.print(f"[dim]{len(remaining)} suggestion(s) deferred.[/dim]")
+    else:
+        pending_path.write_text("")
+        console.print("[dim]No more pending rules.[/dim]")
 
 
 def _remove_line(path, pattern: str, filename: str) -> None:

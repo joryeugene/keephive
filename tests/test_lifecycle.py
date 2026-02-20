@@ -109,23 +109,13 @@ class TestSessionStartLifecycle:
         # Let's just check the structure is there
         assert "Working Memory" in ctx
 
-    def test_workflows_contain_dual_mcp_and_cli_references(self, hive_env):
+    def test_workflows_section_not_injected_for_non_keephive_projects(self, hive_env):
         from keephive.hooks.sessionstart import build_context
 
         ctx = build_context("/test/project", "project")
-        # Workflows section must exist with both MCP tool names and CLI equivalents
-        assert "## Workflows" in ctx
-        assert "hive_recall(topic)" in ctx
-        assert "`hive rc <topic>`" in ctx
-        assert "hive_remember(text)" in ctx
-        assert "`hive r`" in ctx
-        assert "hive_todo()" in ctx
-        assert "`hive todo`" in ctx
-        assert "hive_todo_done(pattern)" in ctx
-        # Code hygiene block
-        assert "### Code Hygiene" in ctx
-        assert "dead code" in ctx.lower()
-        assert "orphaned imports" in ctx.lower()
+        # Workflows section removed from static injection to reduce token bloat.
+        # It now lives in the keephive-guide and is only injected when the guide matches.
+        assert "## Workflows" not in ctx
 
 
 class TestPostToolUseLifecycle:

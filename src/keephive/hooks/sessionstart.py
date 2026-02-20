@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from keephive.storage import (
+    active_slot,
     backup_and_write,
     count_stale_facts,
     due_recurring,
@@ -25,6 +26,7 @@ from keephive.storage import (
     open_todos,
     read_memory,
     read_rules,
+    slot_file,
 )
 
 
@@ -35,6 +37,34 @@ def hook_sessionstart(args: list[str]) -> None:
         input_data = json.loads(raw)
     except json.JSONDecodeError:
         input_data = {}
+
+    import os as _os
+    import time as _time
+
+    _skip = False
+    try:
+        _sig = hive_dir() / ".session-launched"
+        if _sig.exists():
+            _ts = int(_sig.read_text().strip())
+            if _time.time() - _ts < 15:
+                _skip = True
+            _sig.unlink(missing_ok=True)
+    except Exception:
+        pass
+    if not _skip:
+        _skip = bool(_os.environ.get("HIVE_SESSION_LAUNCHED"))  # env var fallback
+    if _skip:
+        sys.stdout.write(
+            json.dumps(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": "SessionStart",
+                        "additionalContext": "",
+                    }
+                }
+            )
+        )
+        return
 
     cwd = input_data.get("cwd", "")
     project_name = Path(cwd).name if cwd else ""
@@ -74,6 +104,21 @@ def hook_sessionstart(args: list[str]) -> None:
                 }
             )
         )
+
+
+def _active_draft_hint() -> str:
+    """Return a one-line hint about the active note slot, or empty string."""
+    slot = active_slot()
+    path = slot_file(slot)
+    if not path.exists():
+        return ""
+    content = path.read_text().strip()
+    if not content:
+        return ""
+    words = len(content.split())
+    flat = content.replace("\n", " ")
+    preview = flat[:40] + ("..." if len(flat) > 40 else "")
+    return f'slot {slot} · "{preview}" ({words} words)'
 
 
 def build_context(cwd: str, project_name: str) -> str:
@@ -143,6 +188,11 @@ def build_context(cwd: str, project_name: str) -> str:
                 todo_lines.append(f"- [?] {text}")
         parts.append("\n".join(todo_lines))
 
+    # 4b. Active draft hint
+    draft_hint = _active_draft_hint()
+    if draft_hint:
+        parts.append(f"## Active Draft\n{draft_hint}")
+
     # 5. Due recurring tasks
     due = due_recurring()
     if due:
@@ -204,11 +254,6 @@ def build_context(cwd: str, project_name: str) -> str:
         guide_text = _match_guides(project_name, cwd)
         if guide_text:
             parts.append(guide_text)
-
-    # 10. Workflows (MCP + CLI dual references, hygiene, quality standards)
-    from keephive.identity import render_workflows
-
-    parts.append(render_workflows())
 
     return "\n\n".join(parts)
 

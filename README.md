@@ -57,7 +57,7 @@ After a few sessions, `hive` shows what your agent has learned:
 
 ```console
 $ hive
-keephive v0.12.2
+keephive v0.13.0
   ● hooks  ● mcp  ● data
 
   4 facts (4 ok) | 12 today | 8 yesterday | 2 guides | 48K
@@ -71,7 +71,7 @@ keephive v0.12.2
   ~ [09:15:44] INSIGHT: The retry logic in api_client.py silently swallows 429s.
   [09:12:30] DONE: Migrate user table to new schema.
 
-  Note [slot 1]: 14 lines / 812b    2  3  4  5  6  7  8  9  0
+  Active draft: slot 1 · "api testing todo list..." (47 words)  ->  hive nc
 
   hive go (session) | hive l (log) | hive rf (reflect) | hive help
 ```
@@ -124,6 +124,7 @@ keephive uses the three extension points Claude Code exposes:
 | `hive remember "text"`  | `hive r "text"`   | Save to daily log                          |
 | `hive t <text>`         |                   | Quick-add a TODO                           |
 | `hive note`             | `hive n`          | Multi-slot scratchpad ($EDITOR)            |
+| `hive n todo`           | `hive 4 todo`     | Extract action items from a note slot      |
 | **Recall**              |                   |                                            |
 | `hive status`           | `hive` / `hive s` | Status overview                            |
 | `hive recall <query>`   | `hive rc <query>` | Search all tiers                           |
@@ -163,7 +164,11 @@ keephive uses the three extension points Claude Code exposes:
 
 #### Notes
 
-`hive n` is a multi-slot scratchpad. Each slot persists across sessions, auto-copies to clipboard on save, and can be initialized from a prompt template (`hive n <template>`). Use `hive n.2` to switch slots.
+`hive n` is a multi-slot scratchpad. Each slot persists across sessions, auto-copies to clipboard on save, and can be initialized from a prompt template (`hive n <template>`). Use `hive n.2` or `hive 2` to switch to slot 2 and open it in `$EDITOR`.
+
+`hive n todo` (or `hive 4 todo` for slot 4) scans the active slot for action items. Both plain text lines and bullet points from a `## todo` section become candidates; items over 120 characters are skipped as observations. For a single item, you get a yes/no prompt. For multiple items, your `$EDITOR` opens with the candidates — delete lines you don't want, save and quit to confirm.
+
+`hive 4 "text"` appends text directly to slot 4 without opening an editor. Use bare-digit commands with a quoted string to capture quick notes mid-session.
 
 #### Edit
 

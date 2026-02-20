@@ -410,11 +410,8 @@ class TestFullHookChain:
         ctx = build_context("/test/project", "project")
         # Must include working memory facts
         assert "Python is great" in ctx
-        # Must include workflows section
-        assert "## Workflows" in ctx
-        # Must include MCP and CLI references
-        assert "hive_remember" in ctx
-        assert "hive_recall" in ctx
+        # Workflows section is no longer injected (covered by keephive-guide when active)
+        assert "## Workflows" not in ctx
 
     def test_posttooluse_counter_based_nudge(self, hive_env):
         """PostToolUse fires nudge at interval boundary, silent otherwise."""
@@ -520,8 +517,8 @@ class TestStatusOutputCompleteness:
         # Due recurring
         assert "due recurring" in out.lower()
         assert "Check builds" in out
-        # Note indicator
-        assert "Note" in out and "ready" in out
+        # Note indicator (new format)
+        assert "Active draft" in out and "slot 1" in out
         # Footer (stale facts -> suggests verify session)
         assert "hive v" in out
         assert "session verify" in out

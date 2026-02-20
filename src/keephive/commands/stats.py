@@ -6,8 +6,15 @@ import json
 from collections import defaultdict
 from datetime import date, timedelta
 
+from rich.table import Table
+
 from keephive.output import console
-from keephive.storage import parse_date_arg, read_stats
+from keephive.storage import (
+    count_log_entries_with_prefix,
+    last_log_entry_with_prefix,
+    parse_date_arg,
+    read_stats,
+)
 
 
 def cmd_stats(args: list[str]) -> None:
@@ -258,119 +265,129 @@ def _display_full(data: dict) -> None:
     # Today / This week / All time summary
     today_data = days_data.get(today_str, {})
     today_cmds = _count_category(today_data, "commands")
-    today_hooks = _count_category(today_data, "hooks")
-    today_projects = len(today_data.get("projects", {}))
 
-    week_cmds = week_hooks = 0
-    week_projects: set[str] = set()
-    all_cmds = all_hooks = 0
-    all_projects: set[str] = set()
+    week_cmds = 0
+    all_cmds = 0
 
     for day_str, day_data in days_data.items():
         cmds = _count_category(day_data, "commands")
-        hooks = _count_category(day_data, "hooks")
         all_cmds += cmds
-        all_hooks += hooks
-        for p in day_data.get("projects", {}):
-            all_projects.add(p)
         if day_str >= week_ago:
             week_cmds += cmds
-            week_hooks += hooks
-            for p in day_data.get("projects", {}):
-                week_projects.add(p)
 
-    console.print("[bold]keephive stats[/bold]")
+    curr_streak, longest_streak = _calculate_streak(days_data)
+
+    # Single-line header
+    console.print(
+        f"[bold]keephive[/bold]  "
+        f"today [bold]{today_cmds}[/bold] cmds  ·  "
+        f"week [bold]{week_cmds}[/bold]  ·  "
+        f"all time [bold]{all_cmds}[/bold]  ·  "
+        f"streak [bold]{curr_streak}d[/bold] (best: {longest_streak}d)"
+    )
+
+    # 7-day activity chart
+    daily_cmd_counts: dict[str, int] = {}
+    for i in range(6, -1, -1):
+        d = date.today() - timedelta(days=i)
+        day_s = d.isoformat()
+        dd = days_data.get(day_s, {})
+        daily_cmd_counts[day_s] = _count_category(dd, "commands")
+
+    spark = _sparkline(daily_cmd_counts, days=7)
+    max_c = max((c for _, c in spark), default=1) or 1
+
     console.print()
-    console.print(
-        f"  Today:     {today_cmds} commands | {today_hooks} hooks | {today_projects} projects"
-    )
-    console.print(
-        f"  This week: {week_cmds} commands | {week_hooks} hooks | {len(week_projects)} projects"
-    )
-    console.print(
-        f"  All time:  {all_cmds} commands | {all_hooks} hooks | {len(all_projects)} projects"
-    )
+    console.print("[dim]Activity · last 7 days[/dim]")
+    for i, (label, count) in enumerate(spark):
+        bar = _bar(count, max_c, width=20) if count > 0 else ""
+        bar_display = bar if bar else "─"
+        today_marker = "  ← today" if i == len(spark) - 1 else ""
+        # Get weekday abbreviation from label (e.g. "Feb 13" -> "Thu")
+        try:
+            d = date.today() - timedelta(days=len(spark) - 1 - i)
+            day_name = d.strftime("%a")
+        except Exception:
+            day_name = "   "
+        console.print(f"  {label}  {day_name:<3}  {bar_display:<20}  {count:>3}{today_marker}")
 
-    # Sources
-    sources = _sum_sources(days_data)
-    if sources:
-        total_src = sum(sources.values())
-        console.print()
-        console.print("[bold]Sources (all time):[/bold]")
-        for src, count in sorted(sources.items(), key=lambda x: -x[1]):
-            pct = int(count / total_src * 100) if total_src else 0
-            label = src.replace("_", " ").title()
-            console.print(f"  {label:<14} {count:>5}  ({pct}%)")
-
-    # Top commands
+    # Two-column: top commands (left) + sources + hooks (right)
     commands = _sum_counters(days_data, "commands")
-    if commands:
-        console.print()
-        console.print("[bold]Top commands (all time):[/bold]")
-        for name, count in sorted(commands.items(), key=lambda x: -x[1])[:8]:
-            console.print(f"  {name:<14} {count:>5}")
-
-    # Hooks
+    sources = _sum_sources(days_data)
     hooks = _sum_counters(days_data, "hooks")
-    if hooks:
-        console.print()
-        console.print("[bold]Hooks (all time):[/bold]")
-        for name, count in sorted(hooks.items(), key=lambda x: -x[1]):
-            console.print(f"  {name:<20} {count:>5}")
 
-    # Projects
+    if commands or sources or hooks:
+        grid = Table.grid(padding=(0, 4))
+        grid.add_column()
+        grid.add_column()
+
+        left: list[str] = ["[dim]Top Commands[/dim]"]
+        max_cmd = max(commands.values(), default=1) or 1
+        for name, count in sorted(commands.items(), key=lambda x: -x[1])[:8]:
+            bar = _bar(count, max_cmd, width=12)
+            left.append(f"  {name:<12}  {count:>4}  {bar}")
+
+        right: list[str] = ["[dim]Sources[/dim]"]
+        total_src = sum(sources.values()) or 1
+        for src, count in sorted(sources.items(), key=lambda x: -x[1]):
+            pct = int(count / total_src * 100)
+            right.append(f"  {src.replace('_', ' '):<10}  {pct:>3}%")
+        if hooks:
+            right.append("")
+            right.append("[dim]Hooks[/dim]")
+            for name, count in sorted(hooks.items(), key=lambda x: -x[1])[:4]:
+                right.append(f"  {name:<16}  {count:>4}")
+
+        max_rows = max(len(left), len(right))
+        left += [""] * (max_rows - len(left))
+        right += [""] * (max_rows - len(right))
+        for l_row, r_row in zip(left, right):
+            grid.add_row(l_row, r_row)
+
+        console.print()
+        console.print(grid)
+
+    # Projects: 1 line each
     projects = _all_projects(days_data)
     if projects:
         console.print()
-        console.print("[bold]Projects:[/bold]")
+        console.print("[dim]Projects[/dim]")
         for key, proj in sorted(projects.items(), key=lambda x: -x[1]["commands"]):
             last = _relative_day(proj["last_seen"])
             console.print(
-                f"  {key}    "
-                f"{proj['commands']} commands | {proj['sessions']} sessions | "
-                f"{proj['days_active']} days | last: {last}"
+                f"  {key}  [bold]{proj['commands']}[/bold] cmds · "
+                f"{proj['sessions']} sessions · {proj['days_active']}d active · last: {last}"
             )
-            # Top commands for project
-            top = sorted(proj["by_command"].items(), key=lambda x: -x[1])[:4]
-            if top:
-                top_str = ", ".join(f"{n} ({c})" for n, c in top)
-                console.print(f"    top: {top_str}")
-            # Peak day
-            if proj["daily_counts"]:
-                peak_day = max(proj["daily_counts"], key=proj["daily_counts"].get)
-                peak_count = proj["daily_counts"][peak_day]
-                console.print(f"    peak day: {peak_day} ({peak_count} commands)")
 
-    # Records
-    curr_streak, longest_streak = _calculate_streak(days_data)
+    # Quality section
     meta = _sum_counters(days_data, "meta")
-    console.print()
-    console.print("[bold]Records:[/bold]")
+    from keephive.storage import count_log_entries_with_prefix, last_log_entry_with_prefix
 
-    # Most active day
-    if days_data:
-        peak_day = ""
-        peak_count = 0
-        for day_str, day_data in days_data.items():
-            total = _count_category(day_data, "commands")
-            if total > peak_count:
-                peak_count = total
-                peak_day = day_str
-        if peak_day:
-            console.print(f"  Most active day:     {peak_day} ({peak_count} commands)")
+    standup_count = count_log_entries_with_prefix("STANDUP:")
+    health_last = last_log_entry_with_prefix("HEALTH:")
 
-    console.print(f"  Longest streak:      {longest_streak} days")
-    console.print(f"  Current streak:      {curr_streak} days")
+    accepted = meta.get("insights_accepted", 0)
+    dismissed = meta.get("insights_dismissed", 0)
+    todos_done = meta.get("todos_completed", 0)
 
-    if meta.get("insights_accepted") or meta.get("insights_dismissed"):
-        captured = meta.get("insights_accepted", 0) + meta.get("insights_dismissed", 0)
-        accepted = meta.get("insights_accepted", 0)
-        dismissed = meta.get("insights_dismissed", 0)
-        console.print(
-            f"  Insights captured:   {captured} ({accepted} accepted, {dismissed} dismissed)"
+    quality_lines = []
+    if accepted or dismissed or todos_done:
+        quality_lines.append(
+            f"  insights: {accepted} kept · {dismissed} dismissed    todos: {todos_done} completed"
         )
-    if meta.get("todos_completed"):
-        console.print(f"  TODOs completed:     {meta['todos_completed']}")
+    if standup_count or health_last:
+        parts_q = []
+        if standup_count:
+            parts_q.append(f"standups: {standup_count} logged")
+        if health_last:
+            parts_q.append(f"health: {health_last}")
+        quality_lines.append("  " + "    ".join(parts_q))
+    quality_lines.append(f"  streak: {curr_streak}d current · {longest_streak}d best")
+
+    console.print()
+    console.print("[dim]Quality[/dim]")
+    for line in quality_lines:
+        console.print(line)
 
 
 def _display_day(data: dict, date_arg: str) -> None:

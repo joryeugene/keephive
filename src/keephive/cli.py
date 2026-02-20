@@ -17,7 +17,7 @@ HELP: dict[str, str] = {
     "log": "Usage: hive l [date|summarize]\n  View daily log. Date: today, yesterday, N (days ago), YYYY-MM-DD\n  summarize  AI summary of today's entries (3-5 bullets)",
     "edit": "Usage: hive e [target]\n  Targets: memory, rules, claude, settings, local, today, note\n  No args: show available targets",
     "todo": "Usage: hive todo [done <pat>] [repeat [freq] [text]]\n  todo         List open TODOs\n  todo done X  Mark TODO matching X complete\n  todo repeat  List/add recurring tasks",
-    "note": "Usage: hive n [show|copy|clear|list|<slot>|<template>]\n  n          Open active slot in $EDITOR\n  n.3        Switch to slot 3 (1-9, 0=10)\n  n show     Print content\n  n copy     Copy to clipboard\n  n clear    Archive and clear\n  n list     Show all slots",
+    "note": "Usage: hive n [show|copy|clear|list|<slot>|<template>]\n  n          Open active slot in $EDITOR\n  n.3        Switch to slot 3, open editor (1-9, 0=10)\n  4          Open slot 4 in $EDITOR (bare-digit shorthand)\n  n show     Print content\n  n copy     Copy to clipboard\n  n clear    Archive and clear\n  n list     Show all slots\n  n <N> todo  Extract TODOs from slot N and add to daily log\n  4 \"text\"   Append text to slot 4 without opening editor",
     "knowledge": "Usage: hive k [name|edit <name>|rm <name>]\n  k           List all guides and prompts\n  k <name>    View guide (prefix match)\n  k edit X    Create/edit guide\n  k rm X      Remove guide",
     "audit": "Usage: hive a [-v] [--json]\n  Quality Pulse: 3-perspective LLM analysis + synthesis\n  -v      Show full perspective essays\n  --json  Machine-readable output",
     "doctor": "Usage: hive dr\n  Health check: hooks, MCP, deps, data integrity\n  Uses LLM for semantic TODO dedup (deterministic fallback if unavailable)",
@@ -25,7 +25,7 @@ HELP: dict[str, str] = {
     "standup": "Usage: hive su\n  Generate standup summary from daily logs + GitHub PRs\n  Uses LLM for formatting. Copies to clipboard.",
     "stats": "Usage: hive st [-p <project>] [date]\n  Usage statistics. Date: today, N (days ago), YYYY-MM-DD",
     "mem": "Usage: hive m [rm] <text>\n  Add or remove working memory facts\n  hive m <text>      Add fact to memory.md\n  hive m rm <pat>    Remove line matching pattern",
-    "rule": "Usage: hive rule [rm] <text>\n  Add or remove behavioral rules\n  hive rule <text>      Add rule\n  hive rule rm <pat>    Remove matching rule",
+    "rule": "Usage: hive rule [rm|review] <text>\n  Add or remove behavioral rules\n  hive rule <text>      Add rule\n  hive rule rm <pat>    Remove matching rule\n  hive rule review      Review pending rule suggestions from PreCompact hook",
     "session": "Usage: hive go [mode|prompt]\n  Modes: todo, verify, learn, reflect\n  Or load a custom prompt from knowledge/prompts/",
     "skill": "Usage: hive sk [publish <name>|unpublish <name>|sync|find <q>]\n  Manage skill plugins",
     "update": "Usage: hive up\n  Upgrade keephive to the latest version in-place",
@@ -80,6 +80,7 @@ Daily
   l, log [date]        View daily log (today, yesterday, N, YYYY-MM-DD)
   m, mem [rm] <text>   Add/remove working memory facts
   rule [rm] <text>     Add/remove behavioral rules
+  rule review          Review queued rule suggestions
 
 Todo
   to, todo             List open TODOs + due recurring
@@ -99,9 +100,12 @@ Knowledge
 Notes
   n, note              Open scratchpad in $EDITOR
   draft                (alias for n)
-  n.3                  Switch to slot 3
+  4                    Open slot 4 in $EDITOR (bare-digit shorthand for n.4)
+  n.3                  Switch to slot 3, open editor
   nc / n.3c            Copy to clipboard
   n list               Show all slots
+  n <N> todo           Extract TODOs from slot N
+  4 "text"             Append text to slot 4 without opening editor
 
 Sessions (run 'hive s' first - signals tell you which to use)
   go, session          General session with full context
@@ -242,6 +246,31 @@ def main(args: list[str] | None = None) -> None:
                 mod.cmd_note_slot(slot, ["copy"])
             else:
                 mod.cmd_note_slot(slot, args[1:])
+        except KeyboardInterrupt:
+            sys.stdout.write("\n")
+            sys.exit(130)
+        return
+
+    # Bare digit: hive 4 → hive n.4, hive 4 todo → hive n.4 todo
+    if re.match(r"^[0-9]$", cmd):
+        digit = int(cmd)
+        slot = 10 if digit == 0 else digit
+
+        # Track usage
+        try:
+            import os
+
+            from keephive.storage import _detect_source, track_event
+
+            track_event("commands", f"note.{digit}", project=os.getcwd(), source=_detect_source())
+        except Exception:
+            pass
+
+        import importlib
+
+        mod = importlib.import_module("keephive.commands.note")
+        try:
+            mod.cmd_note_slot(slot, args[1:])
         except KeyboardInterrupt:
             sys.stdout.write("\n")
             sys.exit(130)

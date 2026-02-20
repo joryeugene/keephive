@@ -181,18 +181,20 @@ class TestSeedBundledContent:
         guides = list(gd.glob("*.md"))
         assert len(guides) >= 1
 
-    def test_skips_if_exists(self, hive_env):
-        """Existing files are not overwritten."""
+    def test_updates_if_content_differs(self, hive_env):
+        """Bundled guides are synced on upgrade: stale content is overwritten."""
         gd = hive_env / "knowledge" / "guides"
-        # Write a file with custom content
-        (gd / "keephive-guide.md").write_text("# Custom Content\n")
+        # Write an outdated version (simulates stale installed guide)
+        (gd / "keephive-guide.md").write_text("# Old version\n")
 
         from keephive.commands.setup import _seed_bundled_content
 
         _seed_bundled_content()
 
-        # Should still have custom content
-        assert "Custom Content" in (gd / "keephive-guide.md").read_text()
+        # Should now contain the current bundled content, not the old version
+        content = (gd / "keephive-guide.md").read_text()
+        assert "Old version" not in content
+        assert "keephive" in content.lower()  # bundled guide has keephive content
 
 
 # ---- _sync_global_install ----

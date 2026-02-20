@@ -189,9 +189,100 @@ class TestBuildContext:
         ctx = build_context("/tmp/test", "test")
         assert "stale" in ctx.lower()
 
-    def test_includes_workflows(self, hive_env):
+    def test_workflows_not_statically_injected(self, hive_env):
         from keephive.hooks.sessionstart import build_context
 
         ctx = build_context("/tmp/test", "test")
-        assert "Workflows" in ctx
-        assert "hive_recall" in ctx
+        # Workflows section removed from static injection (token bloat reduction).
+        # It lives in the keephive-guide, injected only when that guide matches.
+        assert "Workflows" not in ctx
+
+
+# ---- session signal (file-based guard) ----
+
+
+class TestSessionSignal:
+    def test_recent_signal_blocks_injection(self, hive_env):
+        """File written <15s ago → hook returns empty context and deletes file."""
+        import importlib
+        import json
+        import sys
+        import time
+        from io import StringIO
+        from unittest.mock import patch
+
+        from keephive.storage import hive_dir
+
+        sig = hive_dir() / ".session-launched"
+        sig.write_text(str(int(time.time())))
+
+        output_parts: list[str] = []
+
+        with patch("sys.stdin", StringIO(json.dumps({"cwd": str(hive_dir())}))):
+            with patch.object(sys, "stdout") as mock_out:
+                mock_out.write = lambda s: output_parts.append(s)
+                import keephive.hooks.sessionstart as _ss_mod
+
+                importlib.reload(_ss_mod)
+                _ss_mod.hook_sessionstart([])
+
+        result = json.loads("".join(output_parts))
+        assert result["hookSpecificOutput"]["additionalContext"] == ""
+        assert not sig.exists()
+
+    def test_stale_signal_allows_injection(self, hive_env):
+        """File written >15s ago → hook proceeds with injection and deletes file."""
+        import importlib
+        import json
+        import sys
+        import time
+        from io import StringIO
+        from unittest.mock import patch
+
+        from keephive.storage import hive_dir
+
+        sig = hive_dir() / ".session-launched"
+        sig.write_text(str(int(time.time()) - 30))  # 30s ago, stale
+
+        output_parts: list[str] = []
+
+        with patch("sys.stdin", StringIO(json.dumps({"cwd": str(hive_dir())}))):
+            with patch.object(sys, "stdout") as mock_out:
+                mock_out.write = lambda s: output_parts.append(s)
+                import keephive.hooks.sessionstart as _ss_mod
+
+                importlib.reload(_ss_mod)
+                _ss_mod.hook_sessionstart([])
+
+        result = json.loads("".join(output_parts))
+        # stale signal → injection proceeds (additionalContext is non-empty or at least hook ran)
+        assert "hookSpecificOutput" in result
+        assert not sig.exists()
+
+    def test_no_signal_file_runs_normally(self, hive_env):
+        """No signal file → hook runs normally, no empty context shortcut."""
+        import importlib
+        import json
+        import sys
+        from io import StringIO
+        from unittest.mock import patch
+
+        from keephive.storage import hive_dir
+
+        sig = hive_dir() / ".session-launched"
+        assert not sig.exists()
+
+        output_parts: list[str] = []
+
+        with patch("sys.stdin", StringIO(json.dumps({"cwd": str(hive_dir())}))):
+            with patch.object(sys, "stdout") as mock_out:
+                mock_out.write = lambda s: output_parts.append(s)
+                import keephive.hooks.sessionstart as _ss_mod
+
+                importlib.reload(_ss_mod)
+                _ss_mod.hook_sessionstart([])
+
+        result = json.loads("".join(output_parts))
+        assert "hookSpecificOutput" in result
+        # Context should be non-empty (has memory, rules etc from hive_env fixture)
+        assert result["hookSpecificOutput"]["additionalContext"] != ""

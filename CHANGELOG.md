@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.13.0
+
+### Features
+
+- **`hive n todo` (edit-buffer review)**: Extract action items from a note slot. Both plain text lines and bullet lines under a `## todo` section become candidates; items over 120 chars are silently dropped as observations. Single item: `(y/n)` prompt. Multiple items: opens `$EDITOR` with candidates — delete lines you don't want, save to confirm.
+- **`hive 4 "text"` quick-append**: Append text directly to a note slot without opening an editor. `hive 4 "fix auth bug"` appends to slot 4; multi-word bare args are joined automatically.
+- **Bare-digit note dispatch**: `hive 4`, `hive 4 todo`, and `hive 4 "text"` all work — bare digits route to `cmd_note_slot` without needing the `n.` prefix.
+- **Active draft indicator**: `hive s` shows a single consolidated "Active draft: slot N · preview (W words)  ->  hive nc" line at the bottom. Removed the duplicate early hint.
+
+### Fixes
+
+- **Input hardening (ESC + unrecognized keys)**: In `prompt_yn` and `prompt_choice`, pressing ESC cancels and returns False/no. Any unrecognized key also cancels (no longer falls through to the default). Only `y`, `n`, Enter, and Space are accepted.
+- **4× context duplication in `hive go`**: The `HIVE_SESSION_LAUNCHED` env var guard never worked because Claude Code's daemon inherits its own environment, not the CLI's. Replaced with a file-based signal: `session.py` writes `~/.claude/hive/.session-launched` with a Unix timestamp before `os.execvpe`; `sessionstart.py` reads the file, skips injection if timestamp is <15 seconds old, then deletes it.
+- **Guide sync on upgrade**: `_seed_bundled_content` now overwrites installed guides when bundled content differs (not only when missing). Run `hive setup` after upgrading to sync guides to the latest bundled version.
+- **Note extraction includes plain lines**: `_extract_structured_items` now collects both plain text task lines and bullet lines from `## todo` sections. Previously only bullet-prefixed lines were extracted, causing plain-line tasks to be missed.
+
+### Tests
+
+- 864 tests total (up from 823)
+- New: `tests/test_note_todify.py` (15 tests — structured extraction, LLM fallback, edit-buffer review, bare-digit dispatch, long-item filtering, plain-line extraction)
+- Extended: `tests/test_note.py` — 5 new tests for quick-append (`hive 4 "text"`, multiword, newline handling, editor fallback, list subcommand)
+- Extended: `tests/test_sessionstart_logic.py` — `TestSessionSignal` class (3 tests: recent signal blocks injection, stale signal allows injection, no signal runs normally)
+- Updated: `tests/test_note.py`, `tests/test_e2e_flows.py` — note indicator assertions updated to new "Active draft" format
+- Updated: `tests/test_setup_hooks.py` — `test_updates_if_content_differs` reflects new guide sync-on-upgrade behavior
+
 ## v0.12.16
 
 ### Docs

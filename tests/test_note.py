@@ -165,13 +165,15 @@ def test_note_from_template(hive_env):
 
 
 def test_note_status_indicator(hive_env):
-    """Note exists, status output contains 'Note [1] ready'."""
+    """Note exists, status output shows 'Active draft' indicator with slot and word count."""
     (hive_env / "working" / "note-1.md").write_text("Some note content\nLine two\n")
 
     r = _run(["s"], str(hive_env))
     assert r.returncode == 0
-    assert "Note" in r.stdout
-    assert "ready" in r.stdout
+    # ANSI escape codes split "slot 1" across spans; check parts individually
+    assert "Active draft" in r.stdout
+    assert "slot" in r.stdout
+    assert "words" in r.stdout
 
 
 # ---- Backward compat aliases ----
@@ -330,3 +332,65 @@ def test_migration_drafts_dir_to_notes(hive_env):
     nd = hive_env / "working" / "notes"
     assert (nd / "2026-02-15_10-00-00.md").exists()
     assert "Old archive" in (nd / "2026-02-15_10-00-00.md").read_text()
+
+
+# ---- Quick-append tests ----
+
+
+def test_note_slot_quick_append(hive_env):
+    """cmd_note_slot(4, ["fix auth bug"]) appends text to note-4 without opening editor."""
+    from keephive.commands.note import cmd_note_slot
+    from keephive.storage import slot_file
+
+    cmd_note_slot(4, ["fix auth bug"])
+
+    content = slot_file(4).read_text()
+    assert "fix auth bug" in content
+
+
+def test_note_slot_quick_append_multiword(hive_env):
+    """cmd_note_slot(4, ["fix", "auth", "bug"]) joins all args into appended text."""
+    from keephive.commands.note import cmd_note_slot
+    from keephive.storage import slot_file
+
+    cmd_note_slot(4, ["fix", "auth", "bug"])
+
+    content = slot_file(4).read_text()
+    assert "fix auth bug" in content
+
+
+def test_note_slot_quick_append_adds_newline(hive_env):
+    """Quick-append ends with newline and doesn't double-space existing content."""
+    from keephive.commands.note import cmd_note_slot
+    from keephive.storage import slot_file
+
+    # Pre-populate with content that doesn't end in newline
+    slot_file(4).write_text("existing line")
+
+    cmd_note_slot(4, ["new line"])
+
+    content = slot_file(4).read_text()
+    assert "existing line\nnew line\n" == content
+
+
+def test_note_slot_no_args_opens_editor(hive_env, monkeypatch):
+    """cmd_note_slot(4, []) opens editor via subprocess.run."""
+    from unittest.mock import MagicMock
+
+    from keephive.commands.note import cmd_note_slot
+
+    mock_run = MagicMock()
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    cmd_note_slot(4, [])
+
+    mock_run.assert_called_once()
+
+
+def test_note_slot_list_subcommand(hive_env):
+    """cmd_note_slot with 'list' shows all slots."""
+    (hive_env / "working" / "note-4.md").write_text("Slot 4 content\n")
+
+    r = _run(["n.4", "list"], str(hive_env))
+    assert r.returncode == 0
+    assert "Note Slots" in r.stdout

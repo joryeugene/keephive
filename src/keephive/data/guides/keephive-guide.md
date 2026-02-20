@@ -45,18 +45,22 @@ A knowledge sidecar for Claude Code. Commands work as both `keephive <cmd>` and 
 
 | Command                | Shorthand           | What it does                            |
 | ---------------------- | ------------------- | --------------------------------------- |
-| `hive note`            | `hive n`            | Open active slot in $EDITOR (auto-copy) |
-| `hive n.3`             |                     | Switch to slot 3, open editor           |
-| `hive n.3 show`        |                     | Show slot 3 content                     |
-| `hive n.3 copy`        | `hive n.3c`         | Copy slot 3 to clipboard                |
-| `hive n.3 clear`       |                     | Archive and clear slot 3                |
-| `hive note copy`       | `hive nc`           | Copy active slot to clipboard           |
-| `hive note show`       | `hive n show`       | Print active slot with line/byte stats  |
-| `hive note clear`      | `hive n clear`      | Archive and clear active slot           |
-| `hive note list`       | `hive n list`       | Show all slots + archived notes         |
-| `hive note <N>`        | `hive n <N>`        | Restore the Nth archived note           |
-| `hive note <template>` | `hive n <template>` | Start note from a prompt template       |
-| `hive d` / `hive dc`   |                     | Aliases (backward compat)               |
+| `hive note`            | `hive n`            | Open active slot in $EDITOR (auto-copy)         |
+| `hive n.3`             | `hive 3`            | Switch to slot 3, open editor                   |
+| `hive n.3 show`        |                     | Show slot 3 content                             |
+| `hive n.3 copy`        | `hive n.3c`         | Copy slot 3 to clipboard                        |
+| `hive n.3 clear`       |                     | Archive and clear slot 3                        |
+| `hive note copy`       | `hive nc`           | Copy active slot to clipboard                   |
+| `hive note show`       | `hive n show`       | Print active slot with line/byte stats          |
+| `hive note clear`      | `hive n clear`      | Archive and clear active slot                   |
+| `hive note list`       | `hive n list`       | Show all slots + archived notes                 |
+| `hive note todo`       | `hive n todo`       | Extract action items, offer to add as TODOs     |
+| `hive 4`               |                     | Open slot 4 in $EDITOR (bare-digit shorthand)   |
+| `hive 4 todo`          |                     | Extract TODOs from slot 4                       |
+| `hive 4 "text"`        |                     | Append text to slot 4 (no editor)               |
+| `hive note <N>`        | `hive n <N>`        | Restore the Nth archived note                   |
+| `hive note <template>` | `hive n <template>` | Start note from a prompt template               |
+| `hive d` / `hive dc`   |                     | Aliases (backward compat)                       |
 
 ## How It Works
 
@@ -78,6 +82,8 @@ When a new session starts, keephive's SessionStart hook injects:
 - Stale fact warnings
 - Matching knowledge guides (by project name/tag)
 - Open TODOs and recent activity
+
+When `hive go` launches a session, it writes a timestamp file (`.session-launched`) that the SessionStart hook reads. If the timestamp is <15 seconds old, the hook skips injection to avoid doubling context. This prevents the 2× duplication that would otherwise occur.
 
 ### Verification
 

@@ -953,10 +953,10 @@ class TestSessionStartOutput:
         assert "TODO" in ctx
         assert "today" in ctx
 
-    def test_workflows_section_present(self, hive_env):
-        """SessionStart context includes Workflows section."""
+    def test_workflows_section_not_statically_injected(self, hive_env):
+        """Workflows section removed from static injection to cut token bloat.
+        It lives in the keephive-guide and is injected only when that guide matches."""
         from keephive.hooks.sessionstart import build_context
 
         ctx = build_context("/tmp/test", "test")
-        assert "## Workflows" in ctx
-        assert "hive_recall" in ctx
+        assert "## Workflows" not in ctx

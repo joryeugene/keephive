@@ -167,6 +167,14 @@ def cmd_status(args: list[str]) -> None:
             console.print("    [warn]Consider: hive todo done <pat> | hive dr[/warn]")
         console.print()
 
+    # Pending rule suggestions nudge
+    pending_rules_path = hive_dir() / ".pending-rules.md"
+    if pending_rules_path.exists() and pending_rules_path.read_text().strip():
+        n = sum(1 for l in pending_rules_path.read_text().splitlines() if l.strip().startswith("- "))
+        if n > 0:
+            console.print(f"  [yellow]⚡ {n} rule suggestion(s) pending[/yellow]  →  hive rule review")
+            console.print()
+
     # Due recurring tasks
     from keephive.storage import due_recurring
 
@@ -199,15 +207,17 @@ def cmd_status(args: list[str]) -> None:
                 console.print(e)
             console.print()
 
-    # Note slot indicator
+    # Note slot indicator (single location, enhanced format)
     current_slot = active_slot()
     slot_path = slot_file(current_slot)
     if slot_path.exists() and slot_path.read_text().strip():
         text = slot_path.read_text()
-        lines = sum(1 for line in text.splitlines() if line.strip())
-        size = len(text.encode())
+        words = len(text.split())
+        flat = text.replace("\n", " ")
+        preview = flat[:40] + ("..." if len(flat) > 40 else "")
         console.print(
-            f"  [info]Note \\[{current_slot}] ready ({lines}L, {size}B)[/info]  ->  [bold]hive nc[/bold] to copy"
+            f'  [info]Active draft: slot {current_slot} · "{preview}" ({words} words)[/info]'
+            f"  ->  [bold]hive nc[/bold]"
         )
         # Show slot bar if multiple slots have content
         filled = sum(

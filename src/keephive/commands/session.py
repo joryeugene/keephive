@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
 # Built-in mode prompts. Each gets the full context prepended.
@@ -193,6 +194,16 @@ def cmd_session(args: list[str]) -> None:
     print(f"Launching {mode} session... {flag_desc}")
 
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    env["HIVE_SESSION_LAUNCHED"] = "1"  # env var fallback for older hook versions
+
+    # Write file-based signal so the SessionStart hook can detect a hive go session
+    # (env var guard doesn't work because Claude Code daemon inherits its own env)
+    try:
+        from keephive.storage import hive_dir as _hive_dir
+
+        (_hive_dir() / ".session-launched").write_text(str(int(time.time())))
+    except Exception:
+        pass
 
     # Build claude argv: flags go before the prompt positional arg
     claude_argv = ["claude"] + claude_flags + [session_prompt]

@@ -80,6 +80,7 @@ def _seed_bundled_content() -> None:
     ]
 
     seeded = 0
+    updated = 0
     for subdir, target_dir in seed_map:
         target_dir.mkdir(parents=True, exist_ok=True)
         source = data_pkg.joinpath(subdir)
@@ -87,16 +88,22 @@ def _seed_bundled_content() -> None:
             for item in source.iterdir():
                 if item.name.endswith(".md"):
                     dest = target_dir / item.name
+                    bundled_content = item.read_text()
                     if not dest.exists():
-                        dest.write_text(item.read_text())
+                        dest.write_text(bundled_content)
                         seeded += 1
+                    elif dest.read_text() != bundled_content:
+                        dest.write_text(bundled_content)
+                        updated += 1
         except (TypeError, FileNotFoundError):
             pass
 
     if seeded:
         console.print(f"  [ok]OK[/ok] seeded {seeded} default guide(s)/prompt(s)")
+    elif updated:
+        console.print(f"  [ok]OK[/ok] updated {updated} guide(s)/prompt(s)")
     else:
-        console.print("  [dim]guides/prompts already present[/dim]")
+        console.print("  [dim]guides/prompts already present and up to date[/dim]")
 
 
 def _setup_hooks(settings_path: Path | None = None) -> None:

@@ -205,6 +205,11 @@ def cmd_doctor(args: list[str]) -> None:
     console.print("  [dim]hive rf[/dim]  reviews logs for patterns to promote")
     console.print("  [dim]hive a[/dim]   scores overall knowledge quality")
 
+    from keephive.storage import append_to_daily, ensure_daily
+    ensure_daily()
+    append_to_daily(f"HEALTH: {issues} issue(s)")
+    console.print("  [dim]Logged. ✓[/dim]")
+
 
 def _data_quality_checks() -> int:
     """Run data quality checks on TODOs. Returns count of issues found."""

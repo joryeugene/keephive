@@ -60,6 +60,7 @@ class MemoryUpdate(BaseModel):
 class PreCompactResponse(BaseModel):
     insights: list[Insight]
     memory_updates: list[MemoryUpdate] = []
+    rule_suggestions: list[str] = []  # short imperative rules, max 2
 
 
 # ---- Reflect Analyze ----
@@ -161,3 +162,10 @@ class RecallExpandResponse(BaseModel):
 
 class DailySummaryResponse(BaseModel):
     bullets: list[str]  # 3-5 summary points
+
+
+# ---- Note Extract ----
+
+
+class NoteExtractResponse(BaseModel):
+    items: list[str]  # extracted action items from freeform text

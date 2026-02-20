@@ -349,7 +349,9 @@ If the user corrected Claude, that is always a CORRECTION category.
 
 IMPORTANT: NEVER include API keys, tokens, secrets, passwords, or credentials in your classified insights. Redact or omit them entirely.
 
-Extract 2-7 insights. If nothing is worth remembering, return an empty insights array.{memory_block}"""
+Extract 2-7 insights. If nothing is worth remembering, return an empty insights array.
+
+Optionally include rule_suggestions (max 2, empty list if none): short imperative behavioral rules like "Always use uv for Python package management" only if a consistent behavioral preference appears 3+ times in this transcript and is NOT a one-off decision. Leave empty if nothing qualifies.{memory_block}"""
 
         response = fn(prompt, PreCompactResponse, stdin_text=excerpts)
 
@@ -376,6 +378,9 @@ Extract 2-7 insights. If nothing is worth remembering, return an empty insights 
         # Apply memory updates (auto-promote / auto-correct)
         if response.memory_updates:
             _apply_memory_updates(response.memory_updates)
+
+        if response.rule_suggestions:
+            _queue_rule_suggestions(response.rule_suggestions)
 
     except Exception as e:
         debug_log = hive_dir() / ".hook-debug.log"
@@ -425,6 +430,26 @@ def _apply_memory_updates(updates: list) -> None:
                 f"[{datetime.now().isoformat(timespec='seconds')}] "
                 f"Memory auto-updated: {applied} change(s)\n"
             )
+
+
+def _pending_rules_path() -> Path:
+    return hive_dir() / ".pending-rules.md"
+
+
+def _queue_rule_suggestions(suggestions: list[str]) -> None:
+    """Queue LLM-suggested rules for human review in .pending-rules.md."""
+    if not suggestions:
+        return
+    path = _pending_rules_path()
+    existing = path.read_text() if path.exists() else ""
+    new_lines = []
+    for rule in suggestions[:2]:
+        rule = rule.strip()
+        if rule and rule.lower() not in existing.lower():
+            new_lines.append(f"- {rule}\n")
+    if new_lines:
+        with path.open("a") as f:
+            f.writelines(new_lines)
 
 
 def _correct_in_memory(content: str, old_text: str, new_text: str, today_str: str) -> str:

@@ -60,6 +60,9 @@ def prompt_choice(prompt: str, valid: list[str]) -> str:
     if ch == "\x03":  # Ctrl+C in raw mode (tty.setraw disables ISIG)
         sys.stdout.write("\n")
         raise KeyboardInterrupt
+    if ch == "\x1b":  # Escape = cancel
+        sys.stdout.write("cancelled\n")
+        return valid[-1]
     sys.stdout.write(ch + "\n")
     return ch if ch in valid else valid[-1]
 
@@ -110,13 +113,20 @@ def prompt_yn(prompt: str, default_yes: bool = True) -> bool:
     if ch == "\x03":  # Ctrl+C in raw mode (tty.setraw disables ISIG)
         sys.stdout.write("\n")
         raise KeyboardInterrupt
+    if ch == "\x1b":  # Escape = cancel
+        sys.stdout.write("cancelled\n")
+        return False
     if ch == "y":
         sys.stdout.write("y\n")
         return True
     if ch == "n":
         sys.stdout.write("n\n")
         return False
-    # Enter (\r), space, or any other key → honor the default
-    default_char = "Y" if default_yes else "N"
-    sys.stdout.write(f"{default_char}\n")
-    return default_yes
+    if ch in ("\r", "\n", " "):
+        # Enter or space → honor the default
+        default_char = "Y" if default_yes else "N"
+        sys.stdout.write(f"{default_char}\n")
+        return default_yes
+    # Any other unrecognized key → cancel (no)
+    sys.stdout.write("cancelled\n")
+    return False

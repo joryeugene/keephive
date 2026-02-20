@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from keephive.claude import run_claude_pipe
+from keephive.models import NoteExtractResponse
 from keephive.output import console, copy_to_clipboard, prompt_yn
 from keephive.storage import (
     NOTE_SLOT_COUNT,
@@ -75,6 +77,9 @@ def cmd_note(args: list[str]) -> None:
         _note_clear()
     elif sub in ("list", "l"):
         _note_list()
+    elif sub == "todo":
+        _note_extract_todos(active_slot())
+        return
     elif sub.isdigit():
         digit = int(sub)
         slot = 10 if digit == 0 else digit
@@ -111,8 +116,161 @@ def cmd_note_slot(slot: int, args: list[str]) -> None:
         _note_show()
     elif sub == "clear":
         _note_clear()
+    elif sub in ("list", "l"):
+        _note_list()
+    elif sub == "todo":
+        _note_extract_todos(slot)
+        return
     else:
-        _note_edit()
+        text = " ".join(args)
+        if text.strip():
+            _note_append_text(slot, text.strip())
+        else:
+            _note_edit()
+
+
+def _note_append_text(slot: int, text: str) -> None:
+    """Append free text to a note slot without opening editor."""
+    path = slot_file(slot)
+    existing = path.read_text() if path.exists() else ""
+    sep = "\n" if existing and not existing.endswith("\n") else ""
+    path.write_text(existing + sep + text + "\n")
+    console.print(f"[ok]→ note [{slot}]:[/ok] {text}")
+
+
+def _extract_structured_items(content: str) -> list[str]:
+    """Extract bullet/checkbox/numbered items from structured note content."""
+    lines = content.splitlines()
+    items = []
+
+    # Check for ## todo / # todo section first — collect both plain lines and bullets
+    in_todo_section = False
+    plain_items: list[str] = []
+    bullet_items: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.lower().lstrip("#").strip() in ("todo", "todos", "to do", "to-do"):
+            in_todo_section = True
+            continue
+        if in_todo_section:
+            if stripped.startswith("#"):
+                break  # next section
+            if stripped.startswith(("- [ ] ", "- ", "* ", "• ")):
+                text = stripped.lstrip("-*•").lstrip("[ ]x").strip()
+                if text and len(text) <= 120:
+                    bullet_items.append(text)
+            elif stripped and len(stripped) <= 120:
+                plain_items.append(stripped)
+
+    if plain_items or bullet_items:
+        seen: set[str] = set()
+        result: list[str] = []
+        for item in (plain_items + bullet_items):
+            if item not in seen:
+                seen.add(item)
+                result.append(item)
+        return result
+
+    # Fallback: checkboxes (skip completed)
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("- [ ] "):
+            text = stripped[6:].strip()
+            if text:
+                items.append(text)
+        # Skip - [x] (completed)
+
+    if items:
+        return [item for item in items if len(item) <= 120]
+
+    # Plain bullets if >50% of non-empty lines are bullet lines
+    non_empty = [line.strip() for line in lines if line.strip()]
+    bullets = [line for line in non_empty if line.startswith(("- ", "* ", "• "))]
+    if non_empty and len(bullets) / len(non_empty) >= 0.5:
+        for line in bullets:
+            text = line.lstrip("-*• ").strip()
+            if text:
+                items.append(text)
+
+    return [item for item in items if len(item) <= 120]
+
+
+def _note_extract_todos(slot: int) -> None:
+    """Extract action items from note slot and offer to add as TODOs."""
+    from datetime import datetime as _datetime
+
+    from keephive.storage import append_to_daily, ensure_daily
+
+    path = slot_file(slot)
+    if not path.exists() or not path.read_text().strip():
+        console.print(f"[dim]Slot {slot} is empty.[/dim]")
+        return
+
+    content = path.read_text().strip()
+
+    # Tier 1: structured extraction
+    items = _extract_structured_items(content)
+
+    # Tier 2: LLM fallback if no structure and content is substantial
+    if not items and len(content) >= 50 and not os.environ.get("HIVE_SKIP_LLM"):
+        console.print("[dim]No bullet points found. Scanning for action items...[/dim]")
+        prompt = (
+            "Extract specific actionable TODO items from this note. "
+            "Return only concrete tasks—things someone would actually do. "
+            "Omit context, background, or metadata. "
+            "Each item should be a brief imperative action. "
+            "Return empty list if no clear action items exist.\n\n"
+            f"Note content:\n{content}"
+        )
+        try:
+            response = run_claude_pipe(prompt, NoteExtractResponse)
+            items = response.items
+        except Exception:
+            items = []
+
+    if not items:
+        console.print(f"[dim]No action items found in slot {slot}.[/dim]")
+        return
+
+    console.print(f"\nFound {len(items)} item(s):\n")
+    for i, item in enumerate(items, 1):
+        console.print(f"  {i}. {item}")
+    console.print()
+
+    if len(items) == 1:
+        if not prompt_yn("Add as TODO?"):
+            console.print("[dim]Cancelled.[/dim]")
+            return
+        selected = items
+    else:
+        review_path = working_dir() / ".todo-candidates.md"
+        header = (
+            "# Review TODO candidates\n"
+            "# Delete lines you don't want. Edit to rephrase.\n"
+            "# Lines starting with # are ignored. Save and quit to confirm.\n\n"
+        )
+        review_path.write_text(header + "\n".join(items) + "\n")
+        editor = os.environ.get("EDITOR", "vi")
+        subprocess.run([editor, str(review_path)])
+        if not review_path.exists():
+            console.print("[dim]No items added.[/dim]")
+            return
+        raw = review_path.read_text()
+        review_path.unlink(missing_ok=True)
+        selected = [
+            ln.strip() for ln in raw.splitlines()
+            if ln.strip() and not ln.strip().startswith("#")
+        ]
+
+    if not selected:
+        console.print("[dim]No items added.[/dim]")
+        return
+
+    ensure_daily()
+    ts = _datetime.now().strftime("%H:%M:%S")
+    for item in selected:
+        append_to_daily(f"- [{ts}] TODO: {item}")
+    console.print(f"\n  Added {len(selected)} TODO(s).")
 
 
 def _note_edit(slot: int | None = None) -> None:

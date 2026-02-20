@@ -435,3 +435,10 @@ def cmd_standup(args: list[str]) -> None:
             console.print("[dim]Copied to clipboard[/dim]")
     else:
         print(standup_text)
+
+    if standup_text and standup_text.strip():
+        from keephive.storage import append_to_daily, ensure_daily
+        first_line = standup_text.strip().splitlines()[0][:100]
+        ensure_daily()
+        append_to_daily(f"STANDUP: {first_line}")
+        console.print("[dim]  Logged. ✓[/dim]")

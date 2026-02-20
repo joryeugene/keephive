@@ -910,6 +910,15 @@ def rebuild_fts_index() -> None:
                                 "INSERT INTO fts VALUES (?, ?, ?)",
                                 (line, f.stem, tier),
                             )
+        for slot in range(1, NOTE_SLOT_COUNT + 1):
+            note_path = slot_file(slot)
+            if note_path.exists():
+                for line in safe_read_text(note_path).splitlines():
+                    if line.strip():
+                        con.execute(
+                            "INSERT INTO fts VALUES (?, ?, ?)",
+                            (line, f"note-{slot}", "notes"),
+                        )
         con.commit()
     finally:
         con.close()
@@ -942,6 +951,34 @@ def fts_search(query: str, limit: int = 10) -> list[dict]:
         return results
     except Exception:
         return []
+
+
+def count_log_entries_with_prefix(prefix: str, days: int = 90) -> int:
+    """Count daily log entries containing a given prefix across recent logs."""
+    count = 0
+    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    dd = daily_dir()
+    if not dd.exists():
+        return 0
+    for f in sorted(dd.glob("*.md")):
+        if f.stem >= cutoff:
+            for line in safe_read_text(f).splitlines():
+                if prefix in line:
+                    count += 1
+    return count
+
+
+def last_log_entry_with_prefix(prefix: str) -> str:
+    """Return text after prefix from the most recent matching log entry."""
+    dd = daily_dir()
+    if not dd.exists():
+        return ""
+    for f in sorted(dd.glob("*.md"), reverse=True):
+        for line in reversed(safe_read_text(f).splitlines()):
+            if prefix in line:
+                idx = line.index(prefix)
+                return line[idx + len(prefix):].strip()
+    return ""
 
 
 # ---- Memory decay scoring ----
