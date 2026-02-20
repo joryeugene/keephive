@@ -197,26 +197,45 @@ class TestBuildContext:
         # It lives in the keephive-guide, injected only when that guide matches.
         assert "Workflows" not in ctx
 
-    def test_stale_guide_notification(self, hive_env, monkeypatch):
-        """When check_bundled_updates returns >0, context includes upgrade notice."""
+    def test_guide_notification_not_in_context(self, hive_env, monkeypatch):
+        """Guide update notifications moved to hive status (context diet)."""
         import keephive.commands.setup as _setup_mod
         from keephive.hooks.sessionstart import build_context
 
         monkeypatch.setattr(_setup_mod, "check_bundled_updates", lambda: 2)
         ctx = build_context("/tmp/test", "test")
 
-        assert "2 bundled guide(s)" in ctx
-        assert "hive setup" in ctx
+        # Guide notifications are now in cmd_status, not in session context
+        assert "bundled guide" not in ctx
 
-    def test_no_notification_when_guides_current(self, hive_env, monkeypatch):
-        """When check_bundled_updates returns 0, no guide update notice in context."""
-        import keephive.commands.setup as _setup_mod
+    def test_no_quality_pulse_in_context(self, hive_env):
+        """Quality Pulse moved to hive status (context diet)."""
         from keephive.hooks.sessionstart import build_context
 
-        monkeypatch.setattr(_setup_mod, "check_bundled_updates", lambda: 0)
         ctx = build_context("/tmp/test", "test")
+        assert "Quality Pulse" not in ctx
 
-        assert "bundled guide" not in ctx
+    def test_no_accumulation_warnings_in_context(self, hive_env):
+        """Accumulation warnings moved to hive status (context diet)."""
+        from keephive.hooks.sessionstart import build_context
+
+        ctx = build_context("/tmp/test", "test")
+        assert "auto-captured facts pending" not in ctx
+
+    def test_no_recent_entries_in_context(self, hive_env):
+        """Recent entries removed from context (available via hive_recall)."""
+        from conftest import make_daily
+
+        make_daily(
+            hive_env,
+            days_ago=0,
+            entries=["- [10:00:00] FACT: something happened today"],
+        )
+        from keephive.hooks.sessionstart import build_context
+
+        ctx = build_context("/tmp/test", "test")
+        assert "## Recent (today)" not in ctx
+        assert "## This Week" not in ctx
 
 
 # ---- session signal (file-based guard) ----

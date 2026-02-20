@@ -15,8 +15,10 @@ from keephive.output import console, prompt_yn
 from keephive.storage import (
     backup_and_write,
     get_all_verified_facts,
+    get_evidence_for_fact,
     get_stale_facts,
     memory_file,
+    store_evidence,
     today,
     version_context,
 )
@@ -78,7 +80,19 @@ def cmd_verify(args: list[str]) -> None:
 
     # Build the prompt with tool-based investigation
     versions = version_context()
-    facts_text = "\n".join(f"{i + 1}. {fact}" for i, (_, fact, _) in enumerate(all_facts))
+
+    # Build facts list with previous evidence when available
+    facts_lines = []
+    for i, (_, fact, _) in enumerate(all_facts):
+        line = f"{i + 1}. {fact}"
+        evidence = get_evidence_for_fact(fact)
+        if evidence and evidence.get("last_reason"):
+            line += f"\n   Previous evidence ({evidence.get('last_date', '?')}): {evidence['last_reason'][:150]}"
+            locs = evidence.get("source_locations")
+            if locs:
+                line += f"\n   Known locations: {', '.join(locs[:3])}"
+        facts_lines.append(line)
+    facts_text = "\n".join(facts_lines)
 
     prompt = f"""You are a fact-checking investigator with access to tools.
 
@@ -94,6 +108,7 @@ INVESTIGATION INSTRUCTIONS:
 For each fact, actively investigate using available tools:
 - Read/Grep/Glob: search the local codebase for evidence
 - WebSearch: check external tools, versions, libraries
+- When previous evidence is provided, check those locations first (faster verification)
 
 After investigating, provide your verdict:
 - VALID: found confirming evidence (cite what you found)
@@ -195,6 +210,9 @@ def apply_verdicts(
             lines[target] = f"{clean} [verified:{today_str}]\n"
             refreshed += 1
         console.print()
+
+        # Store verification evidence for compounding re-verification
+        store_evidence(fact_text, v.verdict.value, v.reason, v.correction)
 
     mem_path.write_text("".join(lines))
     return updated, refreshed

@@ -17,7 +17,6 @@ from keephive.storage import (
     backup_and_write,
     count_stale_facts,
     due_recurring,
-    get_key_entries_past_days,
     get_meaningful_entries,
     get_stale_facts,
     guides_dir,
@@ -130,11 +129,18 @@ def _active_draft_hint() -> str:
 
 
 def build_context(cwd: str, project_name: str) -> str:
-    """Build the context string injected into Claude Code."""
+    """Build the context string injected into Claude Code.
+
+    Optimized for model focus: injects only actionable context.
+    Maintenance noise (Quality Pulse, accumulation warnings, guide update
+    notifications, data quality warnings) lives in `hive s` output where
+    the USER sees it, not in model context. Recent entries and past-week
+    entries are available on demand via hive_recall.
+    """
     parts: list[str] = []
 
-    # 0. Auto-reverify stale facts (deterministic, no LLM)
-    reverified = _auto_reverify()
+    # 0. Auto-reverify stale facts (deterministic, no LLM, silent)
+    _auto_reverify()
 
     # 1. Working memory
     mem = read_memory()
@@ -156,33 +162,10 @@ def build_context(cwd: str, project_name: str) -> str:
         else:
             parts.append(rules)
 
-    # 3. Auto-change summary + stale fact warning
-    if reverified:
-        parts.append(
-            f"Memory auto-updated: re-verified {len(reverified)} fact(s) from recent activity"
-        )
-
+    # 3. Stale fact warning (critical, always inject)
     stale = count_stale_facts()
     if stale > 0:
         parts.append(f"Warning: {stale} stale fact(s) need verification. Run: hive v")
-
-    # Guide update notification (non-intrusive, only when stale)
-    try:
-        from keephive.commands.setup import check_bundled_updates as _cbu
-
-        _stale = _cbu()
-        if _stale > 0:
-            parts.append(
-                f"{_stale} bundled guide(s) have updates from the latest keephive upgrade. "
-                "Run: hive setup"
-            )
-    except Exception:
-        pass
-
-    # 3b. Accumulation warnings
-    acc_warnings = _accumulation_warnings(mem)
-    if acc_warnings:
-        parts.extend(acc_warnings)
 
     # 4. Open TODOs
     todos = open_todos()
@@ -223,54 +206,7 @@ def build_context(cwd: str, project_name: str) -> str:
             recurring_lines.append(f"- [{freq}] {text} ({over_s})")
         parts.append("\n".join(recurring_lines))
 
-    # 6. Quality Pulse score (when concerning)
-    try:
-        from keephive.commands.audit import (
-            _analyze_cleaner,
-            _analyze_strategist,
-            _analyze_vault,
-            _check_previous_play,
-            _compute_score,
-        )
-
-        vault = _analyze_vault()
-        cleaner = _analyze_cleaner()
-        strategist = _analyze_strategist()
-        pulse_score = _compute_score(vault, cleaner, strategist)
-
-        if pulse_score < 70:
-            parts.append(f"Quality Pulse: {pulse_score}/100. Run: hive audit")
-
-        # Check for unfinished Play from previous audit
-        prev_play = _check_previous_play()
-        if prev_play and not prev_play["completed"] and prev_play["age_days"] >= 2:
-            parts.append(f"Unfinished Play from {prev_play['date']}: {prev_play['action']}")
-    except Exception:
-        pass  # Audit is optional, never block session start
-
-    # 7. Data quality warnings
-    warnings = _data_quality_warnings()
-    if warnings:
-        warn_lines = ["## Warnings"]
-        warn_lines.extend(f"- {w}" for w in warnings)
-        parts.append("\n".join(warn_lines))
-
-    # 8. Recent entries from today
-    entries = get_meaningful_entries(limit=3)
-    if entries:
-        entry_lines = ["## Recent (today)"]
-        entry_lines.extend(entries)
-        parts.append("\n".join(entry_lines))
-
-    # 8.5 Key entries from past week
-    past_entries = get_key_entries_past_days(days=7, limit=10)
-    if past_entries:
-        past_lines = ["## This Week"]
-        for day_str, entry in past_entries:
-            past_lines.append(f"  ({day_str}) {entry}")
-        parts.append("\n".join(past_lines))
-
-    # 9. Smart guide injection based on cwd
+    # 6. Smart guide injection based on cwd
     if cwd and project_name:
         guide_text = _match_guides(project_name, cwd)
         if guide_text:

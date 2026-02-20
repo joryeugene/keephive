@@ -517,8 +517,8 @@ class TestDedupInMemory:
 
 
 class TestBuildContextIntegration:
-    def testbuild_context_includes_reverify_summary(self, hive_env):
-        """build_context includes auto-reverify summary when facts refreshed."""
+    def testbuild_context_reverify_silently(self, hive_env):
+        """build_context auto-reverifies but no longer injects summary (context diet)."""
         from keephive.hooks.sessionstart import build_context
         from keephive.storage import memory_file
 
@@ -538,10 +538,14 @@ class TestBuildContextIntegration:
         )
 
         context = build_context("/test/project", "project")
-        assert "auto-updated" in context.lower() or "re-verified" in context.lower()
+        # Auto-reverify still runs but summary is not injected into context
+        assert "auto-updated" not in context.lower()
+        # The fact should have been re-verified in memory.md though
+        updated_mem = mem_path.read_text()
+        assert date.today().isoformat() in updated_mem
 
-    def testbuild_context_accumulation_warnings(self, hive_env):
-        """build_context includes accumulation warnings when memory is large."""
+    def testbuild_context_no_accumulation_warnings(self, hive_env):
+        """build_context no longer includes accumulation warnings (context diet)."""
         from keephive.hooks.sessionstart import build_context
         from keephive.storage import memory_file
 
@@ -551,8 +555,9 @@ class TestBuildContextIntegration:
         memory_file().write_text("\n".join(lines) + "\n")
 
         context = build_context("/test/project", "project")
-        assert "45 facts" in context
-        assert "hive rf" in context
+        # Accumulation warnings moved to cmd_status
+        assert "45 facts" not in context
+        assert "hive rf" not in context
 
 
 # ---- Secret redaction ----

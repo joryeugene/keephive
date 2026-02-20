@@ -127,6 +127,57 @@ def cmd_status(args: list[str]) -> None:
         console.print(f"  [warn]{stale} stale fact(s)[/warn]  ->  [bold]hive v[/bold]")
         console.print()
 
+    # Quality Pulse score (moved from sessionstart injection)
+    try:
+        from keephive.commands.audit import (
+            _analyze_cleaner,
+            _analyze_strategist,
+            _analyze_vault,
+            _check_previous_play,
+            _compute_score,
+        )
+
+        vault = _analyze_vault()
+        cleaner = _analyze_cleaner()
+        strategist = _analyze_strategist()
+        pulse_score = _compute_score(vault, cleaner, strategist)
+
+        if pulse_score < 70:
+            console.print(f"  [warn]Quality Pulse: {pulse_score}/100[/warn]  ->  [bold]hive audit[/bold]")
+            console.print()
+
+        prev_play = _check_previous_play()
+        if prev_play and not prev_play["completed"] and prev_play["age_days"] >= 2:
+            console.print(f"  [info]Unfinished Play ({prev_play['date']}): {prev_play['action']}[/info]")
+            console.print()
+    except Exception:
+        pass
+
+    # Guide update notification (moved from sessionstart injection)
+    try:
+        from keephive.commands.setup import check_bundled_updates as _cbu
+
+        _stale_guides = _cbu()
+        if _stale_guides > 0:
+            console.print(
+                f"  [info]{_stale_guides} bundled guide(s) have updates[/info]"
+                "  ->  [bold]hive setup[/bold]"
+            )
+            console.print()
+    except Exception:
+        pass
+
+    # Memory accumulation warnings (moved from sessionstart injection)
+    if mem.exists():
+        from keephive.hooks.sessionstart import _accumulation_warnings
+
+        mem_content = mem.read_text()
+        acc_warnings = _accumulation_warnings(mem_content)
+        for w in acc_warnings:
+            console.print(f"  [warn]{w}[/warn]")
+        if acc_warnings:
+            console.print()
+
     # Reflect analysis nudge
     from keephive.commands.reflect import get_pending_analysis
 

@@ -197,6 +197,43 @@ def stale_days() -> int:
     return int(os.environ.get("HIVE_STALE_DAYS", "30"))
 
 
+# ---- Context-aware decay rates ----
+
+CATEGORY_STALE_DAYS = {
+    "DECISION": 90,
+    "CORRECTION": 60,
+    "INSIGHT": 60,
+    "FACT": 30,
+    "TODO": 7,
+}
+
+
+def _fact_category(fact_text: str) -> str:
+    """Extract category prefix from a fact line (e.g. 'FACT: ...' -> 'FACT').
+
+    Returns 'FACT' as default when no recognized prefix is found.
+    """
+    stripped = fact_text.lstrip("- ").strip()
+    upper = stripped.upper()
+    for cat in ("DECISION", "CORRECTION", "INSIGHT", "FACT", "TODO"):
+        if upper.startswith(cat + ":") or upper.startswith(cat + " "):
+            return cat
+    return "FACT"
+
+
+def stale_days_for_fact(fact_text: str) -> int:
+    """Get staleness threshold in days for a fact based on its category prefix.
+
+    HIVE_STALE_DAYS env var overrides all categories (backward compat).
+    Otherwise: DECISION=90d, CORRECTION/INSIGHT=60d, FACT=30d, TODO=7d.
+    """
+    env_override = os.environ.get("HIVE_STALE_DAYS")
+    if env_override:
+        return int(env_override)
+    cat = _fact_category(fact_text)
+    return CATEGORY_STALE_DAYS.get(cat, 30)
+
+
 def capture_budget() -> int:
     return int(os.environ.get("HIVE_CAPTURE_BUDGET", "4000"))
 
@@ -205,12 +242,12 @@ def capture_budget() -> int:
 
 
 def count_stale_facts() -> int:
-    """Count facts in memory.md with verified dates older than stale threshold."""
+    """Count facts in memory.md with verified dates older than their category threshold."""
     mem = memory_file()
     if not mem.exists():
         return 0
 
-    cutoff = date.today() - timedelta(days=stale_days())
+    today_d = date.today()
     count = 0
 
     for line in mem.read_text().splitlines():
@@ -218,7 +255,9 @@ def count_stale_facts() -> int:
         if m:
             try:
                 vdate = date.fromisoformat(m.group(1))
-                if vdate < cutoff:
+                fact_text = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line).lstrip("- ").strip()
+                threshold = stale_days_for_fact(fact_text)
+                if (today_d - vdate).days > threshold:
                     count += 1
             except ValueError:
                 pass
@@ -228,13 +267,14 @@ def count_stale_facts() -> int:
 def get_stale_facts() -> list[tuple[int, str, str]]:
     """Get stale facts with line numbers and the raw line.
 
+    Uses per-category staleness thresholds (DECISION=90d, FACT=30d, etc.).
     Returns list of (line_number_1based, fact_text, raw_line).
     """
     mem = memory_file()
     if not mem.exists():
         return []
 
-    cutoff = date.today() - timedelta(days=stale_days())
+    today_d = date.today()
     results = []
 
     for i, line in enumerate(mem.read_text().splitlines(), 1):
@@ -242,11 +282,11 @@ def get_stale_facts() -> list[tuple[int, str, str]]:
         if m:
             try:
                 vdate = date.fromisoformat(m.group(1))
-                if vdate < cutoff:
-                    # Strip the verified tag to get the fact text
-                    fact = (
-                        re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line).lstrip("- ").strip()
-                    )
+                fact = (
+                    re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line).lstrip("- ").strip()
+                )
+                threshold = stale_days_for_fact(fact)
+                if (today_d - vdate).days > threshold:
                     results.append((i, fact, line))
             except ValueError:
                 pass
@@ -981,6 +1021,143 @@ def last_log_entry_with_prefix(prefix: str) -> str:
     return ""
 
 
+# ---- Recall frequency tracking ----
+
+
+def recall_stats_file() -> Path:
+    """Path to the recall frequency tracking file."""
+    return hive_dir() / ".recall-stats.json"
+
+
+def track_recall_hit(fact_line: str) -> None:
+    """Increment recall counter for a fact line. Silent on error."""
+    import hashlib
+
+    try:
+        sf = recall_stats_file()
+        data: dict = {}
+        if sf.exists():
+            try:
+                data = json.loads(sf.read_text())
+            except (json.JSONDecodeError, OSError):
+                data = {}
+
+        key = hashlib.sha256(fact_line.strip().encode()).hexdigest()[:16]
+        entry = data.get(key, {"count": 0, "last": ""})
+        entry["count"] = entry.get("count", 0) + 1
+        entry["last"] = date.today().isoformat()
+        data[key] = entry
+
+        sf.parent.mkdir(parents=True, exist_ok=True)
+        sf.write_text(json.dumps(data))
+    except Exception:
+        pass  # Never block recall operations
+
+
+def get_recall_count(fact_line: str) -> int:
+    """Get recall count for a fact line."""
+    import hashlib
+
+    sf = recall_stats_file()
+    if not sf.exists():
+        return 0
+    try:
+        data = json.loads(sf.read_text())
+    except (json.JSONDecodeError, OSError):
+        return 0
+    key = hashlib.sha256(fact_line.strip().encode()).hexdigest()[:16]
+    return data.get(key, {}).get("count", 0)
+
+
+# ---- Verification evidence storage ----
+
+
+def evidence_file() -> Path:
+    """Path to the verification evidence sidecar."""
+    return working_dir() / "evidence.json"
+
+
+def read_evidence() -> dict:
+    """Read evidence data from disk. Returns empty dict on missing/corrupt."""
+    ef = evidence_file()
+    if not ef.exists():
+        return {}
+    try:
+        return json.loads(ef.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def write_evidence(data: dict) -> None:
+    """Write evidence data atomically."""
+    ef = evidence_file()
+    ef.parent.mkdir(parents=True, exist_ok=True)
+    ef.write_text(json.dumps(data, indent=2))
+
+
+def store_evidence(
+    fact_text: str, verdict: str, reason: str, correction: str | None = None
+) -> None:
+    """Store verification evidence for a fact.
+
+    Tracks verify count, correction count, source locations extracted from reason,
+    and keeps a compact history (last 5 verifications).
+    """
+    import hashlib
+
+    data = read_evidence()
+    key = hashlib.sha256(fact_text.strip().encode()).hexdigest()[:16]
+
+    entry = data.get(
+        key,
+        {
+            "fact": fact_text,
+            "verify_count": 0,
+            "correction_count": 0,
+            "history": [],
+        },
+    )
+
+    entry["fact"] = fact_text
+    entry["verify_count"] = entry.get("verify_count", 0) + 1
+    if verdict == "STALE" and correction:
+        entry["correction_count"] = entry.get("correction_count", 0) + 1
+
+    entry["last_verdict"] = verdict
+    entry["last_reason"] = reason
+    entry["last_date"] = date.today().isoformat()
+
+    # Extract file:line references from the reason text
+    locations = re.findall(
+        r"[\w/.-]+\.(?:py|js|ts|md|json|yaml|toml|cfg|ini|txt)(?::\d+)?", reason
+    )
+    if locations:
+        entry["source_locations"] = locations[:5]
+
+    # Keep history compact (last 5 verifications)
+    history = entry.get("history", [])
+    history.append(
+        {
+            "date": date.today().isoformat(),
+            "verdict": verdict,
+            "reason": reason[:200],
+        }
+    )
+    entry["history"] = history[-5:]
+
+    data[key] = entry
+    write_evidence(data)
+
+
+def get_evidence_for_fact(fact_text: str) -> dict | None:
+    """Get stored evidence for a fact, or None if no evidence exists."""
+    import hashlib
+
+    data = read_evidence()
+    key = hashlib.sha256(fact_text.strip().encode()).hexdigest()[:16]
+    return data.get(key)
+
+
 # ---- Memory decay scoring ----
 
 IMPORTANCE_WEIGHTS = {"CORRECTION": 1.5, "DECISION": 1.2, "FACT": 1.0, "INSIGHT": 1.0}
@@ -1007,14 +1184,18 @@ def score_fact_decay(fact_text: str, verified_date_str: str) -> float:
     """Score a fact for decay. Lower score = better candidate for archiving.
 
     Components:
-      recency (0.0-1.0, weight 0.5): 1.0 = today, 0.0 = 60+ days ago
-      references (0.0-1.0, weight 0.3): how often it appears in daily logs
+      recency (0.0-1.0, weight 0.4): 1.0 = today, 0.0 = threshold+ days ago
+        Uses per-category threshold (DECISION=90d, FACT=30d, etc.)
+      references (0.0-1.0, weight 0.2): how often it appears in daily logs
       importance (weight 0.2): by category prefix (CORRECTION > DECISION > FACT/INSIGHT)
+      recall_freq (0.0-1.0, weight 0.2): how often recalled via hive rc
     """
+    # Recency: use category-aware threshold instead of fixed 60 days
+    threshold = stale_days_for_fact(fact_text)
     try:
         vdate = date.fromisoformat(verified_date_str)
         days_old = (date.today() - vdate).days
-        recency = max(0.0, 1.0 - days_old / 60.0)
+        recency = max(0.0, 1.0 - days_old / (threshold * 2.0))
     except ValueError:
         recency = 0.0
 
@@ -1027,4 +1208,8 @@ def score_fact_decay(fact_text: str, verified_date_str: str) -> float:
             importance = weight
             break
 
-    return recency * 0.5 + ref_score * 0.3 + importance * 0.2
+    # Recall frequency: facts recalled often are more valuable
+    recall_count = get_recall_count(fact_text)
+    recall_score = min(1.0, recall_count / 10.0)
+
+    return recency * 0.4 + ref_score * 0.2 + importance * 0.2 + recall_score * 0.2

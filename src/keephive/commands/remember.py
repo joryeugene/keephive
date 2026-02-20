@@ -19,6 +19,7 @@ from keephive.storage import (
     fts_search,
     knowledge_dir,
     stale_days,
+    track_recall_hit,
     working_dir,
 )
 
@@ -329,6 +330,11 @@ def _search_all_tiers(query: str) -> list[dict]:
 
     results.sort(key=lambda x: x["score"], reverse=True)
 
+    # Track recall frequency for working-tier hits (reinforcement signal)
+    for r in results:
+        if r["tier"] == "working":
+            track_recall_hit(r["line"])
+
     # Fuzzy second-pass when exact results are sparse
     if len(results) < 5:
         query_words = [w for w in re.findall(r"[a-z]+", q_lower) if len(w) > 2]
@@ -356,6 +362,8 @@ def _search_all_tiers(query: str) -> list[dict]:
                             }
                             if tier_name == "knowledge":
                                 hit["file"] = str(f)
+                            if tier_name == "working":
+                                track_recall_hit(line)
                             results.append(hit)
                             existing_lines.add(line)
             results.sort(key=lambda x: x["score"], reverse=True)
