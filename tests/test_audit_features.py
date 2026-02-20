@@ -5,8 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 
-from conftest import make_daily
-
+from conftest import make_daily  # noqa: I001
 
 # ---- Feature A: Context-aware decay rates ----
 
@@ -257,7 +256,6 @@ class TestRecallFrequencyTracking:
     def test_search_all_tiers_tracks_working_hits(self, hive_env):
         """Searching via _search_all_tiers tracks recall for working-tier results."""
         from keephive.commands.remember import _search_all_tiers
-        from keephive.storage import get_recall_count
 
         # hive_env fixture has "Python is great" in memory.md
         _search_all_tiers("Python")
