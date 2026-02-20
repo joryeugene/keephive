@@ -220,6 +220,66 @@ class TestSeedBundledContent:
         # Some output expected (either seeded, updated, or already present)
         assert captured.out != ""
 
+    def test_seed_only_skips_overwrite(self, hive_env):
+        """seed_only=True never overwrites existing files, even when content differs."""
+        gd = hive_env / "knowledge" / "guides"
+        stale_content = "# User-customized version\n"
+        (gd / "keephive-guide.md").write_text(stale_content)
+
+        from keephive.commands.setup import _seed_bundled_content
+
+        _seed_bundled_content(quiet=True, seed_only=True)
+
+        # User content must be preserved
+        assert (gd / "keephive-guide.md").read_text() == stale_content
+
+    def test_seed_only_still_creates_missing(self, hive_env):
+        """seed_only=True still creates files that don't exist yet."""
+        gd = hive_env / "knowledge" / "guides"
+        for f in gd.glob("*.md"):
+            f.unlink()
+
+        from keephive.commands.setup import _seed_bundled_content
+
+        _seed_bundled_content(quiet=True, seed_only=True)
+
+        guides = list(gd.glob("*.md"))
+        assert len(guides) >= 1
+
+
+# ---- check_bundled_updates ----
+
+
+class TestCheckBundledUpdates:
+    def test_detects_stale(self, hive_env):
+        """Returns count > 0 when an installed guide differs from bundled."""
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "keephive-guide.md").write_text("# Old version\n")
+
+        from keephive.commands.setup import check_bundled_updates
+
+        assert check_bundled_updates() > 0
+
+    def test_clean_returns_zero(self, hive_env):
+        """Returns 0 when all installed guides match bundled content."""
+        from keephive.commands.setup import _seed_bundled_content, check_bundled_updates
+
+        # Seed fresh bundled content (full overwrite)
+        _seed_bundled_content(quiet=True, seed_only=False)
+
+        assert check_bundled_updates() == 0
+
+    def test_missing_file_not_counted(self, hive_env):
+        """A file that doesn't exist yet is not counted as stale (it's just missing)."""
+        gd = hive_env / "knowledge" / "guides"
+        for f in gd.glob("*.md"):
+            f.unlink()
+
+        from keephive.commands.setup import check_bundled_updates
+
+        # Missing files don't count — they need seeding, not updating
+        assert check_bundled_updates() == 0
+
 
 # ---- _sync_global_install ----
 

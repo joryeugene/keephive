@@ -77,11 +77,11 @@ def hook_sessionstart(args: list[str]) -> None:
     except Exception:
         pass
 
-    # Silently sync bundled guides on every real session start
+    # Seed missing guides; never overwrite existing (preserve user customizations)
     try:
         from keephive.commands.setup import _seed_bundled_content
 
-        _seed_bundled_content(quiet=True)
+        _seed_bundled_content(quiet=True, seed_only=True)
     except Exception:
         pass
 
@@ -165,6 +165,19 @@ def build_context(cwd: str, project_name: str) -> str:
     stale = count_stale_facts()
     if stale > 0:
         parts.append(f"Warning: {stale} stale fact(s) need verification. Run: hive v")
+
+    # Guide update notification (non-intrusive, only when stale)
+    try:
+        from keephive.commands.setup import check_bundled_updates as _cbu
+
+        _stale = _cbu()
+        if _stale > 0:
+            parts.append(
+                f"{_stale} bundled guide(s) have updates from the latest keephive upgrade. "
+                "Run: hive setup"
+            )
+    except Exception:
+        pass
 
     # 3b. Accumulation warnings
     acc_warnings = _accumulation_warnings(mem)

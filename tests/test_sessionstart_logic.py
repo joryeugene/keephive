@@ -197,6 +197,27 @@ class TestBuildContext:
         # It lives in the keephive-guide, injected only when that guide matches.
         assert "Workflows" not in ctx
 
+    def test_stale_guide_notification(self, hive_env, monkeypatch):
+        """When check_bundled_updates returns >0, context includes upgrade notice."""
+        import keephive.commands.setup as _setup_mod
+        from keephive.hooks.sessionstart import build_context
+
+        monkeypatch.setattr(_setup_mod, "check_bundled_updates", lambda: 2)
+        ctx = build_context("/tmp/test", "test")
+
+        assert "2 bundled guide(s)" in ctx
+        assert "hive setup" in ctx
+
+    def test_no_notification_when_guides_current(self, hive_env, monkeypatch):
+        """When check_bundled_updates returns 0, no guide update notice in context."""
+        import keephive.commands.setup as _setup_mod
+        from keephive.hooks.sessionstart import build_context
+
+        monkeypatch.setattr(_setup_mod, "check_bundled_updates", lambda: 0)
+        ctx = build_context("/tmp/test", "test")
+
+        assert "bundled guide" not in ctx
+
 
 # ---- session signal (file-based guard) ----
 

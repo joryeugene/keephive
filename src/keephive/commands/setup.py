@@ -68,8 +68,14 @@ def cmd_setup(args: list[str]) -> None:
     console.print("  -> [dim]hive doctor[/dim] to verify everything")
 
 
-def _seed_bundled_content(quiet: bool = False) -> None:
-    """Copy bundled guides and prompts into hive dir if targets don't exist."""
+def _seed_bundled_content(quiet: bool = False, seed_only: bool = False) -> None:
+    """Copy bundled guides and prompts into hive dir if targets don't exist.
+
+    Args:
+        quiet: Suppress console output (for use from hooks).
+        seed_only: Only create missing files; never overwrite existing ones.
+                   Used during session start to avoid destroying customizations.
+    """
     from importlib.resources import files as pkg_files
 
     data_pkg = pkg_files("keephive.data")
@@ -92,7 +98,7 @@ def _seed_bundled_content(quiet: bool = False) -> None:
                     if not dest.exists():
                         dest.write_text(bundled_content)
                         seeded += 1
-                    elif dest.read_text() != bundled_content:
+                    elif not seed_only and dest.read_text() != bundled_content:
                         dest.write_text(bundled_content)
                         updated += 1
         except (TypeError, FileNotFoundError):
@@ -105,6 +111,29 @@ def _seed_bundled_content(quiet: bool = False) -> None:
             console.print(f"  [ok]OK[/ok] updated {updated} guide(s)/prompt(s)")
         else:
             console.print("  [dim]guides/prompts already present and up to date[/dim]")
+
+
+def check_bundled_updates() -> int:
+    """Return number of installed guides/prompts that differ from current bundled versions."""
+    from importlib.resources import files as pkg_files
+
+    data_pkg = pkg_files("keephive.data")
+    seed_map = [
+        ("guides", hive_dir() / "knowledge" / "guides"),
+        ("prompts", hive_dir() / "knowledge" / "prompts"),
+    ]
+    stale = 0
+    for subdir, target_dir in seed_map:
+        source = data_pkg.joinpath(subdir)
+        try:
+            for item in source.iterdir():
+                if item.name.endswith(".md"):
+                    dest = target_dir / item.name
+                    if dest.exists() and dest.read_text() != item.read_text():
+                        stale += 1
+        except (TypeError, FileNotFoundError):
+            pass
+    return stale
 
 
 def _setup_hooks(settings_path: Path | None = None) -> None:
