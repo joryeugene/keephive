@@ -52,6 +52,9 @@ dev = [
     "ruff>=0.9.0",
 ]
 
+[tool.pyright]
+extraPaths = ["src"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

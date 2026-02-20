@@ -276,6 +276,8 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .panel-input button:hover{background:#2ea043}
 .todo-done-btn{background:transparent;border:1px solid #30363d;border-radius:3px;color:#7d8590;padding:1px 5px;cursor:pointer;font-size:11px;margin-left:auto;flex-shrink:0}
 .todo-done-btn:hover{border-color:#238636;color:#3fb950}
+#main-content{transition:opacity .12s}
+#main-content.is-loading{opacity:.45;pointer-events:none}
 #search-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:200;background:rgba(0,0,0,0.6);justify-content:center;align-items:flex-start;padding-top:80px}
 .search-panel{background:#161b22;border:1px solid #30363d;border-radius:8px;width:600px;max-width:92vw;max-height:70vh;overflow-y:auto}
 .search-header{padding:10px 14px;border-bottom:1px solid #30363d;display:flex;justify-content:space-between;align-items:center}
@@ -287,10 +289,28 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .search-result:last-child{border-bottom:none}
 .search-date{color:#6e7681;font-size:11px;margin-right:8px;font-family:monospace}
 .search-line{color:#c9d1d9;word-break:break-word}
-.sparkline{display:flex;align-items:flex-end;gap:2px;height:32px;padding:8px 12px 4px;border-bottom:1px solid #21262d}
-.spark-bar{flex:1;background:#1f6feb;border-radius:2px 2px 0 0;min-height:2px;cursor:default;transition:opacity .15s}
+.sparkline-wrap{padding:4px 12px 0;border-bottom:1px solid #21262d}
+.sparkline{display:flex;align-items:flex-end;gap:2px;height:56px;padding:4px 0 0}
+.spark-bar{flex:1;border-radius:2px 2px 0 0;min-height:2px;cursor:default;transition:opacity .15s}
 .spark-bar:hover{opacity:.65}
 .spark-bar.today{background:#3fb950}
+.spark-bar.weekend{background:hsl(265,30%,42%)}
+.spark-labels{display:flex;gap:2px;padding:2px 0 4px}
+.spark-labels span{flex:1;text-align:center;font-size:9px;color:#6e7681}
+.spark-labels span.weekend{color:#8b7bb5}
+.heatmap-wrap{padding:4px 12px 0}
+.heatmap{display:flex;align-items:flex-end;gap:1px;height:32px}
+.heat-bar{flex:1;border-radius:1px 1px 0 0;min-height:2px;cursor:default;transition:opacity .15s}
+.heat-bar:hover{opacity:.65}
+.heat-bar.current{box-shadow:0 0 0 1px #58a6ff}
+.heat-labels{display:flex;gap:1px;padding:1px 0 4px}
+.heat-labels span{flex:1;text-align:center;font-size:8px;color:#6e7681}
+.summary-stats{display:flex;gap:12px;padding:6px 12px;justify-content:center}
+.summary-stat{text-align:center}
+.summary-stat .stat-value{font-size:18px;font-weight:700;color:#e6edf3;display:block}
+.summary-stat .stat-label{font-size:10px;color:#8b949e}
+.summary-link{display:block;text-align:center;padding:4px;font-size:11px;color:#58a6ff;text-decoration:none;border-top:1px solid #21262d}
+.summary-link:hover{color:#79c0ff}
 .log-filter{display:flex;gap:4px;padding:5px 12px;border-bottom:1px solid #21262d;flex-wrap:wrap}
 .log-filter-btn{font-size:11px;padding:1px 7px;border-radius:10px;cursor:pointer;border:1px solid #30363d;background:#21262d;color:#8b949e}
 .log-filter-btn.active{border-color:#58a6ff;color:#58a6ff;background:#122131}
@@ -323,16 +343,18 @@ _JS = """
 
   // --- Main refresh ---
   function refresh(){
+    var mc=document.getElementById('main-content');
     var url='/api/fragment?view='+view;
     if(logDate)url+='&log_date='+logDate;
+    if(mc)mc.classList.add('is-loading');
     fetch(url)
       .then(function(r){return r.text();})
       .then(function(h){
-        var mc=document.getElementById('main-content');
-        if(mc){mc.innerHTML=h;}
+        if(mc){mc.innerHTML=h;mc.classList.remove('is-loading');}
         lastSuccess=Date.now();
         updateTs();
       }).catch(function(){
+        if(mc)mc.classList.remove('is-loading');
         var el=document.getElementById('refresh-ts');
         if(el){el.style.color='#f85149';el.textContent='\u25cf offline';}
       });
@@ -466,9 +488,15 @@ _JS = """
     var btn=e.target.closest('.todo-done-btn');
     if(!btn)return;
     var pattern=btn.dataset.pattern;
+    var orig=btn.textContent;
+    btn.disabled=true;btn.textContent='\u2026';
     fetch('/api/todo/done',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pattern:pattern})})
       .then(function(r){return r.json();})
-      .then(function(d){if(d.ok)refresh();});
+      .then(function(d){
+        if(d.ok){refresh();}
+        else{btn.disabled=false;btn.textContent=orig;}
+      })
+      .catch(function(){btn.disabled=false;btn.textContent=orig;});
   });
 
   // --- Log type filter ---
@@ -487,9 +515,11 @@ _JS = """
 
   // --- Note slot switcher ---
   window.switchNote=function(n){
+    document.querySelectorAll('.slot-btn').forEach(function(b){b.disabled=true;});
     fetch('/api/note/switch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slot:n})})
       .then(function(r){return r.json();})
-      .then(function(d){if(d.ok)refresh();});
+      .then(function(d){if(d.ok)refresh();})
+      .catch(function(){document.querySelectorAll('.slot-btn').forEach(function(b){b.disabled=false;});});
   };
 
   // --- Split pane drag ---
@@ -718,13 +748,18 @@ def _get_stats_data() -> dict:
         )._calculate_streak(days)
     ) or (0, 0)
 
-    # 14-day per-day command totals for sparkline
-    daily_spark: list[tuple[str, int]] = []
+    # 14-day per-day command totals for sparkline (label, count, iso_date)
+    daily_spark: list[tuple[str, int, str]] = []
     for i in range(13, -1, -1):
         d = date.today() - timedelta(days=i)
         day_s = d.isoformat()
         total_cmds = sum(days.get(day_s, {}).get("commands", {}).values())
-        daily_spark.append((d.strftime("%b %d"), total_cmds))
+        daily_spark.append((d.strftime("%b %d"), total_cmds, day_s))
+
+    # Today's hourly data
+    today_str = date.today().isoformat()
+    today_day = days.get(today_str, {})
+    today_hours: dict[str, int] = today_day.get("hours", {})
 
     return {
         "commands": top,
@@ -735,6 +770,7 @@ def _get_stats_data() -> dict:
         "curr_streak": curr_streak,
         "longest_streak": longest_streak,
         "daily_spark": daily_spark,
+        "today_hours": today_hours,
     }
 
 
@@ -1227,6 +1263,38 @@ def _render_notes_panel(data: dict) -> str:
     )
 
 
+def _render_hourly_heatmap(hours: dict[str, int]) -> str:
+    """Render an hourly heatmap HTML fragment. Returns empty string if no data."""
+    if not hours or all(v == 0 for v in hours.values()):
+        return ""
+    from datetime import datetime as _dt
+
+    current_hour = _dt.now().strftime("%H")
+    vals = [hours.get(f"{h:02d}", 0) for h in range(24)]
+    mx = max(vals) or 1
+    bars = ""
+    for h in range(24):
+        v = vals[h]
+        hk = f"{h:02d}"
+        ratio = v / mx if v > 0 else 0
+        sat = 30 + round(ratio * 50)
+        lum = 20 + round(ratio * 25)
+        bg = f"hsl(185,{sat}%,{lum}%)" if v > 0 else "#161b22"
+        ht = max(2, round(ratio * 28))
+        cur_cls = " current" if hk == current_hour else ""
+        bars += f'<div class="heat-bar{cur_cls}" style="height:{ht}px;background:{bg}" title="{hk}:00 — {v} events"></div>'
+    labels = ""
+    for h in range(24):
+        label_text = str(h) if h % 3 == 0 else ""
+        labels += f"<span>{label_text}</span>"
+    return (
+        f'<div class="heatmap-wrap">'
+        f'<div class="heatmap">{bars}</div>'
+        f'<div class="heat-labels">{labels}</div>'
+        f'</div>'
+    )
+
+
 def _render_stats_panel(data: dict) -> str:
     commands = data.get("commands", [])
     today_map = data.get("today", {})
@@ -1235,16 +1303,71 @@ def _render_stats_panel(data: dict) -> str:
     curr_streak = data.get("curr_streak", 0)
     longest_streak = data.get("longest_streak", 0)
     daily_spark = data.get("daily_spark", [])
+    today_hours = data.get("today_hours", {})
 
     sparkline_html = ""
-    if daily_spark and any(c > 0 for _, c in daily_spark):
-        max_c = max(c for _, c in daily_spark) or 1
+    # Support both 2-tuple (label, count) and 3-tuple (label, count, iso_date)
+    has_data = False
+    for item in daily_spark:
+        count = item[1] if len(item) >= 2 else 0
+        if count > 0:
+            has_data = True
+            break
+
+    if daily_spark and has_data:
+        max_c = max(item[1] for item in daily_spark) or 1
         bars = ""
-        for i, (label, count) in enumerate(daily_spark):
-            h = max(2, round(count / max_c * 28)) if count > 0 else 2
-            today_cls = " today" if i == len(daily_spark) - 1 else ""
-            bars += f'<div class="spark-bar{today_cls}" style="height:{h}px" title="{_e(label)}: {count} cmds"></div>'
-        sparkline_html = f'<div class="sparkline">{bars}</div>'
+        labels = ""
+        for i, item in enumerate(daily_spark):
+            label = item[0]
+            count = item[1]
+            iso_date = item[2] if len(item) >= 3 else ""
+            is_today = i == len(daily_spark) - 1
+
+            h = max(2, round(count / max_c * 48)) if count > 0 else 2
+
+            # Determine day-of-week for coloring
+            is_weekend = False
+            dow_letter = ""
+            if iso_date:
+                try:
+                    from datetime import date as _date
+                    d = _date.fromisoformat(iso_date)
+                    dow_letter = "MTWTFSS"[d.weekday()]
+                    is_weekend = d.weekday() >= 5
+                except (ValueError, IndexError):
+                    pass
+
+            if is_today:
+                cls = " today"
+                extra_bg = ""
+            elif is_weekend:
+                cls = " weekend"
+                extra_bg = ""
+            else:
+                cls = ""
+                if count > 0:
+                    ratio = count / max_c
+                    sat = 50 + round(ratio * 30)
+                    lum = 25 + round(ratio * 20)
+                    extra_bg = f";background:hsl(215,{sat}%,{lum}%)"
+                else:
+                    extra_bg = ";background:#161b22"
+
+            bars += f'<div class="spark-bar{cls}" style="height:{h}px{extra_bg}" title="{_e(label)}: {count} cmds"></div>'
+
+            wk_cls = ' class="weekend"' if is_weekend else ""
+            labels += f"<span{wk_cls}>{dow_letter}</span>"
+
+        sparkline_html = (
+            f'<div class="sparkline-wrap">'
+            f'<div class="sparkline">{bars}</div>'
+            f'<div class="spark-labels">{labels}</div>'
+            f'</div>'
+        )
+
+    # Hourly heatmap (embedded in stats panel after sparkline)
+    hourly_html = _render_hourly_heatmap(today_hours)
 
     streak_html = ""
     if total_days > 0:
@@ -1275,6 +1398,7 @@ def _render_stats_panel(data: dict) -> str:
         f'<div class="card-header"><span class="card-title">Usage Stats</span><span class="card-meta">{meta}</span></div>'
         f'{_cmd_hints(["hive st", "hive st -p <project>", "hive st yesterday"])}'
         f'{sparkline_html}'
+        f'{hourly_html}'
         f'<div class="card-body">{streak_html}{rows}</div>'
         f"</div>"
     )
@@ -1371,6 +1495,67 @@ def _render_standup_panel(data: dict) -> str:
     )
 
 
+def _get_stats_summary_data() -> dict:
+    """Compact stats for the home view: today, week, streak, hourly."""
+    from datetime import date, timedelta
+
+    from keephive.storage import read_stats
+
+    data = read_stats()
+    days = data.get("days", {})
+    today_str = date.today().isoformat()
+    week_start = (date.today() - timedelta(days=7)).isoformat()
+
+    today_data = days.get(today_str, {})
+    today_total = sum(today_data.get("commands", {}).values())
+    today_hours: dict[str, int] = today_data.get("hours", {})
+
+    week_total = 0
+    for day_str, day_data in days.items():
+        if day_str >= week_start:
+            week_total += sum(day_data.get("commands", {}).values())
+
+    curr_streak = 0
+    try:
+        from keephive.commands.stats import _calculate_streak
+        curr_streak, _ = _calculate_streak(days)
+    except Exception:
+        pass
+
+    return {
+        "today_total": today_total,
+        "week_total": week_total,
+        "curr_streak": curr_streak,
+        "today_hours": today_hours,
+    }
+
+
+def _render_stats_summary_panel(data: dict) -> str:
+    today_total = data.get("today_total", 0)
+    week_total = data.get("week_total", 0)
+    curr_streak = data.get("curr_streak", 0)
+    today_hours = data.get("today_hours", {})
+
+    stats_row = (
+        f'<div class="summary-stats">'
+        f'<div class="summary-stat"><span class="stat-value">{today_total}</span><span class="stat-label">today</span></div>'
+        f'<div class="summary-stat"><span class="stat-value">{week_total}</span><span class="stat-label">this week</span></div>'
+        f'<div class="summary-stat"><span class="stat-value">{curr_streak}d</span><span class="stat-label">streak</span></div>'
+        f'</div>'
+    )
+
+    hourly = _render_hourly_heatmap(today_hours)
+    link = '<a class="summary-link" href="/stats">Full stats &rarr;</a>'
+
+    return (
+        f'<div class="card">'
+        f'<div class="card-header"><span class="card-title">Activity</span></div>'
+        f'<div class="card-body">{stats_row}{hourly}</div>'
+        f'{link}'
+        f'</div>'
+    )
+
+
 # ---- Panel registry ----
 
 PANELS: dict[str, tuple] = {
@@ -1390,6 +1575,7 @@ PANELS: dict[str, tuple] = {
     "ps": (_get_ps_data, _render_ps_panel),
     "facts": (_get_recent_facts_data, _render_recent_facts_panel),
     "standup": (_get_standup_data, _render_standup_panel),
+    "stats-summary": (_get_stats_summary_data, _render_stats_summary_panel),
 }
 
 # ---- View definitions ----
@@ -1400,6 +1586,7 @@ VIEWS: dict[str, dict] = {
         "title": "All",
         "rows": [
             ["status", "ps"],
+            ["stats-summary"],
             ["log-home"],
             ["todos"],
             ["knowledge-limited"],

@@ -1794,15 +1794,19 @@ def test_stats_data_has_daily_spark(hive_env):
     assert "daily_spark" in data
     spark = data["daily_spark"]
     assert len(spark) == 14
-    # Each entry is (label, count)
-    for label, count in spark:
+    # Each entry is (label, count, iso_date)
+    for item in spark:
+        assert len(item) == 3
+        label, count, iso_date = item
         assert isinstance(label, str)
         assert isinstance(count, int)
         assert count >= 0
+        assert isinstance(iso_date, str)
     # Last entry is today
     from datetime import date
 
     assert date.today().strftime("%b %d") in spark[-1][0]
+    assert spark[-1][2] == date.today().isoformat()
 
 
 def test_stats_panel_renders_sparkline_when_data(hive_env):
@@ -1817,7 +1821,7 @@ def test_stats_panel_renders_sparkline_when_data(hive_env):
         "curr_streak": 3,
         "longest_streak": 5,
         "projects": [],
-        "daily_spark": [("Feb 01", 0), ("Feb 02", 10), ("Feb 03", 5), ("Feb 04", 0), ("Feb 05", 20)],
+        "daily_spark": [("Feb 01", 0, "2026-02-01"), ("Feb 02", 10, "2026-02-02"), ("Feb 03", 5, "2026-02-03"), ("Feb 04", 0, "2026-02-04"), ("Feb 05", 20, "2026-02-05")],
     }
     html = _render_stats_panel(data)
     assert "spark-bar" in html
@@ -1838,7 +1842,7 @@ def test_stats_panel_no_sparkline_when_all_zero(hive_env):
         "curr_streak": 0,
         "longest_streak": 0,
         "projects": [],
-        "daily_spark": [("Feb 01", 0), ("Feb 02", 0)],
+        "daily_spark": [("Feb 01", 0, "2026-02-01"), ("Feb 02", 0, "2026-02-02")],
     }
     html = _render_stats_panel(data)
     assert "spark-bar" not in html
@@ -2044,3 +2048,181 @@ def test_js_has_switch_note_function():
 
     assert "switchNote" in _JS
     assert "/api/note/switch" in _JS
+
+
+# ---- Improved sparkline: day labels, weekend shading ----
+
+
+def test_sparkline_has_day_labels(hive_env):
+    """Sparkline includes day-of-week letter labels below bars."""
+    from keephive.commands.serve import _render_stats_panel
+
+    data = {
+        "commands": [],
+        "today": {},
+        "week": {},
+        "total_days": 5,
+        "curr_streak": 3,
+        "longest_streak": 5,
+        "daily_spark": [("Feb 16", 5, "2026-02-16"), ("Feb 17", 10, "2026-02-17")],
+    }
+    html = _render_stats_panel(data)
+    assert "spark-labels" in html
+    # Day-of-week letters rendered
+    assert "<span" in html
+
+
+def test_sparkline_weekend_different_shade(hive_env):
+    """Weekend bars get the 'weekend' CSS class."""
+    from keephive.commands.serve import _render_stats_panel
+
+    # 2026-02-14 is Saturday, 2026-02-15 is Sunday
+    data = {
+        "commands": [],
+        "today": {},
+        "week": {},
+        "total_days": 3,
+        "curr_streak": 1,
+        "longest_streak": 1,
+        "daily_spark": [
+            ("Feb 14", 5, "2026-02-14"),
+            ("Feb 15", 3, "2026-02-15"),
+            ("Feb 16", 8, "2026-02-16"),
+        ],
+    }
+    html = _render_stats_panel(data)
+    assert "weekend" in html
+
+
+# ---- Hourly heatmap (web) ----
+
+
+def test_hourly_heatmap_renders_24_bars(hive_env):
+    """Hourly heatmap renders 24 bars when data is present."""
+    from keephive.commands.serve import _render_hourly_heatmap
+
+    hours = {"09": 5, "10": 10, "14": 3}
+    html = _render_hourly_heatmap(hours)
+    assert html.count("heat-bar") == 24
+    assert "heatmap" in html
+
+
+def test_hourly_heatmap_highlights_current_hour(hive_env):
+    """Current hour bar has 'current' CSS class."""
+    from datetime import datetime
+
+    from keephive.commands.serve import _render_hourly_heatmap
+
+    current_hour = datetime.now().strftime("%H")
+    hours = {current_hour: 5}
+    html = _render_hourly_heatmap(hours)
+    assert "current" in html
+
+
+def test_hourly_heatmap_empty_when_no_data(hive_env):
+    """Hourly heatmap returns empty string with no data."""
+    from keephive.commands.serve import _render_hourly_heatmap
+
+    assert _render_hourly_heatmap({}) == ""
+    assert _render_hourly_heatmap({"00": 0, "12": 0}) == ""
+
+
+def test_hourly_heatmap_labels_every_3h(hive_env):
+    """Heatmap labels appear at hours 0, 3, 6, 9, 12, 15, 18, 21."""
+    from keephive.commands.serve import _render_hourly_heatmap
+
+    hours = {"12": 5}
+    html = _render_hourly_heatmap(hours)
+    assert "heat-labels" in html
+    # Labels for 0, 3, 6, ... 21 should exist as text content
+    for h in [0, 3, 6, 9, 12, 15, 18, 21]:
+        assert f"<span>{h}</span>" in html
+
+
+def test_css_has_heatmap_styles():
+    """CSS includes heatmap classes."""
+    from keephive.commands.serve import _CSS
+
+    assert ".heatmap{" in _CSS
+    assert ".heat-bar{" in _CSS
+    assert ".heat-bar.current{" in _CSS
+    assert ".heatmap-wrap{" in _CSS
+
+
+# ---- Stats summary panel (home view) ----
+
+
+def test_stats_summary_data_keys(hive_env):
+    """_get_stats_summary_data returns required keys."""
+    from keephive.commands.serve import _get_stats_summary_data
+
+    data = _get_stats_summary_data()
+    assert "today_total" in data
+    assert "week_total" in data
+    assert "curr_streak" in data
+    assert "today_hours" in data
+
+
+def test_stats_summary_panel_renders(hive_env):
+    """Stats summary panel renders Activity card."""
+    from keephive.commands.serve import _render_stats_summary_panel
+
+    data = {"today_total": 12, "week_total": 87, "curr_streak": 5, "today_hours": {"10": 5}}
+    html = _render_stats_summary_panel(data)
+    assert "Activity" in html
+    assert "12" in html
+    assert "87" in html
+    assert "5d" in html
+
+
+def test_stats_summary_links_to_full_stats(hive_env):
+    """Stats summary panel has a link to /stats."""
+    from keephive.commands.serve import _render_stats_summary_panel
+
+    data = {"today_total": 0, "week_total": 0, "curr_streak": 0, "today_hours": {}}
+    html = _render_stats_summary_panel(data)
+    assert "/stats" in html
+    assert "summary-link" in html
+
+
+def test_all_view_has_stats_summary():
+    """All view includes stats-summary row."""
+    from keephive.commands.serve import VIEWS
+
+    all_rows = VIEWS["all"]["rows"]
+    assert any("stats-summary" in r for r in all_rows), "stats-summary not in All view"
+
+
+def test_sparkline_wrap_in_css():
+    """CSS includes sparkline-wrap wrapper styles."""
+    from keephive.commands.serve import _CSS
+
+    assert ".sparkline-wrap{" in _CSS
+    assert ".spark-labels{" in _CSS
+
+
+# ---- Loading state: CSS + JS ----
+
+
+def test_css_has_main_content_loading_state():
+    """CSS includes #main-content.is-loading opacity rule."""
+    from keephive.commands.serve import _CSS
+
+    assert "is-loading" in _CSS
+    assert "opacity" in _CSS
+
+
+def test_js_refresh_adds_is_loading_class():
+    """JS refresh function adds is-loading class before fetch."""
+    from keephive.commands.serve import _JS
+
+    assert "is-loading" in _JS
+    assert "classList.add" in _JS
+
+
+def test_js_todo_done_btn_has_loading_state():
+    """JS todo-done-btn handler disables button during request."""
+    from keephive.commands.serve import _JS
+
+    assert "todo-done-btn" in _JS
+    assert "btn.disabled=true" in _JS

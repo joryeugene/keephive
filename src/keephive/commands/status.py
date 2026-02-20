@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, timedelta
 
 from keephive import __version__
 from keephive.output import console
@@ -120,6 +120,37 @@ def cmd_status(args: list[str]) -> None:
     parts.append(f"{guide_count} guides")
     parts.append(disk_usage)
     console.print(f"  {' | '.join(parts)}")
+
+    # Activity line (commands / streak / hourly sparkline)
+    try:
+        from keephive.commands.stats import _calculate_streak, _hourly_sparkline
+        from keephive.storage import read_stats
+
+        stats = read_stats()
+        days_data = stats.get("days", {})
+        today_str = date.today().isoformat()
+        today_data_st = days_data.get(today_str, {})
+        today_cmds = sum(today_data_st.get("commands", {}).values())
+        week_ago = (date.today() - timedelta(days=7)).isoformat()
+        week_cmds = sum(
+            sum(dd.get("commands", {}).values())
+            for ds, dd in days_data.items()
+            if ds >= week_ago
+        )
+        curr_streak, _ = _calculate_streak(days_data)
+        activity_parts = [
+            f"[bold]{today_cmds}[/bold] cmds today",
+            f"{week_cmds} this week",
+        ]
+        if curr_streak > 0:
+            activity_parts.append(f"{curr_streak}d streak")
+        today_hours = today_data_st.get("hours", {})
+        if today_hours:
+            activity_parts.append(_hourly_sparkline(today_hours))
+        console.print(f"  {' \u00b7 '.join(activity_parts)}")
+    except Exception:
+        pass  # Stats unavailable, skip gracefully
+
     console.print()
 
     # Stale warning

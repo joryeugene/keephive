@@ -196,6 +196,16 @@ def _sparkline(daily_counts: dict[str, int], days: int = 7) -> list[tuple[str, i
     return result
 
 
+_SPARK_CHARS = " ▁▂▃▄▅▆▇█"
+
+
+def _hourly_sparkline(hours: dict[str, int]) -> str:
+    """Render 24-char sparkline from hourly counts."""
+    vals = [hours.get(f"{h:02d}", 0) for h in range(24)]
+    mx = max(vals) or 1
+    return "".join(_SPARK_CHARS[min(8, round(v / mx * 8))] for v in vals)
+
+
 def _bar(value: int, max_value: int, width: int = 20) -> str:
     """Render a simple bar chart character."""
     if max_value == 0:
@@ -285,6 +295,12 @@ def _display_full(data: dict) -> None:
         f"all time [bold]{all_cmds}[/bold]  ·  "
         f"streak [bold]{curr_streak}d[/bold] (best: {longest_streak}d)"
     )
+
+    # Today's hourly activity
+    today_hours = today_data.get("hours", {})
+    if today_hours:
+        spark_line = _hourly_sparkline(today_hours)
+        console.print(f"  hourly  {spark_line}  (0h{'─' * 22}23h)")
 
     # 7-day activity chart
     daily_cmd_counts: dict[str, int] = {}
@@ -406,6 +422,12 @@ def _display_day(data: dict, date_arg: str) -> None:
     console.print()
     console.print(f"  {cmds} commands | {hooks} hooks | {projects} projects")
 
+    # Hourly sparkline
+    day_hours = day_data.get("hours", {})
+    if day_hours:
+        spark_line = _hourly_sparkline(day_hours)
+        console.print(f"  hourly  {spark_line}  (0h{'─' * 22}23h)")
+
     # Sources
     sources = day_data.get("sources", {})
     if sources:
@@ -485,6 +507,14 @@ def _display_project(data: dict, project_filter: str, date_filter: str = "") -> 
         f"  {proj['commands']} commands | {proj['sessions']} sessions | "
         f"{proj['days_active']} days active | first: {proj['first_seen']}"
     )
+
+    # Hourly sparkline (for today only)
+    today_str = date.today().isoformat()
+    today_proj_data = days_data.get(today_str, {})
+    today_hours = today_proj_data.get("hours", {})
+    if today_hours:
+        spark_line = _hourly_sparkline(today_hours)
+        console.print(f"  hourly  {spark_line}  (0h{'─' * 22}23h)")
 
     # Commands
     by_cmd = proj["by_command"]

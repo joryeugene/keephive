@@ -892,6 +892,12 @@ def track_event(
             day_data[category][name] = 0
         day_data[category][name] += 1
 
+        # Track hourly activity
+        hour_key = datetime.now().strftime("%H")  # "00"-"23"
+        if "hours" not in day_data:
+            day_data["hours"] = {}
+        day_data["hours"][hour_key] = day_data["hours"].get(hour_key, 0) + 1
+
         # Track source
         src = source or _detect_source()
         if "sources" not in day_data:

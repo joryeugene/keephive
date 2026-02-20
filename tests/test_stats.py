@@ -516,3 +516,118 @@ class TestRelativeDay:
         from keephive.commands.stats import _relative_day
 
         assert _relative_day("not-a-date") == "not-a-date"
+
+
+# ---- Hourly tracking in storage ----
+
+
+class TestHourlyTracking:
+    def test_track_event_records_hourly(self, hive_env):
+        """track_event records hourly activity in the 'hours' key."""
+        from keephive.storage import read_stats, track_event
+
+        track_event("commands", "status", source="terminal")
+        data = read_stats()
+        today = date.today().isoformat()
+        day_data = data["days"][today]
+        assert "hours" in day_data
+        hours = day_data["hours"]
+        # Current hour should have at least 1
+        from datetime import datetime
+
+        current_hour = datetime.now().strftime("%H")
+        assert hours[current_hour] >= 1
+
+    def test_track_event_hourly_multiple(self, hive_env):
+        """Multiple track_event calls accumulate in the same hour bucket."""
+        from keephive.storage import read_stats, track_event
+
+        track_event("commands", "status", source="terminal")
+        track_event("commands", "recall", source="mcp")
+        track_event("hooks", "sessionstart", source="hook")
+        data = read_stats()
+        today = date.today().isoformat()
+        hours = data["days"][today]["hours"]
+        from datetime import datetime
+
+        current_hour = datetime.now().strftime("%H")
+        assert hours[current_hour] >= 3
+
+    def test_track_event_hourly_backward_compat(self, hive_env):
+        """Old stats data without 'hours' key doesn't break anything."""
+        from keephive.storage import read_stats, stats_file
+
+        today = date.today().isoformat()
+        old_data = {"days": {today: {"commands": {"status": 5}}}}
+        stats_file().write_text(json.dumps(old_data))
+
+        data = read_stats()
+        # No hours key yet
+        assert "hours" not in data["days"][today]
+
+        # New track_event adds hours key
+        from keephive.storage import track_event
+
+        track_event("commands", "recall", source="terminal")
+        data = read_stats()
+        assert "hours" in data["days"][today]
+
+
+# ---- Hourly sparkline CLI ----
+
+
+class TestHourlySparkline:
+    def test_hourly_sparkline_renders(self):
+        """_hourly_sparkline produces 24-char string."""
+        from keephive.commands.stats import _hourly_sparkline
+
+        hours = {"09": 5, "10": 10, "14": 3, "15": 8}
+        result = _hourly_sparkline(hours)
+        assert len(result) == 24
+        # Active hours should have visible block characters
+        assert result[9] != " "  # hour 09
+        assert result[10] != " "  # hour 10
+
+    def test_hourly_sparkline_all_zero(self):
+        """_hourly_sparkline with no data produces 24 spaces."""
+        from keephive.commands.stats import _hourly_sparkline
+
+        result = _hourly_sparkline({})
+        assert len(result) == 24
+        assert result.strip() == ""
+
+    def test_hourly_sparkline_single_hour(self):
+        """_hourly_sparkline with one hour shows max block at that position."""
+        from keephive.commands.stats import _hourly_sparkline
+
+        result = _hourly_sparkline({"12": 10})
+        assert len(result) == 24
+        assert result[12] == "\u2588"  # full block
+        # All other positions should be space
+        for i in range(24):
+            if i != 12:
+                assert result[i] == " "
+
+    def test_display_full_includes_hourly(self, hive_env, capsys):
+        """_display_full shows hourly sparkline when hours data exists."""
+        from keephive.commands.stats import _display_full
+        from keephive.storage import stats_file
+
+        today_str = date.today().isoformat()
+        from datetime import datetime
+
+        current_hour = datetime.now().strftime("%H")
+        data = {
+            "days": {
+                today_str: {
+                    "commands": {"status": 3},
+                    "sources": {"terminal": 3},
+                    "hours": {current_hour: 3},
+                }
+            }
+        }
+        _display_full(data)
+        out = capsys.readouterr().out
+        assert "hourly" in out
+        assert "0h" in out
+        assert "23h" in out
