@@ -185,6 +185,7 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .stale-summary{cursor:pointer;color:#e3b341;font-size:12px;list-style:none;padding:2px 0}
 .stale-summary::-webkit-details-marker{display:none}
 .stale-summary::marker{display:none}
+.status-divider{border-top:1px solid #21262d;margin:6px 0}
 .status-brief{font-size:12px;color:#8b949e;padding:4px 0}
 .status-brief span{color:#c9d1d9;font-weight:600}
 .log-date-nav{display:flex;align-items:center;gap:4px}
@@ -229,6 +230,9 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .acc-body{padding:12px 14px;display:none;font-size:13px}
 .acc-body.open{display:block}
 .acc-body.md{max-height:480px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#30363d #1c2128}
+.know-item{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;border-bottom:1px solid #21262d}
+.know-item:last-child{border-bottom:none}
+.know-name{color:#c9d1d9}
 .know-divider{padding:5px 12px 3px;font-size:10px;color:#6e7681;text-transform:uppercase;letter-spacing:.05em;background:#0d1117;border-top:1px solid #21262d;margin-top:2px}
 .know-divider:first-child{border-top:none;margin-top:0}
 .md h1,.md h2,.md h3,.md h4{color:#f0f6fc;margin:10px 0 5px}
@@ -607,6 +611,31 @@ def _get_status_data() -> dict:
     from datetime import date as _date, timedelta as _timedelta
 
     yesterday = (_date.today() - _timedelta(days=1)).isoformat()
+
+    # Activity metrics from stats (for merged activity section)
+    activity_today = 0
+    activity_week = 0
+    activity_streak = 0
+    activity_hours: dict[str, int] = {}
+    try:
+        from keephive.storage import read_stats
+
+        _stats = read_stats()
+        _days = _stats.get("days", {})
+        _today_str = _date.today().isoformat()
+        _week_start = (_date.today() - _timedelta(days=7)).isoformat()
+        _today_day = _days.get(_today_str, {})
+        activity_today = sum(_today_day.get("commands", {}).values())
+        activity_hours = _today_day.get("hours", {})
+        for _ds, _dd in _days.items():
+            if _ds >= _week_start:
+                activity_week += sum(_dd.get("commands", {}).values())
+        from keephive.commands.stats import _calculate_streak
+
+        activity_streak, _ = _calculate_streak(_days)
+    except Exception:
+        pass
+
     return {
         "stale": stale,
         "total_verified": total_verified,
@@ -618,6 +647,10 @@ def _get_status_data() -> dict:
         "data_ok": data_ok,
         "stale_facts": stale_facts,
         "todo_count": todo_count,
+        "activity_today": activity_today,
+        "activity_week": activity_week,
+        "activity_streak": activity_streak,
+        "activity_hours": activity_hours,
     }
 
 
@@ -879,6 +912,27 @@ def _render_status_panel(data: dict) -> str:
             f"</details>"
         )
 
+    # Activity section (merged from stats-summary)
+    activity_today = data.get("activity_today", 0)
+    activity_week = data.get("activity_week", 0)
+    activity_streak = data.get("activity_streak", 0)
+    activity_hours = data.get("activity_hours", {})
+
+    activity_html = ""
+    if activity_today > 0 or activity_week > 0 or activity_streak > 0:
+        activity_html = (
+            f'<div class="status-divider"></div>'
+            f'<div class="stat-row">'
+            f'<div class="stat-item"><span class="stat-value">{activity_today}</span><span class="stat-label">cmds today</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{activity_week}</span><span class="stat-label">this week</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{activity_streak}d</span><span class="stat-label">streak</span></div>'
+            f'</div>'
+        )
+        hourly = _render_hourly_heatmap(activity_hours)
+        if hourly:
+            activity_html += hourly
+        activity_html += '<a class="summary-link" href="/stats">Full stats &rarr;</a>'
+
     hints = ["hive s", "hive v", "hive dr"]
     if stale > 0:
         hints = ["hive v  \u2190 stale facts!", "hive s", "hive dr"]
@@ -888,7 +942,7 @@ def _render_status_panel(data: dict) -> str:
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Status</span></div>'
         f'{_cmd_hints(hints)}'
-        f'<div class="card-body">{rows}{health}{stale_accordion}</div>'
+        f'<div class="card-body">{rows}{health}{stale_accordion}{activity_html}</div>'
         f"</div>"
     )
 
@@ -898,7 +952,9 @@ def _render_status_brief_panel(data: dict) -> str:
     total = data.get("total_verified", 0)
     today_entries = data.get("today_entries", 0)
     todo_count = data.get("todo_count", 0)
+    activity_today = data.get("activity_today", 0)
     stale_str = f' <span style="color:#e3b341">({stale} stale)</span>' if stale > 0 else ""
+    activity_str = f" &nbsp;|&nbsp; <span>{activity_today}</span> cmds today" if activity_today > 0 else ""
     return (
         f'<div class="card">'
         f'<div class="card-body">'
@@ -906,6 +962,7 @@ def _render_status_brief_panel(data: dict) -> str:
         f"<span>{total}</span> verified facts{stale_str} &nbsp;|&nbsp; "
         f"<span>{today_entries}</span> logged today &nbsp;|&nbsp; "
         f"<span>{todo_count}</span> open todos"
+        f"{activity_str}"
         f"</div></div></div>"
     )
 
@@ -1179,6 +1236,32 @@ def _render_knowledge_limited_panel(data: dict) -> str:
     return _render_knowledge_panel(data)
 
 
+def _render_knowledge_compact_panel(data: dict) -> str:
+    """Flat scannable list of all knowledge items (no accordions). Links to /know."""
+    guides = data.get("guides", [])
+    prompts = data.get("prompts", [])
+    skills = data.get("skills", [])
+    total = len(guides) + len(prompts) + len(skills)
+    rows = ""
+    for g in guides:
+        rows += f'<div class="know-item"><span class="acc-type">guide</span> <span class="know-name">{_e(g["name"])}</span></div>'
+    for p in prompts:
+        rows += f'<div class="know-item"><span class="acc-type">prompt</span> <span class="know-name">{_e(p["name"])}</span></div>'
+    for s in skills:
+        rows += f'<div class="know-item"><span class="acc-type">skill</span> <span class="know-name">{_e(s["name"])}</span></div>'
+    if not rows:
+        rows = '<div class="empty">No knowledge items</div>'
+    meta = f"{total} items" if total else ""
+    link = '<a class="summary-link" href="/know">Expand all &rarr;</a>'
+    return (
+        f'<div class="card">'
+        f'<div class="card-header"><span class="card-title">Knowledge</span><span class="card-meta">{meta}</span></div>'
+        f'<div class="card-body">{rows}</div>'
+        f'{link}'
+        f'</div>'
+    )
+
+
 def _render_memory_panel(data: dict) -> str:
     memory = data.get("memory", "")
     rules = data.get("rules", "")
@@ -1296,9 +1379,6 @@ def _render_hourly_heatmap(hours: dict[str, int]) -> str:
 
 
 def _render_stats_panel(data: dict) -> str:
-    commands = data.get("commands", [])
-    today_map = data.get("today", {})
-    week_map = data.get("week", {})
     total_days = data.get("total_days", 0)
     curr_streak = data.get("curr_streak", 0)
     longest_streak = data.get("longest_streak", 0)
@@ -1379,6 +1459,24 @@ def _render_stats_panel(data: dict) -> str:
             f'</div>'
         )
 
+    meta = f"{total_days} days tracked" if total_days else ""
+    return (
+        f'<div class="card">'
+        f'<div class="card-header"><span class="card-title">Usage Stats</span><span class="card-meta">{meta}</span></div>'
+        f'{_cmd_hints(["hive st", "hive st -p <project>", "hive st yesterday"])}'
+        f'{sparkline_html}'
+        f'{hourly_html}'
+        f'<div class="card-body">{streak_html}</div>'
+        f"</div>"
+    )
+
+
+def _render_stats_commands_panel(data: dict) -> str:
+    """Command breakdown table as a standalone card."""
+    commands = data.get("commands", [])
+    today_map = data.get("today", {})
+    week_map = data.get("week", {})
+
     rows = ""
     if commands:
         rows = (
@@ -1392,14 +1490,10 @@ def _render_stats_panel(data: dict) -> str:
         rows += "</tbody></table>"
     else:
         rows = '<div class="empty">No usage data yet</div>'
-    meta = f"{total_days} days tracked" if total_days else ""
     return (
         f'<div class="card">'
-        f'<div class="card-header"><span class="card-title">Usage Stats</span><span class="card-meta">{meta}</span></div>'
-        f'{_cmd_hints(["hive st", "hive st -p <project>", "hive st yesterday"])}'
-        f'{sparkline_html}'
-        f'{hourly_html}'
-        f'<div class="card-body">{streak_html}{rows}</div>'
+        f'<div class="card-header"><span class="card-title">Commands</span></div>'
+        f'<div class="card-body">{rows}</div>'
         f"</div>"
     )
 
@@ -1569,9 +1663,11 @@ PANELS: dict[str, tuple] = {
     "recurring": (_get_todo_data, _render_recurring_panel),
     "knowledge": (_get_knowledge_data, _render_knowledge_panel),
     "knowledge-limited": (_get_knowledge_data, _render_knowledge_limited_panel),
+    "knowledge-compact": (_get_knowledge_data, _render_knowledge_compact_panel),
     "memory": (_get_memory_data, _render_memory_panel),
     "notes": (_get_notes_data, _render_notes_panel),
     "stats": (_get_stats_data, _render_stats_panel),
+    "stats-commands": (_get_stats_data, _render_stats_commands_panel),
     "ps": (_get_ps_data, _render_ps_panel),
     "facts": (_get_recent_facts_data, _render_recent_facts_panel),
     "standup": (_get_standup_data, _render_standup_panel),
@@ -1586,7 +1682,6 @@ VIEWS: dict[str, dict] = {
         "title": "All",
         "rows": [
             ["status", "ps"],
-            ["stats-summary"],
             ["log-home"],
             ["todos"],
             ["knowledge-limited"],
@@ -1608,8 +1703,9 @@ VIEWS: dict[str, dict] = {
         "title": "Dev",
         "rows": [
             ["status-brief"],
-            ["knowledge-limited", "memory"],
+            ["knowledge-compact", "memory"],
             ["facts"],
+            ["todos-brief", "log-brief"],
         ],
     },
     "simple": {
@@ -1623,7 +1719,10 @@ VIEWS: dict[str, dict] = {
     "stats": {
         "path": "/stats",
         "title": "Stats",
-        "rows": [["stats", "ps"]],
+        "rows": [
+            ["stats", "ps"],
+            ["stats-commands"],
+        ],
     },
     "know": {
         "path": "/know",

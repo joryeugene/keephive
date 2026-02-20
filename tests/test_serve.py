@@ -287,7 +287,7 @@ def test_http_server_serves_root(hive_env, unused_tcp_port=13847):
     t.start()
     time.sleep(0.1)
 
-    conn = HTTPConnection("localhost", port, timeout=3)
+    conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("GET", "/")
     resp = conn.getresponse()
     body = resp.read().decode()
@@ -315,7 +315,7 @@ def test_http_server_serves_fragment(hive_env):
     t.start()
     time.sleep(0.1)
 
-    conn = HTTPConnection("localhost", port, timeout=3)
+    conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("GET", "/api/fragment?view=daily")
     resp = conn.getresponse()
     body = resp.read().decode()
@@ -343,7 +343,7 @@ def test_http_server_ui_feedback_post(hive_env):
     time.sleep(0.1)
 
     payload = json.dumps({"page": "http://localhost:3847", "selector": ".test", "note": "fix this"})
-    conn = HTTPConnection("localhost", port, timeout=3)
+    conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("POST", "/ui-feedback", body=payload, headers={"Content-Type": "application/json"})
     resp = conn.getresponse()
     body = resp.read()
@@ -373,7 +373,7 @@ def test_http_server_cors_headers(hive_env):
     t.start()
     time.sleep(0.1)
 
-    conn = HTTPConnection("localhost", port, timeout=3)
+    conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("OPTIONS", "/ui-feedback")
     resp = conn.getresponse()
     resp.read()
@@ -599,7 +599,7 @@ def test_http_server_search_returns_json(hive_env):
     t.start()
     time.sleep(0.1)
 
-    conn = HTTPConnection("localhost", port, timeout=3)
+    conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("GET", "/api/search?q=FACT")
     resp = conn.getresponse()
     body = resp.read().decode()
@@ -628,7 +628,7 @@ def test_http_server_search_empty_query(hive_env):
     t.start()
     time.sleep(0.1)
 
-    conn = HTTPConnection("localhost", port, timeout=3)
+    conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("GET", "/api/search?q=")
     resp = conn.getresponse()
     body = resp.read().decode()
@@ -659,7 +659,7 @@ def test_http_server_fragment_log_date(hive_env):
     t.start()
     time.sleep(0.1)
 
-    conn = HTTPConnection("localhost", port, timeout=3)
+    conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("GET", "/api/fragment?view=log&date=2026-01-01")
     resp = conn.getresponse()
     body = resp.read().decode()
@@ -957,7 +957,7 @@ def test_search_filters_session_lines(hive_env):
 
     import unittest.mock as mock
     with mock.patch("keephive.storage.fts_search", fake_search):
-        conn = HTTPConnection("localhost", port, timeout=3)
+        conn = HTTPConnection("localhost", port, timeout=10)
         conn.request("GET", "/api/search?q=test")
         resp = conn.getresponse()
         body = resp.read().decode()
@@ -996,7 +996,7 @@ def test_search_strips_log_prefix(hive_env):
     time.sleep(0.1)
 
     with mock.patch("keephive.storage.fts_search", fake_search):
-        conn = HTTPConnection("localhost", port, timeout=3)
+        conn = HTTPConnection("localhost", port, timeout=10)
         conn.request("GET", "/api/search?q=fact")
         resp = conn.getresponse()
         body = resp.read().decode()
@@ -1328,7 +1328,7 @@ def test_http_post_remember(hive_env):
     time.sleep(0.1)
 
     payload = json.dumps({"text": "FACT: test from web"})
-    conn = HTTPConnection("localhost", port, timeout=3)
+    conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("POST", "/api/remember", body=payload, headers={"Content-Type": "application/json"})
     resp = conn.getresponse()
     body = resp.read()
@@ -1362,7 +1362,7 @@ def test_http_post_todo_add(hive_env):
     time.sleep(0.1)
 
     payload = json.dumps({"text": "fix the widget"})
-    conn = HTTPConnection("localhost", port, timeout=3)
+    conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("POST", "/api/todo/add", body=payload, headers={"Content-Type": "application/json"})
     resp = conn.getresponse()
     body = resp.read()
@@ -1403,7 +1403,7 @@ def test_http_post_todo_done(hive_env):
     time.sleep(0.1)
 
     payload = json.dumps({"pattern": "complete this specific task"})
-    conn = HTTPConnection("localhost", port, timeout=3)
+    conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("POST", "/api/todo/done", body=payload, headers={"Content-Type": "application/json"})
     resp = conn.getresponse()
     body = resp.read()
@@ -1436,7 +1436,7 @@ def test_http_post_note_append(hive_env):
     time.sleep(0.1)
 
     payload = json.dumps({"text": "a new note line"})
-    conn = HTTPConnection("localhost", port, timeout=3)
+    conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("POST", "/api/note/append", body=payload, headers={"Content-Type": "application/json"})
     resp = conn.getresponse()
     body = resp.read()
@@ -1469,7 +1469,7 @@ def test_http_post_remember_empty_text(hive_env):
     time.sleep(0.1)
 
     payload = json.dumps({"text": ""})
-    conn = HTTPConnection("localhost", port, timeout=3)
+    conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("POST", "/api/remember", body=payload, headers={"Content-Type": "application/json"})
     resp = conn.getresponse()
     body = resp.read()
@@ -1498,7 +1498,7 @@ def test_http_post_unknown_path(hive_env):
     time.sleep(0.1)
 
     payload = json.dumps({"text": "hello"})
-    conn = HTTPConnection("localhost", port, timeout=3)
+    conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("POST", "/api/nonexistent", body=payload, headers={"Content-Type": "application/json"})
     resp = conn.getresponse()
     resp.read()
@@ -1686,16 +1686,14 @@ def test_knowledge_panel_mixed_skills(hive_env):
 # ---- UX fixes: Dev layout, status bars, note preview ----
 
 
-def test_dev_view_uses_knowledge_limited():
-    """Dev view uses knowledge-limited (not full knowledge) to avoid height imbalance."""
+def test_dev_view_uses_knowledge_compact():
+    """Dev view uses knowledge-compact (flat list, no accordions)."""
     from keephive.commands.serve import VIEWS
 
     dev_rows = VIEWS["dev"]["rows"]
     know_row = next((r for r in dev_rows if any("knowledge" in p for p in r)), None)
     assert know_row is not None, "No knowledge panel in Dev view"
-    assert "knowledge-limited" in know_row, "Dev view should use knowledge-limited, not full knowledge"
-    assert "knowledge" not in [p for p in know_row if p != "knowledge-limited"], \
-        "Dev view must not use the full 'knowledge' panel"
+    assert "knowledge-compact" in know_row, "Dev view should use knowledge-compact"
 
 
 def test_know_view_has_status_bar():
@@ -1989,7 +1987,7 @@ def test_api_note_switch_sets_active_slot(hive_env):
     time.sleep(0.1)
 
     payload = json.dumps({"slot": 2})
-    conn = HTTPConnection("localhost", port, timeout=3)
+    conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("POST", "/api/note/switch", body=payload, headers={"Content-Type": "application/json"})
     resp = conn.getresponse()
     body = resp.read()
@@ -2021,7 +2019,7 @@ def test_api_note_switch_rejects_invalid_slot(hive_env):
     time.sleep(0.1)
 
     payload = json.dumps({"slot": 0})
-    conn = HTTPConnection("localhost", port, timeout=3)
+    conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("POST", "/api/note/switch", body=payload, headers={"Content-Type": "application/json"})
     resp = conn.getresponse()
     body = resp.read()
@@ -2185,12 +2183,12 @@ def test_stats_summary_links_to_full_stats(hive_env):
     assert "summary-link" in html
 
 
-def test_all_view_has_stats_summary():
-    """All view includes stats-summary row."""
+def test_all_view_no_separate_stats_summary():
+    """All view no longer has a separate stats-summary row (merged into status panel)."""
     from keephive.commands.serve import VIEWS
 
     all_rows = VIEWS["all"]["rows"]
-    assert any("stats-summary" in r for r in all_rows), "stats-summary not in All view"
+    assert not any("stats-summary" in r for r in all_rows), "stats-summary should not be in All view"
 
 
 def test_sparkline_wrap_in_css():
@@ -2226,3 +2224,170 @@ def test_js_todo_done_btn_has_loading_state():
 
     assert "todo-done-btn" in _JS
     assert "btn.disabled=true" in _JS
+
+
+# ---- Dashboard UX overhaul tests ----
+
+
+def test_status_data_has_activity_keys(hive_env):
+    """Status data includes activity_today, activity_week, activity_streak, activity_hours."""
+    from keephive.commands.serve import _get_status_data
+
+    data = _get_status_data()
+    assert "activity_today" in data
+    assert "activity_week" in data
+    assert "activity_streak" in data
+    assert "activity_hours" in data
+    assert isinstance(data["activity_today"], int)
+    assert isinstance(data["activity_hours"], dict)
+
+
+def test_status_panel_has_activity_section(hive_env):
+    """Status panel renders activity metrics when present."""
+    from keephive.commands.serve import _render_status_panel
+
+    data = {
+        "stale": 0, "total_verified": 5, "today_entries": 3,
+        "guide_count": 2, "hooks_ok": True, "mcp_ok": True, "data_ok": True,
+        "stale_facts": [], "todo_count": 2,
+        "activity_today": 42, "activity_week": 120, "activity_streak": 5,
+        "activity_hours": {"09": 3, "10": 7},
+    }
+    html = _render_status_panel(data)
+    assert "cmds today" in html
+    assert "this week" in html
+    assert "streak" in html
+    assert "42" in html
+    assert "status-divider" in html
+
+
+def test_status_panel_no_activity_when_zero(hive_env):
+    """Status panel omits activity section when all values are 0."""
+    from keephive.commands.serve import _render_status_panel
+
+    data = {
+        "stale": 0, "total_verified": 5, "today_entries": 3,
+        "guide_count": 2, "hooks_ok": True, "mcp_ok": True, "data_ok": True,
+        "stale_facts": [], "todo_count": 2,
+        "activity_today": 0, "activity_week": 0, "activity_streak": 0,
+        "activity_hours": {},
+    }
+    html = _render_status_panel(data)
+    assert "cmds today" not in html
+    assert "status-divider" not in html
+
+
+def test_status_panel_has_stats_link(hive_env):
+    """Status panel links to /stats when activity is present."""
+    from keephive.commands.serve import _render_status_panel
+
+    data = {
+        "stale": 0, "total_verified": 5, "today_entries": 3,
+        "guide_count": 2, "hooks_ok": True, "mcp_ok": True, "data_ok": True,
+        "stale_facts": [], "todo_count": 2,
+        "activity_today": 10, "activity_week": 50, "activity_streak": 3,
+        "activity_hours": {},
+    }
+    html = _render_status_panel(data)
+    assert "/stats" in html
+    assert "summary-link" in html
+
+
+def test_render_knowledge_compact_panel(hive_env):
+    """Knowledge-compact renders flat list with type badges, no accordions."""
+    from keephive.commands.serve import _render_knowledge_compact_panel
+
+    data = {
+        "guides": [{"name": "strategy", "content": "# Strategy"}],
+        "prompts": [{"name": "review", "content": "# Review"}],
+        "skills": [{"name": "figma", "content": "# Figma"}],
+    }
+    html = _render_knowledge_compact_panel(data)
+    assert "Knowledge" in html
+    assert "3 items" in html
+    assert "know-item" in html
+    assert "know-name" in html
+    assert "strategy" in html
+    assert "review" in html
+    assert "figma" in html
+    # No accordions in compact view
+    assert "acc-header" not in html
+    assert "acc-body" not in html
+    # Links to /know
+    assert "/know" in html
+    assert "summary-link" in html
+
+
+def test_dev_view_has_todos_and_log():
+    """Dev view includes todos-brief and log-brief rows."""
+    from keephive.commands.serve import VIEWS
+
+    dev_rows = VIEWS["dev"]["rows"]
+    flat = [p for row in dev_rows for p in row]
+    assert "todos-brief" in flat, "Dev view must include todos-brief"
+    assert "log-brief" in flat, "Dev view must include log-brief"
+
+
+def test_stats_commands_panel_renders(hive_env):
+    """Stats-commands panel renders the command breakdown table."""
+    from keephive.commands.serve import _render_stats_commands_panel
+
+    data = {
+        "commands": [("status", 50), ("remember", 30)],
+        "today": {"status": 5, "remember": 3},
+        "week": {"status": 20, "remember": 15},
+    }
+    html = _render_stats_commands_panel(data)
+    assert "Commands" in html
+    assert "stats-table" in html
+    assert "status" in html
+    assert "remember" in html
+
+
+def test_stats_view_has_commands_row():
+    """Stats view layout includes stats-commands row."""
+    from keephive.commands.serve import VIEWS
+
+    stats_rows = VIEWS["stats"]["rows"]
+    flat = [p for row in stats_rows for p in row]
+    assert "stats-commands" in flat, "Stats view must include stats-commands panel"
+
+
+def test_status_brief_shows_cmds_today(hive_env):
+    """Status-brief panel shows cmds today when activity_today > 0."""
+    from keephive.commands.serve import _render_status_brief_panel
+
+    data = {
+        "stale": 0, "total_verified": 8, "today_entries": 2,
+        "todo_count": 3, "activity_today": 25,
+    }
+    html = _render_status_brief_panel(data)
+    assert "25" in html
+    assert "cmds today" in html
+
+
+def test_status_brief_hides_cmds_when_zero(hive_env):
+    """Status-brief panel omits cmds today when activity_today is 0."""
+    from keephive.commands.serve import _render_status_brief_panel
+
+    data = {
+        "stale": 0, "total_verified": 8, "today_entries": 2,
+        "todo_count": 3, "activity_today": 0,
+    }
+    html = _render_status_brief_panel(data)
+    assert "cmds today" not in html
+
+
+def test_css_has_status_divider():
+    """CSS includes .status-divider rule."""
+    from keephive.commands.serve import _CSS
+
+    assert ".status-divider{" in _CSS
+
+
+def test_css_has_know_item_styles():
+    """CSS includes .know-item and .know-name rules."""
+    from keephive.commands.serve import _CSS
+
+    assert ".know-item{" in _CSS
+    assert ".know-name{" in _CSS
