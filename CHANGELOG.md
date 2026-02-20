@@ -4,7 +4,7 @@
 
 ### Features
 
-- **`hive n todo` (edit-buffer review)**: Extract action items from a note slot. Both plain text lines and bullet lines under a `## todo` section become candidates; items over 120 chars are silently dropped as observations. Single item: `(y/n)` prompt. Multiple items: opens `$EDITOR` with candidates — delete lines you don't want, save to confirm.
+- **`hive n todo` (edit-buffer review)**: Extract action items from a note slot. Both plain text lines and bullet lines under a `## todo` section become candidates; items over 120 chars are silently dropped as observations. Single item: `(y/n)` prompt. Multiple items: opens `$EDITOR` with the **full note**, candidates pre-marked with `- `, non-candidate bullets stripped to plain text context. Delete or rephrase any `- ` lines, save to confirm. Exiting without saving (no mtime change) cancels — works with neovim `:q!`.
 - **`hive 4 "text"` quick-append**: Append text directly to a note slot without opening an editor. `hive 4 "fix auth bug"` appends to slot 4; multi-word bare args are joined automatically.
 - **Bare-digit note dispatch**: `hive 4`, `hive 4 todo`, and `hive 4 "text"` all work — bare digits route to `cmd_note_slot` without needing the `n.` prefix.
 - **Active draft indicator**: `hive s` shows a single consolidated "Active draft: slot N · preview (W words)  ->  hive nc" line at the bottom. Removed the duplicate early hint.
@@ -18,8 +18,8 @@
 
 ### Tests
 
-- 864 tests total (up from 823)
-- New: `tests/test_note_todify.py` (15 tests — structured extraction, LLM fallback, edit-buffer review, bare-digit dispatch, long-item filtering, plain-line extraction)
+- 867 tests total (up from 823)
+- New: `tests/test_note_todify.py` (18 tests — structured extraction, LLM fallback, edit-buffer review, bare-digit dispatch, long-item filtering, plain-line extraction, mtime cancel detection, `_build_todo_buffer` helper)
 - Extended: `tests/test_note.py` — 5 new tests for quick-append (`hive 4 "text"`, multiword, newline handling, editor fallback, list subcommand)
 - Extended: `tests/test_sessionstart_logic.py` — `TestSessionSignal` class (3 tests: recent signal blocks injection, stale signal allows injection, no signal runs normally)
 - Updated: `tests/test_note.py`, `tests/test_e2e_flows.py` — note indicator assertions updated to new "Active draft" format

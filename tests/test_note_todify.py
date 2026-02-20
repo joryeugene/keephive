@@ -7,11 +7,17 @@ from pathlib import Path
 from unittest.mock import patch
 
 from keephive.commands.note import (
+    _build_todo_buffer,
     _extract_structured_items,
     _note_extract_todos,
 )
 from keephive.models import NoteExtractResponse
 from keephive.storage import daily_dir, open_todos, slot_file
+
+
+def _accept_all(*args, **kwargs):
+    """Mock editor that touches the file (updates mtime) without changing content."""
+    Path(args[0][1]).touch()
 
 
 def test_todify_structured(hive_env, monkeypatch):
@@ -21,7 +27,7 @@ def test_todify_structured(hive_env, monkeypatch):
         "- prompt library figma\n- andy feedback loess\n\n## done\n- old task\n"
     )
     monkeypatch.setenv("HIVE_SKIP_LLM", "1")
-    monkeypatch.setattr("subprocess.run", lambda *a, **kw: None)
+    monkeypatch.setattr("subprocess.run", _accept_all)
 
     _note_extract_todos(4)
 
@@ -45,7 +51,7 @@ def test_todify_prose(hive_env, monkeypatch):
     mock_response = NoteExtractResponse(
         items=["fix auth bug before demo", "update Figma spec before design review"]
     )
-    monkeypatch.setattr("subprocess.run", lambda *a, **kw: None)
+    monkeypatch.setattr("subprocess.run", _accept_all)
 
     with patch("keephive.commands.note.run_claude_pipe", return_value=mock_response):
         _note_extract_todos(1)
@@ -85,7 +91,7 @@ def test_todify_conversation(hive_env, monkeypatch):
     mock_response = NoteExtractResponse(
         items=["merge PR after adoption goals sign-off", "add LOESS smoothing to graph"]
     )
-    monkeypatch.setattr("subprocess.run", lambda *a, **kw: None)
+    monkeypatch.setattr("subprocess.run", _accept_all)
 
     with patch("keephive.commands.note.run_claude_pipe", return_value=mock_response):
         _note_extract_todos(3)
@@ -188,7 +194,7 @@ def test_todify_long_item_filtered_at_extraction(hive_env, monkeypatch):
     monkeypatch.setenv("HIVE_SKIP_LLM", "1")
 
     # Only 2 short items remain after filtering → editor opens, accept all
-    monkeypatch.setattr("subprocess.run", lambda *a, **kw: None)
+    monkeypatch.setattr("subprocess.run", _accept_all)
 
     _note_extract_todos(4)
 
@@ -205,7 +211,7 @@ def test_todify_all_short_offers_add_all(hive_env, monkeypatch):
     """All short items: editor opens and all are accepted."""
     slot_file(3).write_text("- fix auth bug\n- update spec\n- add tests\n")
     monkeypatch.setenv("HIVE_SKIP_LLM", "1")
-    monkeypatch.setattr("subprocess.run", lambda *a, **kw: None)
+    monkeypatch.setattr("subprocess.run", _accept_all)
 
     _note_extract_todos(3)
 
@@ -214,46 +220,62 @@ def test_todify_all_short_offers_add_all(hive_env, monkeypatch):
 
 
 def test_todify_editor_buffer_review(hive_env, monkeypatch):
-    """Editor deletes one line — only remaining items are added as TODOs."""
+    """Editor deletes one '- ' line — only remaining items are added as TODOs."""
     slot_file(1).write_text("- fix auth bug\n- update spec\n- add tests\n")
     monkeypatch.setenv("HIVE_SKIP_LLM", "1")
 
-    def delete_first_item(*args, **kwargs):
+    def delete_first_todo(*args, **kwargs):
         path = Path(args[0][1])
         lines = path.read_text().splitlines()
         result = []
         deleted = False
         for line in lines:
-            if not deleted and line.strip() and not line.strip().startswith("#"):
+            if not deleted and line.startswith("- "):
                 deleted = True
                 continue
             result.append(line)
         path.write_text("\n".join(result) + "\n")
 
-    monkeypatch.setattr("subprocess.run", delete_first_item)
+    monkeypatch.setattr("subprocess.run", delete_first_todo)
 
     _note_extract_todos(1)
 
     todos = open_todos()
     texts = [t for _, _, t in todos]
     assert len(texts) == 2
-    assert not any("fix auth bug" in t for t in texts)
     assert any("update spec" in t for t in texts)
     assert any("add tests" in t for t in texts)
 
 
 def test_todify_editor_all_deleted(hive_env, monkeypatch):
-    """Editor clears the file — no TODOs created."""
+    """Editor removes all '- ' lines — no TODOs created."""
     slot_file(2).write_text("- task one\n- task two\n")
     monkeypatch.setenv("HIVE_SKIP_LLM", "1")
 
-    def clear_file(*args, **kwargs):
+    def clear_todos(*args, **kwargs):
         path = Path(args[0][1])
-        path.write_text("")
+        # Keep non-'- ' lines (instruction, blank lines) but strip all todo markers
+        lines = [
+            ln for ln in path.read_text().splitlines() if not ln.startswith("- ")
+        ]
+        path.write_text("\n".join(lines) + "\n")
 
-    monkeypatch.setattr("subprocess.run", clear_file)
+    monkeypatch.setattr("subprocess.run", clear_todos)
 
     _note_extract_todos(2)
+
+    assert len(open_todos()) == 0
+
+
+def test_todify_no_save_cancels(hive_env, monkeypatch):
+    """Exiting editor without saving (mtime unchanged) cancels — no TODOs created."""
+    slot_file(1).write_text("- task one\n- task two\n")
+    monkeypatch.setenv("HIVE_SKIP_LLM", "1")
+
+    # No-op: editor does nothing, file mtime does not change
+    monkeypatch.setattr("subprocess.run", lambda *a, **kw: None)
+
+    _note_extract_todos(1)
 
     assert len(open_todos()) == 0
 
@@ -272,3 +294,31 @@ def test_extract_structured_includes_plain_lines():
     assert "prompt library start" in items
     assert "pr approved" in items
     assert "figma" in items
+
+
+def test_build_todo_buffer_marks_candidates(hive_env):
+    """Candidates are pre-marked with '- ', non-candidate bullets stripped to plain text."""
+    content = "## todo\n- fix auth bug\n- update spec\n\n## done\n- old task\n"
+    candidates = {"fix auth bug", "update spec"}
+    buf = _build_todo_buffer(content, candidates)
+    lines = buf.splitlines()
+
+    # Candidates are pre-marked
+    assert "- fix auth bug" in lines
+    assert "- update spec" in lines
+    # Non-candidate bullet (done section) is stripped to plain text
+    assert "old task" in lines
+    assert "- old task" not in lines
+    # Instruction line is present
+    assert any('Lines starting with "- "' in ln for ln in lines)
+
+
+def test_build_todo_buffer_unmatched(hive_env):
+    """LLM-extracted items not found in note are appended after '---' separator."""
+    content = "Just some prose about the project."
+    candidates = {"fix auth bug", "add tests"}
+    buf = _build_todo_buffer(content, candidates)
+
+    assert "---" in buf
+    assert "- fix auth bug" in buf
+    assert "- add tests" in buf

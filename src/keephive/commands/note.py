@@ -195,6 +195,55 @@ def _extract_structured_items(content: str) -> list[str]:
     return [item for item in items if len(item) <= 120]
 
 
+def _build_todo_buffer(note_content: str, candidates: set[str]) -> str:
+    """Build edit buffer from full note, pre-marking extracted candidates with '- '.
+
+    Non-candidate bullet lines are stripped of their prefix (shown as plain text
+    context). Lines starting with '- ' in the result become TODOs after editing.
+    Unmatched candidates (from LLM extraction) are appended after '---'.
+    """
+    lines = note_content.splitlines()
+    result = [
+        'Lines starting with "- " become TODOs. Delete any you don\'t want. Save and quit to confirm.',
+        "",
+    ]
+    matched: set[str] = set()
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            result.append("")
+            continue
+
+        # Extract text content regardless of bullet prefix
+        if stripped.startswith(("- [ ] ", "- [x] ", "- [X] ")):
+            text = stripped[6:].strip()
+        elif stripped.startswith(("- ", "* ", "• ")):
+            text = stripped.lstrip("-*•").strip()
+        else:
+            text = stripped
+
+        if text in candidates:
+            result.append(f"- {text}")
+            matched.add(text)
+        elif stripped.startswith("#"):
+            result.append(line)  # section headers: keep as-is
+        elif stripped.startswith(("- ", "* ", "• ")):
+            result.append(text)  # non-candidate bullets: strip prefix (context)
+        else:
+            result.append(line)  # plain text: keep as-is
+
+    # Append unmatched candidates (LLM-extracted items not found in note)
+    unmatched = [c for c in candidates if c not in matched]
+    if unmatched:
+        result.append("")
+        result.append("---")
+        for item in unmatched:
+            result.append(f"- {item}")
+
+    return "\n".join(result)
+
+
 def _note_extract_todos(slot: int) -> None:
     """Extract action items from note slot and offer to add as TODOs."""
     from datetime import datetime as _datetime
@@ -232,34 +281,31 @@ def _note_extract_todos(slot: int) -> None:
         console.print(f"[dim]No action items found in slot {slot}.[/dim]")
         return
 
-    console.print(f"\nFound {len(items)} item(s):\n")
-    for i, item in enumerate(items, 1):
-        console.print(f"  {i}. {item}")
-    console.print()
-
     if len(items) == 1:
+        console.print(f"\n  1. {items[0]}\n")
         if not prompt_yn("Add as TODO?"):
             console.print("[dim]Cancelled.[/dim]")
             return
         selected = items
     else:
         review_path = working_dir() / ".todo-candidates.md"
-        header = (
-            "# Review TODO candidates\n"
-            "# Delete lines you don't want. Edit to rephrase.\n"
-            "# Lines starting with # are ignored. Save and quit to confirm.\n\n"
-        )
-        review_path.write_text(header + "\n".join(items) + "\n")
+        buffer = _build_todo_buffer(content, set(items))
+        review_path.write_text(buffer)
+        mtime_before = review_path.stat().st_mtime
         editor = os.environ.get("EDITOR", "vi")
         subprocess.run([editor, str(review_path)])
         if not review_path.exists():
-            console.print("[dim]No items added.[/dim]")
+            console.print("[dim]Cancelled.[/dim]")
+            return
+        if review_path.stat().st_mtime == mtime_before:
+            console.print("[dim]Cancelled.[/dim]")
+            review_path.unlink(missing_ok=True)
             return
         raw = review_path.read_text()
         review_path.unlink(missing_ok=True)
         selected = [
-            ln.strip() for ln in raw.splitlines()
-            if ln.strip() and not ln.strip().startswith("#")
+            ln[2:].strip() for ln in raw.splitlines()
+            if ln.startswith("- ") and ln[2:].strip()
         ]
 
     if not selected:
