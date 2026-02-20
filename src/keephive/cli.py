@@ -73,13 +73,13 @@ def _help() -> None:
 
 Usage: hive <command> [args]
 
-Memory
+Daily
   s, status            Status overview
   r, remember <text>   Save insight to daily log
   rc, recall <query>   Search all memory tiers
+  l, log [date]        View daily log (today, yesterday, N, YYYY-MM-DD)
   m, mem [rm] <text>   Add/remove working memory facts
   rule [rm] <text>     Add/remove behavioral rules
-  l, log [date]        View daily log (today, yesterday, N, YYYY-MM-DD)
 
 Todo
   to, todo             List open TODOs + due recurring

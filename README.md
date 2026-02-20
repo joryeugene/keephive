@@ -119,26 +119,33 @@ keephive uses the three extension points Claude Code exposes:
 
 | Command                 | Short             | What                                       |
 | ----------------------- | ----------------- | ------------------------------------------ |
+| **Daily**               |                   |                                            |
 | `hive status`           | `hive s`          | Status overview                            |
 | `hive remember "text"`  | `hive r "text"`   | Save to daily log                          |
 | `hive recall <query>`   | `hive rc <query>` | Search all tiers                           |
-| `hive mem [rm] <text>`  | `hive m`          | Add/remove working memory facts            |
-| `hive rule [rm] <text>` |                   | Add/remove behavioral rules                |
-| `hive verify`           | `hive v`          | Verify stale facts                         |
-| `hive session [mode]`   | `hive go`         | Launch interactive session                 |
+| `hive log [date]`       | `hive l`          | View daily log; `hive l summarize` for LLM summary |
 | `hive todo`             | `hive td`         | Open TODOs with ages                       |
 | `hive todo done <pat>`  |                   | Mark TODO complete                         |
 | `hive t <text>`         |                   | Quick-add a TODO                           |
-| `hive edit <target>`    | `hive e`          | Edit memory, rules, todos, etc.            |
+| `hive note`             | `hive n`          | Multi-slot scratchpad ($EDITOR)            |
+| **Reference**           |                   |                                            |
+| `hive knowledge`        | `hive k`          | List/view knowledge guides                 |
+| `hive prompt`           | `hive p`          | List/use prompt templates                  |
+| **Sessions**            |                   |                                            |
+| `hive session [mode]`   | `hive go`         | Launch interactive session                 |
+| **Analysis**            |                   |                                            |
+| `hive verify`           | `hive v`          | Verify stale facts                         |
 | `hive reflect`          | `hive rf`         | Pattern scan across daily logs             |
 | `hive audit`            | `hive a`          | Quality Pulse: 3 perspectives + synthesis  |
 | `hive standup`          | `hive su`         | Standup summary with GitHub PR integration |
 | `hive stats`            | `hive st`         | Usage statistics                           |
-| `hive log [date]`       | `hive l`          | View daily log; `hive l summarize` for LLM summary |
-| `hive note`             | `hive n`          | Multi-slot scratchpad ($EDITOR)            |
-| `hive knowledge`        | `hive k`          | List/view knowledge guides                 |
-| `hive prompt`           | `hive p`          | List/use prompt templates                  |
+| `hive ps`               |                   | Active sessions, project activity, git state |
+| **Advanced**            |                   |                                            |
+| `hive mem [rm] <text>`  | `hive m`          | Add/remove working memory facts            |
+| `hive rule [rm] <text>` |                   | Add/remove behavioral rules                |
+| `hive edit <target>`    | `hive e`          | Edit memory, rules, todos, etc.            |
 | `hive skill`            | `hive sk`         | Manage skill plugins                       |
+| **Maintenance**         |                   |                                            |
 | `hive doctor`           | `hive dr`         | Health check                               |
 | `hive gc`               | `hive g`          | Archive old logs                           |
 | `hive setup`            |                   | Register hooks and MCP server              |
@@ -146,37 +153,17 @@ keephive uses the three extension points Claude Code exposes:
 
 ### Features in depth
 
-#### Reflect
+#### Log Summarize
 
-`hive rf` scans daily logs for recurring patterns across multiple days. When it finds a theme, `hive rf draft <topic>` generates a knowledge guide from the matching entries. This is how scattered daily notes become structured reference material.
-
-#### Audit
-
-`hive a` runs three parallel LLM analyses on your memory state (fact accuracy, data hygiene, strategic gaps), then synthesizes them into a quality score with actionable suggestions.
-
-#### Standup
-
-`hive su` generates a standup summary from recent daily log activity and optionally includes GitHub PR data.
-
-#### Notes
-
-`hive n` is a multi-slot scratchpad. Each slot persists across sessions, auto-copies to clipboard on save, and can be initialized from a prompt template (`hive n <template>`). Use `hive n.2` to switch slots.
-
-#### Prompts
-
-`hive p` lists reusable prompt templates stored in `knowledge/prompts/`. Use them to start notes (`hive n <template>`) or launch custom sessions (`hive session <template>`).
-
-#### Stats
-
-`hive st` shows usage statistics with per-project breakdown, session streaks, and activity sparklines.
+`hive l summarize` pipes today's log entries to claude-haiku and prints 3-5 bullet-point highlights. Useful after long sessions before compaction.
 
 #### Smart Recall
 
 `hive rc <query>` uses an SQLite FTS5 index over all daily logs and the archive for ranked full-text search. Run `hive gc` to rebuild the index. Falls back to grep if the index is absent.
 
-#### Log Summarize
+#### Notes
 
-`hive l summarize` pipes today's log entries to claude-haiku and prints 3-5 bullet-point highlights. Useful after long sessions before compaction.
+`hive n` is a multi-slot scratchpad. Each slot persists across sessions, auto-copies to clipboard on save, and can be initialized from a prompt template (`hive n <template>`). Use `hive n.2` to switch slots.
 
 #### Edit
 
@@ -194,6 +181,26 @@ keephive uses the three extension points Claude Code exposes:
 | `hive session learn`    | Active recall quiz on recent decisions         |
 | `hive session reflect`  | Pattern discovery from daily logs              |
 | `hive session <prompt>` | Load a custom prompt from `knowledge/prompts/` |
+
+#### Reflect
+
+`hive rf` scans daily logs for recurring patterns across multiple days. When it finds a theme, `hive rf draft <topic>` generates a knowledge guide from the matching entries. This is how scattered daily notes become structured reference material.
+
+#### Audit
+
+`hive a` runs three parallel LLM analyses on your memory state (fact accuracy, data hygiene, strategic gaps), then synthesizes them into a quality score with actionable suggestions.
+
+#### Standup
+
+`hive su` generates a standup summary from recent daily log activity and optionally includes GitHub PR data.
+
+#### Stats
+
+`hive st` shows usage statistics with per-project breakdown, session streaks, and activity sparklines.
+
+#### Prompts
+
+`hive p` lists reusable prompt templates stored in `knowledge/prompts/`. Use them to start notes (`hive n <template>`) or launch custom sessions (`hive session <template>`).
 
 ### MCP tools
 

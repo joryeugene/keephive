@@ -130,7 +130,7 @@ class TestHelpRewrite:
 
         _help()
         out = capsys.readouterr().out
-        assert "Memory" in out
+        assert "Daily" in out
         assert "Todo" in out
         assert "Knowledge" in out
         assert "Analysis" in out

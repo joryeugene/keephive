@@ -595,7 +595,7 @@ def test_help_shows_grouped_sections():
     """Help text has grouped sections and key commands."""
     r = _run(["help"])
     assert r.returncode == 0
-    assert "Memory" in r.stdout
+    assert "Daily" in r.stdout
     assert "Todo" in r.stdout
     assert "Knowledge" in r.stdout
     assert "Analysis" in r.stdout
