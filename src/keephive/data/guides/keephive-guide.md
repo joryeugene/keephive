@@ -175,6 +175,94 @@ After finishing work:
 - `hive rf` to find patterns in daily logs
 - `hive k edit <name>` to create a knowledge guide
 
+## Dashboard
+
+`hive serve` (or `hive ws`) launches a live web dashboard at localhost:3847.
+
+### When to use each view
+
+| View   | Path      | Use when you need                        |
+| ------ | --------- | ---------------------------------------- |
+| All    | `/`       | Full picture of everything               |
+| Daily  | `/daily`  | Session work: log, TODOs, standup        |
+| Dev    | `/dev`    | Quick reference while coding             |
+| Simple | `/simple` | Minimal distraction                      |
+| Stats  | `/stats`  | Usage patterns, command breakdown        |
+| Know   | `/know`   | Deep-read knowledge guides               |
+| Mem    | `/mem`    | Review working memory and rules          |
+| Notes  | `/notes`  | Scratchpad with slot switching           |
+
+### Layout principle
+
+Dynamic content (log, TODOs) sits at the top. Static content (standup, knowledge, memory) sits at the bottom. Real-time status is always the first row.
+
+### Tips
+
+- **Cmd+K** opens search across all memory tiers
+- **Auto-refresh** interval is configurable via the dropdown (5s to 60s, or off)
+- **Date navigation** in `/daily` view lets you browse past days
+- **Bookmarklet** (`hive ui-install`) captures UI feedback from any page and queues it for your next Claude Code prompt
+
+### Architecture
+
+```
+             +---------+
+             | Browser |
+             +----+----+
+                  |
+          GET / POST (localhost:3847)
+                  |
+          +-------v--------+
+          |  _HiveHandler  |
+          +--+-----+------++
+             |     |      |
+     GET /   | /api/   POST /api/
+     (page)  | fragment   (CRUD)
+             |
+     +-------v-------+  +----------+
+     | render_page   |  | storage  |
+     | render_fragment|  | .py      |
+     +-------+-------+  +----------+
+             |
+     +-------v-------+
+     | PANELS dict   |
+     | 18 panels     |
+     +---------------+
+```
+
+### View layouts
+
+```
+All (/)                 Daily (/daily)
++------------------+    +------------------+
+| status  |   ps   |    | status  |   ps   |
++------------------+    +------------------+
+| log-home         |    | log (date nav)   |
++------------------+    +------------------+
+| todos            |    | todos | recurring|
++------------------+    +------------------+
+| knowledge-limited|    | standup          |
++------------------+    +------------------+
+| memory  | notes  |
++------------------+    Dev (/dev)
+                        +------------------+
+Stats (/stats)          | status-brief     |
++------------------+    +------------------+
+| stats   |   ps   |    | todos  | log     |
++------------------+    +------------------+
+| stats-commands   |    | facts            |
++------------------+    +------------------+
+                        | knowledge| memory|
+Simple (/simple)        +------------------+
++------------------+
+| status-brief     |    Know / Mem / Notes
++------------------+    +------------------+
+| log     | todos  |    | status-brief     |
++------------------+    +------------------+
+                        | [content]        |
+                        +------------------+
+```
+
 ## LLM Features and Costs
 
 ### Default is always free

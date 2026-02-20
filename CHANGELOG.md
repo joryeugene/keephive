@@ -6,9 +6,25 @@
 
 - **`hive serve [port]`** (`hive ws`): Live web dashboard at localhost:3847 with 8 views (all, daily, dev, simple, stats, know, mem, notes). Auto-refresh with configurable interval, dark theme, zero external dependencies.
 - **Markdown rendering**: Knowledge guides, prompts, and notes render as formatted HTML (headers, bold, code blocks, tables, lists, links). Pure Python stdlib regex renderer, no CDN calls.
+- **Activity merged into Status panel**: Commands today, this week, streak, and hourly heatmap display inline in the Status card. Separate stats-summary panel removed from All view.
+- **Knowledge-compact panel**: Flat list with type badges (guide/prompt/skill) for the Dev view. Links to `/know` for full detail.
+- **Stats-commands split**: Sparkline+heatmap in the Stats panel, command breakdown table in a separate Stats-commands panel.
+- **Dev view expansion**: `todos-brief` + `log-brief` row for active work context alongside facts and reference material.
+- **View reordering**: Dynamic content (log, TODOs) at top, static content (standup, knowledge, memory) at bottom. Applied to Daily and Dev views.
+- **Sparkline polish**: 14-day bars with day-of-week labels, weekend shading, and today highlight.
+- **Loading states**: Opacity transition on refresh, button disable during CRUD operations.
+- **Log type filters**: Filter bar appears when >10 entries with multiple types. Client-side show/hide by category.
+- **Note slot switcher**: Buttons to switch active slot from the Notes panel. `POST /api/note/switch` endpoint.
+- **Note previews**: Collapsed note accordions show a text preview snippet in the header.
+- **Web CRUD endpoints**: `POST /api/remember`, `/api/todo/add`, `/api/todo/done`, `/api/note/append`, `/api/note/switch`. Forms embedded in Log, TODO, and Notes panels.
+- **Search cleanup**: Session log lines filtered from results, `- [HH:MM:SS] ` prefix stripped from display.
 - **`hive ui`**: Show pending UI feedback in queue.
 - **`hive ui-install`**: Print bookmarklet `javascript:` URL to drag to bookmarks bar. Click any element on `hive serve` (or any page), add a note via voice or typing, submit — context is queued and injected into your next Claude Code prompt.
 - **`hive ui-clear`**: Discard pending UI feedback queue.
+
+### Guides
+
+- **keephive-lifecycle.md**: New bundled guide documenting the information hierarchy (daily log at the base, working memory for verified facts, knowledge guides for deep reference, archive for old logs).
 
 ### Hooks
 

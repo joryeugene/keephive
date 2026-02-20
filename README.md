@@ -57,10 +57,11 @@ After a few sessions, `hive` shows what your agent has learned:
 
 ```console
 $ hive
-keephive v0.13.0
+keephive v0.14.0
   ● hooks  ● mcp  ● data
 
   4 facts (4 ok) | 12 today | 8 yesterday | 2 guides | 48K
+  42 cmds today · 120 this week · 5d streak ▁▂▅▃█▇▂▁▁▃▅▆▇█▂▁▁▁▁▁▁▁▁
 
   1 open TODO(s):
     [today] Add rate limiting to the /upload endpoint.
@@ -157,6 +158,23 @@ keephive uses the three extension points Claude Code exposes:
 
 ### Features in depth
 
+#### Dashboard
+
+`hive serve` launches a live web dashboard at localhost:3847 with 8 views:
+
+| View   | Path      | Focus                                              |
+| ------ | --------- | -------------------------------------------------- |
+| All    | `/`       | Everything: status, log, TODOs, knowledge, memory, notes |
+| Daily  | `/daily`  | Active session: log with date nav, TODOs+recurring, standup |
+| Dev    | `/dev`    | Quick reference: TODOs+log, facts, knowledge+memory compact |
+| Simple | `/simple` | Minimal: status, log, TODOs                        |
+| Stats  | `/stats`  | Usage: sparkline, heatmap, streak, command breakdown |
+| Know   | `/know`   | Knowledge guides with markdown rendering            |
+| Mem    | `/mem`    | Working memory + rules                              |
+| Notes  | `/notes`  | Multi-slot scratchpad with switcher                 |
+
+Auto-refresh (configurable interval), Cmd+K search, split-pane resizing, CRUD forms (remember, add TODO, mark done, append note), log type filters, and a bookmarklet for capturing UI feedback. Zero external dependencies.
+
 #### Log Summarize
 
 `hive l summarize` pipes today's log entries to claude-haiku and prints 3-5 bullet-point highlights. Useful after long sessions before compaction.
@@ -204,7 +222,7 @@ keephive uses the three extension points Claude Code exposes:
 
 #### Stats
 
-`hive st` shows usage statistics with per-project breakdown, session streaks, and activity sparklines.
+`hive st` shows usage statistics with per-project breakdown, session streaks, and activity sparklines. The dashboard stats view (`/stats`) adds a 14-day sparkline with day-of-week labels and weekend shading, an hourly heatmap, and a sortable command breakdown table.
 
 #### Prompts
 

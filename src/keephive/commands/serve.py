@@ -1693,9 +1693,9 @@ VIEWS: dict[str, dict] = {
         "title": "Daily",
         "rows": [
             ["status", "ps"],
-            ["standup"],
             ["log"],
             ["todos", "recurring"],
+            ["standup"],
         ],
     },
     "dev": {
@@ -1703,9 +1703,9 @@ VIEWS: dict[str, dict] = {
         "title": "Dev",
         "rows": [
             ["status-brief"],
-            ["knowledge-compact", "memory"],
-            ["facts"],
             ["todos-brief", "log-brief"],
+            ["facts"],
+            ["knowledge-compact", "memory"],
         ],
     },
     "simple": {

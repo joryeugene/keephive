@@ -2391,3 +2391,42 @@ def test_css_has_know_item_styles():
 
     assert ".know-item{" in _CSS
     assert ".know-name{" in _CSS
+
+
+# ---- View ordering: dynamic at top, static at bottom ----
+
+
+def test_daily_view_log_before_standup():
+    """Log (dynamic) comes before standup (static once-a-day)."""
+    from keephive.commands.serve import VIEWS
+
+    rows = VIEWS["daily"]["rows"]
+    flat = [p for row in rows for p in row]
+    log_idx = flat.index("log")
+    standup_idx = flat.index("standup")
+    assert log_idx < standup_idx, f"log ({log_idx}) should come before standup ({standup_idx})"
+
+
+def test_dev_view_todos_log_before_knowledge_memory():
+    """Active content (todos, log) above static reference (knowledge, memory)."""
+    from keephive.commands.serve import VIEWS
+
+    rows = VIEWS["dev"]["rows"]
+    flat = [p for row in rows for p in row]
+    todos_idx = flat.index("todos-brief")
+    log_idx = flat.index("log-brief")
+    know_idx = flat.index("knowledge-compact")
+    mem_idx = flat.index("memory")
+    assert todos_idx < know_idx, f"todos-brief ({todos_idx}) should come before knowledge-compact ({know_idx})"
+    assert log_idx < mem_idx, f"log-brief ({log_idx}) should come before memory ({mem_idx})"
+
+
+def test_focused_views_status_before_content():
+    """In know/mem/notes, status-brief is first row (real-time), content is second."""
+    from keephive.commands.serve import VIEWS
+
+    for view_name in ("know", "mem", "notes"):
+        rows = VIEWS[view_name]["rows"]
+        assert len(rows) >= 2, f"{view_name} should have at least 2 rows"
+        assert "status-brief" in rows[0], f"{view_name} first row should contain status-brief"
+        assert "status-brief" not in rows[1], f"{view_name} second row should be content, not status-brief"
