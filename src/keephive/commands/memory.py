@@ -114,7 +114,7 @@ def _rule_review() -> None:
         console.print("[dim]No pending rule suggestions.[/dim]")
         return
 
-    lines = [l for l in pending_path.read_text().splitlines() if l.strip().startswith("- ")]
+    lines = [ln for ln in pending_path.read_text().splitlines() if ln.strip().startswith("- ")]
     if not lines:
         console.print("[dim]No pending rule suggestions.[/dim]")
         pending_path.write_text("")
@@ -124,14 +124,14 @@ def _rule_review() -> None:
     remaining = []
     for line in lines:
         rule_text = line.lstrip("- ").strip()
-        console.print(f"\n  Suggested rule:")
+        console.print("\n  Suggested rule:")
         console.print(f"  [bold]{rule_text}[/bold]")
         console.print()
         response = input("  Add to rules.md? [y/N/e(dit)]: ").strip().lower()
         if response == "y":
             accepted.append(rule_text)
         elif response.startswith("e"):
-            edited = input(f"  Edit rule: ").strip()
+            edited = input("  Edit rule: ").strip()
             if edited:
                 accepted.append(edited)
             else:
