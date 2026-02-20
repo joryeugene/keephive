@@ -31,7 +31,7 @@ HELP: dict[str, str] = {
     "update": "Usage: hive up\n  Upgrade keephive to the latest version in-place",
     "setup": "Usage: hive setup\n  Initial setup: register MCP server + hooks in ~/.claude/",
     "ps": "Usage: hive ps\n  Local hive map: active claude sessions, recent project activity, git state",
-    "serve": "Usage: hive serve [port]\n  Live web dashboard at localhost:3847 (default)\n  Views: / /daily /dev /simple /stats /know /mem /notes\n  Auto-refresh, markdown rendering, 8 views",
+    "serve": "Usage: hive serve [port] [--hot]\n  Live web dashboard at localhost:3847 (default)\n  Views: / /daily /dev /simple /stats /know /mem /notes\n  --hot  Watch source files, auto-restart on change",
     "ui": "Usage: hive ui [install|clear]\n  ui           Show pending UI feedback queue\n  ui-install   Print bookmarklet URL (drag to bookmarks bar)\n  ui-clear     Clear pending feedback",
 }
 

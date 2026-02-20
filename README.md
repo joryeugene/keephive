@@ -125,6 +125,7 @@ flowchart TD
         RCL["hive rc / hive_recall\nsearch all tiers"]
         VRF["hive v / verify\nauto-correct stale facts"]
         DASH["hive serve\nweb dashboard"]
+        BOOK["bookmarklet\ncapture → POST"]
     end
 
     START -->|reads| MEM & GUIDES & RULES & TODOS
@@ -137,6 +138,8 @@ flowchart TD
     RCL -.->|searches| MEM & GUIDES & LOG
     VRF --> MEM
     DASH -.->|reads all| STORE
+    BOOK -->|"/ui-feedback"| DASH
+    DASH -->|".ui-queue"| WORK
 ```
 
 ### Memory tiers
@@ -214,7 +217,9 @@ flowchart TD
 | Mem    | `/mem`    | Working memory + rules                              |
 | Notes  | `/notes`  | Multi-slot scratchpad with switcher                 |
 
-Auto-refresh (configurable interval), Cmd+K search, split-pane resizing, CRUD forms (remember, add TODO, mark done, append note), log type filters, and a bookmarklet for capturing UI feedback. Zero external dependencies.
+Auto-refresh (configurable interval), Cmd+K search, split-pane resizing, CRUD forms (remember, add TODO, mark done, append note), log type filters, and zero external dependencies.
+
+**UI feedback loop**: `hive ui-install` generates a bookmarklet and copies it to your clipboard. Paste it as a bookmark URL, then click it on any page to capture an element selector and a note. The feedback is POSTed to the dashboard server, queued in `.ui-queue`, and automatically injected into your next Claude Code prompt via the UserPromptSubmit hook. No copy-paste required.
 
 #### Log Summarize
 

@@ -8,10 +8,7 @@ hive ui-clear     Clear pending feedback
 from __future__ import annotations
 
 import json
-import sys
 from urllib.parse import quote
-
-from keephive.commands.serve import DEFAULT_PORT
 
 # Bookmarklet source (runs on click; posts element context to hive serve)
 _BOOKMARKLET_SRC = """(function(){

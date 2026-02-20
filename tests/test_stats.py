@@ -611,7 +611,6 @@ class TestHourlySparkline:
     def test_display_full_includes_hourly(self, hive_env, capsys):
         """_display_full shows hourly sparkline when hours data exists."""
         from keephive.commands.stats import _display_full
-        from keephive.storage import stats_file
 
         today_str = date.today().isoformat()
         from datetime import datetime

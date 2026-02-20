@@ -133,9 +133,7 @@ def cmd_status(args: list[str]) -> None:
         today_cmds = sum(today_data_st.get("commands", {}).values())
         week_ago = (date.today() - timedelta(days=7)).isoformat()
         week_cmds = sum(
-            sum(dd.get("commands", {}).values())
-            for ds, dd in days_data.items()
-            if ds >= week_ago
+            sum(dd.get("commands", {}).values()) for ds, dd in days_data.items() if ds >= week_ago
         )
         curr_streak, _ = _calculate_streak(days_data)
         activity_parts = [

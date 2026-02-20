@@ -6,7 +6,6 @@ import json
 from io import StringIO
 from unittest.mock import patch
 
-
 # ---- ui_queue_path ----
 
 
@@ -29,7 +28,7 @@ def test_format_ui_context_all_fields():
     data = {
         "page": "http://localhost:3847/daily",
         "selector": ".todo-item",
-        "html": "<div class=\"todo-item\">Fix modal</div>",
+        "html": '<div class="todo-item">Fix modal</div>',
         "styles": "padding: 8px",
         "note": "fix the color",
     }
@@ -50,9 +49,7 @@ def test_format_ui_context_extracts_note_after_marker():
     from keephive.hooks.userpromptsubmit import _format_ui_context
 
     # Bookmarklet pre-fills textarea with context header; user appends after "Note: "
-    textarea_value = (
-        "[UI Feedback]\nPage: http://localhost\nElement: .btn\n\nNote: make it orange"
-    )
+    textarea_value = "[UI Feedback]\nPage: http://localhost\nElement: .btn\n\nNote: make it orange"
     data = {
         "page": "http://localhost",
         "selector": ".btn",
@@ -109,11 +106,13 @@ def test_cmd_ui_shows_pending(hive_env, capsys):
 
     queue = ui_queue_path()
     queue.write_text(
-        json.dumps({
-            "page": "http://localhost:3847",
-            "selector": ".card",
-            "note": "alignment is off",
-        })
+        json.dumps(
+            {
+                "page": "http://localhost:3847",
+                "selector": ".card",
+                "note": "alignment is off",
+            }
+        )
     )
 
     cmd_ui([])
@@ -164,11 +163,13 @@ def test_hook_injects_queue_to_stdout(hive_env, capsys):
 
     queue = ui_queue_path()
     queue.write_text(
-        json.dumps({
-            "page": "http://localhost:3847/daily",
-            "selector": ".log-entry",
-            "note": "timestamp too dim",
-        })
+        json.dumps(
+            {
+                "page": "http://localhost:3847/daily",
+                "selector": ".log-entry",
+                "note": "timestamp too dim",
+            }
+        )
     )
 
     _call_hook({"session_id": "test-session-ui"})
@@ -262,7 +263,9 @@ def test_hook_reads_project_scoped_queue(hive_env, capsys):
     # Write to project-scoped queue
     project_queue = ui_queue_path("keephive-serve")
     project_queue.write_text(
-        json.dumps({"page": "http://localhost:3847", "selector": ".card", "note": "scoped feedback"})
+        json.dumps(
+            {"page": "http://localhost:3847", "selector": ".card", "note": "scoped feedback"}
+        )
     )
 
     _call_hook({"session_id": "s1", "cwd": "/Users/jory/Documents/GitHub/keephive-serve"})
@@ -306,9 +309,8 @@ def test_hook_ignores_other_project_queue(hive_env, capsys):
 
     # This hook call is for 'myproject' — should not consume 'other-project' queue
     # No global queue exists, no myproject queue exists — hook should produce no queue output
-    with patch("sys.stdout", StringIO()) as mock_stdout:
+    with patch("sys.stdout", StringIO()):
         _call_hook({"session_id": "s3", "cwd": "/Users/jory/myproject"})
-        output = mock_stdout.getvalue()
 
     # The other-project queue must still exist (not consumed)
     assert other_queue.exists(), "Queue for a different project must not be consumed"

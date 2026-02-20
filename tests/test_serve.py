@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 import threading
 import time
 from http.client import HTTPConnection
 from pathlib import Path
-
 
 # ---- Markdown renderer tests ----
 
@@ -258,7 +255,7 @@ def _start_test_server(port: int, hive_home: str) -> threading.Thread:
 
     os.environ["HIVE_HOME"] = hive_home
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     handler = type("H", (_HiveHandler,), {"server_port": port})
     httpd = HTTPServer(("localhost", port), handler)
@@ -274,7 +271,7 @@ def test_http_server_serves_root(hive_env, unused_tcp_port=13847):
 
     os.environ["HIVE_HOME"] = str(hive_env)
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     port = unused_tcp_port
     _HiveHandler.server_port = port
@@ -305,7 +302,7 @@ def test_http_server_serves_fragment(hive_env):
 
     os.environ["HIVE_HOME"] = str(hive_env)
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     port = 13848
     _HiveHandler.server_port = port
@@ -332,7 +329,7 @@ def test_http_server_ui_feedback_post(hive_env):
 
     os.environ["HIVE_HOME"] = str(hive_env)
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     port = 13849
     _HiveHandler.server_port = port
@@ -346,7 +343,7 @@ def test_http_server_ui_feedback_post(hive_env):
     conn = HTTPConnection("localhost", port, timeout=10)
     conn.request("POST", "/ui-feedback", body=payload, headers={"Content-Type": "application/json"})
     resp = conn.getresponse()
-    body = resp.read()
+    resp.read()
     conn.close()
     httpd.server_close()
 
@@ -363,7 +360,7 @@ def test_http_server_cors_headers(hive_env):
 
     os.environ["HIVE_HOME"] = str(hive_env)
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     port = 13850
     _HiveHandler.server_port = port
@@ -459,7 +456,10 @@ def test_render_status_panel_stale_accordion(hive_env):
 
     data = {
         "stale": 2,
-        "stale_facts": ["FACT: the sky is green [verified:2020-01-01]", "FACT: water is dry [verified:2020-01-01]"],
+        "stale_facts": [
+            "FACT: the sky is green [verified:2020-01-01]",
+            "FACT: water is dry [verified:2020-01-01]",
+        ],
         "total_verified": 10,
         "today_entries": 3,
         "guide_count": 1,
@@ -500,10 +500,7 @@ def test_all_view_log_home_see_more(hive_env):
     """When log has >10 entries, log-home panel shows 'See all' link to /daily."""
     from keephive.commands.serve import _render_log_home_panel
 
-    fake_entries = [
-        {"time": f"10:0{i % 10}", "text": f"Entry {i}", "cat": ""}
-        for i in range(12)
-    ]
+    fake_entries = [{"time": f"10:0{i % 10}", "text": f"Entry {i}", "cat": ""} for i in range(12)]
     data = {"entries": fake_entries, "date": "2026-01-01"}
     html = _render_log_home_panel(data)
     assert "/daily" in html
@@ -589,7 +586,7 @@ def test_http_server_search_returns_json(hive_env):
 
     os.environ["HIVE_HOME"] = str(hive_env)
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     port = 13851
     _HiveHandler.server_port = port
@@ -618,7 +615,7 @@ def test_http_server_search_empty_query(hive_env):
 
     os.environ["HIVE_HOME"] = str(hive_env)
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     port = 13852
     _HiveHandler.server_port = port
@@ -649,7 +646,7 @@ def test_http_server_fragment_log_date(hive_env):
 
     os.environ["HIVE_HOME"] = str(hive_env)
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     port = 13853
     _HiveHandler.server_port = port
@@ -676,7 +673,6 @@ def test_http_server_fragment_log_date(hive_env):
 
 def test_hot_flag_enters_watcher_not_server(hive_env, monkeypatch):
     """--hot with no HIVE_SERVE_WORKER env var calls _hot_watcher, not HTTPServer."""
-    import os
 
     monkeypatch.delenv("HIVE_SERVE_WORKER", raising=False)
 
@@ -719,7 +715,10 @@ def test_hot_flag_worker_env_skips_watcher(hive_env, monkeypatch):
 
     monkeypatch.setattr("keephive.commands.serve._hot_watcher", fake_watcher)
     # Can't actually start HTTPServer in test, so patch that too
-    monkeypatch.setattr("keephive.commands.serve.HTTPServer", lambda *a, **k: (_ for _ in ()).throw(OSError("test skip")))
+    monkeypatch.setattr(
+        "keephive.commands.serve.HTTPServer",
+        lambda *a, **k: (_ for _ in ()).throw(OSError("test skip")),
+    )
 
     from keephive.commands.serve import cmd_serve
 
@@ -731,15 +730,13 @@ def test_hot_flag_worker_env_skips_watcher(hive_env, monkeypatch):
 
 
 def test_log_data_classifies_done(hive_env):
-    from datetime import date
 
     from keephive.commands.serve import _get_log_data
     from keephive.storage import daily_file
 
-    today = date.today().isoformat()
     daily_file().write_text(
-        f"- [10:00:00] DONE: finished the auth module\n"
-        f"- [10:01:00] AUTO-PROMOTED: old fact promoted\n"
+        "- [10:00:00] DONE: finished the auth module\n"
+        "- [10:01:00] AUTO-PROMOTED: old fact promoted\n"
     )
     data = _get_log_data()
     cats = {e["cat"] for e in data["entries"]}
@@ -748,7 +745,6 @@ def test_log_data_classifies_done(hive_env):
 
 
 def test_log_data_done_cat_not_blank(hive_env):
-    from datetime import date
 
     from keephive.commands.serve import _get_log_data
     from keephive.storage import daily_file
@@ -826,10 +822,13 @@ def test_memory_panel_empty_shows_empty_div(hive_env):
 def test_log_panel_fact_shows_badge():
     from keephive.commands.serve import _render_log_panel
 
-    data = {"entries": [{"time": "10:00", "text": "FACT: the sky is blue", "cat": "fact"}], "date": "2026-01-01"}
+    data = {
+        "entries": [{"time": "10:00", "text": "FACT: the sky is blue", "cat": "fact"}],
+        "date": "2026-01-01",
+    }
     html = _render_log_panel(data, show_nav=False)
-    assert 'log-tag-fact' in html
-    assert 'FACT' in html
+    assert "log-tag-fact" in html
+    assert "FACT" in html
     # Text span has category class for line coloring AND badge inside
     assert 'class="log-text fact"' in html
 
@@ -837,36 +836,48 @@ def test_log_panel_fact_shows_badge():
 def test_log_panel_decision_badge():
     from keephive.commands.serve import _render_log_panel
 
-    data = {"entries": [{"time": "10:01", "text": "DECISION: chose X", "cat": "decision"}], "date": "2026-01-01"}
+    data = {
+        "entries": [{"time": "10:01", "text": "DECISION: chose X", "cat": "decision"}],
+        "date": "2026-01-01",
+    }
     html = _render_log_panel(data, show_nav=False)
-    assert 'log-tag-decision' in html
-    assert 'DEC' in html
+    assert "log-tag-decision" in html
+    assert "DEC" in html
 
 
 def test_log_panel_done_badge():
     from keephive.commands.serve import _render_log_panel
 
-    data = {"entries": [{"time": "10:02", "text": "DONE: finished it", "cat": "done"}], "date": "2026-01-01"}
+    data = {
+        "entries": [{"time": "10:02", "text": "DONE: finished it", "cat": "done"}],
+        "date": "2026-01-01",
+    }
     html = _render_log_panel(data, show_nav=False)
-    assert 'log-tag-done' in html
-    assert 'DONE' in html
+    assert "log-tag-done" in html
+    assert "DONE" in html
 
 
 def test_log_panel_auto_badge():
     from keephive.commands.serve import _render_log_panel
 
-    data = {"entries": [{"time": "10:03", "text": "AUTO-PROMOTED: old fact", "cat": "auto"}], "date": "2026-01-01"}
+    data = {
+        "entries": [{"time": "10:03", "text": "AUTO-PROMOTED: old fact", "cat": "auto"}],
+        "date": "2026-01-01",
+    }
     html = _render_log_panel(data, show_nav=False)
-    assert 'log-tag-auto' in html
-    assert 'AUTO' in html
+    assert "log-tag-auto" in html
+    assert "AUTO" in html
 
 
 def test_log_panel_no_cat_no_badge():
     from keephive.commands.serve import _render_log_panel
 
-    data = {"entries": [{"time": "10:04", "text": "some plain note", "cat": ""}], "date": "2026-01-01"}
+    data = {
+        "entries": [{"time": "10:04", "text": "some plain note", "cat": ""}],
+        "date": "2026-01-01",
+    }
     html = _render_log_panel(data, show_nav=False)
-    assert 'log-tag' not in html
+    assert "log-tag" not in html
 
 
 def test_css_has_both_badge_and_line_color_classes():
@@ -896,8 +907,8 @@ def test_knowledge_panel_shows_guide_divider(hive_env):
         "skills": [],
     }
     html = _render_knowledge_panel(data)
-    assert 'know-divider' in html
-    assert 'Guides' in html
+    assert "know-divider" in html
+    assert "Guides" in html
 
 
 def test_knowledge_panel_shows_all_dividers(hive_env):
@@ -909,10 +920,10 @@ def test_knowledge_panel_shows_all_dividers(hive_env):
         "skills": [{"name": "skill-one", "content": ""}],
     }
     html = _render_knowledge_panel(data)
-    assert html.count('know-divider') == 3
-    assert 'Guides' in html
-    assert 'Prompts' in html
-    assert 'Skills' in html
+    assert html.count("know-divider") == 3
+    assert "Guides" in html
+    assert "Prompts" in html
+    assert "Skills" in html
 
 
 def test_knowledge_panel_no_divider_for_empty_section(hive_env):
@@ -920,7 +931,7 @@ def test_knowledge_panel_no_divider_for_empty_section(hive_env):
 
     data = {"guides": [], "prompts": [], "skills": []}
     html = _render_knowledge_panel(data)
-    assert 'know-divider' not in html
+    assert "know-divider" not in html
 
 
 # ---- Fix 6: Search result cleanup ----
@@ -935,12 +946,8 @@ def test_search_filters_session_lines(hive_env):
     import time
     from http.client import HTTPConnection
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
-    from keephive.storage import fts_search
-
     # Monkey-patch fts_search to return a mix of real and session results
-    import keephive.commands.serve as serve_mod
-    orig_search = None
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     def fake_search(query, limit=20):
         return [
@@ -956,6 +963,7 @@ def test_search_filters_session_lines(hive_env):
     time.sleep(0.1)
 
     import unittest.mock as mock
+
     with mock.patch("keephive.storage.fts_search", fake_search):
         conn = HTTPConnection("localhost", port, timeout=10)
         conn.request("GET", "/api/search?q=test")
@@ -965,6 +973,7 @@ def test_search_filters_session_lines(hive_env):
     httpd.server_close()
 
     import json as _json
+
     data = _json.loads(body)
     lines = [r["line"] for r in data["results"]]
     assert all("session" not in ln for ln in lines), f"Session line leaked: {lines}"
@@ -973,17 +982,16 @@ def test_search_filters_session_lines(hive_env):
 
 def test_search_strips_log_prefix(hive_env):
     """Search results strip the `- [HH:MM:SS] ` prefix."""
+    import json as _json
     import os
     import threading
     import time
     import unittest.mock as mock
     from http.client import HTTPConnection
 
-    import json as _json
-
     os.environ["HIVE_HOME"] = str(hive_env)
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     def fake_search(query, limit=20):
         return [{"date": "2026-01-01", "line": "- [10:00:00] FACT: clean result"}]
@@ -1025,9 +1033,15 @@ def test_render_status_panel_shows_open_todos(hive_env):
     from keephive.commands.serve import _render_status_panel
 
     data = {
-        "stale": 0, "total_verified": 5, "today_entries": 3,
-        "guide_count": 2, "hooks_ok": True, "mcp_ok": True, "data_ok": True,
-        "stale_facts": [], "todo_count": 7,
+        "stale": 0,
+        "total_verified": 5,
+        "today_entries": 3,
+        "guide_count": 2,
+        "hooks_ok": True,
+        "mcp_ok": True,
+        "data_ok": True,
+        "stale_facts": [],
+        "todo_count": 7,
     }
     html = _render_status_panel(data)
     assert "open todos" in html
@@ -1038,9 +1052,15 @@ def test_render_status_panel_clearer_labels(hive_env):
     from keephive.commands.serve import _render_status_panel
 
     data = {
-        "stale": 0, "total_verified": 10, "today_entries": 4,
-        "guide_count": 3, "hooks_ok": True, "mcp_ok": True, "data_ok": True,
-        "stale_facts": [], "todo_count": 2,
+        "stale": 0,
+        "total_verified": 10,
+        "today_entries": 4,
+        "guide_count": 3,
+        "hooks_ok": True,
+        "mcp_ok": True,
+        "data_ok": True,
+        "stale_facts": [],
+        "todo_count": 2,
     }
     html = _render_status_panel(data)
     assert "verified facts" in html
@@ -1056,8 +1076,11 @@ def test_render_status_brief_panel_clearer_labels(hive_env):
     from keephive.commands.serve import _render_status_brief_panel
 
     data = {
-        "stale": 0, "total_verified": 8, "today_entries": 2,
-        "guide_count": 1, "todo_count": 3,
+        "stale": 0,
+        "total_verified": 8,
+        "today_entries": 2,
+        "guide_count": 1,
+        "todo_count": 3,
     }
     html = _render_status_brief_panel(data)
     assert "verified facts" in html
@@ -1073,9 +1096,16 @@ def test_status_panel_shows_logged_yesterday(hive_env):
     from keephive.commands.serve import _render_status_panel
 
     data = {
-        "stale": 0, "total_verified": 30, "today_entries": 66,
-        "yesterday_entries": 42, "guide_count": 12, "todo_count": 15,
-        "hooks_ok": True, "mcp_ok": True, "data_ok": True, "stale_facts": [],
+        "stale": 0,
+        "total_verified": 30,
+        "today_entries": 66,
+        "yesterday_entries": 42,
+        "guide_count": 12,
+        "todo_count": 15,
+        "hooks_ok": True,
+        "mcp_ok": True,
+        "data_ok": True,
+        "stale_facts": [],
     }
     html = _render_status_panel(data)
     assert "logged yesterday" in html
@@ -1226,7 +1256,10 @@ def test_log_panel_strips_fact_prefix():
     """When FACT badge is shown, 'FACT: ' prefix is stripped from display text."""
     from keephive.commands.serve import _render_log_panel
 
-    data = {"entries": [{"time": "10:00", "text": "FACT: the sky is blue", "cat": "fact"}], "date": "2026-01-01"}
+    data = {
+        "entries": [{"time": "10:00", "text": "FACT: the sky is blue", "cat": "fact"}],
+        "date": "2026-01-01",
+    }
     html = _render_log_panel(data, show_nav=False)
     assert "log-tag-fact" in html  # badge present
     assert "FACT: the sky is blue" not in html  # full prefixed text gone
@@ -1236,7 +1269,10 @@ def test_log_panel_strips_fact_prefix():
 def test_log_panel_strips_todo_prefix():
     from keephive.commands.serve import _render_log_panel
 
-    data = {"entries": [{"time": "10:00", "text": "TODO: fix the thing", "cat": "todo"}], "date": "2026-01-01"}
+    data = {
+        "entries": [{"time": "10:00", "text": "TODO: fix the thing", "cat": "todo"}],
+        "date": "2026-01-01",
+    }
     html = _render_log_panel(data, show_nav=False)
     assert "log-tag-todo" in html
     assert "TODO: fix the thing" not in html
@@ -1246,7 +1282,10 @@ def test_log_panel_strips_todo_prefix():
 def test_log_panel_strips_done_prefix():
     from keephive.commands.serve import _render_log_panel
 
-    data = {"entries": [{"time": "10:00", "text": "DONE: shipped feature", "cat": "done"}], "date": "2026-01-01"}
+    data = {
+        "entries": [{"time": "10:00", "text": "DONE: shipped feature", "cat": "done"}],
+        "date": "2026-01-01",
+    }
     html = _render_log_panel(data, show_nav=False)
     assert "log-tag-done" in html
     assert "DONE: shipped feature" not in html
@@ -1256,7 +1295,10 @@ def test_log_panel_strips_done_prefix():
 def test_log_panel_strips_auto_promoted_prefix():
     from keephive.commands.serve import _render_log_panel
 
-    data = {"entries": [{"time": "10:00", "text": "AUTO-PROMOTED: old fact text", "cat": "auto"}], "date": "2026-01-01"}
+    data = {
+        "entries": [{"time": "10:00", "text": "AUTO-PROMOTED: old fact text", "cat": "auto"}],
+        "date": "2026-01-01",
+    }
     html = _render_log_panel(data, show_nav=False)
     assert "log-tag-auto" in html
     assert "AUTO-PROMOTED: old fact text" not in html
@@ -1267,7 +1309,10 @@ def test_log_panel_no_cat_no_strip():
     """Entries without a category keep their text unchanged."""
     from keephive.commands.serve import _render_log_panel
 
-    data = {"entries": [{"time": "10:00", "text": "plain note text", "cat": ""}], "date": "2026-01-01"}
+    data = {
+        "entries": [{"time": "10:00", "text": "plain note text", "cat": ""}],
+        "date": "2026-01-01",
+    }
     html = _render_log_panel(data, show_nav=False)
     assert "plain note text" in html
 
@@ -1328,7 +1373,7 @@ def test_http_post_remember(hive_env):
 
     os.environ["HIVE_HOME"] = str(hive_env)
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     port = 13870
     _HiveHandler.server_port = port
@@ -1340,7 +1385,9 @@ def test_http_post_remember(hive_env):
 
     payload = json.dumps({"text": "FACT: test from web"})
     conn = HTTPConnection("localhost", port, timeout=10)
-    conn.request("POST", "/api/remember", body=payload, headers={"Content-Type": "application/json"})
+    conn.request(
+        "POST", "/api/remember", body=payload, headers={"Content-Type": "application/json"}
+    )
     resp = conn.getresponse()
     body = resp.read()
     conn.close()
@@ -1352,6 +1399,7 @@ def test_http_post_remember(hive_env):
 
     # Entry should appear in today's daily log
     from keephive.storage import daily_file
+
     log_text = daily_file().read_text()
     assert "FACT: test from web" in log_text
 
@@ -1362,7 +1410,7 @@ def test_http_post_todo_add(hive_env):
 
     os.environ["HIVE_HOME"] = str(hive_env)
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     port = 13871
     _HiveHandler.server_port = port
@@ -1374,7 +1422,9 @@ def test_http_post_todo_add(hive_env):
 
     payload = json.dumps({"text": "fix the widget"})
     conn = HTTPConnection("localhost", port, timeout=10)
-    conn.request("POST", "/api/todo/add", body=payload, headers={"Content-Type": "application/json"})
+    conn.request(
+        "POST", "/api/todo/add", body=payload, headers={"Content-Type": "application/json"}
+    )
     resp = conn.getresponse()
     body = resp.read()
     conn.close()
@@ -1385,6 +1435,7 @@ def test_http_post_todo_add(hive_env):
     assert data["ok"] is True
 
     from keephive.storage import daily_file
+
     log_text = daily_file().read_text()
     assert "TODO: fix the widget" in log_text
 
@@ -1403,7 +1454,7 @@ def test_http_post_todo_done(hive_env):
     ts = datetime.now().strftime("%H:%M:%S")
     append_to_daily(f"- [{ts}] TODO: complete this specific task")
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     port = 13872
     _HiveHandler.server_port = port
@@ -1415,7 +1466,9 @@ def test_http_post_todo_done(hive_env):
 
     payload = json.dumps({"pattern": "complete this specific task"})
     conn = HTTPConnection("localhost", port, timeout=10)
-    conn.request("POST", "/api/todo/done", body=payload, headers={"Content-Type": "application/json"})
+    conn.request(
+        "POST", "/api/todo/done", body=payload, headers={"Content-Type": "application/json"}
+    )
     resp = conn.getresponse()
     body = resp.read()
     conn.close()
@@ -1436,7 +1489,7 @@ def test_http_post_note_append(hive_env):
 
     os.environ["HIVE_HOME"] = str(hive_env)
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     port = 13873
     _HiveHandler.server_port = port
@@ -1448,7 +1501,9 @@ def test_http_post_note_append(hive_env):
 
     payload = json.dumps({"text": "a new note line"})
     conn = HTTPConnection("localhost", port, timeout=10)
-    conn.request("POST", "/api/note/append", body=payload, headers={"Content-Type": "application/json"})
+    conn.request(
+        "POST", "/api/note/append", body=payload, headers={"Content-Type": "application/json"}
+    )
     resp = conn.getresponse()
     body = resp.read()
     conn.close()
@@ -1459,6 +1514,7 @@ def test_http_post_note_append(hive_env):
     assert data["ok"] is True
 
     from keephive.storage import active_slot, slot_file
+
     note_text = slot_file(active_slot()).read_text()
     assert "a new note line" in note_text
 
@@ -1469,7 +1525,7 @@ def test_http_post_remember_empty_text(hive_env):
 
     os.environ["HIVE_HOME"] = str(hive_env)
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     port = 13874
     _HiveHandler.server_port = port
@@ -1481,7 +1537,9 @@ def test_http_post_remember_empty_text(hive_env):
 
     payload = json.dumps({"text": ""})
     conn = HTTPConnection("localhost", port, timeout=10)
-    conn.request("POST", "/api/remember", body=payload, headers={"Content-Type": "application/json"})
+    conn.request(
+        "POST", "/api/remember", body=payload, headers={"Content-Type": "application/json"}
+    )
     resp = conn.getresponse()
     body = resp.read()
     conn.close()
@@ -1498,7 +1556,7 @@ def test_http_post_unknown_path(hive_env):
 
     os.environ["HIVE_HOME"] = str(hive_env)
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     port = 13875
     _HiveHandler.server_port = port
@@ -1510,7 +1568,9 @@ def test_http_post_unknown_path(hive_env):
 
     payload = json.dumps({"text": "hello"})
     conn = HTTPConnection("localhost", port, timeout=10)
-    conn.request("POST", "/api/nonexistent", body=payload, headers={"Content-Type": "application/json"})
+    conn.request(
+        "POST", "/api/nonexistent", body=payload, headers={"Content-Type": "application/json"}
+    )
     resp = conn.getresponse()
     resp.read()
     conn.close()
@@ -1530,7 +1590,7 @@ def test_log_panel_has_quick_remember_form(hive_env):
     html = _render_log_panel(data)
     assert "panel-input" in html
     assert "/api/remember" in html
-    assert 'placeholder' in html
+    assert "placeholder" in html
 
 
 def test_todo_panel_has_add_form(hive_env):
@@ -1545,9 +1605,10 @@ def test_todo_panel_has_add_form(hive_env):
 
 def test_todo_panel_has_done_buttons(hive_env):
     """TODO panel renders ✓ button for each TODO item."""
+    from datetime import date
+
     from keephive.commands.serve import _render_todo_panel
 
-    from datetime import date
     today = date.today().isoformat()
     data = {
         "todos": [(today, "10:00", "fix the thing"), (today, "10:01", "do the other")],
@@ -1602,7 +1663,6 @@ def test_js_has_todo_done_handler():
 
 def test_knowledge_data_reads_skill_md(hive_env, monkeypatch, tmp_path):
     """_get_knowledge_data reads SKILL.md from skill directories."""
-    from pathlib import Path
 
     skills_dir = tmp_path / ".claude" / "skills"
     skills_dir.mkdir(parents=True)
@@ -1622,7 +1682,6 @@ def test_knowledge_data_reads_skill_md(hive_env, monkeypatch, tmp_path):
 
 def test_knowledge_data_skill_without_skill_md(hive_env, monkeypatch, tmp_path):
     """Skills without SKILL.md get empty content string."""
-    from pathlib import Path
 
     skills_dir = tmp_path / ".claude" / "skills"
     skills_dir.mkdir(parents=True)
@@ -1690,8 +1749,8 @@ def test_knowledge_panel_mixed_skills(hive_env):
     html = _render_knowledge_panel(data)
     assert "rich-skill" in html
     assert "bare-skill" in html
-    assert "&#9654;" in html   # expandable chevron for rich-skill
-    assert "&#8212;" in html   # em-dash for bare-skill
+    assert "&#9654;" in html  # expandable chevron for rich-skill
+    assert "&#8212;" in html  # em-dash for bare-skill
 
 
 # ---- UX fixes: Dev layout, status bars, note preview ----
@@ -1830,7 +1889,13 @@ def test_stats_panel_renders_sparkline_when_data(hive_env):
         "curr_streak": 3,
         "longest_streak": 5,
         "projects": [],
-        "daily_spark": [("Feb 01", 0, "2026-02-01"), ("Feb 02", 10, "2026-02-02"), ("Feb 03", 5, "2026-02-03"), ("Feb 04", 0, "2026-02-04"), ("Feb 05", 20, "2026-02-05")],
+        "daily_spark": [
+            ("Feb 01", 0, "2026-02-01"),
+            ("Feb 02", 10, "2026-02-02"),
+            ("Feb 03", 5, "2026-02-03"),
+            ("Feb 04", 0, "2026-02-04"),
+            ("Feb 05", 20, "2026-02-05"),
+        ],
     }
     html = _render_stats_panel(data)
     assert "spark-bar" in html
@@ -1988,7 +2053,7 @@ def test_api_note_switch_sets_active_slot(hive_env):
 
     os.environ["HIVE_HOME"] = str(hive_env)
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     port = 13876
     _HiveHandler.server_port = port
@@ -1999,7 +2064,9 @@ def test_api_note_switch_sets_active_slot(hive_env):
 
     payload = json.dumps({"slot": 2})
     conn = HTTPConnection("localhost", port, timeout=10)
-    conn.request("POST", "/api/note/switch", body=payload, headers={"Content-Type": "application/json"})
+    conn.request(
+        "POST", "/api/note/switch", body=payload, headers={"Content-Type": "application/json"}
+    )
     resp = conn.getresponse()
     body = resp.read()
     conn.close()
@@ -2011,6 +2078,7 @@ def test_api_note_switch_sets_active_slot(hive_env):
 
     # Verify the active slot was actually switched
     from keephive.storage import active_slot
+
     assert active_slot() == 2
 
 
@@ -2020,7 +2088,7 @@ def test_api_note_switch_rejects_invalid_slot(hive_env):
 
     os.environ["HIVE_HOME"] = str(hive_env)
 
-    from keephive.commands.serve import _HiveHandler, HTTPServer
+    from keephive.commands.serve import HTTPServer, _HiveHandler
 
     port = 13877
     _HiveHandler.server_port = port
@@ -2031,7 +2099,9 @@ def test_api_note_switch_rejects_invalid_slot(hive_env):
 
     payload = json.dumps({"slot": 0})
     conn = HTTPConnection("localhost", port, timeout=10)
-    conn.request("POST", "/api/note/switch", body=payload, headers={"Content-Type": "application/json"})
+    conn.request(
+        "POST", "/api/note/switch", body=payload, headers={"Content-Type": "application/json"}
+    )
     resp = conn.getresponse()
     body = resp.read()
     conn.close()
@@ -2199,7 +2269,9 @@ def test_all_view_no_separate_stats_summary():
     from keephive.commands.serve import VIEWS
 
     all_rows = VIEWS["all"]["rows"]
-    assert not any("stats-summary" in r for r in all_rows), "stats-summary should not be in All view"
+    assert not any("stats-summary" in r for r in all_rows), (
+        "stats-summary should not be in All view"
+    )
 
 
 def test_sparkline_wrap_in_css():
@@ -2258,10 +2330,18 @@ def test_status_panel_has_activity_section(hive_env):
     from keephive.commands.serve import _render_status_panel
 
     data = {
-        "stale": 0, "total_verified": 5, "today_entries": 3,
-        "guide_count": 2, "hooks_ok": True, "mcp_ok": True, "data_ok": True,
-        "stale_facts": [], "todo_count": 2,
-        "activity_today": 42, "activity_week": 120, "activity_streak": 5,
+        "stale": 0,
+        "total_verified": 5,
+        "today_entries": 3,
+        "guide_count": 2,
+        "hooks_ok": True,
+        "mcp_ok": True,
+        "data_ok": True,
+        "stale_facts": [],
+        "todo_count": 2,
+        "activity_today": 42,
+        "activity_week": 120,
+        "activity_streak": 5,
         "activity_hours": {"09": 3, "10": 7},
     }
     html = _render_status_panel(data)
@@ -2277,10 +2357,18 @@ def test_status_panel_no_activity_when_zero(hive_env):
     from keephive.commands.serve import _render_status_panel
 
     data = {
-        "stale": 0, "total_verified": 5, "today_entries": 3,
-        "guide_count": 2, "hooks_ok": True, "mcp_ok": True, "data_ok": True,
-        "stale_facts": [], "todo_count": 2,
-        "activity_today": 0, "activity_week": 0, "activity_streak": 0,
+        "stale": 0,
+        "total_verified": 5,
+        "today_entries": 3,
+        "guide_count": 2,
+        "hooks_ok": True,
+        "mcp_ok": True,
+        "data_ok": True,
+        "stale_facts": [],
+        "todo_count": 2,
+        "activity_today": 0,
+        "activity_week": 0,
+        "activity_streak": 0,
         "activity_hours": {},
     }
     html = _render_status_panel(data)
@@ -2293,10 +2381,18 @@ def test_status_panel_has_stats_link(hive_env):
     from keephive.commands.serve import _render_status_panel
 
     data = {
-        "stale": 0, "total_verified": 5, "today_entries": 3,
-        "guide_count": 2, "hooks_ok": True, "mcp_ok": True, "data_ok": True,
-        "stale_facts": [], "todo_count": 2,
-        "activity_today": 10, "activity_week": 50, "activity_streak": 3,
+        "stale": 0,
+        "total_verified": 5,
+        "today_entries": 3,
+        "guide_count": 2,
+        "hooks_ok": True,
+        "mcp_ok": True,
+        "data_ok": True,
+        "stale_facts": [],
+        "todo_count": 2,
+        "activity_today": 10,
+        "activity_week": 50,
+        "activity_streak": 3,
         "activity_hours": {},
     }
     html = _render_status_panel(data)
@@ -2369,8 +2465,11 @@ def test_status_brief_shows_cmds_today(hive_env):
     from keephive.commands.serve import _render_status_brief_panel
 
     data = {
-        "stale": 0, "total_verified": 8, "today_entries": 2,
-        "todo_count": 3, "activity_today": 25,
+        "stale": 0,
+        "total_verified": 8,
+        "today_entries": 2,
+        "todo_count": 3,
+        "activity_today": 25,
     }
     html = _render_status_brief_panel(data)
     assert "25" in html
@@ -2382,8 +2481,11 @@ def test_status_brief_hides_cmds_when_zero(hive_env):
     from keephive.commands.serve import _render_status_brief_panel
 
     data = {
-        "stale": 0, "total_verified": 8, "today_entries": 2,
-        "todo_count": 3, "activity_today": 0,
+        "stale": 0,
+        "total_verified": 8,
+        "today_entries": 2,
+        "todo_count": 3,
+        "activity_today": 0,
     }
     html = _render_status_brief_panel(data)
     assert "cmds today" not in html
@@ -2428,7 +2530,9 @@ def test_dev_view_todos_log_before_knowledge_memory():
     log_idx = flat.index("log-brief")
     know_idx = flat.index("knowledge-compact")
     mem_idx = flat.index("memory")
-    assert todos_idx < know_idx, f"todos-brief ({todos_idx}) should come before knowledge-compact ({know_idx})"
+    assert todos_idx < know_idx, (
+        f"todos-brief ({todos_idx}) should come before knowledge-compact ({know_idx})"
+    )
     assert log_idx < mem_idx, f"log-brief ({log_idx}) should come before memory ({mem_idx})"
 
 
@@ -2440,7 +2544,9 @@ def test_focused_views_status_before_content():
         rows = VIEWS[view_name]["rows"]
         assert len(rows) >= 2, f"{view_name} should have at least 2 rows"
         assert "status-brief" in rows[0], f"{view_name} first row should contain status-brief"
-        assert "status-brief" not in rows[1], f"{view_name} second row should be content, not status-brief"
+        assert "status-brief" not in rows[1], (
+            f"{view_name} second row should be content, not status-brief"
+        )
 
 
 # ---- Notes compact panel ----
@@ -2478,7 +2584,7 @@ def test_render_notes_compact_active_highlight(hive_env):
 
     data = {"slots": [{"slot": 1, "content": "text", "lines": 1, "active": True}]}
     html = _render_notes_compact_panel(data)
-    assert 'note-tile active' in html
+    assert "note-tile active" in html
 
 
 def test_render_notes_compact_links_to_notes(hive_env):
@@ -2510,7 +2616,12 @@ def test_render_notes_compact_has_tile_body(hive_env):
     data = {
         "slots": [
             {"slot": 1, "content": "Slot 1\n**bold content** here.", "lines": 2, "active": True},
-            {"slot": 3, "content": "Slot 3\n- list item one\n- list item two", "lines": 3, "active": False},
+            {
+                "slot": 3,
+                "content": "Slot 3\n- list item one\n- list item two",
+                "lines": 3,
+                "active": False,
+            },
         ]
     }
     html = _render_notes_compact_panel(data)
@@ -2541,7 +2652,7 @@ def test_render_notes_compact_strips_slot_header_from_body(hive_env):
     assert "Real content" in html
     # note-tile-body should not contain the "Slot 1" line
     body_start = html.index("note-tile-body")
-    body_section = html[body_start:body_start + 200]
+    body_section = html[body_start : body_start + 200]
     assert "Slot 1" not in body_section
 
 

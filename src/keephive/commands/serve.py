@@ -645,7 +645,8 @@ def _get_status_data() -> dict:
     except Exception:
         todo_count = 0
 
-    from datetime import date as _date, timedelta as _timedelta
+    from datetime import date as _date
+    from datetime import timedelta as _timedelta
 
     yesterday = (_date.today() - _timedelta(days=1)).isoformat()
 
@@ -772,7 +773,7 @@ def _get_notes_data() -> dict:
         if f.exists():
             content = safe_read_text(f).strip()
             if content:
-                lines = sum(1 for l in content.splitlines() if l.strip())
+                lines = sum(1 for ln in content.splitlines() if ln.strip())
                 slots.append({"slot": n, "content": content, "lines": lines, "active": n == active})
     return {"slots": slots}
 
@@ -927,7 +928,7 @@ def _render_status_panel(data: dict) -> str:
         return f'<span class="{dot_cls}">{sym}</span><span class="health-label">{label}</span>'
 
     health = (
-        f'<div class="health-row">'
+        '<div class="health-row">'
         + _dot(hooks_ok, "hooks")
         + _dot(mcp_ok, "mcp")
         + _dot(data_ok, "data")
@@ -941,13 +942,13 @@ def _render_status_panel(data: dict) -> str:
             f'<div class="fact-item"><span class="fact-text">{_e(f)}</span></div>'
             for f in stale_facts
         )
-        label = f'{stale} stale fact{"s" if stale != 1 else ""} &#9658;'
+        label = f"{stale} stale fact{'s' if stale != 1 else ''} &#9658;"
         verify_hint = '<div style="margin-top:6px"><span class="cmd-hint">hive v</span></div>'
         stale_accordion = (
             f'<details class="stale-accordion">'
             f'<summary class="stale-summary">{label}</summary>'
             f'<div style="margin-top:6px">{items_html}</div>'
-            f'{verify_hint}'
+            f"{verify_hint}"
             f"</details>"
         )
 
@@ -965,7 +966,7 @@ def _render_status_panel(data: dict) -> str:
             f'<div class="stat-item"><span class="stat-value">{activity_today}</span><span class="stat-label">cmds today</span></div>'
             f'<div class="stat-item"><span class="stat-value">{activity_week}</span><span class="stat-label">this week</span></div>'
             f'<div class="stat-item"><span class="stat-value">{activity_streak}d</span><span class="stat-label">streak</span></div>'
-            f'</div>'
+            f"</div>"
         )
         hourly = _render_hourly_heatmap(activity_hours)
         if hourly:
@@ -980,7 +981,7 @@ def _render_status_panel(data: dict) -> str:
     return (
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Status</span></div>'
-        f'{_cmd_hints(hints)}'
+        f"{_cmd_hints(hints)}"
         f'<div class="card-body">{rows}{health}{stale_accordion}{activity_html}</div>'
         f"</div>"
     )
@@ -993,7 +994,9 @@ def _render_status_brief_panel(data: dict) -> str:
     todo_count = data.get("todo_count", 0)
     activity_today = data.get("activity_today", 0)
     stale_str = f' <span style="color:#e3b341">({stale} stale)</span>' if stale > 0 else ""
-    activity_str = f" &nbsp;|&nbsp; <span>{activity_today}</span> cmds today" if activity_today > 0 else ""
+    activity_str = (
+        f" &nbsp;|&nbsp; <span>{activity_today}</span> cmds today" if activity_today > 0 else ""
+    )
     return (
         f'<div class="card">'
         f'<div class="card-body">'
@@ -1006,8 +1009,11 @@ def _render_status_brief_panel(data: dict) -> str:
     )
 
 
-def _render_log_panel(data: dict, limit: int = 0, show_nav: bool = True, see_more_url: str = "") -> str:
-    from datetime import date as _date, timedelta
+def _render_log_panel(
+    data: dict, limit: int = 0, show_nav: bool = True, see_more_url: str = ""
+) -> str:
+    from datetime import date as _date
+    from datetime import timedelta
 
     entries = data.get("entries", [])
     date_str = data.get("date", "")
@@ -1036,12 +1042,17 @@ def _render_log_panel(data: dict, limit: int = 0, show_nav: bool = True, see_mor
             f'<button class="date-nav-btn" onclick="loadLog(\'{_e(prev_str)}\')" title="Previous day">&#8249;</button>'
             f'<span class="log-date-label">{_e(date_str)}</span>'
             f'<button class="date-nav-btn"{next_disabled} onclick="loadLog(\'{_e(next_str)}\')" title="Next day">&#8250;</button>'
-            f'</div>'
+            f"</div>"
         )
 
     _CAT_LABELS = {
-        "fact": "FACT", "decision": "DEC", "insight": "INS",
-        "todo": "TODO", "correction": "COR", "done": "DONE", "auto": "AUTO",
+        "fact": "FACT",
+        "decision": "DEC",
+        "insight": "INS",
+        "todo": "TODO",
+        "correction": "COR",
+        "done": "DONE",
+        "auto": "AUTO",
     }
     # done and auto use separate CSS class names to avoid collisions
     _CAT_CLS = {"done": "done-cat", "auto": "auto-cat", "todo": "todo-color"}
@@ -1066,7 +1077,7 @@ def _render_log_panel(data: dict, limit: int = 0, show_nav: bool = True, see_mor
         if cat and cat in _CAT_PREFIX:
             pfx = _CAT_PREFIX[cat]
             if text.upper().startswith(pfx):
-                text = text[len(pfx):].lstrip()
+                text = text[len(pfx) :].lstrip()
         rows += (
             f'<div class="log-entry" data-type="{_e(cat)}">'
             f'<span class="log-time">{_e(e["time"])}</span>'
@@ -1078,7 +1089,9 @@ def _render_log_panel(data: dict, limit: int = 0, show_nav: bool = True, see_mor
 
     see_more_html = ""
     if truncated and see_more_url:
-        see_more_html = f'<a class="log-see-more" href="{_e(see_more_url)}">See all {total} entries \u2192</a>'
+        see_more_html = (
+            f'<a class="log-see-more" href="{_e(see_more_url)}">See all {total} entries \u2192</a>'
+        )
     elif truncated:
         see_more_html = f'<div class="empty" style="text-align:center;padding-top:6px">{total - limit} more entries \u2014 visit /daily</div>'
 
@@ -1088,8 +1101,14 @@ def _render_log_panel(data: dict, limit: int = 0, show_nav: bool = True, see_mor
     cats_present = {e.get("cat", "") for e in all_entries} - {""}
     if total > 10 and len(cats_present) > 1:
         _FILTER_LABELS = [
-            ("", "All"), ("fact", "FACT"), ("todo", "TODO"), ("done", "DONE"),
-            ("insight", "INS"), ("decision", "DEC"), ("correction", "COR"), ("auto", "AUTO"),
+            ("", "All"),
+            ("fact", "FACT"),
+            ("todo", "TODO"),
+            ("done", "DONE"),
+            ("insight", "INS"),
+            ("decision", "DEC"),
+            ("correction", "COR"),
+            ("auto", "AUTO"),
         ]
         btns = ""
         for cat_key, label in _FILTER_LABELS:
@@ -1105,18 +1124,18 @@ def _render_log_panel(data: dict, limit: int = 0, show_nav: bool = True, see_mor
         '<form class="panel-input" data-action="/api/remember" data-field="text">'
         '<input type="text" placeholder="hive r \u2014 fact or note..." autocomplete="off">'
         '<button type="submit">+</button>'
-        '</form>'
+        "</form>"
     )
     return (
         f'<div class="card"{data_panel_attr}>'
         f'<div class="card-header">'
         f'<span class="card-title">{title}</span>'
-        f'{nav_html}'
+        f"{nav_html}"
         f'<span class="card-meta">{meta}</span>'
-        f'</div>'
-        f'{log_hints}'
-        f'{filter_html}'
-        f'{log_input}'
+        f"</div>"
+        f"{log_hints}"
+        f"{filter_html}"
+        f"{log_input}"
         f'<div class="card-body">{rows}{see_more_html}</div>'
         f"</div>"
     )
@@ -1163,13 +1182,13 @@ def _render_todo_panel(data: dict, limit: int = 0) -> str:
         '<form class="panel-input" data-action="/api/todo/add" data-field="text">'
         '<input type="text" placeholder="Add a TODO..." autocomplete="off">'
         '<button type="submit">+</button>'
-        '</form>'
+        "</form>"
     )
     return (
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Open TODOs</span><span class="card-meta">{meta}</span></div>'
-        f'{_cmd_hints(["hive t <text>", "hive todo done <pat>", "hive todo"])}'
-        f'{todo_input}'
+        f"{_cmd_hints(['hive t <text>', 'hive todo done <pat>', 'hive todo'])}"
+        f"{todo_input}"
         f'<div class="card-body">{rows}</div>'
         f"</div>"
     )
@@ -1198,7 +1217,7 @@ def _render_recurring_panel(data: dict) -> str:
     return (
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Recurring</span><span class="card-meta">{meta}</span></div>'
-        f'{_cmd_hints(["hive todo repeat daily <task>", "hive todo done <pat>"])}'
+        f"{_cmd_hints(['hive todo repeat daily <task>', 'hive todo done <pat>'])}"
         f'<div class="card-body">{rows}</div>'
         f"</div>"
     )
@@ -1264,7 +1283,7 @@ def _render_knowledge_panel(data: dict) -> str:
     return (
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Knowledge</span><span class="card-meta">{meta}</span></div>'
-        f'{_cmd_hints(["hive ke <name>", "hive pe <name>", "hive k <name>", "hive rf draft <topic>"])}'
+        f"{_cmd_hints(['hive ke <name>', 'hive pe <name>', 'hive k <name>', 'hive rf draft <topic>'])}"
         f'<div class="card-body">{rows}</div>'
         f"</div>"
     )
@@ -1296,8 +1315,8 @@ def _render_knowledge_compact_panel(data: dict) -> str:
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Knowledge</span><span class="card-meta">{meta}</span></div>'
         f'<div class="card-body">{rows}</div>'
-        f'{link}'
-        f'</div>'
+        f"{link}"
+        f"</div>"
     )
 
 
@@ -1311,17 +1330,23 @@ def _render_notes_compact_panel(data: dict) -> str:
         content_lines = s["content"].splitlines()
         body_lines = [ln for ln in content_lines if not re.match(r"^Slot \d+", ln)]
         content_body = "\n".join(body_lines).strip()
-        preview_lines = [ln.strip() for ln in content_lines if ln.strip() and not re.match(r"^Slot \d+", ln)]
-        preview = (preview_lines[0][:60] + "\u2026") if (preview_lines and len(preview_lines[0]) > 60) else (preview_lines[0] if preview_lines else "")
+        preview_lines = [
+            ln.strip() for ln in content_lines if ln.strip() and not re.match(r"^Slot \d+", ln)
+        ]
+        preview = (
+            (preview_lines[0][:60] + "\u2026")
+            if (preview_lines and len(preview_lines[0]) > 60)
+            else (preview_lines[0] if preview_lines else "")
+        )
         tiles += (
             f'<div class="note-tile{active_cls}">'
             f'<div class="note-tile-header">'
             f'<span class="note-tile-slot">{s["slot"]}</span>'
             f'<span class="note-tile-meta">{s["lines"]}L</span>'
-            f'</div>'
+            f"</div>"
             f'<div class="note-tile-preview">{_e(preview)}</div>'
             f'<div class="note-tile-body md">{render_md(content_body)}</div>'
-            f'</div>'
+            f"</div>"
         )
     if not tiles:
         tiles = '<div class="empty">No notes \u2014 hive n</div>'
@@ -1331,8 +1356,8 @@ def _render_notes_compact_panel(data: dict) -> str:
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Notes</span><span class="card-meta">{meta}</span></div>'
         f'<div class="card-body note-tiles">{tiles}</div>'
-        f'{link}'
-        f'</div>'
+        f"{link}"
+        f"</div>"
     )
 
 
@@ -1359,7 +1384,7 @@ def _render_memory_panel(data: dict) -> str:
     return (
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Memory</span></div>'
-        f'{_cmd_hints(["hive m <fact>", "hive m rm <pat>", "hive rule <text>", "hive e memory"])}'
+        f"{_cmd_hints(['hive m <fact>', 'hive m rm <pat>', 'hive rule <text>', 'hive e memory'])}"
         f'<div class="card-body">{mem_section}{rules_section}</div>'
         f"</div>"
     )
@@ -1376,17 +1401,25 @@ def _render_notes_panel(data: dict) -> str:
         body_lines = [ln for ln in content_lines if not re.match(r"^Slot \d+", ln)]
         content_body = "\n".join(body_lines).strip()
         body = f'<div class="acc-body md">{badge}<br>{render_md(content_body)}</div>'
-        meta = f'{s["lines"]}L'
+        meta = f"{s['lines']}L"
         # Build 1-line preview for collapsed state (first non-empty, non-slot-header line)
-        preview_lines = [ln.strip() for ln in content_lines if ln.strip() and not re.match(r"^Slot \d+", ln)]
-        preview_text = preview_lines[0][:68] + "\u2026" if preview_lines and len(preview_lines[0]) > 68 else (preview_lines[0] if preview_lines else "")
-        preview_html = f'<span class="acc-preview">{_e(preview_text)}</span>' if preview_text else ""
+        preview_lines = [
+            ln.strip() for ln in content_lines if ln.strip() and not re.match(r"^Slot \d+", ln)
+        ]
+        preview_text = (
+            preview_lines[0][:68] + "\u2026"
+            if preview_lines and len(preview_lines[0]) > 68
+            else (preview_lines[0] if preview_lines else "")
+        )
+        preview_html = (
+            f'<span class="acc-preview">{_e(preview_text)}</span>' if preview_text else ""
+        )
         rows += (
             f'<div class="accordion">'
             f'<div class="acc-header">'
             f'<span class="acc-toggle">&#9654;</span>'
             f'<span class="acc-name">Note {s["slot"]}{" (active)" if s["active"] else ""}</span>'
-            f'{preview_html}'
+            f"{preview_html}"
             f'<span class="acc-meta">{meta}</span>'
             f"</div>{body}</div>"
         )
@@ -1407,14 +1440,14 @@ def _render_notes_panel(data: dict) -> str:
         '<form class="panel-input" data-action="/api/note/append" data-field="text">'
         '<input type="text" placeholder="Append to active note..." autocomplete="off">'
         '<button type="submit">+</button>'
-        '</form>'
+        "</form>"
     )
     return (
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Notes</span><span class="card-meta">{meta}</span></div>'
-        f'{_cmd_hints(["hive n", "hive n show", "hive nc", "hive n.3"])}'
-        f'{slot_switcher}'
-        f'{note_input}'
+        f"{_cmd_hints(['hive n', 'hive n show', 'hive nc', 'hive n.3'])}"
+        f"{slot_switcher}"
+        f"{note_input}"
         f'<div class="card-body">{rows}</div>'
         f"</div>"
     )
@@ -1448,7 +1481,7 @@ def _render_hourly_heatmap(hours: dict[str, int]) -> str:
         f'<div class="heatmap-wrap">'
         f'<div class="heatmap">{bars}</div>'
         f'<div class="heat-labels">{labels}</div>'
-        f'</div>'
+        f"</div>"
     )
 
 
@@ -1486,6 +1519,7 @@ def _render_stats_panel(data: dict) -> str:
             if iso_date:
                 try:
                     from datetime import date as _date
+
                     d = _date.fromisoformat(iso_date)
                     dow_letter = "MTWTFSS"[d.weekday()]
                     is_weekend = d.weekday() >= 5
@@ -1517,7 +1551,7 @@ def _render_stats_panel(data: dict) -> str:
             f'<div class="sparkline-wrap">'
             f'<div class="sparkline">{bars}</div>'
             f'<div class="spark-labels">{labels}</div>'
-            f'</div>'
+            f"</div>"
         )
 
     # Hourly heatmap (embedded in stats panel after sparkline)
@@ -1530,16 +1564,16 @@ def _render_stats_panel(data: dict) -> str:
             f'<div class="stat-item"><span class="stat-value">{curr_streak}</span><span class="stat-label">curr streak</span></div>'
             f'<div class="stat-item"><span class="stat-value">{longest_streak}</span><span class="stat-label">best streak</span></div>'
             f'<div class="stat-item"><span class="stat-value">{total_days}</span><span class="stat-label">days active</span></div>'
-            f'</div>'
+            f"</div>"
         )
 
     meta = f"{total_days} days tracked" if total_days else ""
     return (
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Usage Stats</span><span class="card-meta">{meta}</span></div>'
-        f'{_cmd_hints(["hive st", "hive st -p <project>", "hive st yesterday"])}'
-        f'{sparkline_html}'
-        f'{hourly_html}'
+        f"{_cmd_hints(['hive st', 'hive st -p <project>', 'hive st yesterday'])}"
+        f"{sparkline_html}"
+        f"{hourly_html}"
         f'<div class="card-body">{streak_html}</div>'
         f"</div>"
     )
@@ -1560,7 +1594,9 @@ def _render_stats_commands_panel(data: dict) -> str:
         for name, total in commands:
             t = today_map.get(name, 0)
             w = week_map.get(name, 0)
-            rows += f"<tr><td>{_e(name)}</td><td>{t or ''}</td><td>{w or ''}</td><td>{total}</td></tr>"
+            rows += (
+                f"<tr><td>{_e(name)}</td><td>{t or ''}</td><td>{w or ''}</td><td>{total}</td></tr>"
+            )
         rows += "</tbody></table>"
     else:
         rows = '<div class="empty">No usage data yet</div>'
@@ -1596,7 +1632,7 @@ def _render_ps_panel(data: dict) -> str:
     return (
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Projects</span><span class="card-meta">{_e(proc_str)}</span></div>'
-        f'{_cmd_hints(["hive ps", "hive go", "hive su"])}'
+        f"{_cmd_hints(['hive ps', 'hive go', 'hive su'])}"
         f'<div class="card-body">{rows}</div>'
         f"</div>"
     )
@@ -1619,7 +1655,7 @@ def _render_recent_facts_panel(data: dict) -> str:
     return (
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Recent Insights</span><span class="card-meta">past 7d</span></div>'
-        f'{facts_hints}'
+        f"{facts_hints}"
         f'<div class="card-body">{rows}</div>'
         f"</div>"
     )
@@ -1656,8 +1692,8 @@ def _render_standup_panel(data: dict) -> str:
 
     return (
         f'<div class="card">'
-        f"<div class=\"card-header\"><span class=\"card-title\">Today's Focus</span></div>"
-        f'{_cmd_hints(["hive su", "hive todo", "hive todo done <pat>"])}'
+        f'<div class="card-header"><span class="card-title">Today\'s Focus</span></div>'
+        f"{_cmd_hints(['hive su', 'hive todo', 'hive todo done <pat>'])}"
         f'<div class="card-body">{rows}</div>'
         f"</div>"
     )
@@ -1686,6 +1722,7 @@ def _get_stats_summary_data() -> dict:
     curr_streak = 0
     try:
         from keephive.commands.stats import _calculate_streak
+
         curr_streak, _ = _calculate_streak(days)
     except Exception:
         pass
@@ -1709,7 +1746,7 @@ def _render_stats_summary_panel(data: dict) -> str:
         f'<div class="summary-stat"><span class="stat-value">{today_total}</span><span class="stat-label">today</span></div>'
         f'<div class="summary-stat"><span class="stat-value">{week_total}</span><span class="stat-label">this week</span></div>'
         f'<div class="summary-stat"><span class="stat-value">{curr_streak}d</span><span class="stat-label">streak</span></div>'
-        f'</div>'
+        f"</div>"
     )
 
     hourly = _render_hourly_heatmap(today_hours)
@@ -1719,8 +1756,8 @@ def _render_stats_summary_panel(data: dict) -> str:
         f'<div class="card">'
         f'<div class="card-header"><span class="card-title">Activity</span></div>'
         f'<div class="card-body">{stats_row}{hourly}</div>'
-        f'{link}'
-        f'</div>'
+        f"{link}"
+        f"</div>"
     )
 
 
@@ -1829,7 +1866,11 @@ def _render_panel_safe(name: str, extra_params: dict | None = None) -> str:
     data_fn, render_fn = PANELS[name]
     try:
         # Log panels accept an optional date param
-        if name in ("log", "log-brief", "log-home") and extra_params and extra_params.get("log_date"):
+        if (
+            name in ("log", "log-brief", "log-home")
+            and extra_params
+            and extra_params.get("log_date")
+        ):
             data = data_fn(extra_params["log_date"])
         else:
             data = data_fn()
@@ -1858,7 +1899,7 @@ def render_fragment(view_name: str, extra_params: dict | None = None) -> str:
                 f'<div class="split-left">{left}</div>'
                 f'<div class="split-divider" title="Drag to resize"></div>'
                 f'<div class="split-right">{right}</div>'
-                f'</div>'
+                f"</div>"
             )
         else:
             cols = "".join(_render_panel_safe(name, extra_params) for name in row)
@@ -1870,7 +1911,9 @@ def render_page(view_name: str, port: int) -> str:
     nav_tabs = ""
     for vname, vdef in VIEWS.items():
         active_cls = " active" if vname == view_name else ""
-        nav_tabs += f'<a class="nav-tab{active_cls}" href="{_e(vdef["path"])}">{_e(vdef["title"])}</a>'
+        nav_tabs += (
+            f'<a class="nav-tab{active_cls}" href="{_e(vdef["path"])}">{_e(vdef["title"])}</a>'
+        )
 
     content = render_fragment(view_name)
 
@@ -2016,7 +2059,9 @@ class _HiveHandler(BaseHTTPRequestHandler):
             try:
                 from keephive.storage import ui_queue_path
 
-                ui_queue_path(self.__class__.project_name or None).write_text(json.dumps(data, indent=2))
+                ui_queue_path(self.__class__.project_name or None).write_text(
+                    json.dumps(data, indent=2)
+                )
             except Exception as exc:
                 ok = False
                 error = str(exc)
@@ -2174,15 +2219,9 @@ def _hot_watcher(port: int) -> None:
                 time.sleep(0.4)
                 now = _mtimes()
                 changed = [
-                    Path(p).relative_to(src_dir)
-                    for p in now
-                    if now[p] != snapshot.get(p, 0)
+                    Path(p).relative_to(src_dir) for p in now if now[p] != snapshot.get(p, 0)
                 ]
-                changed += [
-                    Path(p).relative_to(src_dir)
-                    for p in snapshot
-                    if p not in now
-                ]
+                changed += [Path(p).relative_to(src_dir) for p in snapshot if p not in now]
                 if changed:
                     names = ", ".join(str(c) for c in changed[:3])
                     suffix = f" (+{len(changed) - 3} more)" if len(changed) > 3 else ""

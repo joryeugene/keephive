@@ -203,6 +203,19 @@ Dynamic content (log, TODOs) sits at the top. Static content (standup, knowledge
 - **Date navigation** in `/daily` view lets you browse past days
 - **Bookmarklet** (`hive ui-install`) captures UI feedback from any page and queues it for your next Claude Code prompt
 
+#### Bookmarklet feedback loop
+
+1. `hive ui-install` prints a `javascript:` URL and copies it to your clipboard
+2. Create a bookmark and paste the URL, or drag it to your bookmarks bar
+3. Click the bookmarklet on any page: a crosshair overlay appears
+4. Hover to highlight elements, click to select one
+5. Type your feedback in the dialog, hit Submit
+6. The bookmarklet POSTs to `localhost:3847/ui-feedback`, which queues it in `.ui-queue`
+7. On your next prompt, the UserPromptSubmit hook injects `[UI Feedback]` context automatically
+8. The queue clears after injection (one-shot)
+
+No manual copy-paste. The feedback appears in Claude Code's context on the very next prompt.
+
 ### Architecture
 
 ```
@@ -214,20 +227,23 @@ Dynamic content (log, TODOs) sits at the top. Static content (standup, knowledge
                   |
           +-------v--------+
           |  _HiveHandler  |
-          +--+-----+------++
-             |     |      |
-     GET /   | /api/   POST /api/
-     (page)  | fragment   (CRUD)
-             |
-     +-------v-------+  +----------+
-     | render_page   |  | storage  |
-     | render_fragment|  | .py      |
-     +-------+-------+  +----------+
-             |
-     +-------v-------+
-     | PANELS dict   |
+          +--+-----+--+---+
+             |     |   |
+     GET /   | /api/  POST /ui-feedback
+     (page)  | fragment   |
+             |            v
+     +-------v-------+  +-----------+
+     | render_page   |  | .ui-queue |
+     | render_fragment|  +-----------+
+     +-------+-------+       |
+             |          UserPromptSubmit
+     +-------v-------+  hook injects as
+     | PANELS dict   |  [UI Feedback]
      | 18 panels     |
      +---------------+
+
+  Bookmarklet (hive ui-install):
+    click → select element → POST /ui-feedback → .ui-queue → next prompt
 ```
 
 ### View layouts
