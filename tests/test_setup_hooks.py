@@ -196,6 +196,30 @@ class TestSeedBundledContent:
         assert "Old version" not in content
         assert "keephive" in content.lower()  # bundled guide has keephive content
 
+    def test_quiet_suppresses_all_output(self, hive_env, capsys):
+        """quiet=True produces no console output even when guides are seeded or updated."""
+        gd = hive_env / "knowledge" / "guides"
+        # Force an update by writing stale content
+        (gd / "keephive-guide.md").write_text("# Old version\n")
+
+        from keephive.commands.setup import _seed_bundled_content
+
+        _seed_bundled_content(quiet=True)
+
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert captured.err == ""
+
+    def test_quiet_false_produces_output(self, hive_env, capsys):
+        """quiet=False (default) still prints status."""
+        from keephive.commands.setup import _seed_bundled_content
+
+        _seed_bundled_content(quiet=False)
+
+        captured = capsys.readouterr()
+        # Some output expected (either seeded, updated, or already present)
+        assert captured.out != ""
+
 
 # ---- _sync_global_install ----
 

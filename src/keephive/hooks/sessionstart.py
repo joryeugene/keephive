@@ -77,6 +77,14 @@ def hook_sessionstart(args: list[str]) -> None:
     except Exception:
         pass
 
+    # Silently sync bundled guides on every real session start
+    try:
+        from keephive.commands.setup import _seed_bundled_content
+
+        _seed_bundled_content(quiet=True)
+    except Exception:
+        pass
+
     # Build context
     context = build_context(cwd, project_name)
 
@@ -406,7 +414,7 @@ def _auto_reverify() -> list[str]:
     today_str = today.isoformat()
     changed = False
 
-    for line_num, fact_text, _raw_line in stale:
+    for line_num, fact_text, _ in stale:
         fact_words = set(w.lower() for w in fact_text.split() if len(w) > 3)
         if not fact_words:
             continue

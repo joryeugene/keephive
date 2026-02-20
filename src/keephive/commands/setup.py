@@ -68,7 +68,7 @@ def cmd_setup(args: list[str]) -> None:
     console.print("  -> [dim]hive doctor[/dim] to verify everything")
 
 
-def _seed_bundled_content() -> None:
+def _seed_bundled_content(quiet: bool = False) -> None:
     """Copy bundled guides and prompts into hive dir if targets don't exist."""
     from importlib.resources import files as pkg_files
 
@@ -98,12 +98,13 @@ def _seed_bundled_content() -> None:
         except (TypeError, FileNotFoundError):
             pass
 
-    if seeded:
-        console.print(f"  [ok]OK[/ok] seeded {seeded} default guide(s)/prompt(s)")
-    elif updated:
-        console.print(f"  [ok]OK[/ok] updated {updated} guide(s)/prompt(s)")
-    else:
-        console.print("  [dim]guides/prompts already present and up to date[/dim]")
+    if not quiet:
+        if seeded:
+            console.print(f"  [ok]OK[/ok] seeded {seeded} default guide(s)/prompt(s)")
+        elif updated:
+            console.print(f"  [ok]OK[/ok] updated {updated} guide(s)/prompt(s)")
+        else:
+            console.print("  [dim]guides/prompts already present and up to date[/dim]")
 
 
 def _setup_hooks(settings_path: Path | None = None) -> None:
