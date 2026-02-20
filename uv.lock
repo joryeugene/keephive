@@ -455,7 +455,7 @@ wheels = [
 
 [[package]]
 name = "keephive"
-version = "0.12.8"
+version = "0.12.11"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },

@@ -85,6 +85,15 @@ class TestPromptYn:
 
         assert prompt_yn("Continue?", default_yes=False) is False
 
+    def test_ctrl_c_raises_keyboard_interrupt(self, monkeypatch):
+        self._patch(monkeypatch, "\x03")
+        import pytest
+
+        from keephive.output import prompt_yn
+
+        with pytest.raises(KeyboardInterrupt):
+            prompt_yn("Continue?")
+
 
 def test_console_force_terminal(capsys):
     """Console with force_terminal=True outputs to stdout even when piped."""

@@ -57,6 +57,9 @@ def prompt_choice(prompt: str, valid: list[str]) -> str:
         ch = valid[-1]
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    if ch == "\x03":  # Ctrl+C in raw mode (tty.setraw disables ISIG)
+        sys.stdout.write("\n")
+        raise KeyboardInterrupt
     sys.stdout.write(ch + "\n")
     return ch if ch in valid else valid[-1]
 
@@ -104,6 +107,9 @@ def prompt_yn(prompt: str, default_yes: bool = True) -> bool:
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
+    if ch == "\x03":  # Ctrl+C in raw mode (tty.setraw disables ISIG)
+        sys.stdout.write("\n")
+        raise KeyboardInterrupt
     if ch == "y":
         sys.stdout.write("y\n")
         return True
