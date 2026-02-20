@@ -237,10 +237,14 @@ def main(args: list[str] | None = None) -> None:
         import importlib
 
         mod = importlib.import_module("keephive.commands.note")
-        if copy_flag:
-            mod.cmd_note_slot(slot, ["copy"])
-        else:
-            mod.cmd_note_slot(slot, args[1:])
+        try:
+            if copy_flag:
+                mod.cmd_note_slot(slot, ["copy"])
+            else:
+                mod.cmd_note_slot(slot, args[1:])
+        except KeyboardInterrupt:
+            sys.stdout.write("\n")
+            sys.exit(130)
         return
 
     if cmd not in COMMANDS:
@@ -275,4 +279,8 @@ def main(args: list[str] | None = None) -> None:
 
     mod = importlib.import_module(module_path)
     handler = getattr(mod, func_name)
-    handler(args[1:])
+    try:
+        handler(args[1:])
+    except KeyboardInterrupt:
+        sys.stdout.write("\ncancelled\n")
+        sys.exit(130)
