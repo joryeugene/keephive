@@ -81,9 +81,7 @@ class TestContextAwareDecay:
         from keephive.storage import get_stale_facts, memory_file
 
         d25 = (date.today() - timedelta(days=25)).isoformat()
-        memory_file().write_text(
-            f"# Working Memory\n\n- FACT: Python is great [verified:{d25}]\n"
-        )
+        memory_file().write_text(f"# Working Memory\n\n- FACT: Python is great [verified:{d25}]\n")
         stale = get_stale_facts()
         assert len(stale) == 0
 
@@ -207,9 +205,7 @@ class TestEvidenceStorage:
         stale_facts = [(3, "Python is great", "- Python is great [verified:2020-01-01]\n")]
 
         response = VerifyResponse(
-            verdicts=[
-                FactVerdict(index=1, verdict=Verdict.VALID, reason="Confirmed in code")
-            ]
+            verdicts=[FactVerdict(index=1, verdict=Verdict.VALID, reason="Confirmed in code")]
         )
         apply_verdicts(response, stale_facts, mem_path, today_str)
 

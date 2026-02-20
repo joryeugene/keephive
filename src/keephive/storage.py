@@ -255,7 +255,9 @@ def count_stale_facts() -> int:
         if m:
             try:
                 vdate = date.fromisoformat(m.group(1))
-                fact_text = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line).lstrip("- ").strip()
+                fact_text = (
+                    re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line).lstrip("- ").strip()
+                )
                 threshold = stale_days_for_fact(fact_text)
                 if (today_d - vdate).days > threshold:
                     count += 1
@@ -282,9 +284,7 @@ def get_stale_facts() -> list[tuple[int, str, str]]:
         if m:
             try:
                 vdate = date.fromisoformat(m.group(1))
-                fact = (
-                    re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line).lstrip("- ").strip()
-                )
+                fact = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line).lstrip("- ").strip()
                 threshold = stale_days_for_fact(fact)
                 if (today_d - vdate).days > threshold:
                     results.append((i, fact, line))
@@ -1128,9 +1128,7 @@ def store_evidence(
     entry["last_date"] = date.today().isoformat()
 
     # Extract file:line references from the reason text
-    locations = re.findall(
-        r"[\w/.-]+\.(?:py|js|ts|md|json|yaml|toml|cfg|ini|txt)(?::\d+)?", reason
-    )
+    locations = re.findall(r"[\w/.-]+\.(?:py|js|ts|md|json|yaml|toml|cfg|ini|txt)(?::\d+)?", reason)
     if locations:
         entry["source_locations"] = locations[:5]
 

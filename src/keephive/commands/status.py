@@ -143,12 +143,16 @@ def cmd_status(args: list[str]) -> None:
         pulse_score = _compute_score(vault, cleaner, strategist)
 
         if pulse_score < 70:
-            console.print(f"  [warn]Quality Pulse: {pulse_score}/100[/warn]  ->  [bold]hive audit[/bold]")
+            console.print(
+                f"  [warn]Quality Pulse: {pulse_score}/100[/warn]  ->  [bold]hive audit[/bold]"
+            )
             console.print()
 
         prev_play = _check_previous_play()
         if prev_play and not prev_play["completed"] and prev_play["age_days"] >= 2:
-            console.print(f"  [info]Unfinished Play ({prev_play['date']}): {prev_play['action']}[/info]")
+            console.print(
+                f"  [info]Unfinished Play ({prev_play['date']}): {prev_play['action']}[/info]"
+            )
             console.print()
     except Exception:
         pass
