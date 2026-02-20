@@ -7,6 +7,7 @@ import os
 import re
 import sys
 from datetime import date, timedelta
+from pathlib import Path
 
 from keephive.output import console, prompt_yn
 from keephive.storage import (
@@ -89,6 +90,65 @@ def cmd_recall(args: list[str]) -> None:
     _display_results(query, results)
 
 
+def _get_context_lines(file_path: Path, needle: str) -> tuple[str | None, str | None]:
+    """Return (prev_line, next_line) around the needle in file_path.
+
+    Both neighbors are filtered: blank lines and lines starting with '#' or
+    '<!--' are skipped. Returns (None, None) on any error or if needle not found.
+    """
+    try:
+        lines = file_path.read_text(errors="replace").splitlines()
+    except OSError:
+        return (None, None)
+
+    needle_stripped = needle.strip()
+    idx = None
+    for i, line in enumerate(lines):
+        if line.strip() == needle_stripped or line.strip().endswith(needle_stripped):
+            idx = i
+            break
+
+    if idx is None:
+        return (None, None)
+
+    def _is_useful(line: str) -> bool:
+        s = line.strip()
+        return bool(s) and not s.startswith("#") and not s.startswith("<!--")
+
+    prev_line = None
+    for i in range(idx - 1, -1, -1):
+        if _is_useful(lines[i]):
+            prev_line = lines[i].strip()
+            break
+
+    next_line = None
+    for i in range(idx + 1, len(lines)):
+        if _is_useful(lines[i]):
+            next_line = lines[i].strip()
+            break
+
+    return (prev_line, next_line)
+
+
+def _daily_path_for_result(result: dict) -> Path | None:
+    """Return the file path for a daily/archive result dict, or None.
+
+    Returns None if date is missing, tier is not daily/archive, or the file
+    does not exist on disk.
+    """
+    date_str = result.get("date")
+    if not date_str:
+        return None
+    tier = result.get("tier")
+    if tier == "daily":
+        path = daily_dir() / f"{date_str}.md"
+    elif tier == "archive":
+        path = archive_dir() / f"{date_str}.md"
+    else:
+        return None
+    return path if path.exists() else None
+
+
 def _display_results(query: str, results: list[dict]) -> None:
     """Display recall results to console."""
     console.print(f"Found {len(results)} result(s) for: {query}\n")
@@ -98,6 +158,7 @@ def _display_results(query: str, results: list[dict]) -> None:
         "daily": "tier.daily",
         "archive": "tier.archive",
     }
+    show_context = sys.stdout.isatty()
 
     for r in results[:20]:
         style = tier_styles.get(r["tier"], "")
@@ -111,7 +172,25 @@ def _display_results(query: str, results: list[dict]) -> None:
             line = re.sub(r"^-\s*", "", line)
             line = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line)
         date_str = f" {r.get('date', '')}" if r.get("date") else ""
-        console.print(f"[{style}]{score_str} {tier_str}{date_str}[/{style}] {line}")
+
+        # Knowledge hits: prepend guide name from source file stem
+        if r["tier"] == "knowledge" and r.get("file"):
+            guide_name = Path(r["file"]).stem
+            tier_display = f"{tier_str} {guide_name}"
+        else:
+            tier_display = tier_str
+
+        console.print(f"[{style}]{score_str} {tier_display}{date_str}[/{style}] {line}")
+
+        # Context lines for daily/archive hits, only on TTY
+        if show_context and r["tier"] in ("daily", "archive"):
+            file_path = _daily_path_for_result(r)
+            if file_path:
+                prev_line, next_line = _get_context_lines(file_path, r["line"])
+                if prev_line:
+                    console.print(f"       [dim]· {prev_line}[/dim]")
+                if next_line:
+                    console.print(f"       [dim]· {next_line}[/dim]")
 
     if len(results) > 20:
         console.print(f"\n  [dim]Showing 20 of {len(results)} results[/dim]")
@@ -208,7 +287,7 @@ def _search_all_tiers(query: str) -> list[dict]:
         for f in kd.rglob("*.md"):
             for line in f.read_text().splitlines():
                 if q_lower in line.lower():
-                    results.append({"tier": "knowledge", "score": 80, "line": line})
+                    results.append({"tier": "knowledge", "score": 80, "line": line, "file": str(f)})
 
     # Tier 3: Daily logs + archive — try FTS first, fall back to grep
     fts_hits = fts_search(query)
@@ -265,11 +344,14 @@ def _search_all_tiers(query: str) -> list[dict]:
                             continue
                         ratio = _fuzzy_word_score(query_words, line_words)
                         if ratio >= 0.65:
-                            results.append({
+                            hit: dict = {
                                 "tier": tier_name,
                                 "score": int(score_base * ratio * 0.7),
                                 "line": line,
-                            })
+                            }
+                            if tier_name == "knowledge":
+                                hit["file"] = str(f)
+                            results.append(hit)
                             existing_lines.add(line)
             results.sort(key=lambda x: x["score"], reverse=True)
 
