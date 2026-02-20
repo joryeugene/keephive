@@ -170,9 +170,13 @@ def cmd_status(args: list[str]) -> None:
     # Pending rule suggestions nudge
     pending_rules_path = hive_dir() / ".pending-rules.md"
     if pending_rules_path.exists() and pending_rules_path.read_text().strip():
-        n = sum(1 for ln in pending_rules_path.read_text().splitlines() if ln.strip().startswith("- "))
+        n = sum(
+            1 for ln in pending_rules_path.read_text().splitlines() if ln.strip().startswith("- ")
+        )
         if n > 0:
-            console.print(f"  [yellow]⚡ {n} rule suggestion(s) pending[/yellow]  →  hive rule review")
+            console.print(
+                f"  [yellow]⚡ {n} rule suggestion(s) pending[/yellow]  →  hive rule review"
+            )
             console.print()
 
     # Due recurring tasks

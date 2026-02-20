@@ -362,7 +362,6 @@ def _display_full(data: dict) -> None:
     # Quality section
     meta = _sum_counters(days_data, "meta")
 
-
     standup_count = count_log_entries_with_prefix("STANDUP:")
     health_last = last_log_entry_with_prefix("HEALTH:")
 

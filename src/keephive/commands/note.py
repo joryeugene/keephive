@@ -165,7 +165,7 @@ def _extract_structured_items(content: str) -> list[str]:
     if plain_items or bullet_items:
         seen: set[str] = set()
         result: list[str] = []
-        for item in (plain_items + bullet_items):
+        for item in plain_items + bullet_items:
             if item not in seen:
                 seen.add(item)
                 result.append(item)
@@ -304,8 +304,7 @@ def _note_extract_todos(slot: int) -> None:
         raw = review_path.read_text()
         review_path.unlink(missing_ok=True)
         selected = [
-            ln[2:].strip() for ln in raw.splitlines()
-            if ln.startswith("- ") and ln[2:].strip()
+            ln[2:].strip() for ln in raw.splitlines() if ln.startswith("- ") and ln[2:].strip()
         ]
 
     if not selected:

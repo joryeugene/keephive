@@ -1,4 +1,5 @@
 """Tests for hive n todo extraction (structured + LLM fallback)."""
+
 from __future__ import annotations
 
 import re
@@ -255,9 +256,7 @@ def test_todify_editor_all_deleted(hive_env, monkeypatch):
     def clear_todos(*args, **kwargs):
         path = Path(args[0][1])
         # Keep non-'- ' lines (instruction, blank lines) but strip all todo markers
-        lines = [
-            ln for ln in path.read_text().splitlines() if not ln.startswith("- ")
-        ]
+        lines = [ln for ln in path.read_text().splitlines() if not ln.startswith("- ")]
         path.write_text("\n".join(lines) + "\n")
 
     monkeypatch.setattr("subprocess.run", clear_todos)
@@ -282,13 +281,7 @@ def test_todify_no_save_cancels(hive_env, monkeypatch):
 
 def test_extract_structured_includes_plain_lines():
     """Plain (non-bullet) lines under ## todo section are included in extraction."""
-    content = (
-        "## todo\n"
-        "adoption goals api testing\n"
-        "prompt library start\n"
-        "- pr approved\n"
-        "- figma\n"
-    )
+    content = "## todo\nadoption goals api testing\nprompt library start\n- pr approved\n- figma\n"
     items = _extract_structured_items(content)
     assert "adoption goals api testing" in items
     assert "prompt library start" in items

@@ -977,7 +977,7 @@ def last_log_entry_with_prefix(prefix: str) -> str:
         for line in reversed(safe_read_text(f).splitlines()):
             if prefix in line:
                 idx = line.index(prefix)
-                return line[idx + len(prefix):].strip()
+                return line[idx + len(prefix) :].strip()
     return ""
 
 

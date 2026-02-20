@@ -206,6 +206,7 @@ def cmd_doctor(args: list[str]) -> None:
     console.print("  [dim]hive a[/dim]   scores overall knowledge quality")
 
     from keephive.storage import append_to_daily, ensure_daily
+
     ensure_daily()
     append_to_daily(f"HEALTH: {issues} issue(s)")
     console.print("  [dim]Logged. ✓[/dim]")
