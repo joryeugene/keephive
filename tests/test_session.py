@@ -313,13 +313,13 @@ class TestCliDispatch:
         from keephive.cli import COMMANDS
 
         assert "session" in COMMANDS
-        assert "sess" in COMMANDS
+        assert "sesh" in COMMANDS
         assert "go" in COMMANDS
 
     def test_all_point_to_session_module(self):
         from keephive.cli import COMMANDS
 
-        for alias in ("session", "sess", "go"):
+        for alias in ("session", "sesh", "go"):
             module, func = COMMANDS[alias]
             assert module == "keephive.commands.session"
             assert func == "cmd_session"

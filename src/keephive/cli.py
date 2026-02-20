@@ -29,6 +29,8 @@ HELP: dict[str, str] = {
     "rule": "Usage: hive rule [rm] <text>\n  Add or remove behavioral rules\n  hive rule <text>      Add rule\n  hive rule rm <pat>    Remove matching rule",
     "session": "Usage: hive go [mode|prompt]\n  Modes: todo, verify, learn, reflect\n  Or load a custom prompt from knowledge/prompts/",
     "skill": "Usage: hive sk [publish <name>|unpublish <name>|sync|find <q>]\n  Manage skill plugins",
+    "update": "Usage: hive up\n  Upgrade keephive to the latest version in-place",
+    "setup": "Usage: hive setup\n  Initial setup: register MCP server + hooks in ~/.claude/",
 }
 
 # Map aliases to canonical names for help lookup
@@ -38,7 +40,8 @@ _CANONICAL: dict[str, str] = {
     "nc": "note", "dc": "note", "m": "mem", "td": "todo", "to": "todo", "t": "todo",
     "su": "standup", "k": "knowledge", "ke": "knowledge", "p": "knowledge",
     "pe": "knowledge", "sk": "skill", "a": "audit", "g": "gc", "dr": "doctor",
-    "st": "stats", "go": "session", "sess": "session", "up": "update",
+    "st": "stats", "go": "session", "sesh": "session", "up": "update",
+    "draft": "note",
 }
 
 
@@ -73,6 +76,7 @@ Knowledge
 
 Notes
   n, note              Open scratchpad in $EDITOR
+  draft                (alias for n)
   n.3                  Switch to slot 3
   nc / n.3c            Copy to clipboard
   n list               Show all slots
@@ -93,7 +97,7 @@ Analysis
   st, stats [-p path]  Usage statistics
 
 Maintenance
-  e, edit [target]     Edit file (memory/rules/claude/settings/note/today)
+  e, edit [target]     Edit file (memory/rules/claude/settings/local/note/today)
   g, gc                Archive old logs
   dr, doctor           Check setup + find duplicate TODOs
   up, update           Upgrade keephive in-place
@@ -145,7 +149,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "sk": ("keephive.commands.skill", "cmd_skill"),
     "skill": ("keephive.commands.skill", "cmd_skill"),
     "session": ("keephive.commands.session", "cmd_session"),
-    "sess": ("keephive.commands.session", "cmd_session"),
+    "sesh": ("keephive.commands.session", "cmd_session"),
     "go": ("keephive.commands.session", "cmd_session"),
     "a": ("keephive.commands.audit", "cmd_audit"),
     "audit": ("keephive.commands.audit", "cmd_audit"),
