@@ -1,3 +1,3 @@
 """keephive: a knowledge sidecar for Claude Code."""
 
-__version__ = "0.13.2"
+__version__ = "0.14.0"
