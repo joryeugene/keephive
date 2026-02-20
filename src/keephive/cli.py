@@ -38,7 +38,7 @@ _CANONICAL: dict[str, str] = {
     "nc": "note", "dc": "note", "m": "mem", "td": "todo", "to": "todo", "t": "todo",
     "su": "standup", "k": "knowledge", "ke": "knowledge", "p": "knowledge",
     "pe": "knowledge", "sk": "skill", "a": "audit", "g": "gc", "dr": "doctor",
-    "st": "stats", "go": "session", "sess": "session",
+    "st": "stats", "go": "session", "sess": "session", "up": "update",
 }
 
 
@@ -62,6 +62,7 @@ Todo
   td <pat>             Mark TODO done (also: t done <pat>, t d <pat>)
   todo done <pat>      Complete a TODO or recurring task
   todo repeat <freq> <text>   Add recurring (daily/weekly/2d/12h)
+  e todo               Bulk-edit TODOs in $EDITOR
 
 Knowledge
   k [name]             List or view guides (prefix match)
@@ -95,6 +96,7 @@ Maintenance
   e, edit [target]     Edit file (memory/rules/claude/settings/note/today)
   g, gc                Archive old logs
   dr, doctor           Check setup + find duplicate TODOs
+  up, update           Upgrade keephive in-place
   setup                Initial setup
 
   h, help / --help     Show this help

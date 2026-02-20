@@ -37,10 +37,11 @@ cd keephive && uv tool install . && keephive setup
 ### Stay up to date
 
 ```bash
-uv tool upgrade keephive  # then: keephive setup
+hive up                    # upgrade in place (recommended)
+uv tool upgrade keephive   # manual alternative; run keephive setup after
 ```
 
-Run `keephive setup` again after upgrading to sync hooks and the MCP server registration to the new binary path.
+Run `keephive setup` again after upgrading manually to sync hooks and the MCP server registration to the new binary path.
 
 ## Quick start
 
@@ -55,7 +56,7 @@ After a few sessions, `hive s` shows what your agent has learned:
 
 ```console
 $ hive s
-keephive v0.10.0
+keephive v0.12.2
   ● hooks  ● mcp  ● data
 
   4 facts (4 ok) | 12 today | 8 yesterday | 2 guides | 48K
@@ -68,6 +69,8 @@ keephive v0.10.0
   ~ [10:38:01] DECISION: Chose Postgres over SQLite for multi-user support.
   ~ [09:15:44] INSIGHT: The retry logic in api_client.py silently swallows 429s.
   [09:12:30] DONE: Migrate user table to new schema.
+
+  Note [slot 1]: 14 lines / 812b    2  3  4  5  6  7  8  9  0
 
   hive go (session) | hive l (log) | hive rf (reflect) | hive help
 ```
@@ -139,6 +142,7 @@ keephive uses the three extension points Claude Code exposes:
 | `hive doctor`           | `hive dr`         | Health check                               |
 | `hive gc`               | `hive g`          | Archive old logs                           |
 | `hive setup`            |                   | Register hooks and MCP server              |
+| `hive update`           | `hive up`         | Upgrade keephive in-place                  |
 
 ### Features in depth
 

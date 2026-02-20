@@ -59,9 +59,10 @@ class TestTodoDoneRecurring:
 
         cmd_todo([])
         out = capsys.readouterr().out
-        assert "hive todo done" in out
-        assert "hive t" in out
-        assert "hive todo repeat" in out
+        assert "td <pat>" in out
+        assert "t <text>" in out
+        assert "todo repeat" in out
+        assert "e todo" in out
 
 
 class TestMcpTodoDoneRecurring:

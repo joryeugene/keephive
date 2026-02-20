@@ -97,7 +97,7 @@ def cmd_log(args: list[str]) -> None:
             pass
 
         print(df.read_text())
-        console.print("  -> [dim]hive r \"insight\"[/dim] to add  |  [dim]hive rf[/dim] to reflect on recent logs")
+        console.print("  [dim]hive r \"insight\"[/dim] add  |  [dim]hive l summarize[/dim] AI summary  |  [dim]hive rf[/dim] reflect")
     else:
         console.print(f"[dim]No log for {target_date}[/dim]")
         console.print()

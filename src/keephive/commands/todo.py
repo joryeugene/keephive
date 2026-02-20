@@ -63,7 +63,7 @@ def cmd_todo(args: list[str]) -> None:
 
     # Contextual hints
     console.print()
-    console.print("  [dim]hive todo done <pat>[/dim] complete  |  [dim]hive t <text>[/dim] add  |  [dim]hive todo repeat daily \"text\"[/dim] recurring")
+    console.print("  [dim]td <pat>[/dim] done  |  [dim]t <text>[/dim] add  |  [dim]e todo[/dim] edit all  |  [dim]todo repeat daily \"..[/dim]\" recurring")
 
     # Show recent completions
     dones = recent_dones(days=3)

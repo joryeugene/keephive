@@ -228,4 +228,4 @@ def _prompt_list() -> None:
         console.print("  [dim](none yet)[/dim]")
 
     console.print()
-    console.print("  -> [dim]hive p <name>[/dim] to view  |  [dim]hive pe <name>[/dim] to create")
+    console.print("  [dim]hive p <name>[/dim] view  |  [dim]hive pe <name>[/dim] create/edit  |  [dim]hive n <template>[/dim] start note")
