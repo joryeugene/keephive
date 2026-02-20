@@ -82,9 +82,17 @@ def cmd_todo(args: list[str]) -> None:
 
 
 def cmd_t(args: list[str]) -> None:
-    """Quick TODO shortcut: hive t "fix the thing" logs TODO: fix the thing."""
+    """Quick TODO shortcut: hive t "fix the thing" logs TODO: fix the thing.
+
+    Subcommands:
+      hive t done <pat>  /  hive t d <pat>   Mark TODO matching pattern as done.
+    """
     if not args:
         cmd_todo([])
+        return
+
+    if args[0] in ("done", "d"):
+        _todo_done(" ".join(args[1:]))
         return
 
     # Import the remember command to reuse it
@@ -161,6 +169,14 @@ def edit_todos() -> None:
             track_event("meta", "todos_created")
     except Exception:
         pass
+
+
+def cmd_td(args: list[str]) -> None:
+    """hive td [pat]: mark TODO matching pattern done. No args: list todos."""
+    if args:
+        _todo_done(" ".join(args))
+    else:
+        cmd_todo([])
 
 
 def _todo_done(pattern: str) -> None:

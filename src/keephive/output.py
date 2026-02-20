@@ -60,16 +60,35 @@ def prompt_choice(prompt: str, valid: list[str]) -> str:
 
 
 def prompt_yn(prompt: str, default_yes: bool = True) -> bool:
-    """Y/n confirmation. Returns True for yes. Instant keypress on TTY."""
+    """Y/n confirmation. Returns True for yes. Enter accepts the default."""
     import sys
 
     if not sys.stdin.isatty():
         return default_yes
 
+    import termios
+    import tty
+
     hint = "(Y/n)" if default_yes else "(y/N)"
-    choice = prompt_choice(f"{prompt} {hint} ", ["y", "n"])
-    if choice == "y":
+    sys.stdout.write(f"{prompt} {hint} ")
+    sys.stdout.flush()
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1).lower()
+    except (EOFError, KeyboardInterrupt):
+        ch = ""
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+    if ch == "y":
+        sys.stdout.write("y\n")
         return True
-    if choice == "n":
+    if ch == "n":
+        sys.stdout.write("n\n")
         return False
+    # Enter (\r), space, or any other key → honor the default
+    default_char = "Y" if default_yes else "N"
+    sys.stdout.write(f"{default_char}\n")
     return default_yes

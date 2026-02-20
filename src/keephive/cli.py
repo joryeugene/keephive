@@ -35,7 +35,7 @@ HELP: dict[str, str] = {
 _CANONICAL: dict[str, str] = {
     "s": "status", "r": "remember", "rc": "recall", "v": "verify",
     "rf": "reflect", "l": "log", "e": "edit", "n": "note", "d": "note",
-    "nc": "note", "dc": "note", "m": "mem", "td": "todo", "t": "todo",
+    "nc": "note", "dc": "note", "m": "mem", "td": "todo", "to": "todo", "t": "todo",
     "su": "standup", "k": "knowledge", "ke": "knowledge", "p": "knowledge",
     "pe": "knowledge", "sk": "skill", "a": "audit", "g": "gc", "dr": "doctor",
     "st": "stats", "go": "session", "sess": "session",
@@ -57,8 +57,9 @@ Memory
   l, log [date]        View daily log (today, yesterday, N, YYYY-MM-DD)
 
 Todo
-  todo, td             List open TODOs + due recurring
+  to, todo             List open TODOs + due recurring
   t <text>             Quick add TODO
+  td <pat>             Mark TODO done (also: t done <pat>, t d <pat>)
   todo done <pat>      Complete a TODO or recurring task
   todo repeat <freq> <text>   Add recurring (daily/weekly/2d/12h)
 
@@ -127,7 +128,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "m": ("keephive.commands.memory", "cmd_mem"),
     "mem": ("keephive.commands.memory", "cmd_mem"),
     "rule": ("keephive.commands.memory", "cmd_rule"),
-    "td": ("keephive.commands.todo", "cmd_todo"),
+    "to": ("keephive.commands.todo", "cmd_todo"),
+    "td": ("keephive.commands.todo", "cmd_td"),
     "todo": ("keephive.commands.todo", "cmd_todo"),
     "t": ("keephive.commands.todo", "cmd_t"),
     "su": ("keephive.commands.standup", "cmd_standup"),

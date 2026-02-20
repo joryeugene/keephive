@@ -98,6 +98,37 @@ def test_todo_quick(hive_env):
     assert "Remembered" in r.stdout
 
 
+def test_t_done_shortcut(hive_env, daily_with_entries):
+    """hive t done <pat> marks a TODO done (same as hive todo done)."""
+    r = _run(["t", "done", "tests"], hive_home=str(hive_env))
+    assert r.returncode == 0
+    assert "No matching TODO" in r.stdout or "Completed" in r.stdout, \
+        f"hive t done should mark done or report no match. Got: {r.stdout!r}"
+
+
+def test_t_d_shortcut(hive_env, daily_with_entries):
+    """hive t d <pat> is the shortest done shortcut."""
+    r = _run(["t", "d", "tests"], hive_home=str(hive_env))
+    assert r.returncode == 0
+    assert "No matching TODO" in r.stdout or "Completed" in r.stdout, \
+        f"hive t d should mark done or report no match. Got: {r.stdout!r}"
+
+
+def test_td_direct_shortcut(hive_env, daily_with_entries):
+    """hive td <pat> marks done without the 'done' keyword."""
+    r = _run(["td", "tests"], hive_home=str(hive_env))
+    assert r.returncode == 0
+    assert "No matching TODO" in r.stdout or "Completed" in r.stdout, \
+        f"hive td <pat> should mark done or report no match. Got: {r.stdout!r}"
+
+
+def test_to_shows_todo_list(hive_env, daily_with_entries):
+    """hive to lists open TODOs."""
+    r = _run(["to"], hive_home=str(hive_env))
+    assert r.returncode == 0
+    assert "Open TODOs" in r.stdout, f"hive to should list todos. Got: {r.stdout!r}"
+
+
 def test_edit_todos_diff(hive_env, daily_with_entries):
     """edit_todos: removals become DONE, additions become TODO."""
     from datetime import date
