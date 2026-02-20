@@ -492,6 +492,43 @@ def recent_dones(days: int = 3) -> list[tuple[str, str]]:
     return dones
 
 
+def undo_done(pattern: str = "") -> str | None:
+    """Remove the most recent DONE entry matching pattern from daily logs.
+
+    Searches recent files (newest first). If pattern is empty, removes the
+    most recent DONE entry from today only.
+    Returns undone text, or None if not found.
+    """
+    d = daily_dir()
+    if not d.exists():
+        return None
+
+    files = sorted(d.glob("*.md"), reverse=True)
+    # With no pattern, only search today; with pattern, search last 3 days
+    search_files = files[:1] if not pattern else files[:3]
+
+    for fpath in search_files:
+        lines = safe_read_text(fpath).splitlines(keepends=True)
+        match_idx = None
+        match_text = None
+        for i in range(len(lines) - 1, -1, -1):
+            m = re.match(r"^- \[\d{2}:\d{2}:\d{2}\]\s*DONE:\s*(.*)", lines[i])
+            if not m:
+                m = re.match(r"^- DONE:\s*(.*)", lines[i])
+            if m:
+                text = m.group(1).strip()
+                if not pattern or pattern.lower() in text.lower():
+                    match_idx = i
+                    match_text = text
+                    break
+        if match_idx is not None:
+            del lines[match_idx]
+            fpath.write_text("".join(lines))
+            return match_text
+
+    return None
+
+
 # ---- Recurring tasks ----
 
 FREQ_ALIASES = {"daily": 1.0, "weekly": 7.0, "monthly": 30.0}

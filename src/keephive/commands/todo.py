@@ -19,7 +19,14 @@ from keephive.storage import (
 def cmd_todo(args: list[str]) -> None:
     """List open TODOs, mark one as done, or manage recurring tasks."""
     if args and args[0] == "done":
+        if len(args) > 1 and args[1] == "undo":
+            _todo_undo(" ".join(args[2:]))
+            return
         _todo_done(" ".join(args[1:]))
+        return
+
+    if args and args[0] == "undo":
+        _todo_undo(" ".join(args[1:]))
         return
 
     if args and args[0] == "repeat":
@@ -63,7 +70,7 @@ def cmd_todo(args: list[str]) -> None:
 
     # Contextual hints
     console.print()
-    console.print("  [dim]td <pat>[/dim] done  |  [dim]t <text>[/dim] add  |  [dim]e todo[/dim] edit all  |  [dim]todo repeat daily \"..[/dim]\" recurring")
+    console.print("  [dim]td <pat>[/dim] done  |  [dim]td undo[/dim]  |  [dim]t <text>[/dim] add  |  [dim]e todo[/dim]  |  [dim]todo repeat daily \"..[/dim]\" recurring")
 
     # Show recent completions
     dones = recent_dones(days=3)
@@ -92,6 +99,9 @@ def cmd_t(args: list[str]) -> None:
         return
 
     if args[0] in ("done", "d"):
+        if len(args) > 1 and args[1] == "undo":
+            _todo_undo(" ".join(args[2:]))
+            return
         _todo_done(" ".join(args[1:]))
         return
 
@@ -171,10 +181,31 @@ def edit_todos() -> None:
         pass
 
 
+def _todo_undo(pattern: str) -> None:
+    """Reopen the most recent completed TODO matching pattern."""
+    from keephive.storage import undo_done
+    result = undo_done(pattern)
+    if result:
+        console.print(f"  [ok]Reopened:[/ok] {result}")
+    else:
+        if pattern:
+            console.print(f'  [warn]No completed TODO matching[/warn] "{pattern}"')
+        else:
+            console.print("  [warn]No completed TODO to undo[/warn]")
+        dones = recent_dones(days=3)
+        if dones:
+            console.print("  [dim]Recent completions:[/dim]")
+            for _, text in dones[-3:]:
+                console.print(f"    {text}")
+
+
 def cmd_td(args: list[str]) -> None:
-    """hive td [pat]: mark TODO matching pattern done. No args: list todos."""
+    """hive td [pat]: mark TODO matching pattern done. td undo [pat]: reopen. No args: list todos."""
     if args:
-        _todo_done(" ".join(args))
+        if args[0] == "undo":
+            _todo_undo(" ".join(args[1:]))
+        else:
+            _todo_done(" ".join(args))
     else:
         cmd_todo([])
 

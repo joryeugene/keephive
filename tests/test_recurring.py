@@ -8,6 +8,9 @@ from pathlib import Path
 import pytest
 
 
+
+
+
 class TestParseFreq:
     def test_daily(self):
         from keephive.storage import parse_freq
@@ -191,3 +194,21 @@ class TestMarkRecurringDone:
         content = recurring_file().read_text()
         assert "Check logs:" in content
         assert date.today().isoformat() in content
+
+
+class TestRecurringDoneWritesDailyLog:
+    def _make_recurring(self, hive_env: Path, content: str) -> Path:
+        rf = hive_env / "working" / "recurring.md"
+        rf.write_text(content)
+        return rf
+
+    def test_recurring_done_writes_to_daily_log(self, hive_env):
+        """_recurring_done should also append DONE: entry to daily log."""
+        from keephive.commands.recurring import _recurring_done
+        from keephive.storage import recent_dones
+        self._make_recurring(hive_env, "# Recurring\n\n- [daily] Check logs\n\n## Last Completed\n\n")
+        result = _recurring_done("Check logs")
+        assert result is True
+        dones = recent_dones(days=1)
+        texts = [text for _, text in dones]
+        assert any("Check logs" in t for t in texts)
