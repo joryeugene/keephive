@@ -104,14 +104,14 @@ keephive uses the three extension points Claude Code exposes:
 flowchart TD
     subgraph CYCLE["Session Cycle (automatic)"]
         direction LR
-        START([New session]) -->|"SessionStart:\ninject context"| WORK([Working])
-        WORK -->|"PostToolUse · UserPromptSubmit\nnudge, TODO detect, ui-queue"| WORK
-        WORK -->|"context full"| PC[PreCompact:\nextract → log]
-        PC -->|"next session"| START
+        START([New session]) -->|"SessionStart:<br>inject context"| WORK([Working])
+        WORK -->|"PostToolUse · UserPromptSubmit:<br>nudge, ui-queue inject"| WORK
+        WORK -->|context full| PC["PreCompact:<br>extract → log"]
+        PC -->|next session| START
     end
 
     subgraph STORE["Knowledge Store"]
-        MEM[("Memory\n30–90d TTL")]
+        MEM[("Memory<br>30–90d TTL")]
         GUIDES[("Guides")]
         RULES[("Rules")]
         LOG[("Daily log")]
@@ -122,7 +122,7 @@ flowchart TD
         REM["hive r · capture"]
         RCL["hive rc · recall"]
         VRF["hive v · verify"]
-        DASH["hive serve · dashboard\n+ bookmarklet"]
+        DASH["hive serve · dashboard<br>+ bookmarklet"]
     end
 
     START -->|reads| STORE
