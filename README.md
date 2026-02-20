@@ -46,16 +46,17 @@ Run `keephive setup` again after upgrading manually to sync hooks and the MCP se
 ## Quick start
 
 ```bash
+hive                                               # status at a glance
 hive r "FACT: Auth service uses JWT with RS256"   # remember something
 hive v                                             # verify stale facts
 hive go                                            # launch interactive session
 hive todo                                          # open TODOs
 ```
 
-After a few sessions, `hive s` shows what your agent has learned:
+After a few sessions, `hive` shows what your agent has learned:
 
 ```console
-$ hive s
+$ hive
 keephive v0.12.2
   ● hooks  ● mcp  ● data
 
@@ -83,16 +84,16 @@ keephive uses the three extension points Claude Code exposes:
 2. **MCP server** gives Claude Code native tool access (`hive_remember`, `hive_recall`, etc.) so the agent can read and write memory directly.
 3. **Context injection** surfaces verified facts, behavioral rules, stale warnings, matching knowledge guides, and open TODOs at the start of every session via the SessionStart hook's `additionalContext` field.
 
-### The capture/verify/correct loop
+### The loop
 
 ```
-  capture --> store --> verify --> correct
-     ^                               |
-     +-------------------------------+
+  capture --> recall --> verify --> correct
+     ^                                 |
+     +---------------------------------+
 ```
 
 - **Capture**: The PreCompact hook extracts FACT/DECISION/TODO/INSIGHT entries when conversations compact. It reads the full transcript, classifies insights via LLM, and writes them to today's daily log.
-- **Store**: Entries land in daily logs and get promoted to working memory. Knowledge guides hold deep reference on specific topics.
+- **Recall**: Captured entries surface automatically at the next session start via context injection. `hive rc` searches all tiers directly; `hive` shows current state.
 - **Verify**: Facts carry `[verified:YYYY-MM-DD]` timestamps. After 30 days (configurable), they are flagged stale. `hive v` checks them against the codebase with LLM analysis and tool access.
 - **Correct**: Invalid facts get replaced with corrected versions. Valid facts get re-stamped. Uncertain facts get flagged for human review.
 
@@ -119,33 +120,32 @@ keephive uses the three extension points Claude Code exposes:
 
 | Command                 | Short             | What                                       |
 | ----------------------- | ----------------- | ------------------------------------------ |
-| **Daily**               |                   |                                            |
-| `hive status`           | `hive s`          | Status overview                            |
+| **Capture**             |                   |                                            |
 | `hive remember "text"`  | `hive r "text"`   | Save to daily log                          |
+| `hive t <text>`         |                   | Quick-add a TODO                           |
+| `hive note`             | `hive n`          | Multi-slot scratchpad ($EDITOR)            |
+| **Recall**              |                   |                                            |
+| `hive status`           | `hive` / `hive s` | Status overview                            |
 | `hive recall <query>`   | `hive rc <query>` | Search all tiers                           |
 | `hive log [date]`       | `hive l`          | View daily log; `hive l summarize` for LLM summary |
 | `hive todo`             | `hive td`         | Open TODOs with ages                       |
 | `hive todo done <pat>`  |                   | Mark TODO complete                         |
-| `hive t <text>`         |                   | Quick-add a TODO                           |
-| `hive note`             | `hive n`          | Multi-slot scratchpad ($EDITOR)            |
-| **Reference**           |                   |                                            |
 | `hive knowledge`        | `hive k`          | List/view knowledge guides                 |
 | `hive prompt`           | `hive p`          | List/use prompt templates                  |
-| **Sessions**            |                   |                                            |
+| `hive ps`               |                   | Active sessions, project activity, git state |
 | `hive session [mode]`   | `hive go`         | Launch interactive session                 |
-| **Analysis**            |                   |                                            |
-| `hive verify`           | `hive v`          | Verify stale facts                         |
-| `hive reflect`          | `hive rf`         | Pattern scan across daily logs             |
-| `hive audit`            | `hive a`          | Quality Pulse: 3 perspectives + synthesis  |
 | `hive standup`          | `hive su`         | Standup summary with GitHub PR integration |
 | `hive stats`            | `hive st`         | Usage statistics                           |
-| `hive ps`               |                   | Active sessions, project activity, git state |
-| **Advanced**            |                   |                                            |
+| **Verify**              |                   |                                            |
+| `hive verify`           | `hive v`          | Check stale facts against codebase; auto-corrects |
+| `hive reflect`          | `hive rf`         | Pattern scan across daily logs             |
+| `hive audit`            | `hive a`          | Quality Pulse: 3 perspectives + synthesis  |
+| **Manage**              |                   |                                            |
 | `hive mem [rm] <text>`  | `hive m`          | Add/remove working memory facts            |
 | `hive rule [rm] <text>` |                   | Add/remove behavioral rules                |
 | `hive edit <target>`    | `hive e`          | Edit memory, rules, todos, etc.            |
 | `hive skill`            | `hive sk`         | Manage skill plugins                       |
-| **Maintenance**         |                   |                                            |
+| **Maintain**            |                   |                                            |
 | `hive doctor`           | `hive dr`         | Health check                               |
 | `hive gc`               | `hive g`          | Archive old logs                           |
 | `hive setup`            |                   | Register hooks and MCP server              |

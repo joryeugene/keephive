@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.12.16
+
+### Docs
+
+- **README cohesion**: Loop and command table now share one vocabulary — capture / recall / verify / correct — instead of two separate naming schemes.
+- **`hive` bare**: Quick start, example block, and command table now all show `hive` (no subcommand) as the canonical status shorthand.
+
+### Developer
+
+- **Release pipeline**: `just release` is now fully rerunnable. The version-file commit is skipped with `git diff --cached --quiet ||` when the files are already committed, preventing a hard fail on re-runs after partial releases.
+
+## v0.12.15
+
+### MCP
+
+- **`hive_standup`**: Generate a standup summary from recent activity via MCP tool.
+- **`hive_prompt`**: List and retrieve prompt templates via MCP tool.
+- **`hive_ps`**: Expose active session map to Claude Code via MCP tool.
+- **`hive_recurring`**: Extended with full CRUD — add, edit, remove, and list recurring tasks.
+
 ## v0.12.x
 
 ### New Commands
