@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.12.x
+
+### New Commands
+
+- **`hive up`** (`hive update`): Check PyPI for a newer version and upgrade in place. Runs `keephive setup` after upgrading to sync hooks and MCP registration.
+- **`hive ps`**: Local hive map — active Claude Code sessions (via lsof), project activity, git branch + worktree count.
+
+### Features
+
+- **Session flags**: `hive go -c` (compact mode), `-r` (resume last session), stdin piping for scripted launch.
+- **Auto-copy**: `hive l`, `hive k`, `hive p` copy output to clipboard automatically in TTY mode.
+- **Pipe mode**: Content commands output plain text when stdout is piped.
+- **Recall context**: `hive rc` shows surrounding log lines for each match.
+- **Knowledge attribution**: Guides display their source file path.
+- **Todo undo**: `hive todo done` shows an undo hint; undo within the same session is supported.
+- **Recurring visibility**: Completed recurring tasks remain visible in `hive todo repeat`.
+- **LLM cost docs**: `hive k keephive-guide` documents model and cost for each LLM-powered feature.
+
+### Developer
+
+- **justfile**: `just test`, `just lint`, `just fmt`, `just check-private`, `just check` for contributors.
+- **Release pipeline**: `.just/release.just` (gitignored) with `just release <version> "<desc>"` — version bump, sync, check, commit, build, PyPI publish, GitHub release, local upgrade.
+- **ruff**: Added as dev dependency. Full codebase linted and formatted.
+
+### Fixes
+
+- **Ctrl+C in prompts**: `tty.setraw()` disables ISIG so Ctrl+C sent `\x03` as data rather than raising SIGINT — now caught explicitly, prints `cancelled`, exits cleanly.
+- **`hive l summarize`**: Header-only log (`# Daily Log: DATE`) was falsely treated as having entries. Now checks for `- ` lines.
+- **Test suite hang**: `test_empty_log_exits_gracefully` was removing `HIVE_SKIP_LLM` and triggering a real API call when `CLAUDECODE` and `ANTHROPIC_API_KEY` were both set.
+- **PS session tracking**: Uses lsof to map Claude processes to actual working directories, excluding `-p`, Electron helpers, and grep.
+- **Doctor content drift**: Detects when installed hooks or MCP config diverge from the source package.
+
 ## v0.11.0
 
 ### Features
