@@ -182,6 +182,87 @@ def _recurring_rm(pattern: str) -> None:
         console.print(f'[warn]No recurring task matching "{pattern}"[/warn]')
 
 
+def recurring_list_text() -> str:
+    """Return all recurring tasks as plain text (for MCP)."""
+    rf = recurring_file()
+    if not rf.exists():
+        return "No recurring tasks. Add one: hive todo repeat daily \"task\""
+
+    content = safe_read_text(rf)
+    tasks: list[tuple[str, str]] = []
+    for line in content.splitlines():
+        m = _TASK_RE.match(line)
+        if m and is_valid_freq(m.group(1)):
+            tasks.append((m.group(1), m.group(2).strip()))
+
+    if not tasks:
+        return "No recurring tasks. Add one: hive todo repeat daily \"task\""
+
+    due = due_recurring()
+    due_texts = {text.lower() for _, text, _ in due}
+    lines = ["Recurring Tasks:"]
+    for freq, text in tasks:
+        due_marker = " (DUE)" if text.lower() in due_texts else ""
+        display = _freq_display(freq)
+        lines.append(f"  [{freq}] {text}  ({display}){due_marker}")
+    return "\n".join(lines)
+
+
+def recurring_add_text(freq: str, text: str) -> str:
+    """Add a recurring task, return result message (no console output)."""
+    if not text:
+        return f"Error: specify task text. Usage: hive todo repeat {freq} \"task description\""
+
+    _ensure_recurring()
+    rf = recurring_file()
+    content = safe_read_text(rf)
+
+    lines = content.splitlines(keepends=True)
+    insert_idx = len(lines)
+    for i, line in enumerate(lines):
+        if line.strip().startswith("## Last Completed"):
+            insert_idx = i
+            break
+
+    new_line = f"- [{freq}] {text}\n"
+    lines.insert(insert_idx, new_line)
+    rf.write_text("".join(lines))
+    display = _freq_display(freq)
+    return f"Added [{freq}] {text}  ({display})"
+
+
+def recurring_rm_text(pattern: str) -> str:
+    """Remove a recurring task matching pattern, return result message (no console output)."""
+    if not pattern:
+        return "Error: specify a pattern to match"
+
+    rf = recurring_file()
+    if not rf.exists():
+        return "No recurring tasks"
+
+    content = safe_read_text(rf)
+    lines = content.splitlines(keepends=True)
+    new_lines = []
+    removed = None
+
+    for line in lines:
+        m = _TASK_RE.match(line)
+        if (
+            m
+            and not removed
+            and is_valid_freq(m.group(1))
+            and pattern.lower() in m.group(2).lower()
+        ):
+            removed = m.group(2).strip()
+            continue
+        new_lines.append(line)
+
+    if removed:
+        rf.write_text("".join(new_lines))
+        return f"Removed: {removed}"
+    return f"No recurring task matching \"{pattern}\""
+
+
 def _recurring_done(pattern: str) -> bool:
     """Mark a recurring task as done (updates last completed date/time).
 

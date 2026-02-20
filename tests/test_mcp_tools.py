@@ -266,3 +266,172 @@ def test_rule_invalid_action(mcp_env: Path):
 
     result = hive_rule("delete", "something")
     assert "Invalid" in result or "Unknown" in result
+
+
+# --- hive_recurring extended ---
+
+
+@pytest.fixture
+def recurring_env(hive_env: Path):
+    """Extend hive_env with a seeded recurring.md."""
+    rf = hive_env / "working" / "recurring.md"
+    rf.write_text(
+        "# Recurring Tasks\n\n"
+        "- [daily] Review test coverage\n"
+        "- [weekly] Check stale facts\n"
+        "\n## Last Completed\n\n"
+    )
+    return hive_env
+
+
+def test_recurring_list_all(recurring_env: Path):
+    from keephive.mcp_server import hive_recurring
+
+    result = hive_recurring("list")
+    assert "Review test coverage" in result
+    assert "Check stale facts" in result
+
+
+def test_recurring_list_empty(mcp_env: Path):
+    from keephive.mcp_server import hive_recurring
+
+    result = hive_recurring("list")
+    assert "No recurring tasks" in result
+
+
+def test_recurring_add(mcp_env: Path):
+    from keephive.mcp_server import hive_recurring
+
+    result = hive_recurring("add", "daily", "Run the test suite")
+    assert "Added" in result
+    assert "Run the test suite" in result
+
+    list_result = hive_recurring("list")
+    assert "Run the test suite" in list_result
+
+
+def test_recurring_add_invalid_freq(mcp_env: Path):
+    from keephive.mcp_server import hive_recurring
+
+    result = hive_recurring("add", "biweekly", "Some task")
+    assert "Invalid" in result
+
+
+def test_recurring_add_missing_text(mcp_env: Path):
+    from keephive.mcp_server import hive_recurring
+
+    result = hive_recurring("add", "daily", "")
+    assert "Error" in result or "required" in result
+
+
+def test_recurring_rm(recurring_env: Path):
+    from keephive.mcp_server import hive_recurring
+
+    result = hive_recurring("rm", text="stale facts")
+    assert "Removed" in result
+    assert "stale facts" in result
+
+    list_result = hive_recurring("list")
+    assert "Check stale facts" not in list_result
+
+
+def test_recurring_rm_no_match(recurring_env: Path):
+    from keephive.mcp_server import hive_recurring
+
+    result = hive_recurring("rm", text="nonexistent_xyz_task")
+    assert "No recurring task" in result
+
+
+def test_recurring_done(recurring_env: Path):
+    from keephive.mcp_server import hive_recurring
+
+    result = hive_recurring("done", text="test coverage")
+    assert "Done" in result
+    assert "test coverage" in result.lower()
+
+
+def test_recurring_done_no_match(recurring_env: Path):
+    from keephive.mcp_server import hive_recurring
+
+    result = hive_recurring("done", text="nonexistent_xyz_task")
+    assert "No recurring task" in result
+
+
+def test_recurring_unknown_action(mcp_env: Path):
+    from keephive.mcp_server import hive_recurring
+
+    result = hive_recurring("purge")
+    assert "Unknown action" in result
+
+
+# --- hive_prompt ---
+
+
+@pytest.fixture
+def prompt_env(hive_env: Path):
+    """Extend hive_env with a seeded prompt template."""
+    prompt = hive_env / "knowledge" / "prompts" / "code-review.md"
+    prompt.write_text("Review this code:\n\n{{code}}\n\nFocus on: correctness, clarity, edge cases.")
+    return hive_env
+
+
+def test_prompt_found(prompt_env: Path):
+    from keephive.mcp_server import hive_prompt
+
+    result = hive_prompt("code-review")
+    assert "Review this code" in result
+    assert "{{code}}" in result
+
+
+def test_prompt_prefix_match(prompt_env: Path):
+    from keephive.mcp_server import hive_prompt
+
+    result = hive_prompt("code")
+    assert "Review this code" in result
+
+
+def test_prompt_not_found(mcp_env: Path):
+    from keephive.mcp_server import hive_prompt
+
+    result = hive_prompt("nonexistent_xyz_prompt")
+    assert "not found" in result.lower()
+
+
+# --- hive_ps ---
+
+
+def test_ps_returns_string(mcp_env: Path):
+    from keephive.mcp_server import hive_ps
+
+    result = hive_ps()
+    assert isinstance(result, str)
+    assert "local hive map" in result
+
+
+def test_ps_shows_project(mcp_env: Path):
+    from keephive.mcp_server import hive_ps
+
+    result = hive_ps()
+    assert "This project:" in result
+
+
+# --- hive_standup ---
+
+
+def test_standup_deterministic(mcp_env: Path, daily_with_entries: Path):
+    from keephive.mcp_server import hive_standup
+
+    result = hive_standup(use_llm=False)
+    assert isinstance(result, str)
+    # Deterministic standup always produces the three Slack sections
+    assert "*Yesterday:*" in result or "*Today:*" in result or "*Blockers:*" in result
+
+
+def test_standup_skip_llm(mcp_env: Path):
+    """HIVE_SKIP_LLM causes standup to use deterministic path."""
+    from keephive.mcp_server import hive_standup
+
+    # hive_env fixture sets HIVE_SKIP_LLM=1
+    result = hive_standup(use_llm=True)
+    assert isinstance(result, str)
+    assert len(result) > 0

@@ -371,19 +371,51 @@ def hive_audit() -> str:
 
 
 @mcp.tool()
-def hive_recurring() -> str:
-    """List due recurring tasks. Shows tasks past their schedule."""
-    _track_mcp("recurring")
-    from keephive.storage import due_recurring
+def hive_recurring(action: str = "list", freq: str = "", text: str = "") -> str:
+    """Manage recurring tasks.
 
-    due = due_recurring()
-    if not due:
-        return "No recurring tasks due."
-    lines = [f"{len(due)} recurring task(s) due:"]
-    for freq, text, overdue in due:
-        over_s = f"+{overdue}d overdue" if overdue > 0 else "due today"
-        lines.append(f"  [{freq}] {text} ({over_s})")
-    return "\n".join(lines)
+    action: list | add | rm | done
+      list: show all recurring tasks with due status (default)
+      add: add a new recurring task (requires freq and text)
+      rm: remove a task matching text pattern
+      done: mark a task done (next due per schedule)
+    freq: daily | weekly | monthly | Nd | Nh (required for add)
+    text: task text or pattern (required for add/rm/done)
+    """
+    _track_mcp("recurring")
+    ensure_dirs()
+    from keephive.commands.recurring import (
+        recurring_add_text,
+        recurring_list_text,
+        recurring_rm_text,
+    )
+    from keephive.storage import append_to_daily, ensure_daily, is_valid_freq, mark_recurring_done
+
+    if action == "list":
+        return recurring_list_text()
+    elif action == "add":
+        if not freq or not is_valid_freq(freq):
+            return f"Invalid freq: {freq!r}. Use: daily, weekly, monthly, Nd, Nh"
+        if not text:
+            return "Error: text is required for add"
+        return recurring_add_text(freq, text)
+    elif action == "rm":
+        if not text:
+            return "Error: text pattern is required for rm"
+        return recurring_rm_text(text)
+    elif action == "done":
+        if not text:
+            return "Error: text pattern is required for done"
+        result = mark_recurring_done(text)
+        if not result:
+            return f"No recurring task matching: {text}"
+        match_text, _ = result
+        ensure_daily()
+        ts = datetime.now().strftime("%H:%M:%S")
+        append_to_daily(f"- [{ts}] DONE: {match_text}")
+        return f"Done: {match_text} (next due per schedule)"
+    else:
+        return f"Unknown action: {action!r}. Use: list | add | rm | done"
 
 
 @mcp.tool()
@@ -562,6 +594,59 @@ def hive_fts_search(query: str, limit: int = 10) -> str:
         date_str = f" {r.get('date', '')}" if r.get("date") else ""
         lines.append(f"[{r['score']:>3}] ({r['tier']}){date_str} {r['line']}")
     return "\n".join(lines)
+
+
+@mcp.tool()
+def hive_standup(use_llm: bool = True) -> str:
+    """Generate standup text from daily logs and GitHub PRs.
+
+    use_llm: True (default) uses LLM synthesis; False uses raw data only.
+    Returns Slack-formatted standup text."""
+    _track_mcp("standup")
+    ensure_dirs()
+    from keephive.commands.standup import _display_deterministic, _display_llm, _gather_raw_data
+
+    data = _gather_raw_data()
+    return _display_llm(data) if use_llm else _display_deterministic(data)
+
+
+@mcp.tool()
+def hive_prompt(name: str) -> str:
+    """Get a prompt template by name (prefix/substring matching).
+
+    name: prompt name or prefix (e.g. 'code-review', 'code')"""
+    _track_mcp("prompt")
+    ensure_dirs()
+    from keephive.commands.knowledge import _resolve_file
+    from keephive.storage import prompts_dir
+
+    match = _resolve_file(name, prompts_dir())
+    if not match:
+        return f"Prompt not found: {name}\nUse hive_knowledge_write to create it or hive_knowledge() to list guides."
+    return match.read_text()
+
+
+@mcp.tool()
+def hive_ps() -> str:
+    """Show active Claude sessions and recent project activity."""
+    _track_mcp("ps")
+    ensure_dirs()
+    from pathlib import Path as _Path
+
+    from keephive.commands.ps import (
+        _get_active_session_dirs,
+        _git_info,
+        _recent_projects,
+        _render_text,
+    )
+    from keephive.storage import read_stats
+
+    cwd = str(_Path.cwd())
+    stats = read_stats()
+    session_dirs = _get_active_session_dirs()
+    projects = _recent_projects(stats, cwd)
+    git = _git_info(cwd)
+    return _render_text(cwd, projects, git, session_dirs)
 
 
 def main() -> None:

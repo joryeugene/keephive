@@ -207,6 +207,61 @@ def _format_git(git: dict | None) -> str:
     return f"  [{git['branch']}]  {wt_label}"
 
 
+def _render_text(
+    cwd: str,
+    projects: list[dict],
+    git: dict | None,
+    session_dirs: list[str],
+) -> str:
+    """Return ps output as a plain string (for MCP)."""
+    lines: list[str] = []
+    lines.append("")
+    lines.append("  local hive map")
+    lines.append("  " + "\u2500" * 46)
+
+    current = [p for p in projects if p["is_current"]]
+    others = [p for p in projects if not p["is_current"]]
+
+    active_others = [p for p in others if any(_same_path(p["key"], d) for d in session_dirs)]
+    recent_others = [p for p in others if not any(_same_path(p["key"], d) for d in session_dirs)]
+
+    active_count = _count_claude_processes()
+    proc_label = f"{active_count} active session{'s' if active_count != 1 else ''}"
+    lines.append(f"  Claude: {proc_label}")
+    lines.append("")
+
+    if current:
+        p = current[0]
+        git_str = _format_git(git)
+        lines.append(f"  This project:  {p['name']}{git_str}")
+        today_str = f"today: {p['today_cmds']} command{'s' if p['today_cmds'] != 1 else ''}"
+        age = _last_log_time() or p["age"] if p["age"] == "today" else p["age"]
+        lines.append(f"    {today_str}  |  last entry: {age}")
+    else:
+        git_str = _format_git(git)
+        lines.append(f"  This project:  {_project_name(cwd)}{git_str}")
+        lines.append("    no activity recorded today")
+
+    if active_others:
+        lines.append("")
+        lines.append("  Active sessions:")
+        for p in active_others:
+            label = f"{p['today_cmds']} cmd today" if p["today_cmds"] else p["age"]
+            lines.append(f"    \u25cf {p['name']:<22}  {label}")
+
+    if recent_others:
+        lines.append("")
+        lines.append("  Recent hives (30d):")
+        for p in recent_others:
+            label = f"{p['today_cmds']} cmd today" if p["today_cmds"] else p["age"]
+            lines.append(f"    {p['name']:<24}  {label}")
+
+    lines.append("")
+    lines.append("  " + "\u2500" * 46)
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _render(
     cwd: str,
     projects: list[dict],
