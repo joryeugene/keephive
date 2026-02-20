@@ -90,6 +90,38 @@ def check_installed_deps() -> list[str]:
     return missing
 
 
+def check_content_drift() -> bool:
+    """Return True if installed cli.py differs from dev source cli.py.
+
+    Detects content drift within the same version: when `uv tool install --force`
+    used a cached wheel and didn't pick up file changes.
+    """
+    import hashlib
+
+    tool_python = get_tool_python()
+    if not tool_python:
+        return False
+
+    # Find installed cli.py under the tool env's site-packages
+    tool_lib = Path(tool_python).parent.parent / "lib"
+    installed_cli: Path | None = None
+    for p in tool_lib.rglob("keephive/cli.py"):
+        installed_cli = p
+        break
+    if not installed_cli or not installed_cli.exists():
+        return False
+
+    # Dev cli.py lives alongside health.py
+    dev_cli = Path(__file__).parent / "cli.py"
+    if not dev_cli.exists():
+        return False
+
+    def md5(path: Path) -> str:
+        return hashlib.md5(path.read_bytes()).hexdigest()
+
+    return md5(installed_cli) != md5(dev_cli)
+
+
 def check_hooks() -> bool:
     """Check if keephive hooks are configured in settings.json."""
     settings = Path.home() / ".claude" / "settings.json"

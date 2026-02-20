@@ -152,6 +152,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "setup": ("keephive.commands.setup", "cmd_setup"),
     "st": ("keephive.commands.stats", "cmd_stats"),
     "stats": ("keephive.commands.stats", "cmd_stats"),
+    "update": ("keephive.commands.update", "cmd_update"),
+    "up": ("keephive.commands.update", "cmd_update"),
     "hook-precompact": ("keephive.hooks.precompact", "hook_precompact"),
     "hook-sessionstart": ("keephive.hooks.sessionstart", "hook_sessionstart"),
     "hook-posttooluse": ("keephive.hooks.posttooluse", "hook_posttooluse"),

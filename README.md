@@ -1,5 +1,8 @@
 # keephive
 
+[![PyPI version](https://img.shields.io/pypi/v/keephive.svg)](https://pypi.org/project/keephive/)
+[![GitHub release](https://img.shields.io/github/v/release/joryeugene/keephive.svg)](https://github.com/joryeugene/keephive/releases/latest)
+
 A knowledge sidecar for Claude Code. It captures what you learn, verifies it stays true, and surfaces it when relevant.
 
 <p align="center">

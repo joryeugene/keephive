@@ -12,6 +12,7 @@ from pathlib import Path
 
 from keephive.health import (
     check_anthropic_memory,
+    check_content_drift as _check_content_drift,
     check_installed_deps as _check_installed_deps,
     get_installed_version as _get_installed_version,
 )
@@ -140,15 +141,21 @@ def cmd_doctor(args: list[str]) -> None:
     from keephive import __version__ as dev_ver
     if installed_ver and installed_ver != dev_ver:
         console.print(f"  [err]STALE[/err] Installed v{installed_ver}, dev v{dev_ver}")
-        console.print("  [dim]  Run: uv tool install --force .[/dim]")
+        console.print("  [dim]  Run: uv tool install --force --no-cache .[/dim]")
         issues += 1
     elif installed_ver:
         console.print(f"  [ok]OK[/ok] Installed version matches (v{installed_ver})")
 
+    # Content drift: same version number but stale cached wheel
+    if installed_ver and installed_ver == dev_ver and _check_content_drift():
+        console.print("  [warn]STALE[/warn] Version matches but installed code differs (cached wheel)")
+        console.print("  [dim]  Run: uv tool install --force --no-cache .[/dim]")
+        issues += 1
+
     missing_deps = _check_installed_deps()
     if missing_deps:
         console.print(f"  [err]STALE DEPS[/err] Missing in tool env: {', '.join(missing_deps)}")
-        console.print("  [dim]  Run: uv tool install --force .[/dim]")
+        console.print("  [dim]  Run: uv tool install --force --no-cache .[/dim]")
         issues += 1
 
     # 5. Last activity

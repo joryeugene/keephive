@@ -75,6 +75,14 @@ When a command produces NO output (empty stdout AND stderr), that is NOT success
 
 Empty output is the most dangerous failure mode because it looks like success.
 
+## Publishing
+
+`uv publish` does NOT read `~/.pypirc`. Use one of:
+- `uv run --with twine twine upload dist/keephive-*`
+- `UV_PUBLISH_TOKEN=pypi-... uv publish`
+
+Full release sequence: `uv build` → `twine upload` → `gh release create v<N>`
+
 ## Before Calling It Done
 
 1. `uv run pytest` passes

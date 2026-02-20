@@ -104,6 +104,29 @@ class TestDoctorVersionDrift:
         assert "anthropic" in out
         assert "uv tool install" in out
 
+    def test_stale_hint_includes_no_cache(self, hive_env, capsys):
+        """The stale reinstall hint must include --no-cache to actually rebuild."""
+        with patch("keephive.commands.doctor._get_installed_version", return_value="0.9.0"):
+            from keephive.commands.doctor import cmd_doctor
+            cmd_doctor([])
+        out = capsys.readouterr().out
+        assert "--no-cache" in out, "Reinstall hint must include --no-cache"
+
+    def test_content_drift_detected(self, hive_env, capsys):
+        """Doctor warns when installed and dev cli.py have different content."""
+        from keephive import __version__
+        with (
+            patch("keephive.commands.doctor._get_installed_version", return_value=__version__),
+            patch("keephive.commands.doctor._check_content_drift", return_value=True),
+            patch("keephive.commands.doctor._check_installed_deps", return_value=[]),
+        ):
+            from keephive.commands.doctor import cmd_doctor
+            cmd_doctor([])
+        out = capsys.readouterr().out
+        assert "content" in out.lower() or "STALE" in out, \
+            "Doctor must warn about content drift"
+        assert "--no-cache" in out, "Content drift hint must include --no-cache"
+
 
 # ---------------------------------------------------------------------------
 # TestDoctorDuplicateDetection
