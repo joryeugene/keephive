@@ -208,8 +208,47 @@ All commands are also available as MCP tools for Claude Code to call directly:
 | `HIVE_HOME`           | `~/.claude/hive` | Data directory                         |
 | `HIVE_STALE_DAYS`     | `30`             | Days before a fact is flagged stale    |
 | `HIVE_CAPTURE_BUDGET` | `4000`           | Characters to extract from transcripts |
-| `ANTHROPIC_API_KEY`   | (unset)          | Direct API calls instead of claude -p  |
+| `ANTHROPIC_API_KEY`   | (unset)          | Enables LLM features inside Claude Code sessions. Never needed from a terminal. |
 | `NO_COLOR`            | (unset)          | Disable terminal colors                |
+
+## LLM features
+
+**TL;DR: If you have Claude Code, you pay nothing extra. Ever.**
+
+keephive calls `claude -p`, which runs under your existing Claude Code subscription. `ANTHROPIC_API_KEY` is never checked from a terminal or a hook — you cannot accidentally bill yourself.
+
+The API path exists for one specific case: running LLM commands (`hive a`, `hive v`, etc.) _inside_ a Claude Code session rather than from a separate terminal. That is the only time `ANTHROPIC_API_KEY` is consulted.
+
+### Two tiers
+
+| Tier | When active | Cost |
+|------|-------------|------|
+| `claude -p` subprocess | Terminal or hooks (default, always) | Free — Claude Code subscription |
+| Direct Anthropic API | Inside Claude Code + `ANTHROPIC_API_KEY` set | Paid — per-call billing |
+
+Hooks (PreCompact, etc.) run without the `CLAUDECODE` environment variable, so they always take the free subprocess path regardless of whether `ANTHROPIC_API_KEY` is present in your shell.
+
+### LLM-powered commands
+
+| Command | Model | When to use |
+|---------|-------|-------------|
+| `hive a` (audit) | 3× haiku + 1× sonnet | Intentional quality check |
+| `hive v` (verify) | sonnet + tools, multi-turn | Validating stale facts |
+| `hive rf analyze/draft` | haiku | Pattern discovery |
+| `hive su` (standup) | haiku | Daily standup generation |
+| `hive l summarize` | haiku | End-of-session summary |
+| `hive dr` (doctor) | haiku, optional | Duplicate TODO detection |
+| PreCompact hook | haiku | Automatic on compaction — always free |
+
+`hive a` and `hive v` are the heavyweight operations. Use them intentionally.
+
+### Free commands (no LLM)
+
+`hive r`, `hive rc`, `hive s`, `hive todo`, `hive t`, `hive m`, `hive rule`, `hive e`, `hive n`, `hive k`, `hive p`, `hive st`, `hive l` (without `summarize`), `hive gc`, `hive sk`, and all hooks except PreCompact.
+
+### Disable automatic LLM calls
+
+Set `HIVE_SKIP_LLM=1` to skip the PreCompact hook's extraction step. SessionStart never calls an LLM.
 
 ## Development
 

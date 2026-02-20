@@ -2,7 +2,7 @@
 
 This validates that keephive.claude handles:
 1. parse_claude_response: the response format from claude -p
-2. run_claude_pipe routing: API key -> API, CLAUDECODE -> fail fast, else -> subprocess
+2. run_claude_pipe routing: inside CC + API key -> API, inside CC only -> fail fast, terminal/hooks -> subprocess (always)
 3. Error paths for all tiers
 """
 
@@ -384,24 +384,22 @@ class TestRouting:
         assert result.verdicts == []
         mock_sub.assert_called_once()
 
-    def test_api_key_without_tools_uses_api(self, monkeypatch):
-        """API key set (not in CC): uses API path for non-tool calls."""
+    def test_api_key_terminal_uses_subprocess(self, monkeypatch):
+        """API key in env at terminal: still uses claude -p (free), never bills API."""
         monkeypatch.delenv("CLAUDECODE", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
 
-        mock_api = MagicMock()
-        monkeypatch.setattr(
-            "keephive.claude._run_via_api", mock_api,
-        )
-        mock_api.return_value = VerifyResponse(verdicts=[])
+        mock_sub = MagicMock()
+        monkeypatch.setattr("keephive.claude._run_via_subprocess", mock_sub)
+        mock_sub.return_value = VerifyResponse(verdicts=[])
 
         from keephive.claude import run_claude_pipe
         result = run_claude_pipe("test prompt", VerifyResponse)
         assert result.verdicts == []
-        mock_api.assert_called_once()
+        mock_sub.assert_called_once()
 
-    def test_api_key_with_tools_uses_subprocess(self, monkeypatch):
-        """API key set with tools: falls through to subprocess (needs CC tools)."""
+    def test_api_key_terminal_with_tools_uses_subprocess(self, monkeypatch):
+        """API key + tools + terminal: subprocess used (API key still ignored at terminal)."""
         monkeypatch.delenv("CLAUDECODE", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
 

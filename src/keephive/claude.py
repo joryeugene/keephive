@@ -1,11 +1,13 @@
 """LLM integration with Pydantic validation.
 
-Two-tier routing:
-  Tier 1 (default): claude -p subprocess. Uses Claude Code subscription. Works from terminal.
-  Tier 2 (opt-in):  Anthropic API direct. Set ANTHROPIC_API_KEY. Works everywhere.
+Routing:
+  Terminal or hook: always claude -p subprocess (free via Claude Code subscription).
+  Inside Claude Code + ANTHROPIC_API_KEY: direct API (only paid path).
+  Inside Claude Code without key: fail fast with guidance.
 
-Inside Claude Code without an API key, LLM calls fail fast with guidance
-instead of hanging for 120s on a blocked subprocess.
+ANTHROPIC_API_KEY is consulted ONLY inside Claude Code. From a terminal or
+a hook subprocess, ANTHROPIC_API_KEY is ignored and claude -p always runs.
+This prevents silent billing when an API key is present for other tools.
 """
 
 from __future__ import annotations
@@ -157,13 +159,14 @@ def run_claude_pipe(
     """Run an LLM call with structured output, validated by Pydantic.
 
     Routing:
-      1. ANTHROPIC_API_KEY set -> direct API call (works everywhere)
-      2. Inside Claude Code without API key -> fail fast with guidance
-      3. Otherwise -> claude -p subprocess (terminal only)
+      1. Inside Claude Code + API key + no tools  -> direct API (only paid path)
+      2. Inside Claude Code + no API key          -> fail fast with guidance
+      3. Inside Claude Code + tools               -> fail fast (tools need terminal)
+      4. Terminal or hook (any)                   -> claude -p subprocess (free)
 
-    When tools are requested (verify, reflect analyze), the API path
-    cannot provide Claude Code built-in tools. Those calls require
-    the subprocess path (from terminal) or fail fast inside Claude Code.
+    ANTHROPIC_API_KEY is consulted ONLY inside Claude Code. From a terminal or
+    a hook subprocess, ANTHROPIC_API_KEY is ignored and claude -p always runs.
+    This prevents silent billing when an API key is present for other tools.
 
     Args:
         prompt: The prompt text to send.
@@ -184,27 +187,25 @@ def run_claude_pipe(
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     inside_cc = bool(os.environ.get("CLAUDECODE"))
 
-    # Tier 2: Direct API (works everywhere, including inside Claude Code)
-    if api_key and not tools:
+    # Inside Claude Code: claude -p cannot run as a nested subprocess here.
+    if inside_cc:
+        if not api_key:
+            raise ClaudePipeError(
+                "LLM features need claude -p, which can't run inside Claude Code. "
+                "Set ANTHROPIC_API_KEY for LLM features here, or run from a terminal."
+            )
+        if tools:
+            raise ClaudePipeError(
+                f"This command needs Claude Code tools ({', '.join(tools)}) "
+                "which require a terminal. Run from a terminal: hive v"
+            )
         return _run_via_api(
             prompt, response_model, model, stdin_text, timeout, verbose,
         )
 
-    # Tools requested with API key: still need subprocess for tool access.
-    # Inside CC that means we can't run it.
-    if inside_cc and not api_key:
-        raise ClaudePipeError(
-            "LLM features need claude -p, which can't run inside Claude Code. "
-            "Set ANTHROPIC_API_KEY for LLM features here, or run from a terminal."
-        )
-
-    if inside_cc and api_key and tools:
-        raise ClaudePipeError(
-            f"This command needs Claude Code tools ({', '.join(tools)}) "
-            "which require a terminal. Run from a terminal: hive v"
-        )
-
-    # Tier 1: subprocess (terminal, uses Claude Code subscription)
+    # Terminal or hook context: always use claude -p (Claude Code subscription, free).
+    # ANTHROPIC_API_KEY is intentionally ignored -- users should not be billed
+    # for keephive calls just because an API key exists in their environment.
     return _run_via_subprocess(
         prompt, response_model, model, stdin_text, tools, max_turns,
         timeout, verbose,

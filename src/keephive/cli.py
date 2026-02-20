@@ -31,6 +31,7 @@ HELP: dict[str, str] = {
     "skill": "Usage: hive sk [publish <name>|unpublish <name>|sync|find <q>]\n  Manage skill plugins",
     "update": "Usage: hive up\n  Upgrade keephive to the latest version in-place",
     "setup": "Usage: hive setup\n  Initial setup: register MCP server + hooks in ~/.claude/",
+    "ps": "Usage: hive ps\n  Local hive map: active claude sessions, recent project activity, git state",
 }
 
 # Map aliases to canonical names for help lookup
@@ -95,6 +96,7 @@ Analysis
   a, audit [-v]        Quality pulse (score + actions)
   su, standup          Generate standup summary
   st, stats [-p path]  Usage statistics
+  ps                   Active sessions, project activity, git state
 
 Maintenance
   e, edit [target]     Edit file (memory/rules/claude/settings/local/note/today)
@@ -162,6 +164,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "stats": ("keephive.commands.stats", "cmd_stats"),
     "update": ("keephive.commands.update", "cmd_update"),
     "up": ("keephive.commands.update", "cmd_update"),
+    "ps": ("keephive.commands.ps", "cmd_ps"),
     "hook-precompact": ("keephive.hooks.precompact", "hook_precompact"),
     "hook-sessionstart": ("keephive.hooks.sessionstart", "hook_sessionstart"),
     "hook-posttooluse": ("keephive.hooks.posttooluse", "hook_posttooluse"),

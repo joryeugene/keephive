@@ -160,3 +160,29 @@ After finishing work:
 - `hive v` to verify stale facts against codebase
 - `hive rf` to find patterns in daily logs
 - `hive k edit <name>` to create a knowledge guide
+
+## LLM Features and Costs
+
+### Default is always free
+
+From a terminal or a hook, keephive uses `claude -p` (Claude Code subscription).
+`ANTHROPIC_API_KEY` is ignored — setting it for other tools does NOT bill keephive.
+
+The API path is taken only when INSIDE a Claude Code session (`CLAUDECODE` is set) AND `ANTHROPIC_API_KEY` is present. Hooks do not run inside Claude Code, so they are always free.
+
+### LLM-powered commands
+
+| Command | Model | Cost |
+|---------|-------|------|
+| `hive a` | 3× haiku + 1× sonnet | 4 calls — use intentionally |
+| `hive v` | sonnet + tools | Multi-turn — use intentionally |
+| `hive rf`, `hive su`, `hive l summarize` | haiku | Light |
+| PreCompact hook | haiku | Automatic, always free |
+
+### Free commands
+
+`hive r`, `hive rc`, `hive s`, `hive todo`, `hive m`, `hive rule`, `hive e`, `hive n`, `hive k`, `hive p`, `hive st`, `hive l`, `hive gc`, `hive sk`
+
+### Agent rule
+
+Use free commands for routine work. Reserve `hive a` and `hive v` for intentional quality checks.
