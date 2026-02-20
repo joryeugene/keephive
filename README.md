@@ -104,39 +104,35 @@ keephive uses the three extension points Claude Code exposes:
 flowchart TD
     subgraph CYCLE["Session Cycle (automatic)"]
         direction LR
-        START([New session]) -->|SessionStart:\ninjects context| WORK([Working\nwith Claude])
-        WORK -->|PostToolUse:\nperiodic nudge| WORK
-        WORK -->|"UserPromptSubmit:\nTODO detection\n+ .ui-queue injection"| WORK
-        WORK -->|context near limit| PC[PreCompact:\nextract → classify\n→ daily log]
-        PC -->|next session\nhas more context| START
+        START([New session]) -->|"SessionStart:\ninject context"| WORK([Working])
+        WORK -->|"PostToolUse · UserPromptSubmit\nnudge, TODO detect, ui-queue"| WORK
+        WORK -->|"context full"| PC[PreCompact:\nextract → log]
+        PC -->|"next session"| START
     end
 
-    subgraph STORE["Knowledge Store (stable → ephemeral)"]
-        MEM[("Working memory\n30–90d TTL")]
-        GUIDES[("Knowledge guides\nper-topic docs")]
-        RULES[("Rules\nsession nudges")]
-        LOG[("Daily log\nraw stream")]
-        TODOS[("TODOs / Notes\n7d stale TTL")]
+    subgraph STORE["Knowledge Store"]
+        MEM[("Memory\n30–90d TTL")]
+        GUIDES[("Guides")]
+        RULES[("Rules")]
+        LOG[("Daily log")]
+        TODOS[("TODOs")]
     end
 
     subgraph MANUAL["On-demand (CLI · MCP)"]
-        direction LR
-        REM["hive r / hive_remember\ncapture a fact"]
-        RCL["hive rc / hive_recall\nsearch all tiers"]
-        VRF["hive v / verify\nauto-correct stale facts"]
-        DASH["hive serve\nweb dashboard\n+ bookmarklet → .ui-queue"]
+        REM["hive r · capture"]
+        RCL["hive rc · recall"]
+        VRF["hive v · verify"]
+        DASH["hive serve · dashboard\n+ bookmarklet"]
     end
 
-    START -->|reads| MEM & GUIDES & RULES & TODOS
+    START -->|reads| STORE
     PC --> LOG
-    LOG -->|"hive rf → promote"| MEM
-    LOG -->|"hive rf → promote"| GUIDES
-    MEM -->|"hive v → re-stamp or correct"| MEM
-
+    LOG -->|"hive rf · promote"| MEM
+    MEM -->|"hive v · re-stamp"| MEM
     REM --> LOG
-    RCL -.->|searches| MEM & GUIDES & LOG
+    RCL -.->|searches| STORE
     VRF --> MEM
-    DASH -.->|reads all| STORE
+    DASH -.->|reads| STORE
 ```
 
 ### Memory tiers
