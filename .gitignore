@@ -18,3 +18,7 @@ tests/e2e_outputs/
 
 # Private just recipes (maintainer-only)
 .just/
+
+# hive serve runtime artifacts
+server.pid
+server_output.log

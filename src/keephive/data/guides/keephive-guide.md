@@ -29,6 +29,10 @@ A knowledge sidecar for Claude Code. Commands work as both `keephive <cmd>` and 
 | `hive doctor`          | `hive dr`         | Health check (hooks, MCP, data integrity)                        |
 | `hive standup`         |                   | Generate standup summary from recent activity                    |
 | `hive gc`              |                   | Archive old logs, rebuild index                                  |
+| `hive serve [port]`    | `hive ws`         | Live web dashboard (localhost:3847)                              |
+| `hive ui`              |                   | Show pending UI feedback queue                                   |
+| `hive ui-install`      |                   | Print bookmarklet URL (drag to bookmarks bar)                    |
+| `hive ui-clear`        |                   | Discard pending UI feedback                                      |
 
 ### Knowledge
 
@@ -191,7 +195,7 @@ The API path is taken only when INSIDE a Claude Code session (`CLAUDECODE` is se
 
 ### Free commands
 
-`hive r`, `hive rc`, `hive s`, `hive todo`, `hive m`, `hive rule`, `hive e`, `hive n`, `hive k`, `hive p`, `hive st`, `hive l`, `hive gc`, `hive sk`
+`hive r`, `hive rc`, `hive s`, `hive todo`, `hive m`, `hive rule`, `hive e`, `hive n`, `hive k`, `hive p`, `hive st`, `hive l`, `hive gc`, `hive sk`, `hive serve`, `hive ui`
 
 ### Agent rule
 

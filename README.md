@@ -151,6 +151,9 @@ keephive uses the three extension points Claude Code exposes:
 | `hive gc`               | `hive g`          | Archive old logs                           |
 | `hive setup`            |                   | Register hooks and MCP server              |
 | `hive update`           | `hive up`         | Upgrade keephive in-place                  |
+| **Dashboard**           |                   |                                            |
+| `hive serve [port]`     | `hive ws`         | Live web dashboard (localhost:3847)        |
+| `hive ui`               |                   | Show / manage UI feedback queue            |
 
 ### Features in depth
 

@@ -31,6 +31,8 @@ HELP: dict[str, str] = {
     "update": "Usage: hive up\n  Upgrade keephive to the latest version in-place",
     "setup": "Usage: hive setup\n  Initial setup: register MCP server + hooks in ~/.claude/",
     "ps": "Usage: hive ps\n  Local hive map: active claude sessions, recent project activity, git state",
+    "serve": "Usage: hive serve [port]\n  Live web dashboard at localhost:3847 (default)\n  Views: / /daily /dev /simple /stats /know /mem /notes\n  Auto-refresh, markdown rendering, 8 views",
+    "ui": "Usage: hive ui [install|clear]\n  ui           Show pending UI feedback queue\n  ui-install   Print bookmarklet URL (drag to bookmarks bar)\n  ui-clear     Clear pending feedback",
 }
 
 # Map aliases to canonical names for help lookup
@@ -64,6 +66,7 @@ _CANONICAL: dict[str, str] = {
     "sesh": "session",
     "up": "update",
     "draft": "note",
+    "ws": "serve",
 }
 
 
@@ -130,6 +133,10 @@ Maintenance
   up, update           Upgrade keephive in-place
   setup                Initial setup
 
+Dashboard
+  serve [port]         Live web dashboard (localhost:3847)
+  ui [install|clear]   UI feedback queue (bookmarklet → Claude Code)
+
   h, help / --help     Show this help
   --version            Show version
 """)
@@ -190,6 +197,11 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "update": ("keephive.commands.update", "cmd_update"),
     "up": ("keephive.commands.update", "cmd_update"),
     "ps": ("keephive.commands.ps", "cmd_ps"),
+    "serve": ("keephive.commands.serve", "cmd_serve"),
+    "ws": ("keephive.commands.serve", "cmd_serve"),
+    "ui": ("keephive.commands.ui", "cmd_ui"),
+    "ui-install": ("keephive.commands.ui", "cmd_ui_install"),
+    "ui-clear": ("keephive.commands.ui", "cmd_ui_clear"),
     "hook-precompact": ("keephive.hooks.precompact", "hook_precompact"),
     "hook-sessionstart": ("keephive.hooks.sessionstart", "hook_sessionstart"),
     "hook-posttooluse": ("keephive.hooks.posttooluse", "hook_posttooluse"),

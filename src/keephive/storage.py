@@ -1178,6 +1178,11 @@ def _count_fact_references(fact_text: str) -> int:
     return count
 
 
+def ui_queue_path() -> "Path":
+    """Path to the UI feedback queue file (written by bookmarklet, read by UserPromptSubmit)."""
+    return hive_dir() / ".ui-queue"
+
+
 def score_fact_decay(fact_text: str, verified_date_str: str) -> float:
     """Score a fact for decay. Lower score = better candidate for archiving.
 

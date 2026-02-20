@@ -11,6 +11,38 @@ import sys
 from datetime import datetime
 
 
+def _format_ui_context(data: dict) -> str:
+    """Format UI feedback queue data as a context block for Claude."""
+    page = data.get("page", "?")
+    selector = data.get("selector", "?")
+    html_snippet = data.get("html", "")[:400]
+    styles = data.get("styles", "")
+    note = data.get("note", "")
+    # Extract the user's actual note (after "Note: " in the textarea)
+    if "\n\nNote: " in note:
+        note = note.split("\n\nNote: ")[-1].strip()
+
+    lines = [f"[UI Feedback — {page}]"]
+    lines.append(f"Page: {page}")
+    lines.append(f"Element: {selector}")
+    if html_snippet:
+        lines.append(f"HTML: {html_snippet}")
+    if styles:
+        lines.append(f"Styles:\n{styles}")
+    if note:
+        lines.append(f"Note: {note}")
+    lines.append("[/UI Feedback]")
+
+    output = json.dumps(
+        {
+            "hookSpecificOutput": {
+                "additionalContext": "\n".join(lines),
+            }
+        }
+    )
+    return output + "\n"
+
+
 def hook_userpromptsubmit(args: list[str]) -> None:
     """Main entry point for UserPromptSubmit hook."""
     try:
@@ -22,6 +54,20 @@ def hook_userpromptsubmit(args: list[str]) -> None:
     session_id = input_data.get("session_id", "")
     if not session_id:
         return
+
+    # Check UI feedback queue first — inject before nudge
+    try:
+        from keephive.storage import ui_queue_path
+
+        queue = ui_queue_path()
+        if queue.exists():
+            data = json.loads(queue.read_text())
+            context = _format_ui_context(data)
+            sys.stdout.write(context)
+            queue.unlink()
+            return  # Queue consumed; skip nudge this turn
+    except Exception:
+        pass  # Never block the prompt
 
     # Track usage
     try:

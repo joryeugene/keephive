@@ -38,7 +38,9 @@ A knowledge sidecar for Claude Code.
 - `hooks/sessionstart.py`: Injects context at session start. No LLM call.
 - `hooks/precompact.py`: Layer 1 extraction (deterministic) + Layer 2 auto-write to daily log (claude -p).
 - `hooks/posttooluse.py`: Counter-based periodic nudge after Edit/Write tool use.
-- `hooks/userpromptsubmit.py`: Counter-based periodic nudge + TODO detection from user prompts.
+- `hooks/userpromptsubmit.py`: Counter-based periodic nudge + TODO detection from user prompts. Also injects `.ui-queue` content before nudge when present.
+- `commands/serve.py`: Live web dashboard (HTTP server, 8 views, markdown rendering, auto-refresh, `/ui-feedback` POST endpoint). Zero external deps.
+- `commands/ui.py`: UI feedback queue CLI (`hive ui`/`ui-install`/`ui-clear`) + bookmarklet source as `javascript:` URL.
 
 ## The Rule
 

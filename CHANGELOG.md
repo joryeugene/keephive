@@ -2,6 +2,18 @@
 
 ## v0.13.0
 
+### Dashboard
+
+- **`hive serve [port]`** (`hive ws`): Live web dashboard at localhost:3847 with 8 views (all, daily, dev, simple, stats, know, mem, notes). Auto-refresh with configurable interval, dark theme, zero external dependencies.
+- **Markdown rendering**: Knowledge guides, prompts, and notes render as formatted HTML (headers, bold, code blocks, tables, lists, links). Pure Python stdlib regex renderer, no CDN calls.
+- **`hive ui`**: Show pending UI feedback in queue.
+- **`hive ui-install`**: Print bookmarklet `javascript:` URL to drag to bookmarks bar. Click any element on `hive serve` (or any page), add a note via voice or typing, submit — context is queued and injected into your next Claude Code prompt.
+- **`hive ui-clear`**: Discard pending UI feedback queue.
+
+### Hooks
+
+- **UserPromptSubmit**: Reads `.ui-queue` before nudge logic. When a bookmarklet submission is pending, injects `[UI Feedback]` element context as `additionalContext` and clears the queue, skipping the nudge for that turn.
+
 ### Features
 
 - **`hive n todo` (edit-buffer review)**: Extract action items from a note slot. Both plain text lines and bullet lines under a `## todo` section become candidates; items over 120 chars are silently dropped as observations. Single item: `(y/n)` prompt. Multiple items: opens `$EDITOR` with the **full note**, candidates pre-marked with `- `, non-candidate bullets stripped to plain text context. Delete or rephrase any `- ` lines, save to confirm. Exiting without saving (no mtime change) cancels — works with neovim `:q!`.
