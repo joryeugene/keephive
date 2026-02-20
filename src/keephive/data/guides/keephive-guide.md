@@ -105,8 +105,12 @@ When keephive runs as an MCP server, Claude Code calls these natively:
 | `hive_rule(action, text)`             | `hive rule`            | Manage rules               |
 | `hive_log(day)`                       | `hive l`               | View daily log             |
 | `hive_audit()`                        | `hive audit`           | Quality Pulse analysis     |
-| `hive_recurring()`                    | `hive todo repeat`     | List due recurring tasks   |
+| `hive_recurring(action, freq, text)`  | `hive todo repeat`     | Manage recurring tasks (list/add/rm/done) |
 | `hive_stats(project, date)`           | `hive stats`           | Usage statistics           |
+| `hive_fts_search(query)`              | `hive rc <query>`      | FTS5-ranked search over logs + archive |
+| `hive_standup(use_llm)`               | `hive su`              | Generate standup from logs + GitHub PRs |
+| `hive_prompt(name)`                   | `hive p <name>`        | Get prompt template by name |
+| `hive_ps()`                           | `hive ps`              | Active sessions + recent project activity |
 
 MCP tools are preferred when available. Use CLI for: verify, reflect, edit, note, gc, setup.
 
