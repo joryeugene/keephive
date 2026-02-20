@@ -42,6 +42,7 @@ def hook_sessionstart(args: list[str]) -> None:
     # Track usage
     try:
         from keephive.storage import track_event
+
         track_event("hooks", "sessionstart", project=cwd, source="hook")
     except Exception:
         pass
@@ -63,12 +64,16 @@ def hook_sessionstart(args: list[str]) -> None:
         debug_log = hive_dir() / ".hook-debug.log"
         with open(debug_log, "a") as f:
             f.write(f"[{datetime.now().isoformat()}] sessionstart encoding FAILED\n")
-        sys.stdout.write(json.dumps({
-            "hookSpecificOutput": {
-                "hookEventName": "SessionStart",
-                "additionalContext": "hive: encoding failed, see .hook-debug.log",
-            }
-        }))
+        sys.stdout.write(
+            json.dumps(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": "SessionStart",
+                        "additionalContext": "hive: encoding failed, see .hook-debug.log",
+                    }
+                }
+            )
+        )
 
 
 def build_context(cwd: str, project_name: str) -> str:
@@ -100,7 +105,9 @@ def build_context(cwd: str, project_name: str) -> str:
 
     # 3. Auto-change summary + stale fact warning
     if reverified:
-        parts.append(f"Memory auto-updated: re-verified {len(reverified)} fact(s) from recent activity")
+        parts.append(
+            f"Memory auto-updated: re-verified {len(reverified)} fact(s) from recent activity"
+        )
 
     stale = count_stale_facts()
     if stale > 0:
@@ -114,7 +121,8 @@ def build_context(cwd: str, project_name: str) -> str:
     # 4. Open TODOs
     todos = open_todos()
     if todos:
-        from datetime import date, timedelta
+        from datetime import date
+
         t = date.today()
         todo_lines = ["## Open TODOs"]
         for d, ts, text in reversed(todos[-5:]):
@@ -153,6 +161,7 @@ def build_context(cwd: str, project_name: str) -> str:
             _check_previous_play,
             _compute_score,
         )
+
         vault = _analyze_vault()
         cleaner = _analyze_cleaner()
         strategist = _analyze_strategist()
@@ -164,9 +173,7 @@ def build_context(cwd: str, project_name: str) -> str:
         # Check for unfinished Play from previous audit
         prev_play = _check_previous_play()
         if prev_play and not prev_play["completed"] and prev_play["age_days"] >= 2:
-            parts.append(
-                f"Unfinished Play from {prev_play['date']}: {prev_play['action']}"
-            )
+            parts.append(f"Unfinished Play from {prev_play['date']}: {prev_play['action']}")
     except Exception:
         pass  # Audit is optional, never block session start
 
@@ -200,6 +207,7 @@ def build_context(cwd: str, project_name: str) -> str:
 
     # 10. Workflows (MCP + CLI dual references, hygiene, quality standards)
     from keephive.identity import render_workflows
+
     parts.append(render_workflows())
 
     return "\n\n".join(parts)
@@ -207,8 +215,9 @@ def build_context(cwd: str, project_name: str) -> str:
 
 def _data_quality_warnings() -> list[str]:
     """Generate lightweight data quality warnings."""
-    from difflib import SequenceMatcher
     from datetime import date, timedelta
+    from difflib import SequenceMatcher
+
     from keephive.storage import collect_todos
 
     todos_all, dones_set = collect_todos()
@@ -274,10 +283,7 @@ def _match_guides(project_name: str, cwd: str = "") -> str:
             # Extract paths: [...] from front matter for cwd matching
             paths_match = _re.search(r"paths:\s*\[([^\]]+)\]", " ".join(fm_lines))
             if paths_match:
-                paths_patterns = [
-                    p.strip().strip("'\"")
-                    for p in paths_match.group(1).split(",")
-                ]
+                paths_patterns = [p.strip().strip("'\"") for p in paths_match.group(1).split(",")]
 
         # Check cwd against paths patterns
         if not matched and cwd and paths_patterns:
@@ -370,7 +376,9 @@ def _auto_reverify() -> list[str]:
                 # Update the verified date in-place
                 idx = line_num - 1  # 1-based to 0-based
                 if idx < len(lines):
-                    clean = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", lines[idx]).rstrip("\n")
+                    clean = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", lines[idx]).rstrip(
+                        "\n"
+                    )
                     new_line = f"{clean} [verified:{today_str}]\n"
                     if new_line != lines[idx]:
                         lines[idx] = new_line
@@ -415,9 +423,7 @@ def _accumulation_warnings(mem_content: str) -> list[str]:
             auto_count += 1
 
     if auto_count > 5:
-        warnings.append(
-            f"{auto_count} auto-captured facts pending review. Curate: hive rf apply"
-        )
+        warnings.append(f"{auto_count} auto-captured facts pending review. Curate: hive rf apply")
 
     # Check for critically stale facts (>60 days)
     cutoff_60 = (date.today() - timedelta(days=60)).isoformat()
@@ -427,8 +433,6 @@ def _accumulation_warnings(mem_content: str) -> list[str]:
         if m and m.group(1) < cutoff_60:
             critical_stale += 1
     if critical_stale > 0:
-        warnings.append(
-            f"CRITICAL: {critical_stale} fact(s) unverified for 60+ days. Run: hive v"
-        )
+        warnings.append(f"CRITICAL: {critical_stale} fact(s) unverified for 60+ days. Run: hive v")
 
     return warnings

@@ -10,13 +10,18 @@ def _run(args, hive_home):
     """Run keephive as subprocess with given hive home."""
     return subprocess.run(
         [sys.executable, "-m", "keephive"] + args,
-        capture_output=True, text=True,
-        env={"HIVE_HOME": hive_home, "HIVE_SKIP_LLM": "1",
-             "PATH": "/usr/bin:/usr/local/bin:/opt/homebrew/bin"},
+        capture_output=True,
+        text=True,
+        env={
+            "HIVE_HOME": hive_home,
+            "HIVE_SKIP_LLM": "1",
+            "PATH": "/usr/bin:/usr/local/bin:/opt/homebrew/bin",
+        },
     )
 
 
 # ---- Basic operations (migrated from test_draft.py) ----
+
 
 def test_note_show_empty(hive_env):
     """No note yet, output contains 'No note'."""
@@ -42,9 +47,9 @@ def test_note_copy_stdout_fallback(hive_env):
     # Empty PATH = no clipboard tools, so falls back to stdout
     r = subprocess.run(
         [sys.executable, "-m", "keephive", "nc"],
-        capture_output=True, text=True,
-        env={"HIVE_HOME": str(hive_env), "HIVE_SKIP_LLM": "1",
-             "PATH": ""},
+        capture_output=True,
+        text=True,
+        env={"HIVE_HOME": str(hive_env), "HIVE_SKIP_LLM": "1", "PATH": ""},
     )
     assert r.returncode == 0
     assert "Note content here" in r.stdout
@@ -121,9 +126,9 @@ def test_note_c_shortcut_copies(hive_env):
 
     r = subprocess.run(
         [sys.executable, "-m", "keephive", "n", "c"],
-        capture_output=True, text=True,
-        env={"HIVE_HOME": str(hive_env), "HIVE_SKIP_LLM": "1",
-             "PATH": ""},
+        capture_output=True,
+        text=True,
+        env={"HIVE_HOME": str(hive_env), "HIVE_SKIP_LLM": "1", "PATH": ""},
     )
     assert r.returncode == 0
     assert "Copy me" in r.stdout
@@ -171,6 +176,7 @@ def test_note_status_indicator(hive_env):
 
 # ---- Backward compat aliases ----
 
+
 def test_d_alias_works(hive_env):
     """hive d show works (backward compat)."""
     (hive_env / "working" / "note-1.md").write_text("Hello via d\n")
@@ -184,15 +190,16 @@ def test_dc_alias_works(hive_env):
     (hive_env / "working" / "note-1.md").write_text("Copy via dc\n")
     r = subprocess.run(
         [sys.executable, "-m", "keephive", "dc"],
-        capture_output=True, text=True,
-        env={"HIVE_HOME": str(hive_env), "HIVE_SKIP_LLM": "1",
-             "PATH": ""},
+        capture_output=True,
+        text=True,
+        env={"HIVE_HOME": str(hive_env), "HIVE_SKIP_LLM": "1", "PATH": ""},
     )
     assert r.returncode == 0
     assert "Copy via dc" in r.stdout
 
 
 # ---- Slot system tests ----
+
 
 def test_slot_switching(hive_env):
     """n.3 switches active slot to 3."""
@@ -235,9 +242,9 @@ def test_slot_copy_shorthand(hive_env):
 
     r = subprocess.run(
         [sys.executable, "-m", "keephive", "n.5c"],
-        capture_output=True, text=True,
-        env={"HIVE_HOME": str(hive_env), "HIVE_SKIP_LLM": "1",
-             "PATH": ""},
+        capture_output=True,
+        text=True,
+        env={"HIVE_HOME": str(hive_env), "HIVE_SKIP_LLM": "1", "PATH": ""},
     )
     assert r.returncode == 0
     assert "Slot 5 for copy" in r.stdout
@@ -293,6 +300,7 @@ def test_slot_clear_specific(hive_env):
 
 
 # ---- Migration tests ----
+
 
 def test_migration_draft_to_note(hive_env):
     """draft.md migrates to note-1.md on first use."""

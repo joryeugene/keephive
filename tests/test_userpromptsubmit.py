@@ -6,8 +6,6 @@ import json
 from io import StringIO
 from unittest.mock import patch
 
-import pytest
-
 from keephive.hooks.userpromptsubmit import hook_userpromptsubmit
 
 
@@ -54,5 +52,3 @@ class TestUserPromptSubmit:
                     break
 
         assert got_output, "Nudge never fired after 12 calls"
-
-

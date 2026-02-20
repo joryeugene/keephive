@@ -213,6 +213,7 @@ def _relative_day(day_str: str) -> str:
 
 # ---- Data extraction ----
 
+
 def _day_data(data: dict, date_arg: str) -> dict:
     """Extract data for a specific day."""
     day_str = _parse_date_arg(date_arg)
@@ -224,7 +225,10 @@ def _project_data(data: dict, project_filter: str, date_filter: str = "") -> dic
     projects = _all_projects(data.get("days", {}))
     key = _match_project(projects, project_filter)
     if not key:
-        return {"error": f"No project matching '{project_filter}'", "available": list(projects.keys())}
+        return {
+            "error": f"No project matching '{project_filter}'",
+            "available": list(projects.keys()),
+        }
     proj = projects[key]
     proj["path"] = key
     if date_filter:
@@ -237,6 +241,7 @@ def _project_data(data: dict, project_filter: str, date_filter: str = "") -> dic
 
 
 # ---- Display functions ----
+
 
 def _display_full(data: dict) -> None:
     """Display full stats overview."""
@@ -276,9 +281,15 @@ def _display_full(data: dict) -> None:
 
     console.print("[bold]keephive stats[/bold]")
     console.print()
-    console.print(f"  Today:     {today_cmds} commands | {today_hooks} hooks | {today_projects} projects")
-    console.print(f"  This week: {week_cmds} commands | {week_hooks} hooks | {len(week_projects)} projects")
-    console.print(f"  All time:  {all_cmds} commands | {all_hooks} hooks | {len(all_projects)} projects")
+    console.print(
+        f"  Today:     {today_cmds} commands | {today_hooks} hooks | {today_projects} projects"
+    )
+    console.print(
+        f"  This week: {week_cmds} commands | {week_hooks} hooks | {len(week_projects)} projects"
+    )
+    console.print(
+        f"  All time:  {all_cmds} commands | {all_hooks} hooks | {len(all_projects)} projects"
+    )
 
     # Sources
     sources = _sum_sources(days_data)
@@ -355,7 +366,9 @@ def _display_full(data: dict) -> None:
         captured = meta.get("insights_accepted", 0) + meta.get("insights_dismissed", 0)
         accepted = meta.get("insights_accepted", 0)
         dismissed = meta.get("insights_dismissed", 0)
-        console.print(f"  Insights captured:   {captured} ({accepted} accepted, {dismissed} dismissed)")
+        console.print(
+            f"  Insights captured:   {captured} ({accepted} accepted, {dismissed} dismissed)"
+        )
     if meta.get("todos_completed"):
         console.print(f"  TODOs completed:     {meta['todos_completed']}")
 

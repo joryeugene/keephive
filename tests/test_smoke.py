@@ -7,14 +7,23 @@ import sys
 from pathlib import Path
 
 
-def _run(args: list[str], hive_home: str | None = None, stdin: str | None = None) -> subprocess.CompletedProcess:
+def _run(
+    args: list[str], hive_home: str | None = None, stdin: str | None = None
+) -> subprocess.CompletedProcess:
     """Run keephive as a subprocess."""
-    env = {"HIVE_SKIP_LLM": "1", "NO_COLOR": "1", "PATH": "/usr/bin:/usr/local/bin:/opt/homebrew/bin:" + (Path.home() / ".local/bin").as_posix()}
+    env = {
+        "HIVE_SKIP_LLM": "1",
+        "NO_COLOR": "1",
+        "PATH": "/usr/bin:/usr/local/bin:/opt/homebrew/bin:"
+        + (Path.home() / ".local/bin").as_posix(),
+    }
     if hive_home:
         env["HIVE_HOME"] = hive_home
     return subprocess.run(
         [sys.executable, "-m", "keephive"] + args,
-        capture_output=True, text=True, env=env,
+        capture_output=True,
+        text=True,
+        env=env,
         input=stdin,
     )
 
@@ -51,20 +60,24 @@ def test_remember_empty(hive_env):
     r = _run(["r"], hive_home=str(hive_env))
     # Should print usage guidance, not silently succeed
     assert r.returncode == 0
-    assert "nothing to remember" in r.stdout.lower() or "usage" in r.stdout.lower(), \
+    assert "nothing to remember" in r.stdout.lower() or "usage" in r.stdout.lower(), (
         f"Empty remember should give guidance. Output: {r.stdout!r}"
+    )
 
 
 def test_recall(hive_env):
     r = _run(["rc", "Python"], hive_home=str(hive_env))
     assert r.returncode == 0
-    assert "Python" in r.stdout, f"Recall for 'Python' should find the test fact. Output: {r.stdout!r}"
+    assert "Python" in r.stdout, (
+        f"Recall for 'Python' should find the test fact. Output: {r.stdout!r}"
+    )
 
 
 def test_recall_json(hive_env):
     r = _run(["rc", "Python", "--json"], hive_home=str(hive_env))
     assert r.returncode == 0
     import json
+
     data = json.loads(r.stdout)
     assert "query" in data
     assert "results" in data
@@ -73,23 +86,26 @@ def test_recall_json(hive_env):
 def test_log(hive_env):
     r = _run(["l"], hive_home=str(hive_env))
     assert r.returncode == 0
-    assert "No log" in r.stdout or "Daily Log" in r.stdout, \
+    assert "No log" in r.stdout or "Daily Log" in r.stdout, (
         f"Log should show 'No log' or daily content. Output: {r.stdout!r}"
+    )
 
 
 def test_todo(hive_env, daily_with_entries):
     r = _run(["todo"], hive_home=str(hive_env))
     assert r.returncode == 0
-    assert "TODO" in r.stdout or "No open" in r.stdout, \
+    assert "TODO" in r.stdout or "No open" in r.stdout, (
         f"Todo should show items or 'No open'. Output: {r.stdout!r}"
+    )
 
 
 def test_todo_done(hive_env, daily_with_entries):
     r = _run(["todo", "done", "tests"], hive_home=str(hive_env))
     assert r.returncode == 0
     # The fixture's only TODO "Add more tests" is already DONE, so no open match.
-    assert "No matching TODO" in r.stdout or "Done" in r.stdout or "Completed" in r.stdout, \
+    assert "No matching TODO" in r.stdout or "Done" in r.stdout or "Completed" in r.stdout, (
         f"Todo done should confirm completion or report no match. Output: {r.stdout!r}"
+    )
 
 
 def test_todo_quick(hive_env):
@@ -102,24 +118,27 @@ def test_t_done_shortcut(hive_env, daily_with_entries):
     """hive t done <pat> marks a TODO done (same as hive todo done)."""
     r = _run(["t", "done", "tests"], hive_home=str(hive_env))
     assert r.returncode == 0
-    assert "No matching TODO" in r.stdout or "Completed" in r.stdout, \
+    assert "No matching TODO" in r.stdout or "Completed" in r.stdout, (
         f"hive t done should mark done or report no match. Got: {r.stdout!r}"
+    )
 
 
 def test_t_d_shortcut(hive_env, daily_with_entries):
     """hive t d <pat> is the shortest done shortcut."""
     r = _run(["t", "d", "tests"], hive_home=str(hive_env))
     assert r.returncode == 0
-    assert "No matching TODO" in r.stdout or "Completed" in r.stdout, \
+    assert "No matching TODO" in r.stdout or "Completed" in r.stdout, (
         f"hive t d should mark done or report no match. Got: {r.stdout!r}"
+    )
 
 
 def test_td_direct_shortcut(hive_env, daily_with_entries):
     """hive td <pat> marks done without the 'done' keyword."""
     r = _run(["td", "tests"], hive_home=str(hive_env))
     assert r.returncode == 0
-    assert "No matching TODO" in r.stdout or "Completed" in r.stdout, \
+    assert "No matching TODO" in r.stdout or "Completed" in r.stdout, (
         f"hive td <pat> should mark done or report no match. Got: {r.stdout!r}"
+    )
 
 
 def test_to_shows_todo_list(hive_env, daily_with_entries):
@@ -147,12 +166,13 @@ def test_edit_todos_diff(hive_env, daily_with_entries):
         path = cmd[1]
         text = open(path).read()
         lines = text.splitlines()
-        new_lines = [l for l in lines if "Update README" not in l]
+        new_lines = [line for line in lines if "Update README" not in line]
         new_lines.append("- Deploy to staging")
         open(path, "w").write("\n".join(new_lines) + "\n")
 
     with patch("subprocess.run", side_effect=fake_editor):
         from keephive.commands.todo import edit_todos
+
         edit_todos()
 
     final = daily.read_text()
@@ -185,8 +205,9 @@ def test_reflect_scan(hive_env, daily_with_entries):
 def test_knowledge_list(hive_env):
     r = _run(["k"], hive_home=str(hive_env))
     assert r.returncode == 0
-    assert "Knowledge" in r.stdout or "No guides" in r.stdout or "guide" in r.stdout.lower(), \
+    assert "Knowledge" in r.stdout or "No guides" in r.stdout or "guide" in r.stdout.lower(), (
         f"Knowledge list should show guides or empty state. Output: {r.stdout!r}"
+    )
 
 
 def test_skill_list(hive_env):
@@ -230,6 +251,7 @@ def test_hook_sessionstart(hive_env):
     )
     assert r.returncode == 0
     import json
+
     data = json.loads(r.stdout)
     assert "hookSpecificOutput" in data
     assert "additionalContext" in data["hookSpecificOutput"]
@@ -325,6 +347,7 @@ def test_setup_hook_format(tmp_path):
     settings_path.write_text("{}")
 
     from keephive.commands.setup import _setup_hooks
+
     _setup_hooks(settings_path=settings_path)
 
     data = json.loads(settings_path.read_text())
@@ -360,8 +383,8 @@ def test_doctor_hygiene_corrections(hive_env, daily_with_entries):
 
 def test_mcp_serve_dispatch():
     """mcp-serve subcommand is recognized by CLI dispatch."""
-    from keephive.cli import main as cli_main
     from keephive import mcp_server
+
     # Verify the dispatch target exists and is callable
     assert hasattr(mcp_server, "main")
     assert callable(mcp_server.main)
@@ -430,6 +453,7 @@ def test_setup_posttooluse_hook_format(tmp_path):
     settings_path.write_text("{}")
 
     from keephive.commands.setup import _setup_hooks
+
     _setup_hooks(settings_path=settings_path)
 
     data = json.loads(settings_path.read_text())
@@ -491,6 +515,7 @@ def test_recurring_done_and_rm(hive_env):
 def test_log_yesterday(hive_env):
     """hive l yesterday runs without error."""
     from datetime import date, timedelta
+
     yesterday = (date.today() - timedelta(days=1)).isoformat()
     (hive_env / "daily" / f"{yesterday}.md").write_text(
         f"# Daily Log: {yesterday}\n\n- [10:00:00] FACT: Test\n"
@@ -531,6 +556,7 @@ def test_reflect_apply_no_analysis(hive_env):
 def test_reflect_apply_empty(hive_env):
     """hive rf apply with empty analysis says nothing to review."""
     import json
+
     data = {"patterns": [], "additions": [], "contradictions": [], "actions": []}
     (hive_env / ".last-analyze.json").write_text(json.dumps(data))
     r = _run(["rf", "apply"], hive_home=str(hive_env))
@@ -621,6 +647,7 @@ def test_setup_userpromptsubmit_hook(tmp_path):
     settings_path.write_text("{}")
 
     from keephive.commands.setup import _setup_hooks
+
     _setup_hooks(settings_path=settings_path)
 
     data = json.loads(settings_path.read_text())

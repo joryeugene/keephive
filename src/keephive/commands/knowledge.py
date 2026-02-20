@@ -160,7 +160,9 @@ def _knowledge_list() -> None:
         console.print("  [dim](none yet)[/dim]")
 
     console.print()
-    console.print("  -> [dim]hive k <name>[/dim] to view  |  [dim]hive k edit <name>[/dim] to create  |  [dim]hive k rm <name>[/dim] to remove")
+    console.print(
+        "  -> [dim]hive k <name>[/dim] to view  |  [dim]hive k edit <name>[/dim] to create  |  [dim]hive k rm <name>[/dim] to remove"
+    )
 
 
 def _knowledge_view(name: str) -> None:
@@ -176,6 +178,7 @@ def _knowledge_view(name: str) -> None:
         print(text)
         if sys.stdout.isatty():
             from keephive.output import copy_to_clipboard
+
             if copy_to_clipboard(text):
                 console.print("[dim]Copied to clipboard[/dim]")
         return
@@ -235,4 +238,6 @@ def _prompt_list() -> None:
         console.print("  [dim](none yet)[/dim]")
 
     console.print()
-    console.print("  [dim]hive p <name>[/dim] view  |  [dim]hive pe <name>[/dim] create/edit  |  [dim]hive n <template>[/dim] start note")
+    console.print(
+        "  [dim]hive p <name>[/dim] view  |  [dim]hive pe <name>[/dim] create/edit  |  [dim]hive n <template>[/dim] start note"
+    )

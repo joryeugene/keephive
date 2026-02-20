@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 
 
 class TestRememberRecallLifecycle:
@@ -11,6 +10,7 @@ class TestRememberRecallLifecycle:
 
     def test_remember_creates_daily_entry(self, hive_env):
         from keephive.commands.remember import cmd_remember
+
         cmd_remember(["FACT: test fact for lifecycle"])
 
         today = date.today().isoformat()
@@ -21,12 +21,14 @@ class TestRememberRecallLifecycle:
 
     def test_recall_finds_working_memory(self, hive_env):
         from keephive.commands.remember import _search_all_tiers
+
         results = _search_all_tiers("Python")
         assert len(results) > 0
         assert any(r["tier"] == "working" for r in results)
 
     def test_recall_finds_daily_entries(self, hive_env, daily_with_entries):
         from keephive.commands.remember import _search_all_tiers
+
         results = _search_all_tiers("type param")
         assert len(results) > 0
         assert any(r["tier"] == "daily" for r in results)
@@ -46,6 +48,7 @@ class TestTodoLifecycle:
 
         # Mark as done
         from keephive.commands.todo import _todo_done
+
         _todo_done("feature X")
 
         # Should no longer appear in open todos
@@ -85,18 +88,21 @@ class TestSessionStartLifecycle:
 
     def test_context_includes_memory(self, hive_env):
         from keephive.hooks.sessionstart import build_context
+
         ctx = build_context("/test/project", "project")
         assert "Working Memory" in ctx
         assert "Python is great" in ctx
 
     def test_context_includes_stale_warning(self, hive_env):
         from keephive.hooks.sessionstart import build_context
+
         ctx = build_context("/test/project", "project")
         # The test fixture has a fact from 2020-01-01 which is definitely stale
         assert "stale" in ctx.lower()
 
     def test_context_includes_todos(self, hive_env, daily_with_entries):
         from keephive.hooks.sessionstart import build_context
+
         ctx = build_context("/test/project", "project")
         # daily_with_entries has a TODO that's already DONE,
         # but the TODO for "Add more tests" is marked done
@@ -105,13 +111,14 @@ class TestSessionStartLifecycle:
 
     def test_workflows_contain_dual_mcp_and_cli_references(self, hive_env):
         from keephive.hooks.sessionstart import build_context
+
         ctx = build_context("/test/project", "project")
         # Workflows section must exist with both MCP tool names and CLI equivalents
         assert "## Workflows" in ctx
         assert "hive_recall(topic)" in ctx
         assert "`hive rc <topic>`" in ctx
         assert "hive_remember(text)" in ctx
-        assert '`hive r`' in ctx
+        assert "`hive r`" in ctx
         assert "hive_todo()" in ctx
         assert "`hive todo`" in ctx
         assert "hive_todo_done(pattern)" in ctx
@@ -126,10 +133,11 @@ class TestPostToolUseLifecycle:
 
     def test_first_edit_is_silent(self, hive_env):
         """First call (count=1) is silent at default interval 8."""
-        from keephive.hooks.posttooluse import hook_posttooluse
         import io
         import json
         import sys
+
+        from keephive.hooks.posttooluse import hook_posttooluse
 
         session_id = "test-session-abc"
         input_json = json.dumps({"session_id": session_id, "tool_name": "Edit"})
@@ -149,10 +157,11 @@ class TestPostToolUseLifecycle:
 
     def test_fires_at_interval(self, hive_env):
         """Fires nudge when counter hits interval boundary."""
-        from keephive.hooks.posttooluse import hook_posttooluse
         import io
         import json
         import sys
+
+        from keephive.hooks.posttooluse import hook_posttooluse
 
         session_id = "test-session-def"
         # Set counter to 23 so next call (count=24) fires.
@@ -184,15 +193,45 @@ class TestPreCompactExcerpts:
     """precompact extracts meaningful excerpts from transcripts."""
 
     def test_extract_user_and_assistant(self, hive_env, tmp_path):
-        from keephive.hooks.precompact import _extract_excerpts
         import json
+
+        from keephive.hooks.precompact import _extract_excerpts
 
         # Create a fake transcript
         transcript = tmp_path / "test.jsonl"
         lines = [
-            json.dumps({"type": "user", "message": {"content": "Please fix the authentication bug in login.py"}}),
-            json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": "I found the issue in the login handler. The session token was not being validated correctly against the database, causing intermittent authentication failures for users with special characters in their passwords."}]}}),
-            json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": "Let me fix this by updating the validation logic."}]}}),
+            json.dumps(
+                {
+                    "type": "user",
+                    "message": {"content": "Please fix the authentication bug in login.py"},
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "I found the issue in the login handler. The session token was not being validated correctly against the database, causing intermittent authentication failures for users with special characters in their passwords.",
+                            }
+                        ]
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Let me fix this by updating the validation logic.",
+                            }
+                        ]
+                    },
+                }
+            ),
         ]
         transcript.write_text("\n".join(lines))
 
@@ -264,14 +303,17 @@ class TestPreCompactGarbageFilter:
     def test_llm_summary_skips_garbage(self, hive_env):
         """_llm_summary filters out garbage insights before writing."""
         from keephive.hooks.precompact import _llm_summary
-        from keephive.models import InsightCategory, PreCompactResponse
+        from keephive.models import PreCompactResponse
         from keephive.storage import daily_file
 
         fake_response = PreCompactResponse(
             insights=[
                 {"category": "TODO", "description": "unfinished work or follow-up items"},
                 {"category": "FACT", "description": "short"},
-                {"category": "FACT", "description": "uv run pytest passes all 60 tests in under 2 seconds"},
+                {
+                    "category": "FACT",
+                    "description": "uv run pytest passes all 60 tests in under 2 seconds",
+                },
             ],
             memory_updates=[],
         )
@@ -330,6 +372,7 @@ class TestSessionStartRecurringSurfacing:
         rf = recurring_file()
         content = safe_read_text(rf)
         from datetime import timedelta
+
         old_date = (date.today() - timedelta(days=3)).isoformat()
         content += f"\n- Overdue task: {old_date}\n"
         # Remove the "never completed" state by adding a Last Completed entry
@@ -362,7 +405,7 @@ class TestTodoDisplay:
         cmd_recurring(["daily", "Check CI"])
         cmd_todo([])
         out = capsys.readouterr().out
-        assert "Due Recurring" in out
+        assert "Recurring" in out
         assert "Check CI" in out
 
     def test_todo_shows_recently_done(self, hive_env, daily_with_entries, capsys):
@@ -419,6 +462,7 @@ class TestStatusDisplay:
 
     def test_status_shows_version(self, hive_env, capsys):
         from keephive.commands.status import cmd_status
+
         cmd_status([])
         out = capsys.readouterr().out
         assert "keephive" in out
@@ -426,6 +470,7 @@ class TestStatusDisplay:
     def test_status_shows_stale_warning(self, hive_env, capsys):
         """Stale facts trigger a warning in status."""
         from keephive.commands.status import cmd_status
+
         cmd_status([])
         out = capsys.readouterr().out
         assert "stale" in out.lower()
@@ -456,8 +501,9 @@ class TestStatusDisplay:
 
     def test_status_json_mode(self, hive_env, capsys):
         """Status --json returns valid JSON with expected fields."""
-        from keephive.commands.status import cmd_status
         import json
+
+        from keephive.commands.status import cmd_status
 
         cmd_status(["--json"])
         out = capsys.readouterr().out
@@ -470,6 +516,7 @@ class TestStatusDisplay:
     def test_status_shows_today_entries(self, hive_env, daily_with_entries, capsys):
         """Today's entries appear in status."""
         from keephive.commands.status import cmd_status
+
         cmd_status([])
         out = capsys.readouterr().out
         assert "Today" in out
@@ -481,6 +528,7 @@ class TestDedupTodos:
     def test_exact_content_dedup_after_normalization(self, hive_env):
         """Identical content after normalization is deduped."""
         from keephive.storage import _dedup_todos
+
         todos = [
             ("2026-02-15", "10:00", "[audit] Fix the bug"),
             ("2026-02-16", "11:00", "Fix the bug"),
@@ -493,6 +541,7 @@ class TestDedupTodos:
     def test_prefix_stripping(self, hive_env):
         """Bracketed prefixes are stripped before comparison."""
         from keephive.storage import _dedup_todos
+
         todos = [
             ("2026-02-15", "10:00", "[reflect] Run test suite"),
             ("2026-02-16", "11:00", "[audit] Run test suite"),
@@ -503,6 +552,7 @@ class TestDedupTodos:
     def test_distinct_items_preserved(self, hive_env):
         """Distinct TODOs are not deduped."""
         from keephive.storage import _dedup_todos
+
         todos = [
             ("2026-02-15", "10:00", "Fix the login bug"),
             ("2026-02-16", "11:00", "Deploy to production"),
@@ -513,6 +563,7 @@ class TestDedupTodos:
     def test_fuzzy_dedup_at_higher_threshold(self, hive_env):
         """Fuzzy dedup requires 0.8 similarity (not 0.7)."""
         from keephive.storage import _dedup_todos
+
         # These are similar but below 0.8 threshold
         todos = [
             ("2026-02-15", "10:00", "Fix login bug in auth module"),
@@ -524,11 +575,13 @@ class TestDedupTodos:
     def test_empty_list(self, hive_env):
         """Empty input returns empty output."""
         from keephive.storage import _dedup_todos
+
         assert _dedup_todos([]) == []
 
     def test_trailing_punctuation_normalized(self, hive_env):
         """Trailing punctuation differences don't prevent dedup."""
         from keephive.storage import _dedup_todos
+
         todos = [
             ("2026-02-15", "10:00", "Fix the bug."),
             ("2026-02-16", "11:00", "Fix the bug"),
@@ -542,24 +595,29 @@ class TestRecurringLifecycle:
 
     def test_parse_freq_named(self, hive_env):
         from keephive.storage import parse_freq
+
         assert parse_freq("daily") == 1.0
         assert parse_freq("weekly") == 7.0
         assert parse_freq("monthly") == 30.0
 
     def test_parse_freq_numeric_days(self, hive_env):
         from keephive.storage import parse_freq
+
         assert parse_freq("2d") == 2.0
         assert parse_freq("14d") == 14.0
 
     def test_parse_freq_numeric_hours(self, hive_env):
         from keephive.storage import parse_freq
+
         assert parse_freq("12h") == 0.5
         assert parse_freq("6h") == 0.25
         assert parse_freq("24h") == 1.0
 
     def test_parse_freq_invalid(self, hive_env):
         import pytest
+
         from keephive.storage import parse_freq
+
         with pytest.raises(ValueError):
             parse_freq("biweekly")
         with pytest.raises(ValueError):

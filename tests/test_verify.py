@@ -16,9 +16,9 @@ def test_valid_updates_timestamp(hive_env):
     # The fixture has "Python is great [verified:2020-01-01]" on line 3
     stale_facts = [(3, "Python is great", "- Python is great [verified:2020-01-01]\n")]
 
-    response = VerifyResponse(verdicts=[
-        FactVerdict(index=1, verdict=Verdict.VALID, reason="Confirmed by codebase")
-    ])
+    response = VerifyResponse(
+        verdicts=[FactVerdict(index=1, verdict=Verdict.VALID, reason="Confirmed by codebase")]
+    )
 
     updated, refreshed = apply_verdicts(response, stale_facts, mem_path, today_str)
 
@@ -36,9 +36,9 @@ def test_uncertain_refreshes_timestamp(hive_env):
 
     stale_facts = [(3, "Python is great", "- Python is great [verified:2020-01-01]\n")]
 
-    response = VerifyResponse(verdicts=[
-        FactVerdict(index=1, verdict=Verdict.UNCERTAIN, reason="No evidence found")
-    ])
+    response = VerifyResponse(
+        verdicts=[FactVerdict(index=1, verdict=Verdict.UNCERTAIN, reason="No evidence found")]
+    )
 
     updated, refreshed = apply_verdicts(response, stale_facts, mem_path, today_str)
 
@@ -55,14 +55,16 @@ def test_stale_replaces_fact(hive_env):
 
     stale_facts = [(3, "Python is great", "- Python is great [verified:2020-01-01]\n")]
 
-    response = VerifyResponse(verdicts=[
-        FactVerdict(
-            index=1,
-            verdict=Verdict.STALE,
-            reason="Outdated information",
-            correction="- Python 3.13 is current",
-        )
-    ])
+    response = VerifyResponse(
+        verdicts=[
+            FactVerdict(
+                index=1,
+                verdict=Verdict.STALE,
+                reason="Outdated information",
+                correction="- Python 3.13 is current",
+            )
+        ]
+    )
 
     updated, refreshed = apply_verdicts(response, stale_facts, mem_path, today_str)
 
@@ -79,14 +81,16 @@ def test_stale_adds_dash_prefix(hive_env):
 
     stale_facts = [(3, "Python is great", "- Python is great [verified:2020-01-01]\n")]
 
-    response = VerifyResponse(verdicts=[
-        FactVerdict(
-            index=1,
-            verdict=Verdict.STALE,
-            reason="Outdated",
-            correction="Python 3.14 is current",  # No leading "- "
-        )
-    ])
+    response = VerifyResponse(
+        verdicts=[
+            FactVerdict(
+                index=1,
+                verdict=Verdict.STALE,
+                reason="Outdated",
+                correction="Python 3.14 is current",  # No leading "- "
+            )
+        ]
+    )
 
     updated, _ = apply_verdicts(response, stale_facts, mem_path, today_str)
 
@@ -111,17 +115,19 @@ def test_multiple_verdicts_all_applied(hive_env):
         (4, "Fact B", "- Fact B [verified:2020-01-02]\n"),
     ]
 
-    response = VerifyResponse(verdicts=[
-        FactVerdict(index=1, verdict=Verdict.VALID, reason="OK"),
-        FactVerdict(index=2, verdict=Verdict.UNCERTAIN, reason="Maybe"),
-    ])
+    response = VerifyResponse(
+        verdicts=[
+            FactVerdict(index=1, verdict=Verdict.VALID, reason="OK"),
+            FactVerdict(index=2, verdict=Verdict.UNCERTAIN, reason="Maybe"),
+        ]
+    )
 
     updated, refreshed = apply_verdicts(response, stale_facts, mem_path, today_str)
 
     assert updated == 1
     assert refreshed == 1
     mem = mem_path.read_text()
-    lines_with_today = [l for l in mem.splitlines() if f"[verified:{today_str}]" in l]
+    lines_with_today = [line for line in mem.splitlines() if f"[verified:{today_str}]" in line]
     assert len(lines_with_today) == 2
 
 
@@ -132,9 +138,11 @@ def test_out_of_range_index_skipped(hive_env):
 
     stale_facts = [(3, "Python is great", "- Python is great [verified:2020-01-01]\n")]
 
-    response = VerifyResponse(verdicts=[
-        FactVerdict(index=99, verdict=Verdict.VALID, reason="OK"),
-    ])
+    response = VerifyResponse(
+        verdicts=[
+            FactVerdict(index=99, verdict=Verdict.VALID, reason="OK"),
+        ]
+    )
 
     updated, refreshed = apply_verdicts(response, stale_facts, mem_path, today_str)
 
@@ -152,6 +160,7 @@ def test_no_stale_facts_exits_clean(hive_env, capsys):
         f"- keephive uses Pydantic [verified:{today_str}]\n"
     )
     from keephive.commands.verify import cmd_verify
+
     cmd_verify([])
     out = capsys.readouterr().out
     assert "current" in out.lower() or "Skipping" in out
@@ -161,6 +170,7 @@ def test_skip_llm_guard(hive_env, capsys):
     """HIVE_SKIP_LLM=1 causes early return without calling claude."""
     # hive_env fixture already sets HIVE_SKIP_LLM=1
     from keephive.commands.verify import cmd_verify
+
     cmd_verify([])
     out = capsys.readouterr().out
     assert "Skipping" in out

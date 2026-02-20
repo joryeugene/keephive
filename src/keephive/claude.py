@@ -16,7 +16,7 @@ import json
 import os
 import subprocess
 import sys
-from typing import TypeVar, Type
+from typing import Type, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -31,6 +31,7 @@ _API_MODELS: dict[str, str] = {
 
 class ClaudePipeError(Exception):
     """Raised when an LLM call fails or returns unparseable output."""
+
     pass
 
 
@@ -63,10 +64,14 @@ def build_claude_command(
         Complete command list ready for subprocess.run.
     """
     cmd = [
-        "claude", "-p",
-        "--output-format", "json",
-        "--json-schema", schema_json,
-        "--model", model,
+        "claude",
+        "-p",
+        "--output-format",
+        "json",
+        "--json-schema",
+        schema_json,
+        "--model",
+        model,
         "--no-session-persistence",
     ]
 
@@ -105,8 +110,7 @@ def parse_claude_response(raw_stdout: str, response_model: Type[T]) -> T:
         raw = json.loads(raw_stdout)
     except json.JSONDecodeError as e:
         raise ClaudePipeError(
-            f"claude -p returned invalid JSON: {e}\n"
-            f"First 500 chars: {raw_stdout[:500]}"
+            f"claude -p returned invalid JSON: {e}\nFirst 500 chars: {raw_stdout[:500]}"
         )
 
     # Handle array format: claude -p --output-format json returns a JSON array
@@ -140,10 +144,7 @@ def parse_claude_response(raw_stdout: str, response_model: Type[T]) -> T:
     try:
         return response_model.model_validate(raw)
     except ValidationError as e:
-        raise ClaudePipeError(
-            f"Response validation failed: {e}\n"
-            f"Raw data: {json.dumps(raw)[:500]}"
-        )
+        raise ClaudePipeError(f"Response validation failed: {e}\nRaw data: {json.dumps(raw)[:500]}")
 
 
 def run_claude_pipe(
@@ -200,15 +201,26 @@ def run_claude_pipe(
                 "which require a terminal. Run from a terminal: hive v"
             )
         return _run_via_api(
-            prompt, response_model, model, stdin_text, timeout, verbose,
+            prompt,
+            response_model,
+            model,
+            stdin_text,
+            timeout,
+            verbose,
         )
 
     # Terminal or hook context: always use claude -p (Claude Code subscription, free).
     # ANTHROPIC_API_KEY is intentionally ignored -- users should not be billed
     # for keephive calls just because an API key exists in their environment.
     return _run_via_subprocess(
-        prompt, response_model, model, stdin_text, tools, max_turns,
-        timeout, verbose,
+        prompt,
+        response_model,
+        model,
+        stdin_text,
+        tools,
+        max_turns,
+        timeout,
+        verbose,
     )
 
 
@@ -227,10 +239,7 @@ def _run_via_api(
     try:
         import anthropic
     except ImportError:
-        raise ClaudePipeError(
-            "anthropic package not installed. "
-            "Run: keephive setup"
-        )
+        raise ClaudePipeError("anthropic package not installed. Run: keephive setup")
 
     api_model = _API_MODELS.get(model, model)
 
@@ -255,11 +264,13 @@ def _run_via_api(
         response = client.messages.create(
             model=api_model,
             max_tokens=4096,
-            tools=[{
-                "name": tool_name,
-                "description": tool_description,
-                "input_schema": schema,
-            }],
+            tools=[
+                {
+                    "name": tool_name,
+                    "description": tool_description,
+                    "input_schema": schema,
+                }
+            ],
             tool_choice={"type": "tool", "name": tool_name},
             messages=[{"role": "user", "content": content}],
         )
@@ -288,8 +299,7 @@ def _run_via_api(
                 )
 
     raise ClaudePipeError(
-        f"API response contained no tool_use block. "
-        f"Stop reason: {response.stop_reason}"
+        f"API response contained no tool_use block. Stop reason: {response.stop_reason}"
     )
 
 
@@ -354,11 +364,7 @@ def _extract_from_result_text(
     """
     import re as _re
 
-    field_names = (
-        list(response_model.model_fields.keys())
-        if response_model
-        else ["verdicts"]
-    )
+    field_names = list(response_model.model_fields.keys()) if response_model else ["verdicts"]
 
     try:
         elements = json.loads(full_stdout)

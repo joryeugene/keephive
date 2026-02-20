@@ -111,7 +111,9 @@ def cmd_gc(args: list[str]) -> None:
         try:
             r = subprocess.run(
                 ["du", "-sk", str(path)],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             return r.stdout.split()[0] + "KB" if r.returncode == 0 else "?"
         except Exception:

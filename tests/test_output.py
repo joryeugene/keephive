@@ -40,41 +40,49 @@ class TestPromptYn:
     def test_y_returns_true(self, monkeypatch):
         self._patch(monkeypatch, "y")
         from keephive.output import prompt_yn
+
         assert prompt_yn("Continue?") is True
 
     def test_uppercase_y_returns_true(self, monkeypatch):
         self._patch(monkeypatch, "Y")
         from keephive.output import prompt_yn
+
         assert prompt_yn("Continue?") is True
 
     def test_n_returns_false(self, monkeypatch):
         self._patch(monkeypatch, "n")
         from keephive.output import prompt_yn
+
         assert prompt_yn("Continue?") is False
 
     def test_enter_accepts_default_yes(self, monkeypatch):
         self._patch(monkeypatch, "\r")
         from keephive.output import prompt_yn
+
         assert prompt_yn("Continue?") is True
 
     def test_enter_accepts_default_no(self, monkeypatch):
         self._patch(monkeypatch, "\r")
         from keephive.output import prompt_yn
+
         assert prompt_yn("Continue?", default_yes=False) is False
 
     def test_space_accepts_default_yes(self, monkeypatch):
         self._patch(monkeypatch, " ")
         from keephive.output import prompt_yn
+
         assert prompt_yn("Continue?") is True
 
     def test_piped_returns_default_yes(self, monkeypatch):
         monkeypatch.setattr("sys.stdin", FakeNonTTY())
         from keephive.output import prompt_yn
+
         assert prompt_yn("Continue?") is True
 
     def test_piped_returns_default_no(self, monkeypatch):
         monkeypatch.setattr("sys.stdin", FakeNonTTY())
         from keephive.output import prompt_yn
+
         assert prompt_yn("Continue?", default_yes=False) is False
 
 

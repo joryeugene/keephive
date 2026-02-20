@@ -23,22 +23,24 @@ class TestParseClaudeResponse:
 
     def test_array_with_structured_output(self):
         """Real production format: system init + result with structured_output."""
-        raw = json.dumps([
-            {
-                "type": "system",
-                "subtype": "init",
-                "cwd": "/Users/test/.claude",
-                "tools": ["Task", "Bash", "Read", "Write"],
-            },
-            {
-                "type": "result",
-                "structured_output": {
-                    "verdicts": [
-                        {"index": 1, "verdict": "VALID", "reason": "OK"},
-                    ]
-                }
-            }
-        ])
+        raw = json.dumps(
+            [
+                {
+                    "type": "system",
+                    "subtype": "init",
+                    "cwd": "/Users/test/.claude",
+                    "tools": ["Task", "Bash", "Read", "Write"],
+                },
+                {
+                    "type": "result",
+                    "structured_output": {
+                        "verdicts": [
+                            {"index": 1, "verdict": "VALID", "reason": "OK"},
+                        ]
+                    },
+                },
+            ]
+        )
 
         resp = parse_claude_response(raw, VerifyResponse)
         assert len(resp.verdicts) == 1
@@ -46,25 +48,42 @@ class TestParseClaudeResponse:
 
     def test_array_with_system_messages(self):
         """The format that broke production: system init with massive tools array + result."""
-        raw = json.dumps([
-            {
-                "type": "system",
-                "subtype": "init",
-                "cwd": "/home/dev/.claude",
-                "tools": ["Task", "TaskOutput", "Bash", "Glob", "Grep",
-                          "Read", "Edit", "Write", "NotebookEdit", "WebFetch",
-                          "WebSearch", "AskUserQuestion"],
-            },
-            {
-                "type": "result",
-                "structured_output": {
-                    "verdicts": [
-                        {"index": 1, "verdict": "STALE", "reason": "Version changed",
-                         "correction": "Python 3.13 now installed"},
-                    ]
-                }
-            }
-        ])
+        raw = json.dumps(
+            [
+                {
+                    "type": "system",
+                    "subtype": "init",
+                    "cwd": "/home/dev/.claude",
+                    "tools": [
+                        "Task",
+                        "TaskOutput",
+                        "Bash",
+                        "Glob",
+                        "Grep",
+                        "Read",
+                        "Edit",
+                        "Write",
+                        "NotebookEdit",
+                        "WebFetch",
+                        "WebSearch",
+                        "AskUserQuestion",
+                    ],
+                },
+                {
+                    "type": "result",
+                    "structured_output": {
+                        "verdicts": [
+                            {
+                                "index": 1,
+                                "verdict": "STALE",
+                                "reason": "Version changed",
+                                "correction": "Python 3.13 now installed",
+                            },
+                        ]
+                    },
+                },
+            ]
+        )
 
         resp = parse_claude_response(raw, VerifyResponse)
         assert resp.verdicts[0].verdict.value == "STALE"
@@ -72,40 +91,44 @@ class TestParseClaudeResponse:
 
     def test_array_system_only_raises(self):
         """System init messages but no result element should raise."""
-        raw = json.dumps([
-            {
-                "type": "system",
-                "subtype": "init",
-                "cwd": "/Users/test",
-                "tools": ["Task", "Bash"],
-            },
-            {
-                "type": "system",
-                "subtype": "tool_list",
-                "tools": ["Read", "Write"],
-            },
-        ])
+        raw = json.dumps(
+            [
+                {
+                    "type": "system",
+                    "subtype": "init",
+                    "cwd": "/Users/test",
+                    "tools": ["Task", "Bash"],
+                },
+                {
+                    "type": "system",
+                    "subtype": "tool_list",
+                    "tools": ["Read", "Write"],
+                },
+            ]
+        )
 
         with pytest.raises(ClaudePipeError, match="no result element"):
             parse_claude_response(raw, VerifyResponse)
 
     def test_array_result_not_last(self):
         """Result element before other messages should still be found."""
-        raw = json.dumps([
-            {
-                "type": "result",
-                "structured_output": {
-                    "insights": [
-                        {"category": "FACT", "description": "Something learned"},
-                    ]
-                }
-            },
-            {
-                "type": "system",
-                "subtype": "usage",
-                "tokens": 1500,
-            },
-        ])
+        raw = json.dumps(
+            [
+                {
+                    "type": "result",
+                    "structured_output": {
+                        "insights": [
+                            {"category": "FACT", "description": "Something learned"},
+                        ]
+                    },
+                },
+                {
+                    "type": "system",
+                    "subtype": "usage",
+                    "tokens": 1500,
+                },
+            ]
+        )
 
         resp = parse_claude_response(raw, PreCompactResponse)
         assert len(resp.insights) == 1
@@ -113,41 +136,40 @@ class TestParseClaudeResponse:
 
     def test_array_multiple_system_messages(self):
         """Multiple system messages surrounding the result."""
-        raw = json.dumps([
-            {
-                "type": "system",
-                "subtype": "init",
-                "cwd": "/Users/test",
-                "tools": ["Task"],
-            },
-            {
-                "type": "system",
-                "subtype": "config",
-                "model": "haiku",
-            },
-            {
-                "type": "result",
-                "structured_output": {
-                    "verdicts": []
-                }
-            },
-            {
-                "type": "system",
-                "subtype": "usage",
-                "tokens": 500,
-            },
-        ])
+        raw = json.dumps(
+            [
+                {
+                    "type": "system",
+                    "subtype": "init",
+                    "cwd": "/Users/test",
+                    "tools": ["Task"],
+                },
+                {
+                    "type": "system",
+                    "subtype": "config",
+                    "model": "haiku",
+                },
+                {"type": "result", "structured_output": {"verdicts": []}},
+                {
+                    "type": "system",
+                    "subtype": "usage",
+                    "tokens": 500,
+                },
+            ]
+        )
 
         resp = parse_claude_response(raw, VerifyResponse)
         assert resp.verdicts == []
 
     def test_direct_object(self):
         """Direct object without array wrapping."""
-        raw = json.dumps({
-            "verdicts": [
-                {"index": 1, "verdict": "STALE", "reason": "Old", "correction": "New"},
-            ]
-        })
+        raw = json.dumps(
+            {
+                "verdicts": [
+                    {"index": 1, "verdict": "STALE", "reason": "Old", "correction": "New"},
+                ]
+            }
+        )
 
         resp = parse_claude_response(raw, VerifyResponse)
         assert resp.verdicts[0].verdict.value == "STALE"
@@ -155,13 +177,15 @@ class TestParseClaudeResponse:
 
     def test_object_with_structured_output(self):
         """Object format with structured_output key."""
-        raw = json.dumps({
-            "structured_output": {
-                "insights": [
-                    {"category": "FACT", "description": "Something learned"},
-                ]
+        raw = json.dumps(
+            {
+                "structured_output": {
+                    "insights": [
+                        {"category": "FACT", "description": "Something learned"},
+                    ]
+                }
             }
-        })
+        )
 
         resp = parse_claude_response(raw, PreCompactResponse)
         assert len(resp.insights) == 1
@@ -178,11 +202,13 @@ class TestParseClaudeResponse:
 
     def test_validation_error_raises(self):
         """Response that doesn't match the model should raise ClaudePipeError."""
-        raw = json.dumps({
-            "verdicts": [
-                {"index": 1, "verdict": "TOTALLY_INVALID", "reason": "Bad"},
-            ]
-        })
+        raw = json.dumps(
+            {
+                "verdicts": [
+                    {"index": 1, "verdict": "TOTALLY_INVALID", "reason": "Bad"},
+                ]
+            }
+        )
 
         with pytest.raises(ClaudePipeError, match="validation failed"):
             parse_claude_response(raw, VerifyResponse)
@@ -231,24 +257,24 @@ class TestParseClaudeResponse:
 
     def test_fallback_extracts_non_verify_model(self):
         """Fallback text extraction works for models other than VerifyResponse."""
-        raw = json.dumps([
-            {"type": "system", "subtype": "init", "cwd": "/test", "tools": []},
-            {
-                "type": "assistant",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": '{"patterns": [{"topic": "testing", "days": 3, "has_guide": false}], "additions": [], "contradictions": [], "actions": []}'
-                    }
-                ]
-            },
-            {
-                "type": "result",
-                "structured_output": None
-            }
-        ])
+        raw = json.dumps(
+            [
+                {"type": "system", "subtype": "init", "cwd": "/test", "tools": []},
+                {
+                    "type": "assistant",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": '{"patterns": [{"topic": "testing", "days": 3, "has_guide": false}], "additions": [], "contradictions": [], "actions": []}',
+                        }
+                    ],
+                },
+                {"type": "result", "structured_output": None},
+            ]
+        )
 
         from keephive.models import ReflectAnalyzeResponse
+
         resp = parse_claude_response(raw, ReflectAnalyzeResponse)
         assert len(resp.patterns) == 1
         assert resp.patterns[0].topic == "testing"
@@ -267,6 +293,7 @@ class TestParseClaudeResponse:
         monkeypatch.setattr("subprocess.run", fake_run)
 
         from keephive.claude import run_claude_pipe
+
         with pytest.raises(ClaudePipeError, match="timed out"):
             run_claude_pipe("test prompt", VerifyResponse, timeout=30)
 
@@ -284,13 +311,13 @@ class TestParseClaudeResponse:
 
         def fake_run(*_a, **_kw):
             return subprocess.CompletedProcess(
-                args=["claude"], returncode=1,
-                stdout="", stderr="some error from claude"
+                args=["claude"], returncode=1, stdout="", stderr="some error from claude"
             )
 
         monkeypatch.setattr("subprocess.run", fake_run)
 
         from keephive.claude import run_claude_pipe
+
         with pytest.raises(ClaudePipeError, match="exited with code 1"):
             run_claude_pipe("test prompt", VerifyResponse)
 
@@ -309,22 +336,21 @@ class TestParseClaudeResponse:
 
     def test_fallback_extracts_verify_model_without_response_model(self):
         """Fallback extraction still works for VerifyResponse (backwards compat)."""
-        raw = json.dumps([
-            {"type": "system", "subtype": "init", "cwd": "/test", "tools": []},
-            {
-                "type": "assistant",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": '{"verdicts": [{"index": 1, "verdict": "VALID", "reason": "Still true"}]}'
-                    }
-                ]
-            },
-            {
-                "type": "result",
-                "structured_output": None
-            }
-        ])
+        raw = json.dumps(
+            [
+                {"type": "system", "subtype": "init", "cwd": "/test", "tools": []},
+                {
+                    "type": "assistant",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": '{"verdicts": [{"index": 1, "verdict": "VALID", "reason": "Still true"}]}',
+                        }
+                    ],
+                },
+                {"type": "result", "structured_output": None},
+            ]
+        )
 
         resp = parse_claude_response(raw, VerifyResponse)
         assert len(resp.verdicts) == 1
@@ -340,6 +366,7 @@ class TestRouting:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
         from keephive.claude import run_claude_pipe
+
         with pytest.raises(ClaudePipeError, match="ANTHROPIC_API_KEY"):
             run_claude_pipe("test prompt", VerifyResponse)
 
@@ -350,11 +377,13 @@ class TestRouting:
 
         mock_api = MagicMock()
         monkeypatch.setattr(
-            "keephive.claude._run_via_api", mock_api,
+            "keephive.claude._run_via_api",
+            mock_api,
         )
         mock_api.return_value = VerifyResponse(verdicts=[])
 
         from keephive.claude import run_claude_pipe
+
         result = run_claude_pipe("test prompt", VerifyResponse)
         assert result.verdicts == []
         mock_api.assert_called_once()
@@ -365,6 +394,7 @@ class TestRouting:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
 
         from keephive.claude import run_claude_pipe
+
         with pytest.raises(ClaudePipeError, match="terminal"):
             run_claude_pipe("test", VerifyResponse, tools=["Read", "Grep"])
 
@@ -375,11 +405,13 @@ class TestRouting:
 
         mock_sub = MagicMock()
         monkeypatch.setattr(
-            "keephive.claude._run_via_subprocess", mock_sub,
+            "keephive.claude._run_via_subprocess",
+            mock_sub,
         )
         mock_sub.return_value = VerifyResponse(verdicts=[])
 
         from keephive.claude import run_claude_pipe
+
         result = run_claude_pipe("test prompt", VerifyResponse)
         assert result.verdicts == []
         mock_sub.assert_called_once()
@@ -394,6 +426,7 @@ class TestRouting:
         mock_sub.return_value = VerifyResponse(verdicts=[])
 
         from keephive.claude import run_claude_pipe
+
         result = run_claude_pipe("test prompt", VerifyResponse)
         assert result.verdicts == []
         mock_sub.assert_called_once()
@@ -405,11 +438,13 @@ class TestRouting:
 
         mock_sub = MagicMock()
         monkeypatch.setattr(
-            "keephive.claude._run_via_subprocess", mock_sub,
+            "keephive.claude._run_via_subprocess",
+            mock_sub,
         )
         mock_sub.return_value = VerifyResponse(verdicts=[])
 
         from keephive.claude import run_claude_pipe
+
         result = run_claude_pipe("test", VerifyResponse, tools=["Read"])
         assert result.verdicts == []
         mock_sub.assert_called_once()
@@ -427,21 +462,18 @@ class TestRunViaApi:
 
         mock_client_cls = MagicMock()
         mock_client = mock_client_cls.return_value
-        mock_client.messages.create.side_effect = anthropic.APITimeoutError(
-            request=MagicMock()
-        )
+        mock_client.messages.create.side_effect = anthropic.APITimeoutError(request=MagicMock())
 
         monkeypatch.setattr("anthropic.Anthropic", mock_client_cls)
 
         from keephive.claude import _run_via_api
+
         with pytest.raises(ClaudePipeError, match="timed out"):
             _run_via_api("test", VerifyResponse, "haiku", None, 30, False)
 
     def test_api_extracts_tool_use_block(self, monkeypatch):
         """API response with tool_use block is correctly parsed."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
-
-        import anthropic
 
         # Build a mock response with a tool_use content block
         mock_block = MagicMock()
@@ -460,6 +492,7 @@ class TestRunViaApi:
         monkeypatch.setattr("anthropic.Anthropic", mock_client_cls)
 
         from keephive.claude import _run_via_api
+
         result = _run_via_api("test", VerifyResponse, "haiku", None, 30, False)
         assert len(result.verdicts) == 1
         assert result.verdicts[0].verdict.value == "VALID"
@@ -467,8 +500,6 @@ class TestRunViaApi:
     def test_api_no_tool_use_block_raises(self, monkeypatch):
         """API response without tool_use block raises error."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
-
-        import anthropic
 
         mock_block = MagicMock()
         mock_block.type = "text"
@@ -485,14 +516,13 @@ class TestRunViaApi:
         monkeypatch.setattr("anthropic.Anthropic", mock_client_cls)
 
         from keephive.claude import _run_via_api
+
         with pytest.raises(ClaudePipeError, match="no tool_use block"):
             _run_via_api("test", VerifyResponse, "haiku", None, 30, False)
 
     def test_api_stdin_text_appended_to_prompt(self, monkeypatch):
         """stdin_text is appended to the prompt content for API calls."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
-
-        import anthropic
 
         mock_block = MagicMock()
         mock_block.type = "tool_use"
@@ -510,6 +540,7 @@ class TestRunViaApi:
         monkeypatch.setattr("anthropic.Anthropic", mock_client_cls)
 
         from keephive.claude import _run_via_api
+
         _run_via_api("prompt here", VerifyResponse, "haiku", "extra context", 30, False)
 
         # Verify the content includes both prompt and stdin_text
@@ -523,8 +554,6 @@ class TestRunViaApi:
         """Model shorthand is mapped to full API model name."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
 
-        import anthropic
-
         mock_block = MagicMock()
         mock_block.type = "tool_use"
         mock_block.name = "structured_output"
@@ -541,6 +570,7 @@ class TestRunViaApi:
         monkeypatch.setattr("anthropic.Anthropic", mock_client_cls)
 
         from keephive.claude import _run_via_api
+
         _run_via_api("test", VerifyResponse, "sonnet", None, 30, False)
 
         call_args = mock_client.messages.create.call_args
@@ -552,6 +582,7 @@ class TestRunViaApi:
         monkeypatch.delenv("CLAUDECODE", raising=False)
 
         import builtins
+
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
@@ -562,5 +593,6 @@ class TestRunViaApi:
         monkeypatch.setattr(builtins, "__import__", mock_import)
 
         from keephive.claude import _run_via_api
+
         with pytest.raises(ClaudePipeError, match="keephive setup"):
             _run_via_api("test", VerifyResponse, "haiku", None, 30, False)

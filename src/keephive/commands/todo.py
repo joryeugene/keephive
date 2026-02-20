@@ -31,19 +31,30 @@ def cmd_todo(args: list[str]) -> None:
 
     if args and args[0] == "repeat":
         from keephive.commands.recurring import cmd_recurring
+
         cmd_recurring(args[1:])
         return
 
     todos = open_todos()
 
-    # Show due recurring tasks first
-    from keephive.storage import due_recurring
-    due = due_recurring()
-    if due:
-        console.print("[bold]Due Recurring:[/bold]")
-        for freq, text, overdue in due:
-            over_s = f"+{overdue}d" if overdue > 0 else "due"
-            console.print(f"  \\[{freq}] \\[{over_s}] {text}")
+    # Show all recurring tasks
+    from keephive.storage import all_recurring
+
+    recurring = all_recurring()
+    if recurring:
+        console.print("[bold]Recurring:[/bold]")
+        for freq, text, overdue in recurring:
+            if overdue > 0:
+                status = f"+{overdue}d"
+                line = f"  \\[{freq}] [warn][{status}][/warn] {text}"
+            elif overdue == 0:
+                status = "due"
+                line = f"  \\[{freq}] [ok][{status}][/ok] {text}"
+            elif overdue == -1:
+                line = f"  [dim]\\[{freq}] \\[tomorrow] {text}[/dim]"
+            else:
+                line = f"  [dim]\\[{freq}] \\[in {-overdue}d] {text}[/dim]"
+            console.print(line)
         console.print()
 
     # Show open TODOs
@@ -70,7 +81,9 @@ def cmd_todo(args: list[str]) -> None:
 
     # Contextual hints
     console.print()
-    console.print("  [dim]td <pat>[/dim] done  |  [dim]td undo[/dim]  |  [dim]t <text>[/dim] add  |  [dim]e todo[/dim]  |  [dim]todo repeat daily \"..[/dim]\" recurring")
+    console.print(
+        '  [dim]td <pat>[/dim] done  |  [dim]td undo[/dim]  |  [dim]t <text>[/dim] add  |  [dim]e todo[/dim]  |  [dim]todo repeat daily "..[/dim]" recurring'
+    )
 
     # Show recent completions
     dones = recent_dones(days=3)
@@ -107,10 +120,12 @@ def cmd_t(args: list[str]) -> None:
 
     # Import the remember command to reuse it
     from keephive.commands.remember import cmd_remember
+
     cmd_remember([f"TODO: {' '.join(args)}"])
 
     try:
         from keephive.storage import track_event
+
         track_event("meta", "todos_created")
     except Exception:
         pass
@@ -173,6 +188,7 @@ def edit_todos() -> None:
 
     try:
         from keephive.storage import track_event
+
         if removed:
             track_event("meta", "todos_completed")
         if added:
@@ -184,6 +200,7 @@ def edit_todos() -> None:
 def _todo_undo(pattern: str) -> None:
     """Reopen the most recent completed TODO matching pattern."""
     from keephive.storage import undo_done
+
     result = undo_done(pattern)
     if result:
         console.print(f"  [ok]Reopened:[/ok] {result}")
@@ -214,7 +231,7 @@ def _todo_done(pattern: str) -> None:
     """Mark first open TODO matching pattern as done."""
     if not pattern:
         console.print("[err]Error: specify a pattern to match[/err]")
-        console.print("Usage: hive todo done \"pattern\"")
+        console.print('Usage: hive todo done "pattern"')
         return
 
     todos = open_todos()
@@ -227,9 +244,10 @@ def _todo_done(pattern: str) -> None:
     if not match:
         # Try recurring tasks before giving up
         from keephive.commands.recurring import _recurring_done
+
         if _recurring_done(pattern):
             return
-        console.print(f"  [warn]No matching TODO for[/warn] \"{pattern}\"")
+        console.print(f'  [warn]No matching TODO for[/warn] "{pattern}"')
         console.print("  [dim]Open TODOs:[/dim]")
         if todos:
             for _, _, text in todos[:5]:
@@ -245,6 +263,7 @@ def _todo_done(pattern: str) -> None:
 
     try:
         from keephive.storage import track_event
+
         track_event("meta", "todos_completed")
     except Exception:
         pass

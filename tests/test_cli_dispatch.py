@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from keephive.cli import main, COMMANDS
+from keephive.cli import COMMANDS, main
 
 
 class TestMainDispatch:
@@ -86,7 +86,9 @@ class TestMainDispatch:
         """'g' dispatches to gc."""
         main(["g"])
         out = capsys.readouterr().out
-        assert "Garbage collection" in out or "archive" in out.lower() or "Nothing to archive" in out
+        assert (
+            "Garbage collection" in out or "archive" in out.lower() or "Nothing to archive" in out
+        )
 
     def test_inbox_not_in_commands(self):
         """Inbox commands removed from dispatch table."""

@@ -8,10 +8,8 @@ from __future__ import annotations
 
 import re
 from datetime import date, timedelta
-from pathlib import Path
 
 import pytest
-
 
 # -- Status output tests --
 
@@ -35,6 +33,7 @@ class TestStatusOutput:
             + "".join(f"- [10:0{i}:00] TODO: {tasks[i]}\n" for i in range(6))
         )
         from keephive.commands.status import cmd_status
+
         cmd_status([])
         out = capsys.readouterr().out
         assert "... and" in out
@@ -51,6 +50,7 @@ class TestStatusOutput:
             "- [10:01:00] TODO: Task two\n"
         )
         from keephive.commands.status import cmd_status
+
         cmd_status([])
         out = capsys.readouterr().out
         assert "... and" not in out
@@ -58,6 +58,7 @@ class TestStatusOutput:
     def test_stale_warning_shows_count_and_action(self, hive_env, capsys):
         """Stale warning includes count and 'hive v' action."""
         from keephive.commands.status import cmd_status
+
         cmd_status([])
         out = capsys.readouterr().out
         assert "stale" in out.lower()
@@ -66,6 +67,7 @@ class TestStatusOutput:
     def test_status_shows_facts_breakdown(self, hive_env, capsys):
         """Status shows ok vs stale fact counts."""
         from keephive.commands.status import cmd_status
+
         cmd_status([])
         out = capsys.readouterr().out
         # Should show "3 facts (2 ok, 1 stale)" or similar
@@ -79,16 +81,11 @@ class TestTodoOutput:
         today_str = date.today().isoformat()
         yesterday_str = (date.today() - timedelta(days=3)).isoformat()
         daily_today = hive_env / "daily" / f"{today_str}.md"
-        daily_today.write_text(
-            f"# Daily Log: {today_str}\n\n"
-            "- [10:00:00] TODO: Fresh task\n"
-        )
+        daily_today.write_text(f"# Daily Log: {today_str}\n\n- [10:00:00] TODO: Fresh task\n")
         daily_old = hive_env / "daily" / f"{yesterday_str}.md"
-        daily_old.write_text(
-            f"# Daily Log: {yesterday_str}\n\n"
-            "- [08:00:00] TODO: Old task\n"
-        )
+        daily_old.write_text(f"# Daily Log: {yesterday_str}\n\n- [08:00:00] TODO: Old task\n")
         from keephive.commands.todo import cmd_todo
+
         cmd_todo([])
         out = capsys.readouterr().out
         assert "today" in out
@@ -105,6 +102,7 @@ class TestTodoOutput:
             "- [10:10:00] TODO: Fix bugs\n"
         )
         from keephive.commands.todo import cmd_todo
+
         cmd_todo([])
         out = capsys.readouterr().out
         assert "Fix bugs" in out
@@ -117,6 +115,7 @@ class TestStandupOutput:
     def test_standup_has_structured_sections(self, hive_env, daily_with_entries, capsys):
         """Standup produces Yesterday and/or Today sections."""
         from keephive.commands.standup import cmd_standup
+
         cmd_standup([])
         out = capsys.readouterr().out
         assert "Standup" in out
@@ -126,6 +125,7 @@ class TestStandupOutput:
     def test_standup_includes_blockers_section(self, hive_env, daily_with_entries, capsys):
         """Standup always includes Blockers section."""
         from keephive.commands.standup import cmd_standup
+
         cmd_standup([])
         out = capsys.readouterr().out
         assert "Blockers:" in out
@@ -133,6 +133,7 @@ class TestStandupOutput:
     def test_empty_standup_gives_guidance(self, hive_env, capsys):
         """Empty standup shows how to start tracking work."""
         from keephive.commands.standup import cmd_standup
+
         cmd_standup([])
         out = capsys.readouterr().out
         assert "hive t" in out or "hive r" in out
@@ -230,14 +231,14 @@ class TestRecurringLifecycle:
         content = recurring_file().read_text()
         today_str = date.today().isoformat()
         # Count occurrences of the completion entry
-        matches = [l for l in content.splitlines() if l.startswith("- Run test suite:")]
+        matches = [line for line in content.splitlines() if line.startswith("- Run test suite:")]
         assert len(matches) == 1
         assert today_str in matches[0]
 
         # Second completion (should update, not duplicate)
         cmd_recurring(["done", "Run test"])
         content = recurring_file().read_text()
-        matches = [l for l in content.splitlines() if l.startswith("- Run test suite:")]
+        matches = [line for line in content.splitlines() if line.startswith("- Run test suite:")]
         assert len(matches) == 1, f"Expected 1 entry, got {len(matches)}: {matches}"
 
     def test_done_pattern_matching(self, hive_env, capsys):
@@ -269,13 +270,16 @@ class TestVerifyVerdicts:
 
         stale_facts = [(3, "Python is great", "- Python is great [verified:2020-01-01]\n")]
 
-        response = VerifyResponse(verdicts=[
-            FactVerdict(
-                index=1, verdict=Verdict.STALE,
-                reason="Outdated",
-                correction="Python 3.14 is current",  # No leading "- "
-            )
-        ])
+        response = VerifyResponse(
+            verdicts=[
+                FactVerdict(
+                    index=1,
+                    verdict=Verdict.STALE,
+                    reason="Outdated",
+                    correction="Python 3.14 is current",  # No leading "- "
+                )
+            ]
+        )
 
         apply_verdicts(response, stale_facts, mem_path, today_str)
         mem = mem_path.read_text()
@@ -301,10 +305,12 @@ class TestVerifyVerdicts:
             (4, "Fact B", "- Fact B [verified:2020-01-02]\n"),
         ]
 
-        response = VerifyResponse(verdicts=[
-            FactVerdict(index=1, verdict=Verdict.VALID, reason="OK"),
-            FactVerdict(index=2, verdict=Verdict.UNCERTAIN, reason="Maybe"),
-        ])
+        response = VerifyResponse(
+            verdicts=[
+                FactVerdict(index=1, verdict=Verdict.VALID, reason="OK"),
+                FactVerdict(index=2, verdict=Verdict.UNCERTAIN, reason="Maybe"),
+            ]
+        )
 
         updated, refreshed = apply_verdicts(response, stale_facts, mem_path, today_str)
 
@@ -312,7 +318,7 @@ class TestVerifyVerdicts:
         assert refreshed == 1
         mem = mem_path.read_text()
         # Both stale facts should now have today's date
-        lines_with_today = [l for l in mem.splitlines() if f"[verified:{today_str}]" in l]
+        lines_with_today = [line for line in mem.splitlines() if f"[verified:{today_str}]" in line]
         assert len(lines_with_today) == 2
 
 
@@ -346,16 +352,13 @@ class TestNewestFirstOrdering:
         three_days = (date.today() - timedelta(days=3)).isoformat()
 
         (hive_env / "daily" / f"{three_days}.md").write_text(
-            f"# Daily Log: {three_days}\n\n"
-            "- [08:00:00] TODO: Deploy monitoring stack\n"
+            f"# Daily Log: {three_days}\n\n- [08:00:00] TODO: Deploy monitoring stack\n"
         )
         (hive_env / "daily" / f"{one_day}.md").write_text(
-            f"# Daily Log: {one_day}\n\n"
-            "- [14:00:00] TODO: Refactor auth module\n"
+            f"# Daily Log: {one_day}\n\n- [14:00:00] TODO: Refactor auth module\n"
         )
         (hive_env / "daily" / f"{today_str}.md").write_text(
-            f"# Daily Log: {today_str}\n\n"
-            "- [10:00:00] TODO: Fix pagination bug\n"
+            f"# Daily Log: {today_str}\n\n- [10:00:00] TODO: Fix pagination bug\n"
         )
         return ["Fix pagination bug", "Refactor auth module", "Deploy monitoring stack"]
 
@@ -364,6 +367,7 @@ class TestNewestFirstOrdering:
         expected_order = self._make_multi_day_todos(hive_env)
 
         from keephive.commands.todo import cmd_todo
+
         cmd_todo([])
         out = capsys.readouterr().out
 
@@ -377,6 +381,7 @@ class TestNewestFirstOrdering:
         expected_order = self._make_multi_day_todos(hive_env)
 
         from keephive.commands.status import cmd_status
+
         cmd_status([])
         out = capsys.readouterr().out
 
@@ -390,6 +395,7 @@ class TestNewestFirstOrdering:
         expected_order = self._make_multi_day_todos(hive_env)
 
         from keephive.mcp_server import hive_todo
+
         result = hive_todo()
 
         displayed = _extract_todo_texts(result)
@@ -402,6 +408,7 @@ class TestNewestFirstOrdering:
         expected_order = self._make_multi_day_todos(hive_env)
 
         from keephive.mcp_server import hive_status
+
         result = hive_status()
 
         displayed = _extract_todo_texts(result)
@@ -420,6 +427,7 @@ class TestNewestFirstOrdering:
         )
 
         from keephive.commands.status import cmd_status
+
         cmd_status([])
         out = capsys.readouterr().out
 
@@ -447,6 +455,7 @@ class TestNewestFirstOrdering:
         )
 
         from keephive.commands.todo import cmd_todo
+
         cmd_todo([])
         out = capsys.readouterr().out
 
@@ -467,23 +476,24 @@ class TestConsistency:
         today_str = date.today().isoformat()
         three_days = (date.today() - timedelta(days=3)).isoformat()
         (hive_env / "daily" / f"{three_days}.md").write_text(
-            f"# Daily Log: {three_days}\n\n"
-            "- [08:00:00] TODO: Oldest task from days ago\n"
+            f"# Daily Log: {three_days}\n\n- [08:00:00] TODO: Oldest task from days ago\n"
         )
         (hive_env / "daily" / f"{today_str}.md").write_text(
-            f"# Daily Log: {today_str}\n\n"
-            "- [10:00:00] TODO: Recent task from today\n"
+            f"# Daily Log: {today_str}\n\n- [10:00:00] TODO: Recent task from today\n"
         )
 
         from keephive.commands.todo import cmd_todo
+
         cmd_todo([])
         todo_texts = _extract_todo_texts(capsys.readouterr().out)
 
         from keephive.commands.status import cmd_status
+
         cmd_status([])
         status_texts = _extract_todo_texts(capsys.readouterr().out)
 
         from keephive.mcp_server import hive_todo
+
         mcp_texts = _extract_todo_texts(hive_todo())
 
         assert todo_texts == status_texts == mcp_texts, (
@@ -503,10 +513,12 @@ class TestConsistency:
             "- [10:01:00] TODO: Task beta\n"
         )
         from keephive.mcp_server import hive_todo
+
         mcp_result = hive_todo()
         assert "2 open TODO" in mcp_result
 
         from keephive.storage import open_todos
+
         todos = open_todos()
         assert len(todos) == 2
 
@@ -518,11 +530,11 @@ class TestAgeLabels:
         """TODO from yesterday shows '1d', not '1d' via different logic paths."""
         yesterday_str = (date.today() - timedelta(days=1)).isoformat()
         (hive_env / "daily" / f"{yesterday_str}.md").write_text(
-            f"# Daily Log: {yesterday_str}\n\n"
-            "- [10:00:00] TODO: Yesterday task\n"
+            f"# Daily Log: {yesterday_str}\n\n- [10:00:00] TODO: Yesterday task\n"
         )
 
         from keephive.commands.todo import cmd_todo
+
         cmd_todo([])
         out = capsys.readouterr().out
         assert "[1d" in out, f"Expected '[1d' age label, got:\n{out}"
@@ -531,11 +543,11 @@ class TestAgeLabels:
         """Status shows '1d' for yesterday's TODO."""
         yesterday_str = (date.today() - timedelta(days=1)).isoformat()
         (hive_env / "daily" / f"{yesterday_str}.md").write_text(
-            f"# Daily Log: {yesterday_str}\n\n"
-            "- [10:00:00] TODO: Yesterday task\n"
+            f"# Daily Log: {yesterday_str}\n\n- [10:00:00] TODO: Yesterday task\n"
         )
 
         from keephive.commands.status import cmd_status
+
         cmd_status([])
         out = capsys.readouterr().out
         assert "[1d" in out, f"Expected '[1d' age label, got:\n{out}"
@@ -544,11 +556,11 @@ class TestAgeLabels:
         """MCP hive_todo shows '1d' for yesterday's TODO."""
         yesterday_str = (date.today() - timedelta(days=1)).isoformat()
         (hive_env / "daily" / f"{yesterday_str}.md").write_text(
-            f"# Daily Log: {yesterday_str}\n\n"
-            "- [10:00:00] TODO: Yesterday task\n"
+            f"# Daily Log: {yesterday_str}\n\n- [10:00:00] TODO: Yesterday task\n"
         )
 
         from keephive.mcp_server import hive_todo
+
         result = hive_todo()
         assert "[1d" in result, f"Expected '[1d' age label, got:\n{result}"
 
@@ -562,13 +574,12 @@ class TestAgeLabels:
         )
 
         from keephive.commands.todo import cmd_todo
+
         cmd_todo([])
         out = capsys.readouterr().out
         if "Recently Done" in out:
             done_section = out.split("Recently Done")[1]
-            assert "[1d]" in done_section, (
-                f"Expected '[1d]' in Recently Done, got:\n{done_section}"
-            )
+            assert "[1d]" in done_section, f"Expected '[1d]' in Recently Done, got:\n{done_section}"
 
     def test_age_labels_cover_all_branches(self, hive_env, capsys):
         """Verify today/1d/Nd labels all render correctly in one output."""
@@ -577,19 +588,17 @@ class TestAgeLabels:
         five_days = (date.today() - timedelta(days=5)).isoformat()
 
         (hive_env / "daily" / f"{five_days}.md").write_text(
-            f"# Daily Log: {five_days}\n\n"
-            "- [08:00:00] TODO: Ancient relic task\n"
+            f"# Daily Log: {five_days}\n\n- [08:00:00] TODO: Ancient relic task\n"
         )
         (hive_env / "daily" / f"{one_day}.md").write_text(
-            f"# Daily Log: {one_day}\n\n"
-            "- [12:00:00] TODO: Middling priority task\n"
+            f"# Daily Log: {one_day}\n\n- [12:00:00] TODO: Middling priority task\n"
         )
         (hive_env / "daily" / f"{today_str}.md").write_text(
-            f"# Daily Log: {today_str}\n\n"
-            "- [16:00:00] TODO: Fresh urgent task\n"
+            f"# Daily Log: {today_str}\n\n- [16:00:00] TODO: Fresh urgent task\n"
         )
 
         from keephive.commands.todo import cmd_todo
+
         cmd_todo([])
         out = capsys.readouterr().out
 
@@ -604,6 +613,7 @@ class TestLogDateParsing:
     def test_log_today_default(self, hive_env, daily_with_entries, capsys):
         """hive l with no args shows today's log."""
         from keephive.commands.log import cmd_log
+
         cmd_log([])
         out = capsys.readouterr().out
         assert "Daily Log" in out
@@ -612,10 +622,10 @@ class TestLogDateParsing:
         """hive l yesterday shows yesterday's log or nearby."""
         yesterday_str = (date.today() - timedelta(days=1)).isoformat()
         (hive_env / "daily" / f"{yesterday_str}.md").write_text(
-            f"# Daily Log: {yesterday_str}\n\n"
-            "- [10:00:00] FACT: Yesterday's entry\n"
+            f"# Daily Log: {yesterday_str}\n\n- [10:00:00] FACT: Yesterday's entry\n"
         )
         from keephive.commands.log import cmd_log
+
         cmd_log(["yesterday"])
         out = capsys.readouterr().out
         assert "Yesterday's entry" in out
@@ -624,10 +634,10 @@ class TestLogDateParsing:
         """hive l 3 shows log from 3 days ago."""
         three_days = (date.today() - timedelta(days=3)).isoformat()
         (hive_env / "daily" / f"{three_days}.md").write_text(
-            f"# Daily Log: {three_days}\n\n"
-            "- [09:00:00] FACT: Three day old entry\n"
+            f"# Daily Log: {three_days}\n\n- [09:00:00] FACT: Three day old entry\n"
         )
         from keephive.commands.log import cmd_log
+
         cmd_log(["3"])
         out = capsys.readouterr().out
         assert "Three day old entry" in out
@@ -635,10 +645,10 @@ class TestLogDateParsing:
     def test_log_iso_date(self, hive_env, capsys):
         """hive l 2026-02-15 shows that specific date's log."""
         (hive_env / "daily" / "2026-02-15.md").write_text(
-            "# Daily Log: 2026-02-15\n\n"
-            "- [10:00:00] FACT: Specific date entry\n"
+            "# Daily Log: 2026-02-15\n\n- [10:00:00] FACT: Specific date entry\n"
         )
         from keephive.commands.log import cmd_log
+
         cmd_log(["2026-02-15"])
         out = capsys.readouterr().out
         assert "Specific date entry" in out
@@ -647,10 +657,10 @@ class TestLogDateParsing:
         """hive l for missing date shows nearby logs."""
         today_str = date.today().isoformat()
         (hive_env / "daily" / f"{today_str}.md").write_text(
-            f"# Daily Log: {today_str}\n\n"
-            "- [10:00:00] FACT: Entry\n"
+            f"# Daily Log: {today_str}\n\n- [10:00:00] FACT: Entry\n"
         )
         from keephive.commands.log import cmd_log
+
         cmd_log(["99"])  # 99 days ago, no log
         out = capsys.readouterr().out
         assert "No log for" in out
@@ -660,23 +670,27 @@ class TestLogDateParsing:
     def test_parse_date_arg_empty(self):
         """Empty arg returns today."""
         from keephive.commands.log import _parse_date_arg
+
         assert _parse_date_arg("") == date.today().isoformat()
 
     def test_parse_date_arg_yesterday(self):
         """'yesterday' returns yesterday's ISO date."""
         from keephive.commands.log import _parse_date_arg
+
         expected = (date.today() - timedelta(days=1)).isoformat()
         assert _parse_date_arg("yesterday") == expected
 
     def test_parse_date_arg_digit(self):
         """Digit arg returns N days ago."""
         from keephive.commands.log import _parse_date_arg
+
         expected = (date.today() - timedelta(days=5)).isoformat()
         assert _parse_date_arg("5") == expected
 
     def test_parse_date_arg_iso(self):
         """ISO date passes through unchanged."""
         from keephive.commands.log import _parse_date_arg
+
         assert _parse_date_arg("2026-01-15") == "2026-01-15"
 
 
@@ -687,10 +701,10 @@ class TestMcpLogDateParsing:
         """MCP hive_log('yesterday') returns yesterday's log."""
         yesterday_str = (date.today() - timedelta(days=1)).isoformat()
         (hive_env / "daily" / f"{yesterday_str}.md").write_text(
-            f"# Daily Log: {yesterday_str}\n\n"
-            "- [10:00:00] FACT: Yesterday via MCP\n"
+            f"# Daily Log: {yesterday_str}\n\n- [10:00:00] FACT: Yesterday via MCP\n"
         )
         from keephive.mcp_server import hive_log
+
         result = hive_log("yesterday")
         assert "Yesterday via MCP" in result
 
@@ -698,10 +712,10 @@ class TestMcpLogDateParsing:
         """MCP hive_log('2') returns log from 2 days ago."""
         two_days = (date.today() - timedelta(days=2)).isoformat()
         (hive_env / "daily" / f"{two_days}.md").write_text(
-            f"# Daily Log: {two_days}\n\n"
-            "- [10:00:00] FACT: Two days ago via MCP\n"
+            f"# Daily Log: {two_days}\n\n- [10:00:00] FACT: Two days ago via MCP\n"
         )
         from keephive.mcp_server import hive_log
+
         result = hive_log("2")
         assert "Two days ago via MCP" in result
 
@@ -712,6 +726,7 @@ class TestMcpLogDateParsing:
             f"# Daily Log: {today_str}\n\n- [10:00:00] FACT: Entry\n"
         )
         from keephive.mcp_server import hive_log
+
         result = hive_log("99")
         assert "No log for" in result
         assert "Nearby" in result
@@ -723,6 +738,7 @@ class TestReflectApply:
     def _write_analysis(self, hive_env, additions=None, contradictions=None):
         """Write a fake .last-analyze.json."""
         import json
+
         data = {
             "patterns": [],
             "additions": additions or [],
@@ -734,6 +750,7 @@ class TestReflectApply:
     def test_apply_no_analysis(self, hive_env, capsys):
         """rf apply with no prior analysis shows guidance."""
         from keephive.commands.reflect import cmd_reflect
+
         cmd_reflect(["apply"])
         out = capsys.readouterr().out
         assert "No pending analysis" in out
@@ -743,19 +760,24 @@ class TestReflectApply:
         """rf apply with empty analysis shows nothing to review."""
         self._write_analysis(hive_env)
         from keephive.commands.reflect import cmd_reflect
+
         cmd_reflect(["apply"])
         out = capsys.readouterr().out
         assert "no additions or contradictions" in out.lower()
 
     def test_apply_addition_yes(self, hive_env, capsys, monkeypatch):
         """Approving an addition writes it to memory.md."""
-        self._write_analysis(hive_env, additions=[
-            {"fact": "uv is the preferred package manager", "source": "2026-02-17"},
-        ])
+        self._write_analysis(
+            hive_env,
+            additions=[
+                {"fact": "uv is the preferred package manager", "source": "2026-02-17"},
+            ],
+        )
         # Simulate user typing "y"
         monkeypatch.setattr("builtins.input", lambda prompt: "y")
 
         from keephive.commands.reflect import cmd_reflect
+
         cmd_reflect(["apply"])
         out = capsys.readouterr().out
 
@@ -766,13 +788,17 @@ class TestReflectApply:
 
     def test_apply_addition_skip(self, hive_env, capsys, monkeypatch):
         """Skipping an addition does not modify memory.md."""
-        self._write_analysis(hive_env, additions=[
-            {"fact": "Should not appear", "source": "2026-02-17"},
-        ])
+        self._write_analysis(
+            hive_env,
+            additions=[
+                {"fact": "Should not appear", "source": "2026-02-17"},
+            ],
+        )
         monkeypatch.setattr("builtins.input", lambda prompt: "n")
 
         mem_before = (hive_env / "working" / "memory.md").read_text()
         from keephive.commands.reflect import cmd_reflect
+
         cmd_reflect(["apply"])
         out = capsys.readouterr().out
 
@@ -783,16 +809,20 @@ class TestReflectApply:
     def test_apply_contradiction_update(self, hive_env, capsys, monkeypatch):
         """Updating a contradiction replaces the old fact in memory.md."""
         # Memory has "Python is great" (from conftest)
-        self._write_analysis(hive_env, contradictions=[
-            {
-                "memory": "Python is great",
-                "log": "Python 3.13 is the latest stable release",
-                "date": "2026-02-17",
-            },
-        ])
+        self._write_analysis(
+            hive_env,
+            contradictions=[
+                {
+                    "memory": "Python is great",
+                    "log": "Python 3.13 is the latest stable release",
+                    "date": "2026-02-17",
+                },
+            ],
+        )
         monkeypatch.setattr("builtins.input", lambda prompt: "u")
 
         from keephive.commands.reflect import cmd_reflect
+
         cmd_reflect(["apply"])
         out = capsys.readouterr().out
 
@@ -817,6 +847,7 @@ class TestReflectApply:
         monkeypatch.setattr("builtins.input", lambda prompt: next(inputs))
 
         from keephive.commands.reflect import cmd_reflect
+
         cmd_reflect(["apply"])
         out = capsys.readouterr().out
 
@@ -831,6 +862,7 @@ class TestStatusReflectNudge:
     def test_nudge_when_analysis_exists(self, hive_env, capsys):
         """Status shows nudge when fresh .last-analyze.json exists."""
         import json
+
         data = {
             "patterns": [],
             "additions": [{"fact": "test", "source": "today"}],
@@ -840,6 +872,7 @@ class TestStatusReflectNudge:
         (hive_env / ".last-analyze.json").write_text(json.dumps(data))
 
         from keephive.commands.status import cmd_status
+
         cmd_status([])
         out = capsys.readouterr().out
         assert "reflect" in out.lower()
@@ -848,13 +881,17 @@ class TestStatusReflectNudge:
     def test_no_nudge_when_no_analysis(self, hive_env, capsys):
         """Status shows no nudge when no analysis exists."""
         from keephive.commands.status import cmd_status
+
         cmd_status([])
         out = capsys.readouterr().out
         assert "hive rf apply" not in out
 
     def test_no_nudge_when_analysis_old(self, hive_env, capsys):
         """Status shows no nudge when analysis is older than 24h."""
-        import json, time, os
+        import json
+        import os
+        import time
+
         data = {
             "patterns": [],
             "additions": [{"fact": "test", "source": "today"}],
@@ -868,6 +905,7 @@ class TestStatusReflectNudge:
         os.utime(path, (old_time, old_time))
 
         from keephive.commands.status import cmd_status
+
         cmd_status([])
         out = capsys.readouterr().out
         assert "hive rf apply" not in out
@@ -879,6 +917,7 @@ class TestRecallDeepFlag:
     def test_deep_without_llm_returns_normal(self, hive_env, capsys):
         """--deep with HIVE_SKIP_LLM=1 returns normal results (no LLM expansion)."""
         from keephive.commands.remember import cmd_recall
+
         cmd_recall(["Python", "--deep"])
         out = capsys.readouterr().out
         assert "Python" in out
@@ -888,6 +927,7 @@ class TestRecallDeepFlag:
     def test_recall_without_deep_is_instant(self, hive_env, capsys):
         """Normal recall does not trigger LLM expansion."""
         from keephive.commands.remember import cmd_recall
+
         cmd_recall(["Python"])
         out = capsys.readouterr().out
         assert "result" in out.lower()
@@ -897,6 +937,7 @@ class TestSessionStartOutput:
     def test_stale_warning_injected(self, hive_env):
         """SessionStart context includes stale fact warning."""
         from keephive.hooks.sessionstart import build_context
+
         ctx = build_context("/tmp/test", "test")
         assert "stale" in ctx.lower()
         assert "hive v" in ctx
@@ -905,11 +946,9 @@ class TestSessionStartOutput:
         """SessionStart context includes TODO items with age labels."""
         today_str = date.today().isoformat()
         daily = hive_env / "daily" / f"{today_str}.md"
-        daily.write_text(
-            f"# Daily Log: {today_str}\n\n"
-            "- [10:00:00] TODO: Test task\n"
-        )
+        daily.write_text(f"# Daily Log: {today_str}\n\n- [10:00:00] TODO: Test task\n")
         from keephive.hooks.sessionstart import build_context
+
         ctx = build_context("/tmp/test", "test")
         assert "TODO" in ctx
         assert "today" in ctx
@@ -917,6 +956,7 @@ class TestSessionStartOutput:
     def test_workflows_section_present(self, hive_env):
         """SessionStart context includes Workflows section."""
         from keephive.hooks.sessionstart import build_context
+
         ctx = build_context("/tmp/test", "test")
         assert "## Workflows" in ctx
         assert "hive_recall" in ctx

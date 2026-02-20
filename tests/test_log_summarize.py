@@ -12,7 +12,7 @@ class TestLogSummarizeSkip:
 
     def test_skip_llm_prints_message(self, hive_env: Path, capsys):
         from keephive.commands.log import _log_summarize
-        from keephive.storage import ensure_daily, append_to_daily
+        from keephive.storage import append_to_daily, ensure_daily
 
         ensure_daily()
         append_to_daily("- [10:00:00] FACT: Python is great")
@@ -20,19 +20,16 @@ class TestLogSummarizeSkip:
         out = capsys.readouterr().out
         assert "HIVE_SKIP_LLM" in out or "skipping" in out.lower()
 
-    def test_empty_log_exits_gracefully(self, hive_env: Path, capsys, monkeypatch):
-        monkeypatch.delenv("HIVE_SKIP_LLM", raising=False)
+    def test_empty_log_exits_gracefully(self, hive_env: Path, capsys):
         from keephive.storage import ensure_daily
 
-        ensure_daily()  # creates header-only file
-        # File exists but has only whitespace/header
+        ensure_daily()  # creates header-only file: "# Daily Log: DATE\n\n"
         from keephive.commands.log import _log_summarize
+
         _log_summarize()
-        # Should not crash — either shows "no entries" or skips silently
-        # (the header line "# Daily Log: DATE\n\n" counts as non-empty but
-        #  the function checks .strip(), which is falsy for just the header)
-        # Either way it must not raise
-        capsys.readouterr()  # just drain
+        # Header-only log has no "- " entries — must print "no entries" and return
+        out = capsys.readouterr().out
+        assert "no entries" in out.lower() or "skipping" in out.lower()
 
     def test_summarize_dispatch_from_cmd_log(self, hive_env: Path, capsys):
         from keephive.commands.log import cmd_log
@@ -59,6 +56,7 @@ class TestLogSummarizeLLM:
         append_to_daily("- [09:20:00] INSIGHT: Strip-then-append is idempotent for verified tags")
 
         from keephive.commands.log import _log_summarize
+
         _log_summarize()
         out = capsys.readouterr().out
 
@@ -66,5 +64,6 @@ class TestLogSummarizeLLM:
         bullet_count = out.count("• ")
         assert 2 <= bullet_count <= 6, f"Expected 3-5 bullets, got {bullet_count}: {out!r}"
         # Verify at least one specific term from the log appears
-        assert any(term in out for term in ["FTS", "SQLite", "atomic", "rules", "idempotent", "os.replace"]), \
-            f"Expected specific content from log in summary, got: {out!r}"
+        assert any(
+            term in out for term in ["FTS", "SQLite", "atomic", "rules", "idempotent", "os.replace"]
+        ), f"Expected specific content from log in summary, got: {out!r}"

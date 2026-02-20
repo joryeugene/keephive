@@ -5,17 +5,16 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 
-import pytest
-
 from keephive.cli import main
 
-
 # ---- _rebuild_index ----
+
 
 class TestRebuildIndex:
     def test_produces_valid_json(self, hive_env):
         from keephive.commands.gc import _rebuild_index
         from keephive.storage import index_file
+
         _rebuild_index()
 
         idx = index_file()
@@ -42,6 +41,7 @@ class TestRebuildIndex:
 
         from keephive.commands.gc import _rebuild_index
         from keephive.storage import index_file
+
         _rebuild_index()
 
         data = json.loads(index_file().read_text())
@@ -53,6 +53,7 @@ class TestRebuildIndex:
 
         from keephive.commands.gc import _rebuild_index
         from keephive.storage import index_file
+
         _rebuild_index()
 
         data = json.loads(index_file().read_text())
@@ -64,6 +65,7 @@ class TestRebuildIndex:
 
         from keephive.commands.gc import _rebuild_index
         from keephive.storage import index_file
+
         _rebuild_index()
 
         data = json.loads(index_file().read_text())
@@ -79,6 +81,7 @@ class TestRebuildIndex:
 
         from keephive.commands.gc import _rebuild_index
         from keephive.storage import index_file
+
         _rebuild_index()
 
         data = json.loads(index_file().read_text())
@@ -86,6 +89,7 @@ class TestRebuildIndex:
 
 
 # ---- cmd_gc ----
+
 
 class TestCmdGc:
     def test_archives_old_logs(self, hive_env, capsys):
@@ -107,7 +111,7 @@ class TestCmdGc:
         (dd / f"{recent}.md").write_text(f"# Daily Log: {recent}\n")
 
         main(["gc"])
-        out = capsys.readouterr().out
+        capsys.readouterr()
 
         # Recent file stays
         assert (dd / f"{recent}.md").exists()
@@ -129,7 +133,7 @@ class TestCmdGc:
         (hd / ".reminded-abc123").write_text("")
 
         main(["gc"])
-        out = capsys.readouterr().out
+        capsys.readouterr()
         assert not (hd / ".reminded-abc123").exists()
 
     def test_cleans_bak_files(self, hive_env, capsys):
@@ -137,7 +141,7 @@ class TestCmdGc:
         (wd / "memory.md.bak").write_text("backup\n")
 
         main(["gc"])
-        out = capsys.readouterr().out
+        capsys.readouterr()
         assert not (wd / "memory.md.bak").exists()
 
     def test_cleans_recall_tmp(self, hive_env, capsys):
@@ -145,7 +149,7 @@ class TestCmdGc:
         (hd / ".recall_tmp_test").write_text("tmp\n")
 
         main(["gc"])
-        out = capsys.readouterr().out
+        capsys.readouterr()
         assert not (hd / ".recall_tmp_test").exists()
 
     def test_nothing_to_archive(self, hive_env, capsys):
@@ -155,6 +159,7 @@ class TestCmdGc:
 
     def test_index_rebuilt(self, hive_env, capsys):
         from keephive.storage import index_file
+
         main(["gc"])
         out = capsys.readouterr().out
         assert "Index rebuilt" in out

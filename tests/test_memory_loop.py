@@ -14,7 +14,6 @@ from datetime import date, timedelta
 
 from conftest import make_daily
 
-
 # ---- Phase 1: todo done + recurring unification ----
 
 
@@ -33,7 +32,7 @@ class TestTodoDoneRecurring:
 
     def test_todo_done_falls_through_to_recurring(self, hive_env, capsys):
         """When no regular TODO matches, falls through to recurring."""
-        from keephive.commands.recurring import _recurring_add, _ensure_recurring
+        from keephive.commands.recurring import _ensure_recurring, _recurring_add
         from keephive.commands.todo import _todo_done
 
         _ensure_recurring()
@@ -76,7 +75,9 @@ class TestMcpTodoDoneRecurring:
 
         _ensure_recurring()
         # Suppress Rich output from _recurring_add
-        import io, contextlib
+        import contextlib
+        import io
+
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             _recurring_add("daily", "Run test suite")
@@ -101,13 +102,15 @@ class TestMcpTodoDoneRecurring:
 
     def test_mcp_todo_done_prefers_regular_todo(self, hive_env):
         """MCP hive_todo_done matches regular TODOs before falling through."""
-        from keephive.commands.remember import cmd_remember
         from keephive.commands.recurring import _ensure_recurring, _recurring_add
+        from keephive.commands.remember import cmd_remember
         from keephive.mcp_server import hive_todo_done
 
         cmd_remember(["TODO: review test suite coverage"])
         _ensure_recurring()
-        import io, contextlib
+        import contextlib
+        import io
+
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             _recurring_add("daily", "Run test suite")
@@ -184,11 +187,9 @@ class TestMemoryUpdateModels:
 
     def test_precompact_response_backward_compat(self):
         """PreCompactResponse still works without memory_updates."""
-        from keephive.models import InsightCategory, PreCompactResponse
+        from keephive.models import PreCompactResponse
 
-        r = PreCompactResponse(
-            insights=[{"category": "FACT", "description": "test"}]
-        )
+        r = PreCompactResponse(insights=[{"category": "FACT", "description": "test"}])
         assert len(r.insights) == 1
         assert r.memory_updates == []
 
@@ -284,16 +285,14 @@ class TestAutoPromote:
             "GraphQL uses schema-first design",
             "Docker containers share the host kernel",
         ]
-        updates = [
-            MemoryUpdate(action=MemoryAction.ADD, text=fact)
-            for fact in distinct_facts
-        ]
+        updates = [MemoryUpdate(action=MemoryAction.ADD, text=fact) for fact in distinct_facts]
         _apply_memory_updates(updates)
 
         mem_content = safe_read_text(memory_file())
         # Only 3 should be added (hard cap)
-        auto_count = sum(1 for line in mem_content.splitlines()
-                         if any(f in line for f in distinct_facts))
+        auto_count = sum(
+            1 for line in mem_content.splitlines() if any(f in line for f in distinct_facts)
+        )
         assert auto_count == 3
 
     def test_apply_memory_updates_dedup(self, hive_env):
@@ -327,9 +326,7 @@ class TestAutoCorrect:
             "- Python is great [verified:2020-01-01]\n"
             "- Other fact [verified:2026-01-01]\n"
         )
-        result = _correct_in_memory(
-            content, "Python is great", "Python is excellent", "2026-02-17"
-        )
+        result = _correct_in_memory(content, "Python is great", "Python is excellent", "2026-02-17")
         assert "- Python is excellent [verified:2026-02-17]" in result
         assert "Python is great" not in result
         assert "Other fact" in result
@@ -339,9 +336,7 @@ class TestAutoCorrect:
         from keephive.hooks.precompact import _correct_in_memory
 
         content = "# Working Memory\n\n- Some fact [verified:2026-01-01]\n"
-        result = _correct_in_memory(
-            content, "nonexistent fact", "new value", "2026-02-17"
-        )
+        result = _correct_in_memory(content, "nonexistent fact", "new value", "2026-02-17")
         assert result == content
 
     def test_apply_memory_updates_correct(self, hive_env):
@@ -382,14 +377,17 @@ class TestAutoReverify:
         old_date = (date.today() - timedelta(days=60)).isoformat()
         mem_path = memory_file()
         mem_path.write_text(
-            "# Working Memory\n\n"
-            f"- Python uses GIL for thread safety [verified:{old_date}]\n"
+            f"# Working Memory\n\n- Python uses GIL for thread safety [verified:{old_date}]\n"
         )
 
         # Add matching daily entry
-        make_daily(hive_env, days_ago=1, entries=[
-            "- [10:00:00] FACT: Python uses GIL for thread safety confirmed",
-        ])
+        make_daily(
+            hive_env,
+            days_ago=1,
+            entries=[
+                "- [10:00:00] FACT: Python uses GIL for thread safety confirmed",
+            ],
+        )
 
         reverified = _auto_reverify()
         assert len(reverified) == 1
@@ -407,14 +405,17 @@ class TestAutoReverify:
         old_date = (date.today() - timedelta(days=60)).isoformat()
         mem_path = memory_file()
         mem_path.write_text(
-            "# Working Memory\n\n"
-            f"- Obscure fact about quantum computing [verified:{old_date}]\n"
+            f"# Working Memory\n\n- Obscure fact about quantum computing [verified:{old_date}]\n"
         )
 
         # Add unrelated daily entry
-        make_daily(hive_env, days_ago=1, entries=[
-            "- [10:00:00] FACT: Python is great for web development",
-        ])
+        make_daily(
+            hive_env,
+            days_ago=1,
+            entries=[
+                "- [10:00:00] FACT: Python is great for web development",
+            ],
+        )
 
         reverified = _auto_reverify()
         assert len(reverified) == 0
@@ -429,10 +430,7 @@ class TestAutoReverify:
 
         recent_date = date.today().isoformat()
         mem_path = memory_file()
-        mem_path.write_text(
-            "# Working Memory\n\n"
-            f"- Fresh fact [verified:{recent_date}]\n"
-        )
+        mem_path.write_text(f"# Working Memory\n\n- Fresh fact [verified:{recent_date}]\n")
 
         reverified = _auto_reverify()
         assert len(reverified) == 0
@@ -459,11 +457,8 @@ class TestAccumulationWarnings:
         """Warns when >5 auto-captured facts."""
         from keephive.hooks.sessionstart import _accumulation_warnings
 
-        content = (
-            "# Working Memory\n\n"
-            "- Normal fact\n\n"
-            "## Auto-Captured\n"
-            + "\n".join(f"- Auto fact {i} [verified:2026-02-17]" for i in range(7))
+        content = "# Working Memory\n\n- Normal fact\n\n## Auto-Captured\n" + "\n".join(
+            f"- Auto fact {i} [verified:2026-02-17]" for i in range(7)
         )
 
         warnings = _accumulation_warnings(content)
@@ -505,7 +500,10 @@ class TestDedupInMemory:
         from keephive.hooks.precompact import _is_duplicate_in_memory
 
         content = "- Python is a great programming language [verified:2026-01-01]\n"
-        assert _is_duplicate_in_memory(content, "Python is a great programming language for data") is True
+        assert (
+            _is_duplicate_in_memory(content, "Python is a great programming language for data")
+            is True
+        )
 
     def test_not_duplicate(self):
         """Unrelated content is not flagged as duplicate."""
@@ -527,14 +525,17 @@ class TestBuildContextIntegration:
         old_date = (date.today() - timedelta(days=60)).isoformat()
         mem_path = memory_file()
         mem_path.write_text(
-            "# Working Memory\n\n"
-            f"- Python uses Pydantic models [verified:{old_date}]\n"
+            f"# Working Memory\n\n- Python uses Pydantic models [verified:{old_date}]\n"
         )
 
         # Add matching daily entry
-        make_daily(hive_env, days_ago=1, entries=[
-            "- [10:00:00] FACT: keephive uses Pydantic models for validation",
-        ])
+        make_daily(
+            hive_env,
+            days_ago=1,
+            entries=[
+                "- [10:00:00] FACT: keephive uses Pydantic models for validation",
+            ],
+        )
 
         context = build_context("/test/project", "project")
         assert "auto-updated" in context.lower() or "re-verified" in context.lower()
@@ -630,10 +631,13 @@ class TestImprovedDuplicateInsight:
         )
 
         # Similar fact, different ending (shorter)
-        assert _is_duplicate_insight(
-            df,
-            "mindlessmuze is a registered Moltbook agent. API key redacted. Claim URL provided."
-        ) is True
+        assert (
+            _is_duplicate_insight(
+                df,
+                "mindlessmuze is a registered Moltbook agent. API key redacted. Claim URL provided.",
+            )
+            is True
+        )
 
     def test_url_stripping_helps_match(self, hive_env):
         """Normalizing URLs helps match otherwise-different text."""
@@ -649,10 +653,12 @@ class TestImprovedDuplicateInsight:
         )
 
         # Same insight without URL
-        assert _is_duplicate_insight(
-            df,
-            "Viral formula on Moltbook: posts need a story and verified claims"
-        ) is True
+        assert (
+            _is_duplicate_insight(
+                df, "Viral formula on Moltbook: posts need a story and verified claims"
+            )
+            is True
+        )
 
     def test_genuinely_different_not_flagged(self, hive_env):
         """Genuinely different insights are not flagged as duplicates."""
@@ -661,15 +667,12 @@ class TestImprovedDuplicateInsight:
 
         ensure_daily()
         df = daily_file()
-        df.write_text(
-            "# Daily Log\n\n"
-            "- [10:00:00] FACT: Python uses GIL for thread safety\n"
-        )
+        df.write_text("# Daily Log\n\n- [10:00:00] FACT: Python uses GIL for thread safety\n")
 
-        assert _is_duplicate_insight(
-            df,
-            "Rust has zero-cost abstractions and no garbage collector"
-        ) is False
+        assert (
+            _is_duplicate_insight(df, "Rust has zero-cost abstractions and no garbage collector")
+            is False
+        )
 
     def test_normalize_for_dedup(self):
         """_normalize_for_dedup strips URLs and long tokens."""

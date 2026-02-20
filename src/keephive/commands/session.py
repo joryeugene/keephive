@@ -11,7 +11,6 @@ import shutil
 import sys
 from pathlib import Path
 
-
 # Built-in mode prompts. Each gets the full context prepended.
 _MODE_PROMPTS: dict[str, str] = {
     "default": (
@@ -23,15 +22,15 @@ _MODE_PROMPTS: dict[str, str] = {
     "todo": (
         "Here are your open TODOs from keephive context above. "
         "Go through each one. For each: decide if it's actionable, stale, or done. "
-        "Use `hive todo done \"<pattern>\"` to close completed items. "
-        "Use `hive r \"TODO: <text>\"` to rewrite unclear ones. "
+        'Use `hive todo done "<pattern>"` to close completed items. '
+        'Use `hive r "TODO: <text>"` to rewrite unclear ones. '
         "Let's triage them one by one."
     ),
     "verify": (
         "Review the stale facts shown in the keephive context above. "
         "For each stale fact: check against the codebase using Read/Grep tools, "
-        "then use `hive r \"FACT: <corrected>\"` to update or "
-        "`hive mem rm \"<old fact>\"` to remove outdated ones. "
+        'then use `hive r "FACT: <corrected>"` to update or '
+        '`hive mem rm "<old fact>"` to remove outdated ones. '
         "Let's verify them one at a time."
     ),
     "learn": (
@@ -45,7 +44,7 @@ _MODE_PROMPTS: dict[str, str] = {
         "Review the daily log entries from the past week shown above. "
         "What patterns do you see? What keeps recurring? "
         "What insights should become a permanent rule or guide? "
-        "Use `hive r \"INSIGHT: <pattern>\"` to capture findings. "
+        'Use `hive r "INSIGHT: <pattern>"` to capture findings. '
         "Use `hive ke <name>` to draft a knowledge guide if warranted."
     ),
 }

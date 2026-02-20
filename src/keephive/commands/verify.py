@@ -78,7 +78,7 @@ def cmd_verify(args: list[str]) -> None:
 
     # Build the prompt with tool-based investigation
     versions = version_context()
-    facts_text = "\n".join(f"{i+1}. {fact}" for i, (_, fact, _) in enumerate(all_facts))
+    facts_text = "\n".join(f"{i + 1}. {fact}" for i, (_, fact, _) in enumerate(all_facts))
 
     prompt = f"""You are a fact-checking investigator with access to tools.
 
@@ -105,7 +105,8 @@ For STALE verdicts, correction must contain the full replacement fact text."""
     try:
         with console.status("  Investigating with claude...", spinner="dots"):
             response = run_claude_pipe(
-                prompt, VerifyResponse,
+                prompt,
+                VerifyResponse,
                 model="sonnet",
                 tools=VERIFY_TOOLS,
                 max_turns=12,
@@ -128,10 +129,14 @@ For STALE verdicts, correction must contain the full replacement fact text."""
 
     updated, refreshed = apply_verdicts(response, all_facts, mem, today())
 
-    console.print(f"[dim]Updated {updated} fact(s), refreshed {refreshed} in working/memory.md[/dim]")
+    console.print(
+        f"[dim]Updated {updated} fact(s), refreshed {refreshed} in working/memory.md[/dim]"
+    )
 
     console.print()
-    console.print("  -> [dim]hive e[/dim] to review working memory  |  [dim]hive s[/dim] to check status")
+    console.print(
+        "  -> [dim]hive e[/dim] to review working memory  |  [dim]hive s[/dim] to check status"
+    )
 
 
 def apply_verdicts(
@@ -185,7 +190,7 @@ def apply_verdicts(
                 updated += 1
         else:
             console.print(f"    [warn]UNCERTAIN[/warn]: {v.reason}")
-            console.print(f"    [dim]-> Refreshed (not disproven)[/dim]")
+            console.print("    [dim]-> Refreshed (not disproven)[/dim]")
             clean = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", lines[target]).rstrip("\n")
             lines[target] = f"{clean} [verified:{today_str}]\n"
             refreshed += 1

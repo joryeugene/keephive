@@ -15,3 +15,6 @@ tests/e2e_outputs/
 
 # Claude Code project settings
 .claude/
+
+# Private just recipes (maintainer-only)
+.just/

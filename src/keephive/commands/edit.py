@@ -48,6 +48,7 @@ def cmd_edit(args: list[str]) -> None:
 
     if target == "todo":
         from keephive.commands.todo import edit_todos
+
         edit_todos()
         return
 

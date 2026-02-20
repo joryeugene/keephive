@@ -34,7 +34,9 @@ def get_installed_version() -> str | None:
     try:
         result = subprocess.run(
             [str(keephive_bin), "--version"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         # Output format: "keephive vX.Y.Z"
         for word in result.stdout.strip().split():
@@ -81,7 +83,9 @@ def check_installed_deps() -> list[str]:
         try:
             result = subprocess.run(
                 [tool_python, "-c", f"import {pkg}"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode != 0:
                 missing.append(pkg)

@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from unittest.mock import patch
 
 from conftest import make_daily
+
 from keephive.models import StandupResponse
 
 
 def _mock_standup_response():
     return StandupResponse(
-        yesterday=["Merged engagement metrics PR #359 https://github.com/org/repo/pull/359",
-                    "Completed audit rewrite"],
-        today=["Get #360 reviewed and merged",
-               "Continue adoption goals #311 toward ready-for-review"],
+        yesterday=[
+            "Merged engagement metrics PR #359 https://github.com/org/repo/pull/359",
+            "Completed audit rewrite",
+        ],
+        today=[
+            "Get #360 reviewed and merged",
+            "Continue adoption goals #311 toward ready-for-review",
+        ],
         blockers=[],
     )
 
@@ -22,6 +27,7 @@ def _mock_standup_response():
 # ---------------------------------------------------------------------------
 # TestWeekendAwareCutoff
 # ---------------------------------------------------------------------------
+
 
 class TestWeekendAwareCutoff:
     def test_monday_returns_friday(self, hive_env):
@@ -66,13 +72,16 @@ class TestWeekendAwareCutoff:
 # TestGatherPrData
 # ---------------------------------------------------------------------------
 
+
 class TestGatherPrData:
     def test_gather_pr_data_with_mocked_gh(self, hive_env, monkeypatch):
         """_gather_pr_data returns open, merged, closed PRs from mocked gh."""
         import subprocess
+
         from keephive.commands.standup import _gather_pr_data
 
         call_count = []
+
         def fake_run(cmd, **kwargs):
             call_count.append(cmd)
             if "--state" in cmd and "open" in cmd:
@@ -80,9 +89,9 @@ class TestGatherPrData:
             elif "--state" in cmd and "merged" in cmd:
                 stdout = '[{"number":2,"title":"Fix bug","url":"https://github.com/o/r/pull/2","mergedAt":"2026-02-17"}]'
             elif "--state" in cmd and "closed" in cmd:
-                stdout = '[]'
+                stdout = "[]"
             else:
-                stdout = '[]'
+                stdout = "[]"
             return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
 
         monkeypatch.setattr("subprocess.run", fake_run)
@@ -97,11 +106,13 @@ class TestGatherPrData:
 
     def test_gather_pr_data_gh_not_found(self, hive_env, monkeypatch):
         """_gather_pr_data returns empty lists when gh is not installed."""
+
         def fake_run(cmd, **kwargs):
             raise FileNotFoundError("gh not found")
 
         monkeypatch.setattr("subprocess.run", fake_run)
         from keephive.commands.standup import _gather_pr_data
+
         result = _gather_pr_data()
         assert result == {"open_prs": [], "merged_prs": [], "closed_prs": []}
 
@@ -110,64 +121,99 @@ class TestGatherPrData:
 # TestStandupDataGathering
 # ---------------------------------------------------------------------------
 
+
 class TestStandupDataGathering:
     def test_gathers_recent_dones(self, hive_env, monkeypatch):
         """Data gathering finds recent DONEs."""
-        monkeypatch.setattr("subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError))
-        make_daily(hive_env, 0, [
-            "- [10:00:00] TODO: Write tests",
-            "- [10:05:00] DONE: Write tests",
-        ])
+        monkeypatch.setattr(
+            "subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError)
+        )
+        make_daily(
+            hive_env,
+            0,
+            [
+                "- [10:00:00] TODO: Write tests",
+                "- [10:05:00] DONE: Write tests",
+            ],
+        )
         from keephive.commands.standup import _gather_raw_data
+
         data = _gather_raw_data()
         assert len(data["recent_done"]) >= 1
         assert any("Write tests" in text for _, text in data["recent_done"])
 
     def test_gathers_open_todos(self, hive_env, monkeypatch):
         """Data gathering finds open TODOs."""
-        monkeypatch.setattr("subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError))
-        make_daily(hive_env, 0, [
-            "- [10:00:00] TODO: Fix the bug",
-            "- [10:05:00] TODO: Add more tests",
-        ])
+        monkeypatch.setattr(
+            "subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError)
+        )
+        make_daily(
+            hive_env,
+            0,
+            [
+                "- [10:00:00] TODO: Fix the bug",
+                "- [10:05:00] TODO: Add more tests",
+            ],
+        )
         from keephive.commands.standup import _gather_raw_data
+
         data = _gather_raw_data()
         assert len(data["open_todos"]) >= 2
 
     def test_gathers_insights(self, hive_env, monkeypatch):
         """Data gathering finds insight entries."""
-        monkeypatch.setattr("subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError))
-        make_daily(hive_env, 0, [
-            "- [10:00:00] DECISION: Use Pydantic for validation",
-            "- [10:05:00] FACT: SequenceMatcher has a 0.7 threshold",
-            "- [10:10:00] session [keephive] /some/path",
-        ])
+        monkeypatch.setattr(
+            "subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError)
+        )
+        make_daily(
+            hive_env,
+            0,
+            [
+                "- [10:00:00] DECISION: Use Pydantic for validation",
+                "- [10:05:00] FACT: SequenceMatcher has a 0.7 threshold",
+                "- [10:10:00] session [keephive] /some/path",
+            ],
+        )
         from keephive.commands.standup import _gather_raw_data
+
         data = _gather_raw_data()
         assert len(data["insights"]) >= 1
 
     def test_empty_log_returns_empty_data(self, hive_env, monkeypatch):
         """Empty daily log returns empty data."""
-        monkeypatch.setattr("subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError))
+        monkeypatch.setattr(
+            "subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError)
+        )
         from keephive.commands.standup import _gather_raw_data
+
         data = _gather_raw_data()
         assert data["recent_done"] == []
         assert data["open_todos"] == []
 
     def test_old_dones_not_included(self, hive_env, monkeypatch):
         """DONEs from 3+ days ago are not in recent_done."""
-        monkeypatch.setattr("subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError))
-        make_daily(hive_env, 3, [
-            "- [10:00:00] DONE: Old task",
-        ])
+        monkeypatch.setattr(
+            "subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError)
+        )
+        make_daily(
+            hive_env,
+            3,
+            [
+                "- [10:00:00] DONE: Old task",
+            ],
+        )
         from keephive.commands.standup import _gather_raw_data
+
         data = _gather_raw_data()
         assert len(data["recent_done"]) == 0
 
     def test_has_pr_keys(self, hive_env, monkeypatch):
         """Data dict includes merged_prs and closed_prs keys."""
-        monkeypatch.setattr("subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError))
+        monkeypatch.setattr(
+            "subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError)
+        )
         from keephive.commands.standup import _gather_raw_data
+
         data = _gather_raw_data()
         assert "merged_prs" in data
         assert "closed_prs" in data
@@ -177,6 +223,7 @@ class TestStandupDataGathering:
 # ---------------------------------------------------------------------------
 # TestStandupDisplay: Direct calls to extracted display functions
 # ---------------------------------------------------------------------------
+
 
 class TestStandupDisplay:
     def test_display_standup_renders_all_sections(self, hive_env, capsys):
@@ -274,15 +321,23 @@ class TestStandupDisplay:
 # TestStandupSkipLLM
 # ---------------------------------------------------------------------------
 
+
 class TestStandupSkipLLM:
     def test_skip_llm_shows_raw_data(self, hive_env, capsys, monkeypatch):
         """HIVE_SKIP_LLM shows deterministic output with Yesterday/Today/Blockers."""
-        monkeypatch.setattr("subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError))
-        make_daily(hive_env, 0, [
-            "- [10:00:00] DONE: Fixed the bug",
-            "- [10:05:00] TODO: Add tests",
-        ])
+        monkeypatch.setattr(
+            "subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError)
+        )
+        make_daily(
+            hive_env,
+            0,
+            [
+                "- [10:00:00] DONE: Fixed the bug",
+                "- [10:05:00] TODO: Add tests",
+            ],
+        )
         from keephive.commands.standup import cmd_standup
+
         cmd_standup([])
 
         out = capsys.readouterr().out
@@ -293,8 +348,11 @@ class TestStandupSkipLLM:
 
     def test_empty_standup_shows_help(self, hive_env, capsys, monkeypatch):
         """Empty standup shows getting-started help."""
-        monkeypatch.setattr("subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError))
+        monkeypatch.setattr(
+            "subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError)
+        )
         from keephive.commands.standup import cmd_standup
+
         cmd_standup([])
 
         out = capsys.readouterr().out
@@ -302,12 +360,19 @@ class TestStandupSkipLLM:
 
     def test_deterministic_yesterday_today_format(self, hive_env, capsys, monkeypatch):
         """Deterministic output uses Yesterday/Today/Blockers sections."""
-        monkeypatch.setattr("subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError))
-        make_daily(hive_env, 0, [
-            "- [10:00:00] DONE: Shipped feature",
-            "- [10:05:00] TODO: Write docs",
-        ])
+        monkeypatch.setattr(
+            "subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError)
+        )
+        make_daily(
+            hive_env,
+            0,
+            [
+                "- [10:00:00] DONE: Shipped feature",
+                "- [10:05:00] TODO: Write docs",
+            ],
+        )
         from keephive.commands.standup import cmd_standup
+
         cmd_standup([])
 
         out = capsys.readouterr().out
@@ -322,12 +387,18 @@ class TestStandupSkipLLM:
         def fake_run(cmd, **kwargs):
             if isinstance(cmd, list) and "gh" in cmd:
                 if "--state" in cmd and "open" in cmd:
-                    return sp.CompletedProcess(cmd, 0, stdout='[{"number":42,"title":"Add metrics","isDraft":false,"url":"https://github.com/o/r/pull/42","updatedAt":"2026-02-18","headRefName":"feat","createdAt":"2026-02-17"}]', stderr="")
+                    return sp.CompletedProcess(
+                        cmd,
+                        0,
+                        stdout='[{"number":42,"title":"Add metrics","isDraft":false,"url":"https://github.com/o/r/pull/42","updatedAt":"2026-02-18","headRefName":"feat","createdAt":"2026-02-17"}]',
+                        stderr="",
+                    )
                 return sp.CompletedProcess(cmd, 0, stdout="[]", stderr="")
             raise FileNotFoundError
 
         monkeypatch.setattr("subprocess.run", fake_run)
         from keephive.commands.standup import cmd_standup
+
         cmd_standup([])
 
         out = capsys.readouterr().out
@@ -338,6 +409,7 @@ class TestStandupSkipLLM:
 # ---------------------------------------------------------------------------
 # TestStandupHallucinationGuard
 # ---------------------------------------------------------------------------
+
 
 class TestStandupHallucinationGuard:
     def test_all_empty_skips_llm(self, hive_env, monkeypatch):
@@ -399,18 +471,25 @@ class TestStandupHallucinationGuard:
 # TestStandupLLMPath
 # ---------------------------------------------------------------------------
 
+
 class TestStandupLLMPath:
     """Tests that exercise the LLM code path via monkeypatched run_claude_pipe."""
 
     def test_display_llm_renders_response(self, hive_env, monkeypatch, capsys):
         """Mock pipe returns StandupResponse; verify it renders to stdout."""
         monkeypatch.delenv("HIVE_SKIP_LLM", raising=False)
-        monkeypatch.setattr("subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError))
+        monkeypatch.setattr(
+            "subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError)
+        )
 
-        make_daily(hive_env, 0, [
-            "- [10:00:00] DONE: Shipped the feature",
-            "- [10:05:00] TODO: Write docs",
-        ])
+        make_daily(
+            hive_env,
+            0,
+            [
+                "- [10:00:00] DONE: Shipped the feature",
+                "- [10:05:00] TODO: Write docs",
+            ],
+        )
 
         def fake_pipe(*_a, **_kw):
             return StandupResponse(
@@ -422,6 +501,7 @@ class TestStandupLLMPath:
         monkeypatch.setattr("keephive.claude.run_claude_pipe", fake_pipe)
 
         from keephive.commands.standup import _display_llm, _gather_raw_data
+
         data = _gather_raw_data()
         _display_llm(data)
 
@@ -433,11 +513,17 @@ class TestStandupLLMPath:
     def test_display_llm_error_visible_on_failure(self, hive_env, monkeypatch, capsys):
         """Mock pipe raises ClaudePipeError; verify error appears in stdout."""
         monkeypatch.delenv("HIVE_SKIP_LLM", raising=False)
-        monkeypatch.setattr("subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError))
+        monkeypatch.setattr(
+            "subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError)
+        )
 
-        make_daily(hive_env, 0, [
-            "- [10:00:00] DONE: Something",
-        ])
+        make_daily(
+            hive_env,
+            0,
+            [
+                "- [10:00:00] DONE: Something",
+            ],
+        )
 
         from keephive.claude import ClaudePipeError
 
@@ -447,6 +533,7 @@ class TestStandupLLMPath:
         monkeypatch.setattr("keephive.claude.run_claude_pipe", failing_pipe)
 
         from keephive.commands.standup import _display_llm, _gather_raw_data
+
         data = _gather_raw_data()
         _display_llm(data)
 
@@ -458,6 +545,7 @@ class TestStandupLLMPath:
 # ---------------------------------------------------------------------------
 # TestStandupModel
 # ---------------------------------------------------------------------------
+
 
 class TestStandupModel:
     def test_valid_response(self):

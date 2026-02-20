@@ -5,10 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
-
 # ---- _setup_hooks ----
+
 
 class TestSetupHooks:
     def test_creates_four_hooks(self, tmp_path):
@@ -17,6 +15,7 @@ class TestSetupHooks:
         settings.write_text("{}")
 
         from keephive.commands.setup import _setup_hooks
+
         _setup_hooks(settings_path=settings)
 
         data = json.loads(settings.read_text())
@@ -32,33 +31,40 @@ class TestSetupHooks:
         settings.write_text("{}")
 
         from keephive.commands.setup import _setup_hooks
+
         _setup_hooks(settings_path=settings)
         _setup_hooks(settings_path=settings)
 
         data = json.loads(settings.read_text())
         ss_hooks = data["hooks"]["SessionStart"]
-        keephive_count = sum(
-            1 for h in ss_hooks
-            if "keephive" in str(h)
-        )
+        keephive_count = sum(1 for h in ss_hooks if "keephive" in str(h))
         assert keephive_count == 1
 
     def test_removes_old_bash_hooks(self, tmp_path):
         """Old bash hive hooks are removed."""
         settings = tmp_path / "settings.json"
-        settings.write_text(json.dumps({
-            "hooks": {
-                "SessionStart": [{
-                    "matcher": "*",
-                    "hooks": [{
-                        "type": "command",
-                        "command": "$HOME/.claude/hive/bin/hive hook-sessionstart",
-                    }],
-                }],
-            }
-        }))
+        settings.write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "SessionStart": [
+                            {
+                                "matcher": "*",
+                                "hooks": [
+                                    {
+                                        "type": "command",
+                                        "command": "$HOME/.claude/hive/bin/hive hook-sessionstart",
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                }
+            )
+        )
 
         from keephive.commands.setup import _setup_hooks
+
         _setup_hooks(settings_path=settings)
 
         data = json.loads(settings.read_text())
@@ -69,16 +75,23 @@ class TestSetupHooks:
     def test_fixes_flat_format_to_grouped(self, tmp_path):
         """Stray flat-format hooks get wrapped in matcher-grouped format."""
         settings = tmp_path / "settings.json"
-        settings.write_text(json.dumps({
-            "hooks": {
-                "SessionStart": [{
-                    "type": "command",
-                    "command": "keephive hook-sessionstart",
-                }],
-            }
-        }))
+        settings.write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "SessionStart": [
+                            {
+                                "type": "command",
+                                "command": "keephive hook-sessionstart",
+                            }
+                        ],
+                    }
+                }
+            )
+        )
 
         from keephive.commands.setup import _setup_hooks
+
         _setup_hooks(settings_path=settings)
 
         data = json.loads(settings.read_text())
@@ -94,6 +107,7 @@ class TestSetupHooks:
         settings = tmp_path / "subdir" / "settings.json"
 
         from keephive.commands.setup import _setup_hooks
+
         _setup_hooks(settings_path=settings)
 
         assert settings.exists()
@@ -106,6 +120,7 @@ class TestSetupHooks:
         settings.write_text("{}")
 
         from keephive.commands.setup import _setup_hooks
+
         _setup_hooks(settings_path=settings)
 
         data = json.loads(settings.read_text())
@@ -119,29 +134,36 @@ class TestSetupHooks:
 
 # ---- _extract_cmds ----
 
+
 class TestExtractCmds:
     def test_flat_format(self):
         from keephive.commands.setup import _extract_cmds
+
         result = _extract_cmds({"command": "keephive hook-sessionstart"})
         assert "keephive hook-sessionstart" in result
 
     def test_grouped_format(self):
         from keephive.commands.setup import _extract_cmds
-        result = _extract_cmds({
-            "matcher": "*",
-            "hooks": [
-                {"type": "command", "command": "keephive hook-sessionstart"},
-            ],
-        })
+
+        result = _extract_cmds(
+            {
+                "matcher": "*",
+                "hooks": [
+                    {"type": "command", "command": "keephive hook-sessionstart"},
+                ],
+            }
+        )
         assert "keephive hook-sessionstart" in result
 
     def test_missing_command_key(self):
         from keephive.commands.setup import _extract_cmds
+
         result = _extract_cmds({"matcher": "*"})
         assert result == ""
 
 
 # ---- _seed_bundled_content ----
+
 
 class TestSeedBundledContent:
     def test_copies_if_not_exists(self, hive_env):
@@ -152,6 +174,7 @@ class TestSeedBundledContent:
             f.unlink()
 
         from keephive.commands.setup import _seed_bundled_content
+
         _seed_bundled_content()
 
         # Should have at least one guide from bundled data
@@ -165,6 +188,7 @@ class TestSeedBundledContent:
         (gd / "keephive-guide.md").write_text("# Custom Content\n")
 
         from keephive.commands.setup import _seed_bundled_content
+
         _seed_bundled_content()
 
         # Should still have custom content
@@ -173,18 +197,22 @@ class TestSeedBundledContent:
 
 # ---- _sync_global_install ----
 
+
 class TestSetupGlobalSync:
     def test_reinstalls_when_deps_stale(self, hive_env, capsys):
         """Setup auto-reinstalls when global install has missing deps."""
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
 
         mock_run = MagicMock(returncode=0, stdout="", stderr="")
         with (
-            patch("keephive.commands.setup.find_global_keephive", return_value=Path("/fake/keephive")),
+            patch(
+                "keephive.commands.setup.find_global_keephive", return_value=Path("/fake/keephive")
+            ),
             patch("keephive.commands.setup.check_installed_deps", return_value=["anthropic"]),
             patch("subprocess.run", return_value=mock_run) as mock_sub,
         ):
             from keephive.commands.setup import _sync_global_install
+
             _sync_global_install()
 
         # Must have called uv tool install --force
@@ -204,6 +232,7 @@ class TestSetupGlobalSync:
 
         with patch("keephive.commands.setup.find_global_keephive", return_value=None):
             from keephive.commands.setup import _sync_global_install
+
             _sync_global_install()
 
         out = capsys.readouterr().out
@@ -214,10 +243,13 @@ class TestSetupGlobalSync:
         from unittest.mock import patch
 
         with (
-            patch("keephive.commands.setup.find_global_keephive", return_value=Path("/fake/keephive")),
+            patch(
+                "keephive.commands.setup.find_global_keephive", return_value=Path("/fake/keephive")
+            ),
             patch("keephive.commands.setup.check_installed_deps", return_value=[]),
         ):
             from keephive.commands.setup import _sync_global_install
+
             _sync_global_install()
 
         out = capsys.readouterr().out
@@ -226,31 +258,57 @@ class TestSetupGlobalSync:
 
 # ---- Health checks (health.py) ----
 
+
 class TestHealthChecks:
     def test_check_hooks_present(self, tmp_path, monkeypatch):
         """Hooks in settings.json are detected."""
         claude_dir = tmp_path / ".claude"
         claude_dir.mkdir()
         settings = claude_dir / "settings.json"
-        settings.write_text(json.dumps({
-            "hooks": {
-                "SessionStart": [{"matcher": "*", "hooks": [
-                    {"type": "command", "command": "keephive hook-sessionstart"}
-                ]}],
-                "PreCompact": [{"matcher": "*", "hooks": [
-                    {"type": "command", "command": "keephive hook-precompact"}
-                ]}],
-                "PostToolUse": [{"matcher": "Edit|Write", "hooks": [
-                    {"type": "command", "command": "keephive hook-posttooluse"}
-                ]}],
-                "UserPromptSubmit": [{"matcher": "*", "hooks": [
-                    {"type": "command", "command": "keephive hook-userpromptsubmit"}
-                ]}],
-            }
-        }))
+        settings.write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "SessionStart": [
+                            {
+                                "matcher": "*",
+                                "hooks": [
+                                    {"type": "command", "command": "keephive hook-sessionstart"}
+                                ],
+                            }
+                        ],
+                        "PreCompact": [
+                            {
+                                "matcher": "*",
+                                "hooks": [
+                                    {"type": "command", "command": "keephive hook-precompact"}
+                                ],
+                            }
+                        ],
+                        "PostToolUse": [
+                            {
+                                "matcher": "Edit|Write",
+                                "hooks": [
+                                    {"type": "command", "command": "keephive hook-posttooluse"}
+                                ],
+                            }
+                        ],
+                        "UserPromptSubmit": [
+                            {
+                                "matcher": "*",
+                                "hooks": [
+                                    {"type": "command", "command": "keephive hook-userpromptsubmit"}
+                                ],
+                            }
+                        ],
+                    }
+                }
+            )
+        )
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         from keephive.health import check_hooks
+
         assert check_hooks() is True
 
     def test_check_hooks_missing(self, tmp_path, monkeypatch):
@@ -258,6 +316,7 @@ class TestHealthChecks:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         from keephive.health import check_hooks
+
         assert check_hooks() is False
 
     def test_check_hooks_partial(self, tmp_path, monkeypatch):
@@ -265,32 +324,53 @@ class TestHealthChecks:
         claude_dir = tmp_path / ".claude"
         claude_dir.mkdir()
         settings = claude_dir / "settings.json"
-        settings.write_text(json.dumps({
-            "hooks": {
-                "SessionStart": [{"matcher": "*", "hooks": [
-                    {"type": "command", "command": "keephive hook-sessionstart"}
-                ]}],
-                "PreCompact": [{"matcher": "*", "hooks": [
-                    {"type": "command", "command": "keephive hook-precompact"}
-                ]}],
-                "PostToolUse": [{"matcher": "Edit|Write", "hooks": [
-                    {"type": "command", "command": "keephive hook-posttooluse"}
-                ]}],
-            }
-        }))
+        settings.write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "SessionStart": [
+                            {
+                                "matcher": "*",
+                                "hooks": [
+                                    {"type": "command", "command": "keephive hook-sessionstart"}
+                                ],
+                            }
+                        ],
+                        "PreCompact": [
+                            {
+                                "matcher": "*",
+                                "hooks": [
+                                    {"type": "command", "command": "keephive hook-precompact"}
+                                ],
+                            }
+                        ],
+                        "PostToolUse": [
+                            {
+                                "matcher": "Edit|Write",
+                                "hooks": [
+                                    {"type": "command", "command": "keephive hook-posttooluse"}
+                                ],
+                            }
+                        ],
+                    }
+                }
+            )
+        )
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         from keephive.health import check_hooks
+
         assert check_hooks() is False
 
     def test_check_mcp_present(self, tmp_path, monkeypatch):
         """MCP server in .claude.json is detected."""
-        (tmp_path / ".claude.json").write_text(json.dumps({
-            "mcpServers": {"hive": {"command": "keephive-mcp"}}
-        }))
+        (tmp_path / ".claude.json").write_text(
+            json.dumps({"mcpServers": {"hive": {"command": "keephive-mcp"}}})
+        )
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         from keephive.health import check_mcp
+
         assert check_mcp() is True
 
     def test_check_mcp_missing(self, tmp_path, monkeypatch):
@@ -298,21 +378,24 @@ class TestHealthChecks:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         from keephive.health import check_mcp
+
         assert check_mcp() is False
 
     def test_check_mcp_no_hive_key(self, tmp_path, monkeypatch):
         """MCP servers exist but no 'hive' key returns False."""
-        (tmp_path / ".claude.json").write_text(json.dumps({
-            "mcpServers": {"other": {"command": "other-server"}}
-        }))
+        (tmp_path / ".claude.json").write_text(
+            json.dumps({"mcpServers": {"other": {"command": "other-server"}}})
+        )
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         from keephive.health import check_mcp
+
         assert check_mcp() is False
 
     def test_check_data_present(self, hive_env):
         """Data check passes with hive_env fixture."""
         from keephive.health import check_data
+
         assert check_data() is True
 
     def test_check_data_missing_memory(self, hive_env):
@@ -320,6 +403,7 @@ class TestHealthChecks:
         (hive_env / "working" / "memory.md").unlink()
 
         from keephive.health import check_data
+
         assert check_data() is False
 
     def test_health_summary(self, hive_env, tmp_path, monkeypatch):
@@ -327,6 +411,7 @@ class TestHealthChecks:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         from keephive.health import health_summary
+
         hooks_ok, mcp_ok, data_ok = health_summary()
         # No hooks or MCP configured in tmp_path
         assert hooks_ok is False

@@ -36,8 +36,10 @@ class TestUpdateAvailable:
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        with patch("urllib.request.urlopen", return_value=mock_resp), \
-             patch("keephive.commands.update.prompt_yn", return_value=False):
+        with (
+            patch("urllib.request.urlopen", return_value=mock_resp),
+            patch("keephive.commands.update.prompt_yn", return_value=False),
+        ):
             rc = cmd_update([])
 
         out = capsys.readouterr().out
@@ -54,8 +56,10 @@ class TestUpdateAvailable:
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        with patch("urllib.request.urlopen", return_value=mock_resp), \
-             patch("keephive.commands.update.prompt_yn", return_value=False):
+        with (
+            patch("urllib.request.urlopen", return_value=mock_resp),
+            patch("keephive.commands.update.prompt_yn", return_value=False),
+        ):
             rc = cmd_update([])
 
         out = capsys.readouterr().out
@@ -74,9 +78,11 @@ class TestUpdateAvailable:
         upgrade_result = MagicMock(returncode=0)
         setup_result = MagicMock(returncode=0)
 
-        with patch("urllib.request.urlopen", return_value=mock_resp), \
-             patch("keephive.commands.update.prompt_yn", return_value=True), \
-             patch("subprocess.run", side_effect=[upgrade_result, setup_result]) as mock_run:
+        with (
+            patch("urllib.request.urlopen", return_value=mock_resp),
+            patch("keephive.commands.update.prompt_yn", return_value=True),
+            patch("subprocess.run", side_effect=[upgrade_result, setup_result]) as mock_run,
+        ):
             rc = cmd_update([])
 
         out = capsys.readouterr().out
@@ -95,9 +101,11 @@ class TestUpdateAvailable:
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        with patch("urllib.request.urlopen", return_value=mock_resp), \
-             patch("keephive.commands.update.prompt_yn", return_value=True), \
-             patch("subprocess.run", return_value=MagicMock(returncode=1)):
+        with (
+            patch("urllib.request.urlopen", return_value=mock_resp),
+            patch("keephive.commands.update.prompt_yn", return_value=True),
+            patch("subprocess.run", return_value=MagicMock(returncode=1)),
+        ):
             rc = cmd_update([])
 
         out = capsys.readouterr().out
@@ -116,9 +124,11 @@ class TestUpdateAvailable:
         upgrade_result = MagicMock(returncode=0)
         setup_result = MagicMock(returncode=1)
 
-        with patch("urllib.request.urlopen", return_value=mock_resp), \
-             patch("keephive.commands.update.prompt_yn", return_value=True), \
-             patch("subprocess.run", side_effect=[upgrade_result, setup_result]):
+        with (
+            patch("urllib.request.urlopen", return_value=mock_resp),
+            patch("keephive.commands.update.prompt_yn", return_value=True),
+            patch("subprocess.run", side_effect=[upgrade_result, setup_result]),
+        ):
             rc = cmd_update([])
 
         out = capsys.readouterr().out

@@ -33,10 +33,10 @@ from keephive.storage import (
     safe_read_text,
 )
 
-
 # ---------------------------------------------------------------------------
 # Perspective 1: The Vault (knowledge quality)
 # ---------------------------------------------------------------------------
+
 
 def _analyze_vault() -> dict:
     """Knowledge quality analysis from memory.md + daily logs.
@@ -94,6 +94,7 @@ def _memory_line_count() -> int:
 # Perspective 2: The Cleaner (execution discipline)
 # ---------------------------------------------------------------------------
 
+
 def _analyze_cleaner() -> dict:
     """Execution discipline from TODOs + recurring.
 
@@ -106,10 +107,7 @@ def _analyze_cleaner() -> dict:
     velocity = _todo_velocity_7d()
 
     # Stale TODOs (>7 days old)
-    stale_todos = sum(
-        1 for d, _, _ in ot
-        if d < (t - timedelta(days=7)).isoformat()
-    )
+    stale_todos = sum(1 for d, _, _ in ot if d < (t - timedelta(days=7)).isoformat())
 
     # Duplicate detection (SequenceMatcher > 0.7 on text)
     texts = [text for _, _, text in ot]
@@ -187,6 +185,7 @@ def _days_since_last_entry() -> int:
 # Perspective 3: The Strategist (direction alignment)
 # ---------------------------------------------------------------------------
 
+
 def _analyze_strategist() -> dict:
     """Direction alignment from concrete counts.
 
@@ -209,8 +208,7 @@ def _strategy_guide_exists() -> bool:
     if not gd.exists():
         return False
     return any(
-        "strategy" in g.stem.lower() or "direction" in g.stem.lower()
-        for g in gd.glob("*.md")
+        "strategy" in g.stem.lower() or "direction" in g.stem.lower() for g in gd.glob("*.md")
     )
 
 
@@ -228,7 +226,9 @@ def _topic_distribution_7d() -> dict[str, int]:
             continue
         for line in safe_read_text(fpath).splitlines():
             for cat in ("FACT", "DECISION", "CORRECTION", "TODO", "INSIGHT", "DONE"):
-                if re.match(rf"^- \[\d{{2}}:\d{{2}}:\d{{2}}\]\s*{cat}:", line) or re.match(rf"^- {cat}:", line):
+                if re.match(rf"^- \[\d{{2}}:\d{{2}}:\d{{2}}\]\s*{cat}:", line) or re.match(
+                    rf"^- {cat}:", line
+                ):
                     categories[cat] += 1
                     break
 
@@ -256,6 +256,7 @@ def _active_days(window: int = 7) -> int:
 # Score computation
 # ---------------------------------------------------------------------------
 
+
 def _compute_score(vault: dict, cleaner: dict, strategist: dict) -> int:
     """Quality Pulse score: 0-100.
 
@@ -266,13 +267,13 @@ def _compute_score(vault: dict, cleaner: dict, strategist: dict) -> int:
 
     # Vault penalties (capped at 30)
     vault_penalty = 0
-    vault_penalty += vault["stale_facts"] * 10     # Each stale fact = -10
+    vault_penalty += vault["stale_facts"] * 10  # Each stale fact = -10
     vault_penalty += min(10, vault["correction_count_7d"])  # High corrections = churn
     score -= min(30, vault_penalty)
 
     # Cleaner penalties (capped at 30)
     cleaner_penalty = 0
-    cleaner_penalty += cleaner["stale_todos"] * 3   # Each stale TODO = -3
+    cleaner_penalty += cleaner["stale_todos"] * 3  # Each stale TODO = -3
     cleaner_penalty += cleaner["duplicate_todos"] * 5  # Each dupe pair = -5
     cleaner_penalty += cleaner["overdue_recurring"] * 5  # Each overdue = -5
     score -= min(30, cleaner_penalty)
@@ -297,6 +298,7 @@ def _compute_score(vault: dict, cleaner: dict, strategist: dict) -> int:
 # ---------------------------------------------------------------------------
 # LLM perspective calls
 # ---------------------------------------------------------------------------
+
 
 def _gather_daily_logs_text(days: int = 7) -> str:
     """Collect daily log text for the last N days."""
@@ -330,7 +332,9 @@ def _gather_corrections_text(days: int = 7) -> str:
         if fpath.stem < cutoff:
             continue
         for line in safe_read_text(fpath).splitlines():
-            if re.match(r"^- \[\d{2}:\d{2}:\d{2}\]\s*CORRECTION:", line) or re.match(r"^- CORRECTION:", line):
+            if re.match(r"^- \[\d{2}:\d{2}:\d{2}\]\s*CORRECTION:", line) or re.match(
+                r"^- CORRECTION:", line
+            ):
                 lines.append(f"[{fpath.stem}] {line}")
 
     return "\n".join(lines) if lines else "(no corrections)"
@@ -349,7 +353,9 @@ def _gather_decisions_text(days: int = 7) -> str:
         if fpath.stem < cutoff:
             continue
         for line in safe_read_text(fpath).splitlines():
-            if re.match(r"^- \[\d{2}:\d{2}:\d{2}\]\s*DECISION:", line) or re.match(r"^- DECISION:", line):
+            if re.match(r"^- \[\d{2}:\d{2}:\d{2}\]\s*DECISION:", line) or re.match(
+                r"^- DECISION:", line
+            ):
                 lines.append(f"[{fpath.stem}] {line}")
 
     return "\n".join(lines) if lines else "(no decisions)"
@@ -374,7 +380,9 @@ def _gather_verify_results(days: int = 7) -> str:
         for line in safe_read_text(fpath).splitlines():
             # Match verify verdicts and verify-triggered corrections
             if re.search(r"(VALID|STALE|UNCERTAIN|verified|verify)", line, re.IGNORECASE):
-                if re.match(r"^- \[\d{2}:\d{2}:\d{2}\]", line) or re.match(r"^- (FACT|CORRECTION):", line):
+                if re.match(r"^- \[\d{2}:\d{2}:\d{2}\]", line) or re.match(
+                    r"^- (FACT|CORRECTION):", line
+                ):
                     lines.append(f"[{fpath.stem}] {line}")
 
     return "\n".join(lines) if lines else "(no recent verify results)"
@@ -438,9 +446,13 @@ def _call_cleaner(cleaner_metrics: dict, verbose: bool = False):
 
     rules_text = read_rules() or "(no rules)"
     ot = open_todos()
-    open_todos_text = "\n".join(f"[{d} {t}] {text}" for d, t, text in ot) if ot else "(no open TODOs)"
+    open_todos_text = (
+        "\n".join(f"[{d} {t}] {text}" for d, t, text in ot) if ot else "(no open TODOs)"
+    )
     rd = recent_dones(days=7)
-    recent_dones_text = "\n".join(f"[{d}] {text}" for d, text in rd) if rd else "(no recent completions)"
+    recent_dones_text = (
+        "\n".join(f"[{d}] {text}" for d, text in rd) if rd else "(no recent completions)"
+    )
     corrections_text = _gather_corrections_text(7)
     metrics_json = json.dumps(cleaner_metrics, indent=2)
 
@@ -507,7 +519,9 @@ If no strategy guide exists, note that as a gap.
     return run_claude_pipe(prompt, StrategistPerspective, model="haiku", verbose=verbose)
 
 
-def _run_perspectives(vault_metrics: dict, cleaner_metrics: dict, strategist_metrics: dict, verbose: bool = False):
+def _run_perspectives(
+    vault_metrics: dict, cleaner_metrics: dict, strategist_metrics: dict, verbose: bool = False
+):
     """Run 3 perspective calls in parallel, return all results."""
     with ThreadPoolExecutor(max_workers=3) as pool:
         vault_future = pool.submit(_call_vault, vault_metrics, verbose)
@@ -521,9 +535,17 @@ def _run_perspectives(vault_metrics: dict, cleaner_metrics: dict, strategist_met
     )
 
 
-def _run_cook(vault_r, cleaner_r, strategist_r,
-              vault_m: dict, cleaner_m: dict, strategist_m: dict,
-              score: int, previous_play: dict | None, verbose: bool = False):
+def _run_cook(
+    vault_r,
+    cleaner_r,
+    strategist_r,
+    vault_m: dict,
+    cleaner_m: dict,
+    strategist_m: dict,
+    score: int,
+    previous_play: dict | None,
+    verbose: bool = False,
+):
     """Run The Cook synthesis after all 3 perspectives complete."""
     from keephive.claude import run_claude_pipe
     from keephive.models import AuditSynthesis
@@ -537,7 +559,11 @@ def _run_cook(vault_r, cleaner_r, strategist_r,
 
     prev_play_text = "No previous audit"
     if previous_play:
-        status = "completed" if previous_play["completed"] else f"open ({previous_play['age_days']}d old)"
+        status = (
+            "completed"
+            if previous_play["completed"]
+            else f"open ({previous_play['age_days']}d old)"
+        )
         prev_play_text = f"{previous_play['action']} [{status}] (from {previous_play['date']})"
 
     prompt = f"""You are The Cook. Three analysts have independently examined a developer's
@@ -588,6 +614,7 @@ Score: {score}/100
 # Closed-loop tracking
 # ---------------------------------------------------------------------------
 
+
 def _check_previous_play() -> dict | None:
     """Check if the previous audit's Play was completed."""
     d = daily_dir()
@@ -626,6 +653,7 @@ def _check_previous_play() -> dict | None:
 # Display
 # ---------------------------------------------------------------------------
 
+
 def _score_color(score: int) -> str:
     """Return Rich color tag for score."""
     if score >= 80:
@@ -635,8 +663,9 @@ def _score_color(score: int) -> str:
     return "err"
 
 
-def _display_metrics(score: int, vault: dict, cleaner: dict, strategist: dict,
-                     previous_play: dict | None) -> None:
+def _display_metrics(
+    score: int, vault: dict, cleaner: dict, strategist: dict, previous_play: dict | None
+) -> None:
     """Render metrics-only output (no LLM synthesis). Used by HIVE_SKIP_LLM path."""
     console.print()
 
@@ -649,9 +678,7 @@ def _display_metrics(score: int, vault: dict, cleaner: dict, strategist: dict,
             console.print(f"  [ok]Previous Play completed:[/ok] {previous_play['action']}")
         else:
             age = previous_play["age_days"]
-            console.print(
-                f"  [warn]Unfinished Play ({age}d old):[/warn] {previous_play['action']}"
-            )
+            console.print(f"  [warn]Unfinished Play ({age}d old):[/warn] {previous_play['action']}")
         console.print()
 
     _display_metrics_body(vault, cleaner, strategist)
@@ -678,7 +705,9 @@ def _display_metrics_body(vault: dict, cleaner: dict, strategist: dict) -> None:
     if vault["guide_count"] > 0:
         console.print(f"    {vault['guide_count']} knowledge guide(s)")
     if vault["memory_line_count"] > 40:
-        console.print(f"    [warn]Memory: {vault['memory_line_count']} lines (consider trimming)[/warn]")
+        console.print(
+            f"    [warn]Memory: {vault['memory_line_count']} lines (consider trimming)[/warn]"
+        )
     console.print()
 
     # Cleaner
@@ -707,7 +736,9 @@ def _display_metrics_body(vault: dict, cleaner: dict, strategist: dict) -> None:
     else:
         console.print("    [dim]No strategy guide (hive ke strategy to create)[/dim]")
 
-    console.print(f"    {strategist['decision_count_7d']} decision(s) | {strategist['fact_count_7d']} fact(s) this week")
+    console.print(
+        f"    {strategist['decision_count_7d']} decision(s) | {strategist['fact_count_7d']} fact(s) this week"
+    )
     console.print(f"    Active {strategist['active_days_7d']}/7 days")
 
     topics = strategist.get("topic_distribution_7d", {})
@@ -728,9 +759,18 @@ def _display_perspective(name: str, perspective) -> None:
     console.print()
 
 
-def display_audit(score: int, vault_r, cleaner_r, strategist_r,
-                   synthesis, vault: dict, cleaner: dict, strategist: dict,
-                   previous_play: dict | None, verbose: bool = False) -> None:
+def display_audit(
+    score: int,
+    vault_r,
+    cleaner_r,
+    strategist_r,
+    synthesis,
+    vault: dict,
+    cleaner: dict,
+    strategist: dict,
+    previous_play: dict | None,
+    verbose: bool = False,
+) -> None:
     """Render audit output. Compact by default, full essays with verbose=True."""
     console.print()
 
@@ -745,9 +785,7 @@ def display_audit(score: int, vault_r, cleaner_r, strategist_r,
             console.print(f"  [ok]Previous Play completed:[/ok] {previous_play['action']}")
         else:
             age = previous_play["age_days"]
-            console.print(
-                f"  [warn]Unfinished Play ({age}d old):[/warn] {previous_play['action']}"
-            )
+            console.print(f"  [warn]Unfinished Play ({age}d old):[/warn] {previous_play['action']}")
         console.print()
 
     # Verbose: metrics + full perspective essays
@@ -801,6 +839,7 @@ def display_perspectives_only(vault_r, cleaner_r, strategist_r, score: int) -> N
 # Save insights to daily log
 # ---------------------------------------------------------------------------
 
+
 def save_audit_insights(synthesis, score: int) -> int:
     """Append audit insights to today's daily log. Returns count saved."""
     ensure_daily()
@@ -831,6 +870,7 @@ def save_audit_insights(synthesis, score: int) -> int:
 # Helpers: daily log scanning
 # ---------------------------------------------------------------------------
 
+
 def _count_category_entries(category: str, days: int = 7) -> int:
     """Count entries of a category in recent daily logs."""
     d = daily_dir()
@@ -839,9 +879,7 @@ def _count_category_entries(category: str, days: int = 7) -> int:
 
     cutoff = (date.today() - timedelta(days=days)).isoformat()
     count = 0
-    pattern = re.compile(
-        rf"^- \[\d{{2}}:\d{{2}}:\d{{2}}\]\s*{category}:|^- {category}:"
-    )
+    pattern = re.compile(rf"^- \[\d{{2}}:\d{{2}}:\d{{2}}\]\s*{category}:|^- {category}:")
 
     for fpath in sorted(d.glob("*.md")):
         if fpath.stem < cutoff:
@@ -856,6 +894,7 @@ def _count_category_entries(category: str, days: int = 7) -> int:
 # ---------------------------------------------------------------------------
 # Main command
 # ---------------------------------------------------------------------------
+
 
 def cmd_audit(args: list[str]) -> None:
     """Run the three perspectives, score, synthesize, display."""
@@ -872,13 +911,17 @@ def cmd_audit(args: list[str]) -> None:
     # Metrics-only mode (for tests and fast checks)
     if os.environ.get("HIVE_SKIP_LLM"):
         if json_mode:
-            print(json.dumps({
-                "score": score,
-                "vault": vault,
-                "cleaner": cleaner,
-                "strategist": strategist,
-                "previous_play": previous_play,
-            }))
+            print(
+                json.dumps(
+                    {
+                        "score": score,
+                        "vault": vault,
+                        "cleaner": cleaner,
+                        "strategist": strategist,
+                        "previous_play": previous_play,
+                    }
+                )
+            )
             return
 
         _display_metrics(score, vault, cleaner, strategist, previous_play)
@@ -893,9 +936,7 @@ def cmd_audit(args: list[str]) -> None:
 
     # 2. Run 3 perspective LLM calls in parallel
     try:
-        vault_r, cleaner_r, strategist_r = _run_perspectives(
-            vault, cleaner, strategist, verbose
-        )
+        vault_r, cleaner_r, strategist_r = _run_perspectives(vault, cleaner, strategist, verbose)
     except Exception as e:
         console.print(f"  [err]Perspective analysis failed: {e}[/err]")
         console.print("  [dim]Check: claude -p availability, CLAUDECODE env var[/dim]")
@@ -906,9 +947,15 @@ def cmd_audit(args: list[str]) -> None:
     # 3. Run Cook synthesis (sequential, needs all 3 outputs)
     try:
         synthesis = _run_cook(
-            vault_r, cleaner_r, strategist_r,
-            vault, cleaner, strategist,
-            score, previous_play, verbose
+            vault_r,
+            cleaner_r,
+            strategist_r,
+            vault,
+            cleaner,
+            strategist,
+            score,
+            previous_play,
+            verbose,
         )
     except Exception as e:
         console.print(f"  [err]Synthesis failed: {e}[/err]")
@@ -917,8 +964,18 @@ def cmd_audit(args: list[str]) -> None:
         return
 
     # 4. Display
-    display_audit(score, vault_r, cleaner_r, strategist_r, synthesis,
-                   vault, cleaner, strategist, previous_play, verbose=verbose)
+    display_audit(
+        score,
+        vault_r,
+        cleaner_r,
+        strategist_r,
+        synthesis,
+        vault,
+        cleaner,
+        strategist,
+        previous_play,
+        verbose=verbose,
+    )
 
     # 5. Save insights to daily log
     count = save_audit_insights(synthesis, score)
@@ -926,20 +983,26 @@ def cmd_audit(args: list[str]) -> None:
     # 6. Footer (after save so we have the count)
     if not verbose:
         console.print(f"  [dim]Top action saved as TODO. {count} entries saved to daily log.[/dim]")
-        console.print(f"  [dim]hive a -v for full perspective analyses[/dim]")
+        console.print("  [dim]hive a -v for full perspective analyses[/dim]")
         console.print()
 
     if json_mode:
-        print(json.dumps({
-            "score": score,
-            "vault": vault,
-            "cleaner": cleaner,
-            "strategist": strategist,
-            "synthesis": {
-                "plays": [{"issue": p.issue, "command": p.command} for p in synthesis.plays],
-                "connection": synthesis.connection,
-                "tension": synthesis.tension,
-                "wild_card": synthesis.wild_card,
-            },
-            "previous_play": previous_play,
-        }))
+        print(
+            json.dumps(
+                {
+                    "score": score,
+                    "vault": vault,
+                    "cleaner": cleaner,
+                    "strategist": strategist,
+                    "synthesis": {
+                        "plays": [
+                            {"issue": p.issue, "command": p.command} for p in synthesis.plays
+                        ],
+                        "connection": synthesis.connection,
+                        "tension": synthesis.tension,
+                        "wild_card": synthesis.wild_card,
+                    },
+                    "previous_play": previous_play,
+                }
+            )
+        )

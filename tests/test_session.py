@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 
@@ -226,9 +224,7 @@ class TestCmdSession:
 
         monkeypatch.setattr("os.execvpe", mock_execvpe)
         monkeypatch.setattr("shutil.which", lambda x: "/usr/local/bin/claude")
-        monkeypatch.setattr(
-            "keephive.commands.session._read_stdin_if_piped", lambda: None
-        )
+        monkeypatch.setattr("keephive.commands.session._read_stdin_if_piped", lambda: None)
 
         from keephive.commands.session import cmd_session
 
@@ -250,9 +246,7 @@ class TestCmdSession:
 
         monkeypatch.setattr("os.execvpe", mock_execvpe)
         monkeypatch.setattr("shutil.which", lambda x: "/usr/local/bin/claude")
-        monkeypatch.setattr(
-            "keephive.commands.session._read_stdin_if_piped", lambda: None
-        )
+        monkeypatch.setattr("keephive.commands.session._read_stdin_if_piped", lambda: None)
 
         from keephive.commands.session import cmd_session
 

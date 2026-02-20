@@ -8,6 +8,7 @@ from datetime import date
 from keephive import __version__
 from keephive.output import console
 from keephive.storage import (
+    NOTE_SLOT_COUNT,
     active_slot,
     count_daily_entries,
     count_stale_facts,
@@ -16,7 +17,6 @@ from keephive.storage import (
     guides_dir,
     hive_dir,
     memory_file,
-    NOTE_SLOT_COUNT,
     open_todos,
     slot_file,
     yesterday,
@@ -35,8 +35,9 @@ def cmd_status(args: list[str]) -> None:
 
     if mem.exists():
         import re
+
         text = mem.read_text()
-        working_lines = sum(1 for l in text.splitlines() if l.strip())
+        working_lines = sum(1 for line in text.splitlines() if line.strip())
         total_verified = len(re.findall(r"\[verified:", text))
         stale = count_stale_facts()
 
@@ -48,9 +49,12 @@ def cmd_status(args: list[str]) -> None:
     disk_usage = "?"
     try:
         import subprocess
+
         r = subprocess.run(
             ["du", "-sh", str(hive_dir())],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if r.returncode == 0:
             disk_usage = r.stdout.split()[0]
@@ -59,25 +63,30 @@ def cmd_status(args: list[str]) -> None:
 
     # Health indicators
     from keephive.health import check_anthropic_memory, health_summary
+
     hooks_ok, mcp_ok, data_ok = health_summary()
     anthropic_mem = check_anthropic_memory()
 
     if json_mode:
-        print(json.dumps({
-            "version": __version__,
-            "working_lines": working_lines,
-            "verified_facts": total_verified,
-            "stale_facts": stale,
-            "guides": guide_count,
-            "today_entries": today_entries,
-            "yesterday_entries": yesterday_entries,
-            "disk_usage": disk_usage,
-            "hive_dir": str(hive_dir()),
-            "hooks_ok": hooks_ok,
-            "mcp_ok": mcp_ok,
-            "data_ok": data_ok,
-            "anthropic_memory": anthropic_mem,
-        }))
+        print(
+            json.dumps(
+                {
+                    "version": __version__,
+                    "working_lines": working_lines,
+                    "verified_facts": total_verified,
+                    "stale_facts": stale,
+                    "guides": guide_count,
+                    "today_entries": today_entries,
+                    "yesterday_entries": yesterday_entries,
+                    "disk_usage": disk_usage,
+                    "hive_dir": str(hive_dir()),
+                    "hooks_ok": hooks_ok,
+                    "mcp_ok": mcp_ok,
+                    "data_ok": data_ok,
+                    "anthropic_memory": anthropic_mem,
+                }
+            )
+        )
         return
 
     console.print()
@@ -101,7 +110,9 @@ def cmd_status(args: list[str]) -> None:
     parts = []
     if total_verified > 0:
         if stale > 0:
-            parts.append(f"[bold]{total_verified} facts[/bold] ({verified_ok} ok, [warn]{stale} stale[/warn])")
+            parts.append(
+                f"[bold]{total_verified} facts[/bold] ({verified_ok} ok, [warn]{stale} stale[/warn])"
+            )
         else:
             parts.append(f"[bold]{total_verified} facts[/bold] ({verified_ok} ok)")
     parts.append(f"{today_entries} today")
@@ -118,6 +129,7 @@ def cmd_status(args: list[str]) -> None:
 
     # Reflect analysis nudge
     from keephive.commands.reflect import get_pending_analysis
+
     pending = get_pending_analysis()
     if pending:
         add_count, contra_count = pending
@@ -127,7 +139,7 @@ def cmd_status(args: list[str]) -> None:
         if contra_count:
             parts_nudge.append(f"{contra_count} contradiction{'s' if contra_count != 1 else ''}")
         console.print(f"  [info]\\[reflect] {', '.join(parts_nudge)} ready[/info]")
-        console.print(f"    -> [bold]hive rf apply[/bold]")
+        console.print("    -> [bold]hive rf apply[/bold]")
         console.print()
 
     # Open TODOs
@@ -152,11 +164,12 @@ def cmd_status(args: list[str]) -> None:
         if len(todos) > 3:
             console.print(f"    [dim]... and {len(todos) - 3} more (hive todo)[/dim]")
         if len(todos) > 10:
-            console.print(f"    [warn]Consider: hive todo done <pat> | hive dr[/warn]")
+            console.print("    [warn]Consider: hive todo done <pat> | hive dr[/warn]")
         console.print()
 
     # Due recurring tasks
     from keephive.storage import due_recurring
+
     due = due_recurring()
     if due:
         console.print(f"  [bold]{len(due)} due recurring task(s):[/bold]")
@@ -191,13 +204,20 @@ def cmd_status(args: list[str]) -> None:
     slot_path = slot_file(current_slot)
     if slot_path.exists() and slot_path.read_text().strip():
         text = slot_path.read_text()
-        lines = sum(1 for l in text.splitlines() if l.strip())
+        lines = sum(1 for line in text.splitlines() if line.strip())
         size = len(text.encode())
-        console.print(f"  [info]Note \\[{current_slot}] ready ({lines}L, {size}B)[/info]  ->  [bold]hive nc[/bold] to copy")
+        console.print(
+            f"  [info]Note \\[{current_slot}] ready ({lines}L, {size}B)[/info]  ->  [bold]hive nc[/bold] to copy"
+        )
         # Show slot bar if multiple slots have content
-        filled = sum(1 for n in range(1, NOTE_SLOT_COUNT + 1) if slot_file(n).exists() and slot_file(n).read_text().strip())
+        filled = sum(
+            1
+            for n in range(1, NOTE_SLOT_COUNT + 1)
+            if slot_file(n).exists() and slot_file(n).read_text().strip()
+        )
         if filled > 1:
             from keephive.commands.note import _slot_bar
+
             console.print(f"  {_slot_bar()}")
         console.print()
 
@@ -208,4 +228,6 @@ def cmd_status(args: list[str]) -> None:
     elif todo_count > 5:
         console.print("  [dim]hive session todo (triage) | hive dr (duplicates) | hive help[/dim]")
     else:
-        console.print("  [dim]hive go (session) | hive l (log) | hive rf (reflect) | hive help[/dim]")
+        console.print(
+            "  [dim]hive go (session) | hive l (log) | hive rf (reflect) | hive help[/dim]"
+        )

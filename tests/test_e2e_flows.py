@@ -8,25 +8,22 @@ from __future__ import annotations
 
 import io
 import json
-import os
-import re
 import sys
-from datetime import date, datetime, timedelta
-from pathlib import Path
+from datetime import date, timedelta
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Flow 1: Day-One Capture and Retrieval
 # ---------------------------------------------------------------------------
+
 
 class TestDayOneCaptureAndRetrieval:
     """remember FACT -> DECISION -> TODO -> recall finds all -> status shows ->
     todo shows -> todo done marks -> todo no longer shows -> recall still finds."""
 
     def test_full_capture_recall_cycle(self, hive_env):
-        from keephive.commands.remember import cmd_remember, _search_all_tiers
+        from keephive.commands.remember import _search_all_tiers, cmd_remember
         from keephive.commands.todo import _todo_done
         from keephive.storage import open_todos
 
@@ -76,6 +73,7 @@ class TestDayOneCaptureAndRetrieval:
 # Flow 2: Memory Promotion and Persistence
 # ---------------------------------------------------------------------------
 
+
 class TestMemoryPromotionAndPersistence:
     """remember FACT -> mem promotes to working memory -> sessionstart includes it
     -> mem rm removes -> sessionstart no longer includes."""
@@ -113,6 +111,7 @@ class TestMemoryPromotionAndPersistence:
 # Flow 3: Stale Fact Detection (no LLM)
 # ---------------------------------------------------------------------------
 
+
 class TestStaleFactDetection:
     """Write fact with old date -> status shows stale -> verify --check exits 1
     -> sessionstart includes stale warning."""
@@ -145,10 +144,7 @@ class TestStaleFactDetection:
         # Make all facts fresh
         mem = hive_env / "working" / "memory.md"
         today = date.today().isoformat()
-        mem.write_text(
-            "# Working Memory\n\n"
-            f"- Everything is fresh [verified:{today}]\n"
-        )
+        mem.write_text(f"# Working Memory\n\n- Everything is fresh [verified:{today}]\n")
         from keephive.commands.verify import cmd_verify
 
         with pytest.raises(SystemExit) as exc_info:
@@ -159,6 +155,7 @@ class TestStaleFactDetection:
 # ---------------------------------------------------------------------------
 # Flow 4: Recurring Task Lifecycle
 # ---------------------------------------------------------------------------
+
 
 class TestRecurringTaskLifecycle:
     """todo repeat daily -> todo shows due -> recurring done -> todo no longer shows."""
@@ -178,7 +175,7 @@ class TestRecurringTaskLifecycle:
         capsys.readouterr()
         cmd_todo([])
         out = capsys.readouterr().out
-        assert "Due Recurring" in out
+        assert "Recurring" in out
         assert "Run test suite" in out
 
         # Mark done
@@ -192,6 +189,7 @@ class TestRecurringTaskLifecycle:
 # ---------------------------------------------------------------------------
 # Flow 5: Audit Metrics Consistency
 # ---------------------------------------------------------------------------
+
 
 class TestAuditMetricsConsistency:
     """Seed data -> audit metrics are internally consistent."""
@@ -258,6 +256,7 @@ class TestAuditMetricsConsistency:
 # Flow 6: Doctor Detects Real Problems
 # ---------------------------------------------------------------------------
 
+
 class TestDoctorDetectsProblems:
     """Write duplicate TODOs -> doctor finds them."""
 
@@ -281,6 +280,7 @@ class TestDoctorDetectsProblems:
 # ---------------------------------------------------------------------------
 # Flow 7: Reflect Scan Shows Structured Summary
 # ---------------------------------------------------------------------------
+
 
 class TestReflectScanStructuredSummary:
     """Seed 3 days of logs -> reflect scan shows all days."""
@@ -310,6 +310,7 @@ class TestReflectScanStructuredSummary:
 # Flow 8: Note Lifecycle
 # ---------------------------------------------------------------------------
 
+
 class TestNoteLifecycle:
     """note creates -> show reads -> clear empties."""
 
@@ -337,6 +338,7 @@ class TestNoteLifecycle:
 # Flow 9: PreCompact Extracts Both User and Assistant
 # ---------------------------------------------------------------------------
 
+
 class TestPreCompactExtraction:
     """Create fake transcript -> precompact extracts user + assistant."""
 
@@ -345,22 +347,37 @@ class TestPreCompactExtraction:
 
         transcript = tmp_path / "test.jsonl"
         lines = [
-            json.dumps({
-                "type": "user",
-                "message": {"content": "Please investigate the authentication failure in the login endpoint"},
-            }),
-            json.dumps({
-                "type": "assistant",
-                "message": {"content": [
-                    {"type": "text", "text": "The authentication failure is caused by an expired JWT signing key. The key rotation schedule was set to 30 days but the last rotation happened 45 days ago, causing all new tokens to fail validation."},
-                ]},
-            }),
-            json.dumps({
-                "type": "assistant",
-                "message": {"content": [
-                    {"type": "text", "text": "Let me read the configuration file."},
-                ]},
-            }),
+            json.dumps(
+                {
+                    "type": "user",
+                    "message": {
+                        "content": "Please investigate the authentication failure in the login endpoint"
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "The authentication failure is caused by an expired JWT signing key. The key rotation schedule was set to 30 days but the last rotation happened 45 days ago, causing all new tokens to fail validation.",
+                            },
+                        ]
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {"type": "text", "text": "Let me read the configuration file."},
+                        ]
+                    },
+                }
+            ),
         ]
         transcript.write_text("\n".join(lines))
 
@@ -381,6 +398,7 @@ class TestPreCompactExtraction:
 # ---------------------------------------------------------------------------
 # Flow 10: Full Hook Chain
 # ---------------------------------------------------------------------------
+
 
 class TestFullHookChain:
     """sessionstart -> returns context -> posttooluse first -> returns reminder
@@ -462,12 +480,12 @@ class TestFullHookChain:
 # Flow 11: Status Output Completeness
 # ---------------------------------------------------------------------------
 
+
 class TestStatusOutputCompleteness:
     """Seed environment with facts, TODOs, guide, draft, entries.
     Status shows all sections."""
 
     def test_status_shows_all_sections(self, hive_env, capsys):
-        from keephive.commands.memory import cmd_mem
         from keephive.commands.recurring import cmd_recurring
         from keephive.commands.remember import cmd_remember
         from keephive.commands.status import cmd_status
@@ -485,7 +503,6 @@ class TestStatusOutputCompleteness:
         )
 
         # Add note in slot 1
-        from keephive.storage import slot_file
         note = slot_file(1)
         note.write_text("# Note\nSome note content.")
 
@@ -513,6 +530,7 @@ class TestStatusOutputCompleteness:
 # ---------------------------------------------------------------------------
 # Flow 12: Edge Cases
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     """Boundary conditions: empty env, unicode, long text, concurrent appends."""
@@ -544,7 +562,7 @@ class TestEdgeCases:
 
     def test_unicode_in_todo(self, hive_env):
         """Unicode text round-trips through remember and recall."""
-        from keephive.commands.remember import cmd_remember, _search_all_tiers
+        from keephive.commands.remember import _search_all_tiers, cmd_remember
         from keephive.storage import open_todos
 
         cmd_remember(["TODO: fix bug in login"])
@@ -580,6 +598,7 @@ class TestEdgeCases:
         assert not (hive_dir / "daily").exists()
 
         from keephive.commands.remember import cmd_remember
+
         cmd_remember(["FACT: auto-creates daily dir"])
 
         assert (hive_dir / "daily").exists()
@@ -599,7 +618,7 @@ class TestEdgeCases:
         assert "first entry" in content
         assert "second entry" in content
         # Each entry should be on its own line
-        lines = [l for l in content.splitlines() if "entry" in l]
+        lines = [line for line in content.splitlines() if "entry" in line]
         assert len(lines) == 2
 
     def test_status_json_mode_complete(self, hive_env, capsys):
@@ -609,9 +628,17 @@ class TestEdgeCases:
         cmd_status(["--json"])
         out = capsys.readouterr().out
         data = json.loads(out)
-        expected_keys = {"version", "working_lines", "verified_facts",
-                         "stale_facts", "guides", "today_entries",
-                         "yesterday_entries", "disk_usage", "hive_dir"}
+        expected_keys = {
+            "version",
+            "working_lines",
+            "verified_facts",
+            "stale_facts",
+            "guides",
+            "today_entries",
+            "yesterday_entries",
+            "disk_usage",
+            "hive_dir",
+        }
         assert expected_keys.issubset(set(data.keys()))
 
     def test_recall_json_mode(self, hive_env, capsys):

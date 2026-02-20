@@ -120,8 +120,15 @@ def slot_file(n: int) -> Path:
 
 def ensure_dirs() -> None:
     """Create all required directories if they don't exist."""
-    for d in [working_dir(), daily_dir(), knowledge_dir(),
-              guides_dir(), prompts_dir(), archive_dir(), notes_dir()]:
+    for d in [
+        working_dir(),
+        daily_dir(),
+        knowledge_dir(),
+        guides_dir(),
+        prompts_dir(),
+        archive_dir(),
+        notes_dir(),
+    ]:
         d.mkdir(parents=True, exist_ok=True)
 
 
@@ -196,6 +203,7 @@ def capture_budget() -> int:
 
 # ---- Counting / querying ----
 
+
 def count_stale_facts() -> int:
     """Count facts in memory.md with verified dates older than stale threshold."""
     mem = memory_file()
@@ -236,7 +244,9 @@ def get_stale_facts() -> list[tuple[int, str, str]]:
                 vdate = date.fromisoformat(m.group(1))
                 if vdate < cutoff:
                     # Strip the verified tag to get the fact text
-                    fact = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line).lstrip("- ").strip()
+                    fact = (
+                        re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line).lstrip("- ").strip()
+                    )
                     results.append((i, fact, line))
             except ValueError:
                 pass
@@ -281,7 +291,9 @@ def count_daily_entries(day: str | None = None, exclude_noise: bool = True) -> i
         if m:
             rest = m.group(2)
             upper = rest.upper()
-            if exclude_noise and ("SESSION" in upper or "COMPACTED" in upper or "COMPACTION" in upper):
+            if exclude_noise and (
+                "SESSION" in upper or "COMPACTED" in upper or "COMPACTION" in upper
+            ):
                 continue
             count += 1
         elif cats_re.match(line):
@@ -455,7 +467,7 @@ def _dedup_todos(todos: list[tuple[str, str, str]]) -> list[tuple[str, str, str]
     for d, t, text in result:
         norm = _normalize_todo_text(text)
         is_dup = False
-        for i, (rd, _rt, rtext) in enumerate(deduped):
+        for i, (rd, _, rtext) in enumerate(deduped):
             rnorm = _normalize_todo_text(rtext)
             if SequenceMatcher(None, norm, rnorm).ratio() >= 0.8:
                 if d > rd:
@@ -569,8 +581,12 @@ def recurring_file() -> Path:
     return working_dir() / "recurring.md"
 
 
-def due_recurring() -> list[tuple[str, str, int]]:
-    """Return (frequency, text, days_overdue) for due recurring tasks."""
+def _parse_recurring_status() -> list[tuple[str, str, float]]:
+    """Parse recurring.md, return (freq, text, overdue_days_float) for all tasks.
+
+    overdue_days >= 0: already due/overdue.
+    overdue_days < 0: -(days until due).
+    """
     rf = recurring_file()
     if not rf.exists():
         return []
@@ -599,7 +615,7 @@ def due_recurring() -> list[tuple[str, str, int]]:
             if m:
                 last_done[m.group(1).strip().lower()] = m.group(2)
 
-    result: list[tuple[str, str, int]] = []
+    result: list[tuple[str, str, float]] = []
     now = datetime.now()
     t = date.today()
     for freq, text in tasks:
@@ -613,15 +629,29 @@ def due_recurring() -> list[tuple[str, str, int]]:
                 else:
                     last_date = date.fromisoformat(last)
                     elapsed_days = float((t - last_date).days)
-                overdue_days = int(elapsed_days - interval_days)
-                if overdue_days >= 0:
-                    result.append((freq, text, overdue_days))
+                result.append((freq, text, elapsed_days - interval_days))
             except ValueError:
-                result.append((freq, text, int(interval_days)))
+                result.append((freq, text, float(interval_days)))
         else:
-            result.append((freq, text, int(interval_days)))
+            result.append((freq, text, float(interval_days)))
 
     return result
+
+
+def due_recurring() -> list[tuple[str, str, int]]:
+    """Return (frequency, text, days_overdue) for due recurring tasks."""
+    return [(f, t, int(o)) for f, t, o in _parse_recurring_status() if o >= 0]
+
+
+def all_recurring() -> list[tuple[str, str, int]]:
+    """Return (freq, text, overdue_days) for ALL recurring tasks.
+
+    overdue_days >= 0: due/overdue. overdue_days < 0: -(days until due).
+    Sorted: most overdue first, then by time remaining ascending.
+    """
+    raw = _parse_recurring_status()
+    result = [(f, t, int(o)) for f, t, o in raw]
+    return sorted(result, key=lambda x: -x[2])
 
 
 def mark_recurring_done(pattern: str) -> tuple[str, str] | None:
@@ -692,6 +722,7 @@ def index_file() -> Path:
 def version_context() -> str:
     """Gather system version info for verify/reflect prompts."""
     import subprocess
+
     lines = []
     for cmd, label in [
         (["node", "--version"], "Node.js"),
@@ -747,6 +778,7 @@ def get_key_entries_past_days(days: int = 7, limit: int = 10) -> list[tuple[str,
 
 
 # ---- Usage Stats ----
+
 
 def stats_file() -> Path:
     """Path to the stats JSON file."""
@@ -854,6 +886,7 @@ def track_event(
 
 
 # ---- FTS5 full-text search ----
+
 
 def fts_db_path() -> Path:
     return hive_dir() / ".fts.db"

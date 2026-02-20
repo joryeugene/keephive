@@ -10,9 +10,6 @@ import json
 from datetime import date
 from pathlib import Path
 
-import pytest
-
-
 # ---------- A1: Memory line merge on append ----------
 
 
@@ -32,7 +29,7 @@ class TestMemAppend:
 
         lines = mem.read_text().splitlines()
         # Each fact must be on its own line
-        fact_lines = [l for l in lines if l.startswith("- ")]
+        fact_lines = [line for line in lines if line.startswith("- ")]
         assert len(fact_lines) == 2, f"Expected 2 fact lines, got {fact_lines}"
         assert "old fact" in fact_lines[0]
         assert "new fact" in fact_lines[1]
@@ -48,7 +45,7 @@ class TestMemAppend:
         cmd_mem(["another fact"])
 
         lines = mem.read_text().splitlines()
-        fact_lines = [l for l in lines if l.startswith("- ")]
+        fact_lines = [line for line in lines if line.startswith("- ")]
         assert len(fact_lines) == 2
         assert "old fact" in fact_lines[0]
         assert "another fact" in fact_lines[1]
@@ -64,7 +61,7 @@ class TestMemAppend:
         cmd_rule(["new rule"])
 
         lines = rf.read_text().splitlines()
-        rule_lines = [l for l in lines if l.startswith("- ")]
+        rule_lines = [line for line in lines if line.startswith("- ")]
         assert len(rule_lines) == 2, f"Expected 2 rule lines, got {rule_lines}"
         assert "old rule" in rule_lines[0]
         assert "new rule" in rule_lines[1]
@@ -83,7 +80,9 @@ class TestEncoding:
         today_str = date.today().isoformat()
         daily = hive_env / "daily" / f"{today_str}.md"
         # Write bytes with invalid UTF-8 sequences
-        content = b"# Daily Log\n\n- [10:00:00] FACT: good entry\n- [10:05:00] bad: \xff\xfe bytes here\n"
+        content = (
+            b"# Daily Log\n\n- [10:00:00] FACT: good entry\n- [10:05:00] bad: \xff\xfe bytes here\n"
+        )
         daily.write_bytes(content)
 
         # Should not crash
@@ -275,10 +274,14 @@ class TestNoiseFilter:
         transcript = tmp_path / "transcript.jsonl"
         lines = []
         for text in assistant_texts:
-            lines.append(json.dumps({
-                "type": "assistant",
-                "message": {"content": [{"type": "text", "text": text}]},
-            }))
+            lines.append(
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {"content": [{"type": "text", "text": text}]},
+                    }
+                )
+            )
         transcript.write_text("\n".join(lines))
         return str(transcript)
 

@@ -67,9 +67,9 @@ def load_outputs() -> list[dict]:
 
 def judge_output(record: dict, verbose: bool = False) -> dict | None:
     """Judge a single output using claude -p."""
-    from keephive.claude import build_claude_env
-
     import subprocess
+
+    from keephive.claude import build_claude_env
 
     metadata = json.dumps(record.get("metadata", {}), indent=2)
     output_text = record.get("output", "")
@@ -80,9 +80,12 @@ def judge_output(record: dict, verbose: bool = False) -> dict | None:
     prompt = JUDGE_PROMPT.format(metadata=metadata, output=output_text[:3000])
 
     cmd = [
-        "claude", "-p",
-        "--output-format", "text",
-        "--model", "haiku",
+        "claude",
+        "-p",
+        "--output-format",
+        "text",
+        "--model",
+        "haiku",
         "--no-session-persistence",
         prompt,
     ]
@@ -91,7 +94,11 @@ def judge_output(record: dict, verbose: bool = False) -> dict | None:
 
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, env=env, timeout=60,
+            cmd,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=60,
         )
     except subprocess.TimeoutExpired:
         return {"error": "timeout", "scores": {}}
@@ -120,6 +127,7 @@ def judge_output(record: dict, verbose: bool = False) -> dict | None:
 
     # Extract JSON from text
     import re
+
     json_match = re.search(r'\{[^{}]*"accuracy"[^{}]*\}', raw, re.DOTALL)
     if not json_match:
         if verbose:
@@ -178,11 +186,11 @@ def main():
         results.append({"file": label, "scores": scores})
 
     # Summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Analyzed: {len(results)}/{len(outputs)}")
 
     if critical_issues:
-        print(f"\nCritical issues (score < 4):")
+        print("\nCritical issues (score < 4):")
         for issue in critical_issues:
             print(f"  - {issue}")
         print(f"\n{len(critical_issues)} issue(s) need attention.")

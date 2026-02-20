@@ -131,8 +131,12 @@ def _setup_hooks(settings_path: Path | None = None) -> None:
         if hive_bin:
             try:
                 import subprocess
+
                 result = subprocess.run(
-                    [hive_bin, "--version"], capture_output=True, text=True, timeout=5,
+                    [hive_bin, "--version"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
                 )
                 # Python version outputs "keephive X.Y.Z", bash outputs nothing useful
                 if "keephive" in result.stdout.lower():
@@ -156,7 +160,8 @@ def _setup_hooks(settings_path: Path | None = None) -> None:
                 if isinstance(h, dict) and "hooks" in h:
                     # Matcher-grouped format: {"matcher": "auto", "hooks": [...]}
                     sub_hooks = [
-                        sh for sh in h["hooks"]
+                        sh
+                        for sh in h["hooks"]
                         if not any(p in sh.get("command", "") for p in old_patterns)
                     ]
                     if sub_hooks:
@@ -183,10 +188,12 @@ def _setup_hooks(settings_path: Path | None = None) -> None:
                 if isinstance(h, dict) and "command" in h and "hooks" not in h:
                     # Flat format entry: wrap in matcher-grouped format
                     if "keephive" in h.get("command", ""):
-                        fixed.append({
-                            "matcher": "*",
-                            "hooks": [h],
-                        })
+                        fixed.append(
+                            {
+                                "matcher": "*",
+                                "hooks": [h],
+                            }
+                        )
                     else:
                         fixed.append(h)
                 else:
@@ -197,13 +204,17 @@ def _setup_hooks(settings_path: Path | None = None) -> None:
     ss_hooks = hooks.setdefault("SessionStart", [])
     ss_cmd = f"{keephive_bin} hook-sessionstart"
     if not any("keephive hook-sessionstart" in _extract_cmds(h) for h in ss_hooks):
-        ss_hooks.append({
-            "matcher": "*",
-            "hooks": [{
-                "type": "command",
-                "command": ss_cmd,
-            }],
-        })
+        ss_hooks.append(
+            {
+                "matcher": "*",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": ss_cmd,
+                    }
+                ],
+            }
+        )
         console.print("  [ok]OK[/ok] SessionStart hook added")
     else:
         console.print("  [dim]SessionStart hook already configured[/dim]")
@@ -212,14 +223,18 @@ def _setup_hooks(settings_path: Path | None = None) -> None:
     pc_hooks = hooks.setdefault("PreCompact", [])
     pc_cmd = f"{keephive_bin} hook-precompact"
     if not any("keephive hook-precompact" in _extract_cmds(h) for h in pc_hooks):
-        pc_hooks.append({
-            "matcher": "*",
-            "hooks": [{
-                "type": "command",
-                "command": pc_cmd,
-                "statusMessage": "Saving session context...",
-            }],
-        })
+        pc_hooks.append(
+            {
+                "matcher": "*",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": pc_cmd,
+                        "statusMessage": "Saving session context...",
+                    }
+                ],
+            }
+        )
         console.print("  [ok]OK[/ok] PreCompact hook added")
     else:
         console.print("  [dim]PreCompact hook already configured[/dim]")
@@ -228,13 +243,17 @@ def _setup_hooks(settings_path: Path | None = None) -> None:
     ptu_hooks = hooks.setdefault("PostToolUse", [])
     ptu_cmd = f"{keephive_bin} hook-posttooluse"
     if not any("keephive hook-posttooluse" in _extract_cmds(h) for h in ptu_hooks):
-        ptu_hooks.append({
-            "matcher": "Edit|Write",
-            "hooks": [{
-                "type": "command",
-                "command": ptu_cmd,
-            }],
-        })
+        ptu_hooks.append(
+            {
+                "matcher": "Edit|Write",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": ptu_cmd,
+                    }
+                ],
+            }
+        )
         console.print("  [ok]OK[/ok] PostToolUse hook added")
     else:
         console.print("  [dim]PostToolUse hook already configured[/dim]")
@@ -243,10 +262,12 @@ def _setup_hooks(settings_path: Path | None = None) -> None:
     ups_hooks = hooks.setdefault("UserPromptSubmit", [])
     ups_cmd = f"{keephive_bin} hook-userpromptsubmit"
     if not any("keephive hook-userpromptsubmit" in _extract_cmds(h) for h in ups_hooks):
-        ups_hooks.append({
-            "matcher": "*",
-            "hooks": [{"type": "command", "command": ups_cmd}],
-        })
+        ups_hooks.append(
+            {
+                "matcher": "*",
+                "hooks": [{"type": "command", "command": ups_cmd}],
+            }
+        )
         console.print("  [ok]OK[/ok] UserPromptSubmit hook added")
     else:
         console.print("  [dim]UserPromptSubmit hook already configured[/dim]")
@@ -262,7 +283,9 @@ def _register_mcp() -> None:
     try:
         result = subprocess.run(
             ["claude", "mcp", "add", "--scope", "user", "hive", "--", "keephive", "mcp-serve"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
             env={**os.environ, "CLAUDECODE": ""},
         )
         if result.returncode == 0:
@@ -282,9 +305,7 @@ def _extract_cmds(hook_entry: dict) -> str:
     if hook_entry.get("command"):
         parts.append(hook_entry["command"])
     if "hooks" in hook_entry:
-        parts.extend(
-            h.get("command", "") for h in hook_entry["hooks"] if h.get("command")
-        )
+        parts.extend(h.get("command", "") for h in hook_entry["hooks"] if h.get("command"))
     return " ".join(parts)
 
 
@@ -320,7 +341,9 @@ def _sync_global_install() -> None:
     try:
         result = subprocess.run(
             ["uv", "tool", "install", "--force", source],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         if result.returncode == 0:
             console.print("  [ok]OK[/ok] global install updated")

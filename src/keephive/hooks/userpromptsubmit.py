@@ -26,6 +26,7 @@ def hook_userpromptsubmit(args: list[str]) -> None:
     # Track usage
     try:
         from keephive.storage import track_event
+
         track_event("hooks", "userpromptsubmit", source="hook")
     except Exception:
         pass

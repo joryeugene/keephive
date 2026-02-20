@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from keephive.cli import main
 
-
 # ---- _resolve_file ----
+
 
 class TestResolveFile:
     def test_exact_match(self, hive_env):
@@ -15,6 +13,7 @@ class TestResolveFile:
         (gd / "my-guide.md").write_text("# My Guide\n")
 
         from keephive.commands.knowledge import _resolve_file
+
         result = _resolve_file("my-guide", gd)
         assert result is not None
         assert result.stem == "my-guide"
@@ -24,6 +23,7 @@ class TestResolveFile:
         (gd / "my-guide.md").write_text("# My Guide\n")
 
         from keephive.commands.knowledge import _resolve_file
+
         result = _resolve_file("my-guide.md", gd)
         assert result is not None
         assert result.stem == "my-guide"
@@ -33,6 +33,7 @@ class TestResolveFile:
         (gd / "code-review.md").write_text("# Code Review\n")
 
         from keephive.commands.knowledge import _resolve_file
+
         result = _resolve_file("code", gd)
         assert result is not None
         assert result.stem == "code-review"
@@ -43,6 +44,7 @@ class TestResolveFile:
         (gd / "code-hygiene.md").write_text("# Code Hygiene\n")
 
         from keephive.commands.knowledge import _resolve_file
+
         result = _resolve_file("code", gd)
         # Ambiguous: returns None
         assert result is None
@@ -52,6 +54,7 @@ class TestResolveFile:
         (gd / "my-review-guide.md").write_text("# Review\n")
 
         from keephive.commands.knowledge import _resolve_file
+
         result = _resolve_file("review", gd)
         assert result is not None
         assert result.stem == "my-review-guide"
@@ -62,6 +65,7 @@ class TestResolveFile:
         (gd / "code-review.md").write_text("# Code Review\n")
 
         from keephive.commands.knowledge import _resolve_file
+
         result = _resolve_file("review", gd)
         # Ambiguous substring: returns None
         assert result is None
@@ -70,6 +74,7 @@ class TestResolveFile:
         gd = hive_env / "knowledge" / "guides"
 
         from keephive.commands.knowledge import _resolve_file
+
         result = _resolve_file("nonexistent", gd)
         assert result is None
 
@@ -79,6 +84,7 @@ class TestResolveFile:
         (pd / "commit-draft.md").write_text("# Commit\n")
 
         from keephive.commands.knowledge import _resolve_file
+
         result = _resolve_file("commit-draft", gd, pd)
         assert result is not None
         assert result.stem == "commit-draft"
@@ -90,11 +96,13 @@ class TestResolveFile:
             f.unlink()
 
         from keephive.commands.knowledge import _resolve_file
+
         result = _resolve_file("anything", gd)
         assert result is None
 
 
 # ---- _knowledge_view ----
+
 
 class TestKnowledgeView:
     def test_view_exact_name(self, hive_env, capsys):
@@ -129,6 +137,7 @@ class TestKnowledgeView:
 
 
 # ---- _knowledge_list ----
+
 
 class TestKnowledgeList:
     def test_list_shows_guides(self, hive_env, capsys):
@@ -170,6 +179,7 @@ class TestKnowledgeList:
 
 # ---- _prompt_list ----
 
+
 class TestPromptList:
     def test_prompt_list(self, hive_env, capsys):
         pd = hive_env / "knowledge" / "prompts"
@@ -190,6 +200,7 @@ class TestPromptList:
 
 
 # ---- _knowledge_rm ----
+
 
 class TestKnowledgeRm:
     def test_rm_removes_file(self, hive_env, capsys):

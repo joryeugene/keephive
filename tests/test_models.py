@@ -9,10 +9,7 @@ from pydantic import ValidationError
 
 from keephive.models import (
     DoctorDuplicatesResponse,
-    DuplicateGroup,
-    FactVerdict,
     GuideDraftResponse,
-    Insight,
     InsightCategory,
     PreCompactResponse,
     RecallExpandResponse,
@@ -125,7 +122,7 @@ class TestReflectAnalyzeResponse:
             "patterns": [],
             "additions": [],
             "contradictions": [],
-            "actions": ['hive v', 'hive todo done "old task"'],
+            "actions": ["hive v", 'hive todo done "old task"'],
         }
         resp = ReflectAnalyzeResponse.model_validate(data)
         assert len(resp.actions) == 2
@@ -247,18 +244,20 @@ class TestClaudePipeJsonParsing:
 
     def test_array_format_with_structured_output(self):
         """claude -p --output-format json returns an array with structured_output."""
-        raw = json.dumps([
-            {
-                "type": "result",
-                "subtype": "success",
-                "result": "ok",
-                "structured_output": {
-                    "verdicts": [
-                        {"index": 1, "verdict": "VALID", "reason": "Confirmed"},
-                    ]
-                },
-            }
-        ])
+        raw = json.dumps(
+            [
+                {
+                    "type": "result",
+                    "subtype": "success",
+                    "result": "ok",
+                    "structured_output": {
+                        "verdicts": [
+                            {"index": 1, "verdict": "VALID", "reason": "Confirmed"},
+                        ]
+                    },
+                }
+            ]
+        )
         # Simulate what claude.py does
         parsed = json.loads(raw)
         if isinstance(parsed, list):
@@ -272,11 +271,18 @@ class TestClaudePipeJsonParsing:
 
     def test_direct_object_format(self):
         """If claude -p ever returns a plain object."""
-        raw = json.dumps({
-            "verdicts": [
-                {"index": 1, "verdict": "STALE", "reason": "Updated", "correction": "New value"},
-            ]
-        })
+        raw = json.dumps(
+            {
+                "verdicts": [
+                    {
+                        "index": 1,
+                        "verdict": "STALE",
+                        "reason": "Updated",
+                        "correction": "New value",
+                    },
+                ]
+            }
+        )
         parsed = json.loads(raw)
         if isinstance(parsed, list):
             parsed = parsed[-1]
@@ -290,16 +296,18 @@ class TestClaudePipeJsonParsing:
 
     def test_precompact_array_format(self):
         """PreCompact response in array format."""
-        raw = json.dumps([
-            {
-                "structured_output": {
-                    "insights": [
-                        {"category": "DECISION", "description": "Use Python for rewrite"},
-                        {"category": "FACT", "description": "jq breaks on arrays"},
-                    ]
+        raw = json.dumps(
+            [
+                {
+                    "structured_output": {
+                        "insights": [
+                            {"category": "DECISION", "description": "Use Python for rewrite"},
+                            {"category": "FACT", "description": "jq breaks on arrays"},
+                        ]
+                    }
                 }
-            }
-        ])
+            ]
+        )
         parsed = json.loads(raw)
         if isinstance(parsed, list):
             parsed = parsed[-1]

@@ -10,15 +10,16 @@ from keephive import __version__
 from keephive.output import console
 from keephive.storage import guides_dir, hive_dir, today
 
-
 SKILL_MANIFEST = hive_dir() / ".skill-manifest.json"
 
 
 def _plugin_dir() -> Path:
-    base = Path(os.environ.get(
-        "KEEPHIVE_PLUGIN_DIR",
-        str(Path.home() / ".claude" / "plugins" / "cache" / "keephive"),
-    ))
+    base = Path(
+        os.environ.get(
+            "KEEPHIVE_PLUGIN_DIR",
+            str(Path.home() / ".claude" / "plugins" / "cache" / "keephive"),
+        )
+    )
     return base / __version__
 
 
@@ -30,11 +31,17 @@ def _ensure_plugin() -> None:
 
     plugin_json = pd / ".claude-plugin" / "plugin.json"
     if not plugin_json.exists():
-        plugin_json.write_text(json.dumps({
-            "name": "keephive",
-            "version": __version__,
-            "description": "A knowledge sidecar for Claude Code",
-        }, indent=2) + "\n")
+        plugin_json.write_text(
+            json.dumps(
+                {
+                    "name": "keephive",
+                    "version": __version__,
+                    "description": "A knowledge sidecar for Claude Code",
+                },
+                indent=2,
+            )
+            + "\n"
+        )
 
     if not SKILL_MANIFEST.exists():
         SKILL_MANIFEST.write_text("{}\n")
@@ -87,7 +94,9 @@ def _skill_list() -> None:
         console.print("  [dim](none)[/dim]")
 
     console.print()
-    console.print("  -> [dim]hive sk publish <name>[/dim]  |  [dim]hive sk sync[/dim]  |  [dim]hive k edit <name>[/dim]")
+    console.print(
+        "  -> [dim]hive sk publish <name>[/dim]  |  [dim]hive sk sync[/dim]  |  [dim]hive k edit <name>[/dim]"
+    )
 
 
 def _skill_publish(args: list[str]) -> None:
@@ -171,6 +180,7 @@ def _skill_view(name: str) -> None:
         print(text)
         if sys.stdout.isatty():
             from keephive.output import copy_to_clipboard
+
             if copy_to_clipboard(text):
                 console.print("[dim]Copied to clipboard[/dim]")
     else:

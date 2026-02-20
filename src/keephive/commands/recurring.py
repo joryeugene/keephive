@@ -92,7 +92,9 @@ def _recurring_list() -> None:
         console.print("[bold]Recurring Tasks:[/bold]")
         console.print("  [dim](none)[/dim]")
         console.print()
-        console.print('  -> [dim]hive todo repeat daily "task"[/dim]  or  [dim]hive todo repeat 2d "task"[/dim]')
+        console.print(
+            '  -> [dim]hive todo repeat daily "task"[/dim]  or  [dim]hive todo repeat 2d "task"[/dim]'
+        )
         return
 
     content = safe_read_text(rf)
@@ -114,7 +116,9 @@ def _recurring_list() -> None:
             console.print(f"  \\[{freq}] {text}  [dim]({display}){due_marker}[/dim]")
 
     console.print()
-    console.print('  -> [dim]hive todo repeat daily "task"[/dim] to add  |  [dim]hive todo repeat done "pattern"[/dim] to mark done')
+    console.print(
+        '  -> [dim]hive todo repeat daily "task"[/dim] to add  |  [dim]hive todo repeat done "pattern"[/dim] to mark done'
+    )
 
 
 def _recurring_add(freq: str, text: str) -> None:
@@ -161,7 +165,12 @@ def _recurring_rm(pattern: str) -> None:
 
     for line in lines:
         m = _TASK_RE.match(line)
-        if m and not removed and is_valid_freq(m.group(1)) and pattern.lower() in m.group(2).lower():
+        if (
+            m
+            and not removed
+            and is_valid_freq(m.group(1))
+            and pattern.lower() in m.group(2).lower()
+        ):
             removed = m.group(2).strip()
             continue
         new_lines.append(line)
@@ -193,5 +202,7 @@ def _recurring_done(pattern: str) -> bool:
     ensure_daily()
     ts = datetime.now().strftime("%H:%M:%S")
     append_to_daily(f"- [{ts}] DONE: {match_text}")
-    console.print(f"[ok]Done[/ok] {match_text} (next due per schedule)  [dim](td undo to reopen)[/dim]")
+    console.print(
+        f"[ok]Done[/ok] {match_text} (next due per schedule)  [dim](td undo to reopen)[/dim]"
+    )
     return True

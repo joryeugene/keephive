@@ -28,11 +28,12 @@ def cmd_remember(args: list[str]) -> None:
     insight = " ".join(args)
     if not insight:
         console.print("[err]Error: nothing to remember[/err]")
-        console.print("Usage: hive r \"your insight here\"")
+        console.print('Usage: hive r "your insight here"')
         return
 
     ensure_daily()
     from datetime import datetime
+
     timestamp = datetime.now().strftime("%H:%M:%S")
 
     append_to_daily(f"- [{timestamp}] {insight}")
@@ -74,7 +75,7 @@ def cmd_recall(args: list[str]) -> None:
             print(json.dumps({"query": query, "results": [], "count": 0}))
         else:
             console.print(f"No results for: {query}")
-            console.print(f"\n  -> hive r \"{query} ...\" to remember something about this")
+            console.print(f'\n  -> hive r "{query} ..." to remember something about this')
         return
 
     if json_mode:
@@ -195,7 +196,7 @@ def _display_results(query: str, results: list[dict]) -> None:
     if len(results) > 20:
         console.print(f"\n  [dim]Showing 20 of {len(results)} results[/dim]")
 
-    console.print(f"\n  -> hive e to edit working memory  |  hive k <name> to view a guide")
+    console.print("\n  -> hive e to edit working memory  |  hive k <name> to view a guide")
 
 
 def _expand_and_search(query: str, existing: list[dict]) -> list[dict] | None:
@@ -279,7 +280,9 @@ def _search_all_tiers(query: str) -> list[dict]:
                         except ValueError:
                             pass
                     date_val = vm.group(1) if vm else ""
-                    results.append({"tier": "working", "score": score, "line": line, "date": date_val})
+                    results.append(
+                        {"tier": "working", "score": score, "line": line, "date": date_val}
+                    )
 
     # Tier 2: Knowledge
     kd = knowledge_dir()
@@ -307,13 +310,15 @@ def _search_all_tiers(query: str) -> list[dict]:
                         except ValueError:
                             days_ago = 30
                         score = max(10, 70 - days_ago)
-                        results.append({
-                            "tier": "daily",
-                            "score": score,
-                            "line": line,
-                            "file": str(f),
-                            "date": fname,
-                        })
+                        results.append(
+                            {
+                                "tier": "daily",
+                                "score": score,
+                                "line": line,
+                                "file": str(f),
+                                "date": fname,
+                            }
+                        )
 
         ad = archive_dir()
         if ad.exists():

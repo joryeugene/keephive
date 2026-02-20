@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from datetime import date
 
-
 # --- Effectiveness facts (seeded into default memory.md) ---
 
 EFFECTIVENESS_FACTS: list[str] = [
@@ -64,13 +63,11 @@ DEFAULT_RULES: list[tuple[str, str]] = [
     ),
     (
         "When You Make an Architecture or Tool Choice",
-        '-> hive_remember("DECISION: chose X over Y because Z") or '
-        '`hive r "DECISION: ..."`',
+        '-> hive_remember("DECISION: chose X over Y because Z") or `hive r "DECISION: ..."`',
     ),
     (
         "When You Notice a Non-Obvious Pattern",
-        '-> hive_remember("INSIGHT: the pattern") or '
-        '`hive r "INSIGHT: ..."`',
+        '-> hive_remember("INSIGHT: the pattern") or `hive r "INSIGHT: ..."`',
     ),
     (
         "When User Gives a Multi-Part Request",
@@ -124,13 +121,15 @@ def render_default_memory() -> str:
     ]
     for fact in EFFECTIVENESS_FACTS:
         lines.append(f"- {fact} [verified:{today}]")
-    lines.extend([
-        "",
-        "## Your Projects",
-        "",
-        "(Add project-specific facts here as you learn them)",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Your Projects",
+            "",
+            "(Add project-specific facts here as you learn them)",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 

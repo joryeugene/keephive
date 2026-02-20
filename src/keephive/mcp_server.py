@@ -98,6 +98,7 @@ def hive_status() -> str:
     today_entries = count_daily_entries()
 
     from keephive.health import health_summary
+
     hooks_ok, mcp_ok, data_ok = health_summary()
     health_icons = " ".join(
         f"{'●' if ok else '○'} {label}"
@@ -184,6 +185,7 @@ def hive_todo_done(pattern: str) -> str:
     if not match:
         # Fall through to recurring tasks (mirrors CLI behavior)
         from keephive.storage import mark_recurring_done
+
         result = mark_recurring_done(pattern)
         if result:
             task_text, _ = result
@@ -212,7 +214,11 @@ def hive_knowledge(name: str = "") -> str:
         for g in guides:
             text = g.read_text()
             first_line = next(
-                (ln.strip()[:80] for ln in text.splitlines() if ln.strip() and not ln.startswith("#")),
+                (
+                    ln.strip()[:80]
+                    for ln in text.splitlines()
+                    if ln.strip() and not ln.startswith("#")
+                ),
                 "",
             )
             lines.append(f"  {g.stem}: {first_line}")
@@ -276,6 +282,7 @@ def hive_audit() -> str:
     Falls back to metrics-only when HIVE_SKIP_LLM is set."""
     _track_mcp("audit")
     import os
+
     from keephive.commands.audit import (
         _analyze_cleaner,
         _analyze_strategist,
@@ -294,20 +301,26 @@ def hive_audit() -> str:
     parts = [f"Quality Pulse: {score}/100"]
 
     if previous_play:
-        status = "completed" if previous_play["completed"] else f"open ({previous_play['age_days']}d)"
+        status = (
+            "completed" if previous_play["completed"] else f"open ({previous_play['age_days']}d)"
+        )
         parts.append(f"Previous Play: {previous_play['action']} [{status}]")
 
     # Vault summary
     v_ok = vault["total_facts"] - vault["stale_facts"]
     if vault["stale_facts"] > 0:
-        parts.append(f"Vault: {vault['total_facts']} facts ({v_ok} ok, {vault['stale_facts']} stale)")
+        parts.append(
+            f"Vault: {vault['total_facts']} facts ({v_ok} ok, {vault['stale_facts']} stale)"
+        )
     elif vault["total_facts"] > 0:
         parts.append(f"Vault: {vault['total_facts']} facts ({v_ok} ok)")
 
     # Cleaner summary
     rate_pct = int(cleaner["todo_completion_rate"] * 100)
     vel = cleaner["todo_velocity_7d"]
-    parts.append(f"Cleaner: {rate_pct}% completion, {vel['created']}c/{vel['completed']}d 7d velocity")
+    parts.append(
+        f"Cleaner: {rate_pct}% completion, {vel['created']}c/{vel['completed']}d 7d velocity"
+    )
 
     # LLM synthesis (skip if HIVE_SKIP_LLM is set)
     if os.environ.get("HIVE_SKIP_LLM"):
@@ -319,6 +332,7 @@ def hive_audit() -> str:
         _run_perspectives,
         save_audit_insights,
     )
+
     try:
         vault_r, cleaner_r, strategist_r = _run_perspectives(vault, cleaner, strategist)
     except Exception as e:
@@ -327,9 +341,14 @@ def hive_audit() -> str:
 
     try:
         synthesis = _run_cook(
-            vault_r, cleaner_r, strategist_r,
-            vault, cleaner, strategist,
-            score, previous_play,
+            vault_r,
+            cleaner_r,
+            strategist_r,
+            vault,
+            cleaner,
+            strategist,
+            score,
+            previous_play,
         )
     except Exception as e:
         parts.append(f"\nVault: {vault_r.analysis}")
@@ -356,6 +375,7 @@ def hive_recurring() -> str:
     """List due recurring tasks. Shows tasks past their schedule."""
     _track_mcp("recurring")
     from keephive.storage import due_recurring
+
     due = due_recurring()
     if not due:
         return "No recurring tasks due."
@@ -407,6 +427,7 @@ def hive_prompt_write(name: str, content: str) -> str:
     content: full markdown content for the prompt"""
     _track_mcp("prompt_write")
     import re as _re
+
     from keephive.storage import prompts_dir
 
     ensure_dirs()
@@ -432,7 +453,8 @@ def hive_mem(action: str = "list", text: str = "") -> str:
     action='add' + text: add a new verified fact
     action='rm' + text: remove first fact matching text"""
     _track_mcp("mem")
-    from keephive.storage import backup_and_write, today as today_str
+    from keephive.storage import backup_and_write
+    from keephive.storage import today as today_str
 
     ensure_dirs()
     mem = memory_file()
@@ -491,7 +513,9 @@ def hive_rule(action: str = "list", text: str = "") -> str:
         if not rf.exists() or not rf.read_text().strip():
             return "No working rules yet."
         content = rf.read_text()
-        rules = [line for line in content.splitlines() if line.startswith("- ") or line.startswith("-> ")]
+        rules = [
+            line for line in content.splitlines() if line.startswith("- ") or line.startswith("-> ")
+        ]
         return f"Working Rules ({len(rules)} rules):\n\n{content}"
 
     if action == "add" and text:

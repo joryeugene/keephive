@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
-
-import pytest
 
 
 class TestCounterPersistence:
@@ -175,6 +172,7 @@ class TestNudgeRotation:
         result = _status_nudge()
         assert result is None  # Nothing actionable
 
+
 class TestBuildOutput:
     def test_build_nudge_output_format(self, hive_env):
         """Output is valid JSON with hookSpecificOutput."""
@@ -202,11 +200,15 @@ class TestHookIntegration:
         env = {
             "HIVE_SKIP_LLM": "1",
             "HIVE_HOME": str(hive_home),
-            "PATH": "/usr/bin:/usr/local/bin:/opt/homebrew/bin:" + (Path.home() / ".local/bin").as_posix(),
+            "PATH": "/usr/bin:/usr/local/bin:/opt/homebrew/bin:"
+            + (Path.home() / ".local/bin").as_posix(),
         }
         return subprocess.run(
             [sys.executable, "-m", "keephive"] + args,
-            capture_output=True, text=True, env=env, input=stdin,
+            capture_output=True,
+            text=True,
+            env=env,
+            input=stdin,
         )
 
     def test_userpromptsubmit_full_cycle(self, hive_env):
@@ -218,7 +220,7 @@ class TestHookIntegration:
                 json.dumps({"prompt": f"prompt {i}", "session_id": "cycle-test"}),
             )
             assert r.returncode == 0
-            assert r.stdout.strip() == "", f"Call {i+1} should be silent"
+            assert r.stdout.strip() == "", f"Call {i + 1} should be silent"
 
         # 8th call should produce nudge
         r = self._run_hook(
@@ -240,7 +242,7 @@ class TestHookIntegration:
                 json.dumps({"session_id": "tool-cycle", "tool_name": "Edit"}),
             )
             assert r.returncode == 0
-            assert r.stdout.strip() == "", f"Call {i+1} should be silent"
+            assert r.stdout.strip() == "", f"Call {i + 1} should be silent"
 
         r = self._run_hook(
             ["hook-posttooluse"],

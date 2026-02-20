@@ -5,17 +5,19 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from conftest import make_daily
-from keephive.models import DoctorDuplicatesResponse, DuplicateGroup
 
+from keephive.models import DoctorDuplicatesResponse, DuplicateGroup
 
 # ---------------------------------------------------------------------------
 # TestDoctorHealthChecks: Basic health checks (no LLM)
 # ---------------------------------------------------------------------------
 
+
 class TestDoctorHealthChecks:
     def test_directories_check(self, hive_env, capsys):
         """Doctor checks directory existence."""
         from keephive.commands.doctor import cmd_doctor
+
         cmd_doctor([])
         out = capsys.readouterr().out
         assert len(out) > 200, f"Doctor output too short ({len(out)} chars)"
@@ -29,6 +31,7 @@ class TestDoctorHealthChecks:
     def test_memory_check(self, hive_env, capsys):
         """Doctor checks memory.md existence."""
         from keephive.commands.doctor import cmd_doctor
+
         cmd_doctor([])
         out = capsys.readouterr().out
         assert "Working Memory" in out
@@ -38,6 +41,7 @@ class TestDoctorHealthChecks:
     def test_rules_check(self, hive_env, capsys):
         """Doctor checks rules.md existence."""
         from keephive.commands.doctor import cmd_doctor
+
         cmd_doctor([])
         out = capsys.readouterr().out
         assert "Working Memory" in out
@@ -48,6 +52,7 @@ class TestDoctorHealthChecks:
         """Missing memory.md is flagged as an issue."""
         (hive_env / "working" / "memory.md").unlink()
         from keephive.commands.doctor import cmd_doctor
+
         cmd_doctor([])
         out = capsys.readouterr().out
         assert "MISSING" in out
@@ -59,11 +64,13 @@ class TestDoctorHealthChecks:
 # TestDoctorVersionDrift
 # ---------------------------------------------------------------------------
 
+
 class TestDoctorVersionDrift:
     def test_stale_install_detected(self, hive_env, capsys):
         """Doctor warns when installed version differs from dev version."""
         with patch("keephive.commands.doctor._get_installed_version", return_value="0.5.0"):
             from keephive.commands.doctor import cmd_doctor
+
             cmd_doctor([])
         out = capsys.readouterr().out
         assert "STALE" in out
@@ -73,8 +80,10 @@ class TestDoctorVersionDrift:
     def test_matching_versions_ok(self, hive_env, capsys):
         """Doctor shows OK when installed version matches dev."""
         from keephive import __version__
+
         with patch("keephive.commands.doctor._get_installed_version", return_value=__version__):
             from keephive.commands.doctor import cmd_doctor
+
             cmd_doctor([])
         out = capsys.readouterr().out
         assert "Installed version matches" in out
@@ -86,6 +95,7 @@ class TestDoctorVersionDrift:
             patch("keephive.commands.doctor._check_installed_deps", return_value=[]),
         ):
             from keephive.commands.doctor import cmd_doctor
+
             cmd_doctor([])
         out = capsys.readouterr().out
         assert "STALE" not in out
@@ -93,11 +103,13 @@ class TestDoctorVersionDrift:
     def test_stale_deps_detected(self, hive_env, capsys):
         """Doctor warns when tool env is missing required deps."""
         from keephive import __version__
+
         with (
             patch("keephive.commands.doctor._get_installed_version", return_value=__version__),
             patch("keephive.commands.doctor._check_installed_deps", return_value=["anthropic"]),
         ):
             from keephive.commands.doctor import cmd_doctor
+
             cmd_doctor([])
         out = capsys.readouterr().out
         assert "STALE DEPS" in out
@@ -108,6 +120,7 @@ class TestDoctorVersionDrift:
         """The stale reinstall hint must include --no-cache to actually rebuild."""
         with patch("keephive.commands.doctor._get_installed_version", return_value="0.9.0"):
             from keephive.commands.doctor import cmd_doctor
+
             cmd_doctor([])
         out = capsys.readouterr().out
         assert "--no-cache" in out, "Reinstall hint must include --no-cache"
@@ -115,16 +128,17 @@ class TestDoctorVersionDrift:
     def test_content_drift_detected(self, hive_env, capsys):
         """Doctor warns when installed and dev cli.py have different content."""
         from keephive import __version__
+
         with (
             patch("keephive.commands.doctor._get_installed_version", return_value=__version__),
             patch("keephive.commands.doctor._check_content_drift", return_value=True),
             patch("keephive.commands.doctor._check_installed_deps", return_value=[]),
         ):
             from keephive.commands.doctor import cmd_doctor
+
             cmd_doctor([])
         out = capsys.readouterr().out
-        assert "content" in out.lower() or "STALE" in out, \
-            "Doctor must warn about content drift"
+        assert "content" in out.lower() or "STALE" in out, "Doctor must warn about content drift"
         assert "--no-cache" in out, "Content drift hint must include --no-cache"
 
 
@@ -132,26 +146,39 @@ class TestDoctorVersionDrift:
 # TestDoctorDuplicateDetection
 # ---------------------------------------------------------------------------
 
+
 class TestDoctorDuplicateDetection:
     def test_deterministic_detects_duplicates(self, hive_env, capsys):
         """SequenceMatcher (HIVE_SKIP_LLM) detects similar TODOs."""
-        make_daily(hive_env, 0, [
-            "- [10:00:00] TODO: Write comprehensive tests for standup",
-            "- [10:05:00] TODO: Write comprehensive tests for standup command",
-        ])
+        make_daily(
+            hive_env,
+            0,
+            [
+                "- [10:00:00] TODO: Write comprehensive tests for standup",
+                "- [10:05:00] TODO: Write comprehensive tests for standup command",
+            ],
+        )
         from keephive.commands.doctor import cmd_doctor
+
         cmd_doctor([])
         out = capsys.readouterr().out
-        assert "duplicate" in out.lower(), f"Should detect near-identical TODOs as duplicates. Output:\n{out}"
+        assert "duplicate" in out.lower(), (
+            f"Should detect near-identical TODOs as duplicates. Output:\n{out}"
+        )
         assert len(out) > 100, f"Doctor output too short ({len(out)} chars)"
 
     def test_deterministic_no_duplicates(self, hive_env, capsys):
         """SequenceMatcher correctly reports no duplicates for distinct TODOs."""
-        make_daily(hive_env, 0, [
-            "- [10:00:00] TODO: Fix the login bug",
-            "- [10:05:00] TODO: Deploy to production",
-        ])
+        make_daily(
+            hive_env,
+            0,
+            [
+                "- [10:00:00] TODO: Fix the login bug",
+                "- [10:05:00] TODO: Deploy to production",
+            ],
+        )
         from keephive.commands.doctor import cmd_doctor
+
         cmd_doctor([])
         out = capsys.readouterr().out
         assert "No duplicate" in out
@@ -236,10 +263,15 @@ class TestDoctorDuplicateDetection:
 
     def test_single_todo_handled_cleanly(self, hive_env, capsys):
         """With only 1 TODO, doctor handles it without error."""
-        make_daily(hive_env, 0, [
-            "- [10:00:00] TODO: Only one task",
-        ])
+        make_daily(
+            hive_env,
+            0,
+            [
+                "- [10:00:00] TODO: Only one task",
+            ],
+        )
         from keephive.commands.doctor import cmd_doctor
+
         cmd_doctor([])
         out = capsys.readouterr().out
         assert "Directories" in out
@@ -251,13 +283,19 @@ class TestDoctorDuplicateDetection:
 # TestDoctorStaleAndAccumulation
 # ---------------------------------------------------------------------------
 
+
 class TestDoctorStaleAndAccumulation:
     def test_stale_todos_detected(self, hive_env, capsys):
         """TODOs older than 7 days are flagged."""
-        make_daily(hive_env, 10, [
-            "- [10:00:00] TODO: Very old task",
-        ])
+        make_daily(
+            hive_env,
+            10,
+            [
+                "- [10:00:00] TODO: Very old task",
+            ],
+        )
         from keephive.commands.doctor import cmd_doctor
+
         cmd_doctor([])
         out = capsys.readouterr().out
         assert "older than" in out and "days" in out
@@ -269,6 +307,7 @@ class TestDoctorStaleAndAccumulation:
         make_daily(hive_env, 0, entries)
 
         from keephive.commands.doctor import cmd_doctor
+
         cmd_doctor([])
         out = capsys.readouterr().out
         assert "12 open TODOs" in out, f"Should show count of 12 open TODOs. Output:\n{out}"
@@ -276,10 +315,15 @@ class TestDoctorStaleAndAccumulation:
 
     def test_hygiene_corrections_surfaced(self, hive_env, capsys):
         """Doctor surfaces hygiene corrections from daily log."""
-        make_daily(hive_env, 0, [
-            "- [10:00:00] CORRECTION: removed dead export from utils.py that was never imported",
-        ])
+        make_daily(
+            hive_env,
+            0,
+            [
+                "- [10:00:00] CORRECTION: removed dead export from utils.py that was never imported",
+            ],
+        )
         from keephive.commands.doctor import cmd_doctor
+
         cmd_doctor([])
         out = capsys.readouterr().out
         assert "hygiene correction" in out.lower()
@@ -290,6 +334,7 @@ class TestDoctorStaleAndAccumulation:
 # ---------------------------------------------------------------------------
 # TestDoctorModels
 # ---------------------------------------------------------------------------
+
 
 class TestDoctorModels:
     def test_valid_response_with_groups(self):

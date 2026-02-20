@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
-import os
 from pathlib import Path
 
 from keephive.output import console, copy_to_clipboard, prompt_yn
 from keephive.storage import (
+    NOTE_SLOT_COUNT,
     active_slot,
     drafts_dir,
     ensure_dirs,
-    NOTE_SLOT_COUNT,
     notes_dir,
     prompts_dir,
     set_active_slot,
@@ -126,11 +126,13 @@ def _note_edit(slot: int | None = None) -> None:
     subprocess.run([editor, str(path)])
     after = path.read_text()
 
-    lines = sum(1 for l in after.splitlines() if l.strip())
+    lines = sum(1 for line in after.splitlines() if line.strip())
     slot_num = slot or active_slot()
     if after != before and after.strip():
         if copy_to_clipboard(after):
-            console.print(f"[ok]Note [bold]\\[{slot_num}][/bold] saved[/ok] ({lines}L) and copied to clipboard")
+            console.print(
+                f"[ok]Note [bold]\\[{slot_num}][/bold] saved[/ok] ({lines}L) and copied to clipboard"
+            )
         else:
             console.print(f"[ok]Note [bold]\\[{slot_num}][/bold] saved[/ok] ({lines}L)")
     elif after.strip():
@@ -146,6 +148,7 @@ def _note_from_template(name: str) -> None:
     pd = prompts_dir()
 
     from keephive.commands.knowledge import _resolve_file
+
     match = _resolve_file(name, pd)
 
     if not match:
@@ -166,11 +169,13 @@ def _note_from_template(name: str) -> None:
     subprocess.run([editor, str(path)])
 
     after = path.read_text()
-    lines = sum(1 for l in after.splitlines() if l.strip())
+    lines = sum(1 for line in after.splitlines() if line.strip())
     slot_num = active_slot()
     if after.strip():
         if copy_to_clipboard(after):
-            console.print(f"[ok]Note [bold]\\[{slot_num}][/bold] saved[/ok] ({lines}L) and copied to clipboard")
+            console.print(
+                f"[ok]Note [bold]\\[{slot_num}][/bold] saved[/ok] ({lines}L) and copied to clipboard"
+            )
         else:
             console.print(f"[ok]Note [bold]\\[{slot_num}][/bold] saved[/ok] ({lines}L)")
 
@@ -187,7 +192,7 @@ def _note_copy(slot: int | None = None) -> None:
     text = path.read_text()
     slot_num = slot or active_slot()
     if copy_to_clipboard(text):
-        lines = sum(1 for l in text.splitlines() if l.strip())
+        lines = sum(1 for line in text.splitlines() if line.strip())
         console.print(f"[ok]Copied[/ok] note \\[{slot_num}] to clipboard ({lines}L)")
     else:
         print(text)
@@ -201,7 +206,7 @@ def _note_show(slot: int | None = None) -> None:
         return
 
     text = path.read_text()
-    lines = sum(1 for l in text.splitlines() if l.strip())
+    lines = sum(1 for line in text.splitlines() if line.strip())
     size = len(text.encode())
     slot_num = slot or active_slot()
     console.print(f"[bold]Note \\[{slot_num}][/bold] ({lines}L, {size}B)\n")
@@ -236,8 +241,8 @@ def _note_list() -> None:
         path = slot_file(n)
         if path.exists() and path.read_text().strip():
             text = path.read_text()
-            lines = sum(1 for l in text.splitlines() if l.strip())
-            first_line = next((l.strip() for l in text.splitlines() if l.strip()), "")
+            lines = sum(1 for line in text.splitlines() if line.strip())
+            first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
             if len(first_line) > 60:
                 first_line = first_line[:57] + "..."
             label = n if n < 10 else 0

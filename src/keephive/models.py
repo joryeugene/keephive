@@ -10,8 +10,8 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-
 # ---- Verify ----
+
 
 class Verdict(str, Enum):
     VALID = "VALID"
@@ -31,6 +31,7 @@ class VerifyResponse(BaseModel):
 
 
 # ---- PreCompact ----
+
 
 class InsightCategory(str, Enum):
     DECISION = "DECISION"
@@ -63,6 +64,7 @@ class PreCompactResponse(BaseModel):
 
 # ---- Reflect Analyze ----
 
+
 class Pattern(BaseModel):
     topic: str
     days: int
@@ -89,6 +91,7 @@ class ReflectAnalyzeResponse(BaseModel):
 
 # ---- Audit ----
 
+
 class VaultPerspective(BaseModel):
     analysis: str
     issues: list[str]
@@ -105,18 +108,19 @@ class StrategistPerspective(BaseModel):
 
 
 class AuditPlay(BaseModel):
-    issue: str       # One-line problem description
-    command: str     # Exact hive command
+    issue: str  # One-line problem description
+    command: str  # Exact hive command
 
 
 class AuditSynthesis(BaseModel):
-    plays: list[AuditPlay]   # 3-5 ranked actions, most impactful first
+    plays: list[AuditPlay]  # 3-5 ranked actions, most impactful first
     connection: str
     tension: str
     wild_card: str
 
 
 # ---- Standup ----
+
 
 class StandupResponse(BaseModel):
     yesterday: list[str]
@@ -125,6 +129,7 @@ class StandupResponse(BaseModel):
 
 
 # ---- Doctor ----
+
 
 class DuplicateGroup(BaseModel):
     entries: list[str]
@@ -138,6 +143,7 @@ class DoctorDuplicatesResponse(BaseModel):
 
 # ---- Reflect Draft ----
 
+
 class GuideDraftResponse(BaseModel):
     title: str
     content: str
@@ -145,13 +151,13 @@ class GuideDraftResponse(BaseModel):
 
 # ---- Recall Expand ----
 
+
 class RecallExpandResponse(BaseModel):
     terms: list[str]
 
 
 # ---- Log Summarize ----
 
+
 class DailySummaryResponse(BaseModel):
     bullets: list[str]  # 3-5 summary points
-
-

@@ -43,18 +43,22 @@ class TestVerifyLLM:
         _skip_if_no_claude()
 
         (llm_hive_env / "working" / "memory.md").write_text(
-            "# Working Memory\n\n"
-            "- Python 2.7 is the latest Python release [verified:2020-01-01]\n"
+            "# Working Memory\n\n- Python 2.7 is the latest Python release [verified:2020-01-01]\n"
         )
 
         from keephive.commands.verify import cmd_verify
+
         cmd_verify([])
         out = capsys.readouterr().out
 
-        save_e2e_output("verify_stale", out, {
-            "input_fact": "Python 2.7 is the latest Python release",
-            "expected": "STALE verdict with Python 3.x correction",
-        })
+        save_e2e_output(
+            "verify_stale",
+            out,
+            {
+                "input_fact": "Python 2.7 is the latest Python release",
+                "expected": "STALE verdict with Python 3.x correction",
+            },
+        )
 
         assert "STALE" in out
         mem = (llm_hive_env / "working" / "memory.md").read_text()
@@ -70,13 +74,18 @@ class TestVerifyLLM:
         )
 
         from keephive.commands.verify import cmd_verify
+
         cmd_verify([])
         out = capsys.readouterr().out
 
-        save_e2e_output("verify_valid", out, {
-            "input_fact": "Pydantic uses BaseModel as its core class",
-            "expected": "VALID verdict",
-        })
+        save_e2e_output(
+            "verify_valid",
+            out,
+            {
+                "input_fact": "Pydantic uses BaseModel as its core class",
+                "expected": "VALID verdict",
+            },
+        )
 
         assert "VALID" in out or "UNCERTAIN" in out
 
@@ -87,8 +96,7 @@ class TestReflectLLM:
         _skip_if_no_claude()
 
         (llm_hive_env / "working" / "memory.md").write_text(
-            "# Working Memory\n\n"
-            "- keephive uses pytest for testing [verified:2026-02-15]\n"
+            "# Working Memory\n\n- keephive uses pytest for testing [verified:2026-02-15]\n"
         )
 
         for i in range(5):
@@ -96,19 +104,24 @@ class TestReflectLLM:
             daily = llm_hive_env / "daily" / f"{d.isoformat()}.md"
             daily.write_text(
                 f"# Daily Log: {d.isoformat()}\n\n"
-                f"- [10:00:00] FACT: Ran testing session {i+1}\n"
-                f"- [10:05:00] TODO: Fix test flake in module {i+1}\n"
-                f"- [10:10:00] DECISION: Use pytest fixtures for test {i+1}\n"
+                f"- [10:00:00] FACT: Ran testing session {i + 1}\n"
+                f"- [10:05:00] TODO: Fix test flake in module {i + 1}\n"
+                f"- [10:10:00] DECISION: Use pytest fixtures for test {i + 1}\n"
             )
 
         from keephive.commands.reflect import cmd_reflect
+
         cmd_reflect(["analyze"])
         out = capsys.readouterr().out
 
-        save_e2e_output("reflect_patterns", out, {
-            "input": "5 daily logs with repeated testing theme",
-            "expected": "Pattern identified mentioning testing",
-        })
+        save_e2e_output(
+            "reflect_patterns",
+            out,
+            {
+                "input": "5 daily logs with repeated testing theme",
+                "expected": "Pattern identified mentioning testing",
+            },
+        )
 
         assert "pattern" in out.lower() or "Pattern" in out or "Recurring" in out
 
@@ -130,24 +143,28 @@ class TestDoctorLLM:
         )
 
         (llm_hive_env / "working" / "memory.md").write_text(
-            "# Working Memory\n\n"
-            "- Testing is important [verified:2026-02-15]\n"
+            "# Working Memory\n\n- Testing is important [verified:2026-02-15]\n"
         )
 
         from keephive.commands.doctor import cmd_doctor
+
         cmd_doctor([])
         out = capsys.readouterr().out
 
-        save_e2e_output("doctor_duplicates", out, {
-            "input_todos": [
-                "Fix the authentication bug in login",
-                "Resolve auth issue in the login flow",
-                "Add unit tests for payment module",
-                "Write tests for payment processing",
-                "Update deployment documentation",
-            ],
-            "expected": "At least 1 duplicate group identified",
-        })
+        save_e2e_output(
+            "doctor_duplicates",
+            out,
+            {
+                "input_todos": [
+                    "Fix the authentication bug in login",
+                    "Resolve auth issue in the login flow",
+                    "Add unit tests for payment module",
+                    "Write tests for payment processing",
+                    "Update deployment documentation",
+                ],
+                "expected": "At least 1 duplicate group identified",
+            },
+        )
 
         assert "duplicate" in out.lower()
 
@@ -175,18 +192,22 @@ class TestStandupLLM:
         )
 
         (llm_hive_env / "working" / "memory.md").write_text(
-            "# Working Memory\n\n"
-            "- Project uses FastAPI backend [verified:2026-02-15]\n"
+            "# Working Memory\n\n- Project uses FastAPI backend [verified:2026-02-15]\n"
         )
 
         from keephive.commands.standup import cmd_standup
+
         cmd_standup([])
         out = capsys.readouterr().out
 
-        save_e2e_output("standup_coherent", out, {
-            "input": "DONEs, open TODOs, decisions, insights over 2 days",
-            "expected": "Summary references auth work and open items",
-        })
+        save_e2e_output(
+            "standup_coherent",
+            out,
+            {
+                "input": "DONEs, open TODOs, decisions, insights over 2 days",
+                "expected": "Summary references auth work and open items",
+            },
+        )
 
         assert "Standup" in out
         assert "Done" in out or "auth" in out.lower()
@@ -209,9 +230,9 @@ class TestAuditLLM:
             daily = llm_hive_env / "daily" / f"{d.isoformat()}.md"
             daily.write_text(
                 f"# Daily Log: {d.isoformat()}\n\n"
-                f"- [10:00:00] TODO: Refactor module {i+1}\n"
-                f"- [10:05:00] FACT: Found bug in handler {i+1}\n"
-                f"- [10:10:00] DECISION: Use strategy pattern for {i+1}\n"
+                f"- [10:00:00] TODO: Refactor module {i + 1}\n"
+                f"- [10:05:00] FACT: Found bug in handler {i + 1}\n"
+                f"- [10:10:00] DECISION: Use strategy pattern for {i + 1}\n"
             )
 
         (llm_hive_env / "working" / "rules.md").write_text(
@@ -221,13 +242,18 @@ class TestAuditLLM:
         )
 
         from keephive.commands.audit import cmd_audit
+
         cmd_audit([])
         out = capsys.readouterr().out
 
-        save_e2e_output("audit_synthesis", out, {
-            "input": "Stale facts, TODOs, decisions across 3 days",
-            "expected": "Connection, Tension, Play, Wild Card sections",
-        })
+        save_e2e_output(
+            "audit_synthesis",
+            out,
+            {
+                "input": "Stale facts, TODOs, decisions across 3 days",
+                "expected": "Connection, Tension, Play, Wild Card sections",
+            },
+        )
 
         # Audit should produce at least some of the synthesis markers
         has_synthesis = any(
@@ -248,27 +274,31 @@ class TestReflectDraftLLM:
             daily = llm_hive_env / "daily" / f"{d.isoformat()}.md"
             daily.write_text(
                 f"# Daily Log: {d.isoformat()}\n\n"
-                f"- [10:00:00] FACT: pytest fixtures simplify test setup {i+1}\n"
-                f"- [10:05:00] DECISION: Use conftest.py for shared test fixtures {i+1}\n"
-                f"- [10:10:00] INSIGHT: Testing edge cases catches 80% of bugs {i+1}\n"
+                f"- [10:00:00] FACT: pytest fixtures simplify test setup {i + 1}\n"
+                f"- [10:05:00] DECISION: Use conftest.py for shared test fixtures {i + 1}\n"
+                f"- [10:10:00] INSIGHT: Testing edge cases catches 80% of bugs {i + 1}\n"
             )
 
         (llm_hive_env / "working" / "memory.md").write_text(
-            "# Working Memory\n\n"
-            "- keephive uses pytest [verified:2026-02-15]\n"
+            "# Working Memory\n\n- keephive uses pytest [verified:2026-02-15]\n"
         )
 
         # Simulate "w" to write the guide
         monkeypatch.setattr("builtins.input", lambda prompt: "w")
 
         from keephive.commands.reflect import cmd_reflect
+
         cmd_reflect(["draft", "testing"])
         out = capsys.readouterr().out
 
-        save_e2e_output("reflect_draft", out, {
-            "input": "5 days of testing-related entries",
-            "expected": "Guide about testing practices",
-        })
+        save_e2e_output(
+            "reflect_draft",
+            out,
+            {
+                "input": "5 days of testing-related entries",
+                "expected": "Guide about testing practices",
+            },
+        )
 
         # Guide should be written
         guide_path = llm_hive_env / "knowledge" / "guides" / "testing.md"
@@ -289,13 +319,18 @@ class TestRecallDeepLLM:
         )
 
         from keephive.commands.remember import cmd_recall
+
         cmd_recall(["--deep", "verification"])
         out = capsys.readouterr().out
 
-        save_e2e_output("recall_deep", out, {
-            "input": "verification (deep query expansion)",
-            "expected": "Results found, possibly expanded via LLM",
-        })
+        save_e2e_output(
+            "recall_deep",
+            out,
+            {
+                "input": "verification (deep query expansion)",
+                "expected": "Results found, possibly expanded via LLM",
+            },
+        )
 
         assert "result" in out.lower()
 
@@ -369,15 +404,17 @@ class TestLifecycleBestPath:
         cmd_reflect(["analyze"])
         out_analyze = capsys.readouterr().out
 
-        save_e2e_output("lifecycle_best_analyze", out_analyze, {
-            "stage": "analyze",
-            "input": "5 daily logs about deployment + stale 15-min fact in memory",
-        })
+        save_e2e_output(
+            "lifecycle_best_analyze",
+            out_analyze,
+            {
+                "stage": "analyze",
+                "input": "5 daily logs about deployment + stale 15-min fact in memory",
+            },
+        )
 
         analyze_path = llm_hive_env / ".last-analyze.json"
-        assert analyze_path.exists(), (
-            f"No .last-analyze.json created. Output:\n{out_analyze[:500]}"
-        )
+        assert analyze_path.exists(), f"No .last-analyze.json created. Output:\n{out_analyze[:500]}"
 
         data = json.loads(analyze_path.read_text())
         response = ReflectAnalyzeResponse.model_validate(data)
@@ -401,17 +438,19 @@ class TestLifecycleBestPath:
         cmd_reflect(["apply"])
         out_apply = capsys.readouterr().out
 
-        save_e2e_output("lifecycle_best_apply", out_apply, {
-            "stage": "apply",
-            "additions_count": len(response.additions),
-            "contradictions_count": len(response.contradictions),
-        })
+        save_e2e_output(
+            "lifecycle_best_apply",
+            out_apply,
+            {
+                "stage": "apply",
+                "additions_count": len(response.additions),
+                "contradictions_count": len(response.contradictions),
+            },
+        )
 
         final_memory = (llm_hive_env / "working" / "memory.md").read_text()
         assert final_memory != initial_memory, "Memory should have changed after apply"
-        assert today_str in final_memory, (
-            f"Expected today's date {today_str} in verified tags"
-        )
+        assert today_str in final_memory, f"Expected today's date {today_str} in verified tags"
         # Contradiction resolved: "15 minutes" gone or "8 minutes" now present
         assert "15 minutes" not in final_memory or "8 min" in final_memory.lower(), (
             "Contradiction should be resolved: '15 minutes' replaced or '8 min' present"
@@ -422,17 +461,19 @@ class TestLifecycleBestPath:
         cmd_reflect(["draft", "deployment"])
         out_draft = capsys.readouterr().out
 
-        save_e2e_output("lifecycle_best_draft", out_draft, {
-            "stage": "draft",
-            "topic": "deployment",
-        })
+        save_e2e_output(
+            "lifecycle_best_draft",
+            out_draft,
+            {
+                "stage": "draft",
+                "topic": "deployment",
+            },
+        )
 
         guide_path = llm_hive_env / "knowledge" / "guides" / "deployment.md"
         assert guide_path.exists(), f"Guide not created. Output:\n{out_draft[:500]}"
         guide_content = guide_path.read_text()
-        assert len(guide_content) > 100, (
-            f"Guide too short ({len(guide_content)} chars)"
-        )
+        assert len(guide_content) > 100, f"Guide too short ({len(guide_content)} chars)"
         assert "deploy" in guide_content.lower(), "Guide should mention deployment"
 
         # ---- Stage 4: Recall ----
@@ -441,10 +482,14 @@ class TestLifecycleBestPath:
         cmd_recall(["deployment"])
         out_recall = capsys.readouterr().out
 
-        save_e2e_output("lifecycle_best_recall", out_recall, {
-            "stage": "recall",
-            "query": "deployment",
-        })
+        save_e2e_output(
+            "lifecycle_best_recall",
+            out_recall,
+            {
+                "stage": "recall",
+                "query": "deployment",
+            },
+        )
 
         assert "result" in out_recall.lower(), (
             f"Expected recall results. Output:\n{out_recall[:500]}"
@@ -453,8 +498,7 @@ class TestLifecycleBestPath:
         out_lower = out_recall.lower()
         tiers_found = sum(1 for t in ["working", "knowledge", "daily"] if t in out_lower)
         assert tiers_found >= 2, (
-            f"Expected results from >= 2 tiers, found {tiers_found}. "
-            f"Output:\n{out_recall[:500]}"
+            f"Expected results from >= 2 tiers, found {tiers_found}. Output:\n{out_recall[:500]}"
         )
 
 
@@ -532,10 +576,14 @@ class TestLifecycleWorstPath:
         cmd_reflect(["analyze"])
         out_analyze = capsys.readouterr().out
 
-        save_e2e_output("lifecycle_worst_analyze", out_analyze, {
-            "stage": "analyze",
-            "input": "5 noisy daily logs with contradictions and duplicates",
-        })
+        save_e2e_output(
+            "lifecycle_worst_analyze",
+            out_analyze,
+            {
+                "stage": "analyze",
+                "input": "5 noisy daily logs with contradictions and duplicates",
+            },
+        )
 
         # Pipeline must survive noise
         analyze_path = llm_hive_env / ".last-analyze.json"
@@ -564,11 +612,15 @@ class TestLifecycleWorstPath:
         cmd_reflect(["apply"])
         out_apply = capsys.readouterr().out
 
-        save_e2e_output("lifecycle_worst_apply", out_apply, {
-            "stage": "apply",
-            "additions_count": len(response.additions),
-            "contradictions_count": len(response.contradictions),
-        })
+        save_e2e_output(
+            "lifecycle_worst_apply",
+            out_apply,
+            {
+                "stage": "apply",
+                "additions_count": len(response.additions),
+                "contradictions_count": len(response.contradictions),
+            },
+        )
 
         final_memory = (llm_hive_env / "working" / "memory.md").read_text()
 
@@ -585,18 +637,21 @@ class TestLifecycleWorstPath:
         has_summary = "Done:" in out_apply
         has_nothing = "no additions or contradictions" in out_apply.lower()
         assert has_summary or has_nothing, (
-            f"Apply should print summary or indicate nothing to review. "
-            f"Output:\n{out_apply[:300]}"
+            f"Apply should print summary or indicate nothing to review. Output:\n{out_apply[:300]}"
         )
 
         # ---- Stage 3: Draft ----
         cmd_reflect(["draft", "api-performance"])
         out_draft = capsys.readouterr().out
 
-        save_e2e_output("lifecycle_worst_draft", out_draft, {
-            "stage": "draft",
-            "topic": "api-performance",
-        })
+        save_e2e_output(
+            "lifecycle_worst_draft",
+            out_draft,
+            {
+                "stage": "draft",
+                "topic": "api-performance",
+            },
+        )
 
         guide_path = llm_hive_env / "knowledge" / "guides" / "api-performance.md"
         if guide_path.exists():
@@ -615,4 +670,3 @@ class TestLifecycleWorstPath:
             assert "No entries found" in out_draft, (
                 f"No guide created and no 'No entries found'. Output:\n{out_draft[:500]}"
             )
-

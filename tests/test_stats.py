@@ -8,24 +8,26 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
-import pytest
-
 
 def _run(args: list[str], hive_home: str | None = None) -> subprocess.CompletedProcess:
     """Run keephive as a subprocess."""
     env = {
         "HIVE_SKIP_LLM": "1",
-        "PATH": "/usr/bin:/usr/local/bin:/opt/homebrew/bin:" + (Path.home() / ".local/bin").as_posix(),
+        "PATH": "/usr/bin:/usr/local/bin:/opt/homebrew/bin:"
+        + (Path.home() / ".local/bin").as_posix(),
     }
     if hive_home:
         env["HIVE_HOME"] = hive_home
     return subprocess.run(
         [sys.executable, "-m", "keephive"] + args,
-        capture_output=True, text=True, env=env,
+        capture_output=True,
+        text=True,
+        env=env,
     )
 
 
 # ---- track_event ----
+
 
 class TestTrackEvent:
     def test_basic_increment(self, hive_env):
@@ -97,6 +99,7 @@ class TestTrackEvent:
 
 # ---- read_stats / stats_file ----
 
+
 class TestReadStats:
     def test_empty_stats(self, hive_env):
         from keephive.storage import read_stats
@@ -114,6 +117,7 @@ class TestReadStats:
 
 # ---- Aggregation helpers ----
 
+
 class TestAggregation:
     def _make_stats(self, hive_env):
         """Write multi-day stats for testing."""
@@ -130,8 +134,16 @@ class TestAggregation:
                     "hooks": {"sessionstart": 2, "posttooluse": 4},
                     "sources": {"terminal": 3, "mcp": 5},
                     "projects": {
-                        "~/proj/a": {"commands": 5, "sessions": 1, "by_command": {"status": 3, "recall": 2}},
-                        "~/proj/b": {"commands": 3, "sessions": 1, "by_command": {"status": 2, "recall": 1}},
+                        "~/proj/a": {
+                            "commands": 5,
+                            "sessions": 1,
+                            "by_command": {"status": 3, "recall": 2},
+                        },
+                        "~/proj/b": {
+                            "commands": 3,
+                            "sessions": 1,
+                            "by_command": {"status": 2, "recall": 1},
+                        },
                     },
                 },
                 yesterday: {
@@ -139,7 +151,11 @@ class TestAggregation:
                     "hooks": {"sessionstart": 1},
                     "sources": {"terminal": 2, "hook": 1, "mcp": 3},
                     "projects": {
-                        "~/proj/a": {"commands": 6, "sessions": 2, "by_command": {"status": 2, "remember": 4}},
+                        "~/proj/a": {
+                            "commands": 6,
+                            "sessions": 2,
+                            "by_command": {"status": 2, "remember": 4},
+                        },
                     },
                 },
                 two_days_ago: {
@@ -207,6 +223,7 @@ class TestAggregation:
 
 # ---- Streak calculation ----
 
+
 class TestStreaks:
     def test_empty_data(self):
         from keephive.commands.stats import _calculate_streak
@@ -266,6 +283,7 @@ class TestStreaks:
 
 # ---- Sparkline / bar ----
 
+
 class TestSparkline:
     def test_sparkline_length(self):
         from keephive.commands.stats import _sparkline
@@ -298,6 +316,7 @@ class TestSparkline:
 
 
 # ---- stats_text (MCP) ----
+
 
 class TestStatsText:
     def test_empty(self, hive_env):
@@ -343,6 +362,7 @@ class TestStatsText:
 
 # ---- CLI smoke tests ----
 
+
 class TestCLIStats:
     def test_stats_runs(self, hive_env):
         r = _run(["stats"], hive_home=str(hive_env))
@@ -376,6 +396,7 @@ class TestCLIStats:
 
 # ---- MCP tracking ----
 
+
 class TestMCPTracking:
     def test_track_mcp_helper(self, hive_env):
         from keephive.mcp_server import _track_mcp
@@ -390,13 +411,18 @@ class TestMCPTracking:
 
 # ---- Display function tests ----
 
+
 class TestDisplayFull:
     def test_prints_today_this_week_all_time(self, hive_env, capsys):
         from keephive.commands.stats import _display_full
         from keephive.storage import track_event
 
         track_event("commands", "status", source="terminal")
-        data = {"days": {date.today().isoformat(): {"commands": {"status": 1}, "sources": {"terminal": 1}}}}
+        data = {
+            "days": {
+                date.today().isoformat(): {"commands": {"status": 1}, "sources": {"terminal": 1}}
+            }
+        }
 
         _display_full(data)
         out = capsys.readouterr().out
@@ -444,7 +470,6 @@ class TestDisplayDay:
 class TestDisplayProject:
     def test_sparkline_shown_when_data_exists(self, hive_env, capsys):
         from keephive.commands.stats import _display_project
-        from keephive.storage import track_event
 
         today_str = date.today().isoformat()
         proj_key = "~/Documents/GitHub/keephive"
@@ -472,18 +497,22 @@ class TestDisplayProject:
 class TestRelativeDay:
     def test_today(self):
         from keephive.commands.stats import _relative_day
+
         assert _relative_day(date.today().isoformat()) == "today"
 
     def test_yesterday(self):
         from keephive.commands.stats import _relative_day
+
         yesterday = (date.today() - timedelta(days=1)).isoformat()
         assert _relative_day(yesterday) == "yesterday"
 
     def test_three_days_ago(self):
         from keephive.commands.stats import _relative_day
+
         three_ago = (date.today() - timedelta(days=3)).isoformat()
         assert _relative_day(three_ago) == "3d ago"
 
     def test_invalid_date_passthrough(self):
         from keephive.commands.stats import _relative_day
+
         assert _relative_day("not-a-date") == "not-a-date"

@@ -12,17 +12,19 @@ from rich.console import Console
 from rich.theme import Theme
 
 # Custom theme matching the bash version's color scheme
-_theme = Theme({
-    "ok": "green",
-    "warn": "yellow",
-    "err": "red",
-    "info": "cyan",
-    "dim": "dim",
-    "tier.working": "green",
-    "tier.knowledge": "blue",
-    "tier.daily": "cyan",
-    "tier.archive": "dim",
-})
+_theme = Theme(
+    {
+        "ok": "green",
+        "warn": "yellow",
+        "err": "red",
+        "info": "cyan",
+        "dim": "dim",
+        "tier.working": "green",
+        "tier.knowledge": "blue",
+        "tier.daily": "cyan",
+        "tier.archive": "dim",
+    }
+)
 
 # Respect NO_COLOR
 _no_color = "NO_COLOR" in os.environ

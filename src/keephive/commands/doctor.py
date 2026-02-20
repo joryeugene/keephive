@@ -12,8 +12,14 @@ from pathlib import Path
 
 from keephive.health import (
     check_anthropic_memory,
+)
+from keephive.health import (
     check_content_drift as _check_content_drift,
+)
+from keephive.health import (
     check_installed_deps as _check_installed_deps,
+)
+from keephive.health import (
     get_installed_version as _get_installed_version,
 )
 from keephive.output import console, prompt_yn
@@ -84,8 +90,12 @@ def cmd_doctor(args: list[str]) -> None:
     else:
         console.print("  [dim]No ANTHROPIC_API_KEY (using claude -p, terminal only)[/dim]")
         if os.environ.get("CLAUDECODE"):
-            console.print("  [warn]WARN[/warn] Inside Claude Code without API key: LLM features disabled")
-            console.print("  [dim]  Set ANTHROPIC_API_KEY for audit, verify, standup, reflect[/dim]")
+            console.print(
+                "  [warn]WARN[/warn] Inside Claude Code without API key: LLM features disabled"
+            )
+            console.print(
+                "  [dim]  Set ANTHROPIC_API_KEY for audit, verify, standup, reflect[/dim]"
+            )
 
     # 3.7. Anthropic Memory
     console.print()
@@ -93,7 +103,9 @@ def cmd_doctor(args: list[str]) -> None:
     anthropic_mem = check_anthropic_memory()
     if anthropic_mem == "active":
         console.print("  [warn]ACTIVE[/warn]  Both Anthropic memory and keephive are active.")
-        console.print("  [dim]  keephive = structured + auditable; Anthropic = opaque + session-aware[/dim]")
+        console.print(
+            "  [dim]  keephive = structured + auditable; Anthropic = opaque + session-aware[/dim]"
+        )
         console.print("  [dim]  They complement, not conflict. Use both.[/dim]")
     else:
         console.print("  [dim]Not detected (inactive or unknown)[/dim]")
@@ -131,6 +143,7 @@ def cmd_doctor(args: list[str]) -> None:
     console.print()
     console.print("[bold]MCP Server[/bold]")
     from keephive.health import check_mcp
+
     if check_mcp():
         console.print("  [ok]OK[/ok] MCP server registered")
     else:
@@ -139,6 +152,7 @@ def cmd_doctor(args: list[str]) -> None:
 
     installed_ver = _get_installed_version()
     from keephive import __version__ as dev_ver
+
     if installed_ver and installed_ver != dev_ver:
         console.print(f"  [err]STALE[/err] Installed v{installed_ver}, dev v{dev_ver}")
         console.print("  [dim]  Run: uv tool install --force --no-cache .[/dim]")
@@ -148,7 +162,9 @@ def cmd_doctor(args: list[str]) -> None:
 
     # Content drift: same version number but stale cached wheel
     if installed_ver and installed_ver == dev_ver and _check_content_drift():
-        console.print("  [warn]STALE[/warn] Version matches but installed code differs (cached wheel)")
+        console.print(
+            "  [warn]STALE[/warn] Version matches but installed code differs (cached wheel)"
+        )
         console.print("  [dim]  Run: uv tool install --force --no-cache .[/dim]")
         issues += 1
 
@@ -223,9 +239,12 @@ def _data_quality_checks() -> int:
     if df.exists():
         daily_lines = safe_read_text(df).splitlines()
         corrections = [
-            line for line in daily_lines
+            line
+            for line in daily_lines
             if "CORRECTION:" in line
-            and any(kw in line.lower() for kw in ("dead", "duplicate", "unused", "orphan", "remove"))
+            and any(
+                kw in line.lower() for kw in ("dead", "duplicate", "unused", "orphan", "remove")
+            )
         ]
         if corrections:
             console.print(f"  [info]{len(corrections)} hygiene correction(s) logged today[/info]")
@@ -261,10 +280,11 @@ def _detect_duplicates_llm(ot: list[tuple[str, str, str]]) -> int:
 
     # Also gather working memory entries for orphan detection
     from keephive.storage import memory_file as _mf
+
     mem = _mf()
     mem_text = mem.read_text() if mem.exists() else ""
 
-    numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(texts))
+    numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(texts))
 
     prompt = f"""Analyze these open TODOs for semantic duplicates and orphaned items.
 
@@ -298,7 +318,9 @@ def display_duplicate_results(response) -> int:
     issue_count = 0
 
     if response.duplicate_groups:
-        console.print(f"  [warn]WARN[/warn] {len(response.duplicate_groups)} duplicate group(s) found:")
+        console.print(
+            f"  [warn]WARN[/warn] {len(response.duplicate_groups)} duplicate group(s) found:"
+        )
         for group in response.duplicate_groups:
             for entry in group.entries:
                 console.print(f"    - {entry}")

@@ -20,13 +20,15 @@ def cmd_mem(args: list[str]) -> None:
         mem = memory_file()
         if mem.exists() and mem.read_text().strip():
             text = mem.read_text()
-            facts = [l for l in text.splitlines() if l.startswith("- ")]
+            facts = [line for line in text.splitlines() if line.startswith("- ")]
             console.print(f"[bold]Working Memory[/bold] ({len(facts)} facts)\n")
             console.print(text)
-            console.print("\n  -> hive mem \"fact\" to add  |  hive mem rm \"pattern\" to remove  |  hive e to edit")
+            console.print(
+                '\n  -> hive mem "fact" to add  |  hive mem rm "pattern" to remove  |  hive e to edit'
+            )
         else:
             console.print("[dim]No working memory yet[/dim]")
-            console.print("  -> hive mem \"your first fact\" to start")
+            console.print('  -> hive mem "your first fact" to start')
         return
 
     if args[0] == "rm":
@@ -60,13 +62,19 @@ def cmd_rule(args: list[str]) -> None:
         rf = rules_file()
         if rf.exists() and rf.read_text().strip():
             text = rf.read_text()
-            rules = [l for l in text.splitlines() if l.startswith("- ") or l.startswith("-> ")]
+            rules = [
+                line
+                for line in text.splitlines()
+                if line.startswith("- ") or line.startswith("-> ")
+            ]
             console.print(f"[bold]Working Rules[/bold] ({len(rules)} rules)\n")
             console.print(text)
-            console.print("\n  -> hive rule \"rule\" to add  |  hive rule rm \"pattern\" to remove  |  hive e rules to edit")
+            console.print(
+                '\n  -> hive rule "rule" to add  |  hive rule rm "pattern" to remove  |  hive e rules to edit'
+            )
         else:
             console.print("[dim]No working rules yet[/dim]")
-            console.print("  -> hive rule \"your first rule\" to start")
+            console.print('  -> hive rule "your first rule" to start')
         return
 
     if args[0] == "rm":
@@ -116,7 +124,7 @@ def _remove_line(path, pattern: str, filename: str) -> None:
             new_lines.append(line)
 
     if not found:
-        console.print(f"[warn]No line matching \"{pattern}\" found in {filename}[/warn]")
+        console.print(f'[warn]No line matching "{pattern}" found in {filename}[/warn]')
         return
 
     backup_and_write(path, "".join(new_lines))

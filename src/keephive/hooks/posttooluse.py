@@ -26,6 +26,7 @@ def hook_posttooluse(_args: list[str]) -> None:
     # Track usage
     try:
         from keephive.storage import track_event
+
         track_event("hooks", "posttooluse", source="hook")
     except Exception:
         pass
@@ -44,6 +45,8 @@ def hook_posttooluse(_args: list[str]) -> None:
 
             debug_log = hive_dir() / ".hook-debug.log"
             with open(debug_log, "a") as f:
-                f.write(f"[{datetime.now().isoformat(timespec='seconds')}] posttooluse error: {e}\n")
+                f.write(
+                    f"[{datetime.now().isoformat(timespec='seconds')}] posttooluse error: {e}\n"
+                )
         except Exception:
             pass

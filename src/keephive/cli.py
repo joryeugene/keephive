@@ -7,7 +7,6 @@ import sys
 
 from keephive import __version__
 
-
 # Per-command help strings, keyed by canonical command name.
 HELP: dict[str, str] = {
     "status": "Usage: hive s\n  Status overview (facts, TODOs, stale warnings)",
@@ -36,12 +35,34 @@ HELP: dict[str, str] = {
 
 # Map aliases to canonical names for help lookup
 _CANONICAL: dict[str, str] = {
-    "s": "status", "r": "remember", "rc": "recall", "v": "verify",
-    "rf": "reflect", "l": "log", "e": "edit", "n": "note", "d": "note",
-    "nc": "note", "dc": "note", "m": "mem", "td": "todo", "to": "todo", "t": "todo",
-    "su": "standup", "k": "knowledge", "ke": "knowledge", "p": "knowledge",
-    "pe": "knowledge", "sk": "skill", "a": "audit", "g": "gc", "dr": "doctor",
-    "st": "stats", "go": "session", "sesh": "session", "up": "update",
+    "s": "status",
+    "r": "remember",
+    "rc": "recall",
+    "v": "verify",
+    "rf": "reflect",
+    "l": "log",
+    "e": "edit",
+    "n": "note",
+    "d": "note",
+    "nc": "note",
+    "dc": "note",
+    "m": "mem",
+    "td": "todo",
+    "to": "todo",
+    "t": "todo",
+    "su": "standup",
+    "k": "knowledge",
+    "ke": "knowledge",
+    "p": "knowledge",
+    "pe": "knowledge",
+    "sk": "skill",
+    "a": "audit",
+    "g": "gc",
+    "dr": "doctor",
+    "st": "stats",
+    "go": "session",
+    "sesh": "session",
+    "up": "update",
     "draft": "note",
 }
 
@@ -192,11 +213,12 @@ def main(args: list[str] | None = None) -> None:
 
     if cmd == "mcp-serve":
         from keephive.mcp_server import main as mcp_main
+
         mcp_main()
         return
 
     # Dot notation for note slots: n.3, d.5, n.0, n.3c, d.5c
-    m = re.match(r'^[nd]\.(\d)(c?)$', cmd)
+    m = re.match(r"^[nd]\.(\d)(c?)$", cmd)
     if m:
         digit = int(m.group(1))
         copy_flag = m.group(2)
@@ -205,12 +227,15 @@ def main(args: list[str] | None = None) -> None:
         # Track usage
         try:
             import os
+
             from keephive.storage import _detect_source, track_event
+
             track_event("commands", f"note.{digit}", project=os.getcwd(), source=_detect_source())
         except Exception:
             pass
 
         import importlib
+
         mod = importlib.import_module("keephive.commands.note")
         if copy_flag:
             mod.cmd_note_slot(slot, ["copy"])
@@ -238,13 +263,16 @@ def main(args: list[str] | None = None) -> None:
     if not cmd.startswith("hook-"):
         try:
             import os
+
             from keephive.storage import _detect_source, track_event
+
             track_event("commands", cmd, project=os.getcwd(), source=_detect_source())
         except Exception:
             pass
 
     # Lazy import
     import importlib
+
     mod = importlib.import_module(module_path)
     handler = getattr(mod, func_name)
     handler(args[1:])

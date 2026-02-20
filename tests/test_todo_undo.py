@@ -5,8 +5,6 @@ from __future__ import annotations
 from datetime import date, datetime
 from pathlib import Path
 
-import pytest
-
 
 class TestUndoDone:
     def _make_daily(self, hive_env: Path, entries: list[str]) -> Path:
@@ -20,10 +18,14 @@ class TestUndoDone:
     def test_undo_done_removes_last_done_entry(self, hive_env):
         """undo_done removes the most recent DONE line from the daily file."""
         from keephive.storage import undo_done
-        self._make_daily(hive_env, [
-            "- [10:00:00] TODO: Fix tests",
-            "- [10:01:00] DONE: Fix tests",
-        ])
+
+        self._make_daily(
+            hive_env,
+            [
+                "- [10:00:00] TODO: Fix tests",
+                "- [10:01:00] DONE: Fix tests",
+            ],
+        )
         today = date.today().isoformat()
         daily = hive_env / "daily" / f"{today}.md"
         undo_done("Fix tests")
@@ -33,19 +35,27 @@ class TestUndoDone:
     def test_undo_done_returns_text(self, hive_env):
         """undo_done returns the text of the removed entry."""
         from keephive.storage import undo_done
-        self._make_daily(hive_env, [
-            "- [10:01:00] DONE: Fix tests",
-        ])
+
+        self._make_daily(
+            hive_env,
+            [
+                "- [10:01:00] DONE: Fix tests",
+            ],
+        )
         result = undo_done("Fix tests")
         assert result == "Fix tests"
 
     def test_undo_done_with_pattern(self, hive_env):
         """undo_done matches by substring pattern."""
         from keephive.storage import undo_done
-        self._make_daily(hive_env, [
-            "- [10:00:00] DONE: Run the full test suite",
-            "- [10:01:00] DONE: Update documentation",
-        ])
+
+        self._make_daily(
+            hive_env,
+            [
+                "- [10:00:00] DONE: Run the full test suite",
+                "- [10:01:00] DONE: Update documentation",
+            ],
+        )
         result = undo_done("documentation")
         assert result == "Update documentation"
         today = date.today().isoformat()
@@ -58,23 +68,26 @@ class TestUndoDone:
     def test_undo_done_no_match_returns_none(self, hive_env):
         """undo_done returns None when pattern has no match."""
         from keephive.storage import undo_done
-        self._make_daily(hive_env, [
-            "- [10:00:00] DONE: Fix tests",
-        ])
+
+        self._make_daily(
+            hive_env,
+            [
+                "- [10:00:00] DONE: Fix tests",
+            ],
+        )
         result = undo_done("zzznomatch")
         assert result is None
 
     def test_undo_done_no_pattern_only_searches_today(self, hive_env):
         """Without pattern, undo_done only searches today's file."""
-        from keephive.storage import undo_done
         from datetime import timedelta
+
+        from keephive.storage import undo_done
+
         # Write a DONE entry to yesterday's file only
         yesterday = (date.today() - timedelta(days=1)).isoformat()
         yesterday_file = hive_env / "daily" / f"{yesterday}.md"
-        yesterday_file.write_text(
-            f"# Daily Log: {yesterday}\n"
-            "- [10:00:00] DONE: Yesterday task\n"
-        )
+        yesterday_file.write_text(f"# Daily Log: {yesterday}\n- [10:00:00] DONE: Yesterday task\n")
         # Today has no DONE entries
         self._make_daily(hive_env, ["- [09:00:00] TODO: Today task"])
         result = undo_done("")
@@ -82,19 +95,23 @@ class TestUndoDone:
 
     def test_undo_done_no_daily_dir_returns_none(self, tmp_path, monkeypatch):
         """undo_done returns None when daily dir doesn't exist."""
-        import os
         monkeypatch.setenv("HIVE_HOME", str(tmp_path / "empty_hive"))
         from keephive.storage import undo_done
+
         result = undo_done("anything")
         assert result is None
 
     def test_undo_done_removes_last_matching_entry(self, hive_env):
         """With multiple matching DONE entries, undo_done removes the last one."""
         from keephive.storage import undo_done
-        self._make_daily(hive_env, [
-            "- [09:00:00] DONE: Check logs",
-            "- [10:00:00] DONE: Check logs",
-        ])
+
+        self._make_daily(
+            hive_env,
+            [
+                "- [09:00:00] DONE: Check logs",
+                "- [10:00:00] DONE: Check logs",
+            ],
+        )
         result = undo_done("Check logs")
         assert result == "Check logs"
         today = date.today().isoformat()
@@ -136,6 +153,7 @@ class TestTodoUndoCommand:
     def test_todo_undo_no_match_shows_warning(self, hive_env, capsys):
         """When no matching DONE, _todo_undo prints a warning."""
         from keephive.commands.todo import _todo_undo
+
         _todo_undo("zzznomatch")
         captured = capsys.readouterr()
         assert "No completed TODO matching" in captured.out
@@ -143,6 +161,7 @@ class TestTodoUndoCommand:
     def test_todo_undo_no_pattern_warns_when_empty(self, hive_env, capsys):
         """When no pattern and no DONE entries, shows 'no completed TODO' message."""
         from keephive.commands.todo import _todo_undo
+
         _todo_undo("")
         captured = capsys.readouterr()
         assert "No completed TODO to undo" in captured.out

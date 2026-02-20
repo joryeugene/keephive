@@ -21,7 +21,7 @@ def make_daily(hive_env: Path, days_ago: int = 0, entries: list[str] | None = No
     d = date.today() - timedelta(days=days_ago)
     daily = hive_env / "daily" / f"{d.isoformat()}.md"
     lines = [f"# Daily Log: {d.isoformat()}\n"]
-    for e in (entries or []):
+    for e in entries or []:
         lines.append(e)
     daily.write_text("\n".join(lines) + "\n")
     return daily
@@ -58,9 +58,7 @@ def hive_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     )
 
     (hive_dir / "working" / "rules.md").write_text(
-        "# Working Rules\n\n"
-        "## When You Learn Something New\n"
-        '-> hive r "FACT: what you learned"\n'
+        '# Working Rules\n\n## When You Learn Something New\n-> hive r "FACT: what you learned"\n'
     )
 
     return hive_dir
@@ -70,6 +68,7 @@ def hive_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 def daily_with_entries(hive_env: Path):
     """Add a daily log with entries to the test environment."""
     from datetime import date
+
     today = date.today().isoformat()
     daily = hive_env / "daily" / f"{today}.md"
     daily.write_text(
@@ -127,6 +126,7 @@ def llm_hive_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 @pytest.fixture
 def save_e2e_output():
     """Returns a callable that saves LLM output for later analysis."""
+
     def _save(command: str, output: str, metadata: dict | None = None):
         cmd_dir = E2E_OUTPUT_DIR / command
         cmd_dir.mkdir(parents=True, exist_ok=True)
@@ -138,4 +138,5 @@ def save_e2e_output():
             "metadata": metadata or {},
         }
         (cmd_dir / f"{ts}.json").write_text(json.dumps(record, indent=2))
+
     return _save

@@ -96,10 +96,7 @@ def _reflect_scan(args: list[str]) -> None:
         console.print()
 
     # Session summaries count
-    summary_count = sum(
-        f.read_text().count("### Session Summary")
-        for f in files
-    )
+    summary_count = sum(f.read_text().count("### Session Summary") for f in files)
     if summary_count > 0:
         console.print(f"  [bold]Auto-captured:[/bold] {summary_count} session summaries")
         console.print()
@@ -162,7 +159,8 @@ Rules:
     try:
         with console.status("  Analyzing with claude...", spinner="dots"):
             response = run_claude_pipe(
-                prompt, ReflectAnalyzeResponse,
+                prompt,
+                ReflectAnalyzeResponse,
                 stdin_text=all_entries,
                 tools=["Read"],
                 max_turns=3,
@@ -207,7 +205,12 @@ Rules:
             console.print(f"  [info]-> {action}[/info]")
         console.print()
 
-    if not response.patterns and not response.additions and not response.contradictions and not response.actions:
+    if (
+        not response.patterns
+        and not response.additions
+        and not response.contradictions
+        and not response.actions
+    ):
         console.print("No significant patterns found in recent logs.")
         console.print()
 
@@ -221,7 +224,7 @@ Rules:
         console.print(f"[dim]-> hive rf draft {safe}    Draft {p.topic} guide from logs[/dim]")
 
     if response.additions or response.contradictions:
-        console.print(f"[dim]-> hive rf apply    Review and graduate to working memory[/dim]")
+        console.print("[dim]-> hive rf apply    Review and graduate to working memory[/dim]")
 
 
 def _analyze_post_pass(response: ReflectAnalyzeResponse, current_memory: str) -> None:
@@ -241,8 +244,8 @@ def _analyze_post_pass(response: ReflectAnalyzeResponse, current_memory: str) ->
     if not_in_memory:
         console.print("[bold]## Not Yet in Working Memory[/bold]")
         for a in not_in_memory:
-            console.print(f"  \"{a.fact}\" (from {a.source})")
-        console.print(f"  -> [dim]hive rf apply[/dim] to review")
+            console.print(f'  "{a.fact}" (from {a.source})')
+        console.print("  -> [dim]hive rf apply[/dim] to review")
         console.print()
 
 
@@ -300,7 +303,9 @@ def _reflect_apply(args: list[str]) -> None:
     analysis_date = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
     console.print(f"  Reviewing {', '.join(parts)} (from {analysis_date} analysis)")
     if age_hours > 24 and not auto:
-        console.print(f"  [warn]Analysis is {age_hours:.0f}h old. Consider re-running: hive rf analyze[/warn]")
+        console.print(
+            f"  [warn]Analysis is {age_hours:.0f}h old. Consider re-running: hive rf analyze[/warn]"
+        )
     if auto:
         console.print("  [info]Auto mode: accepting all items[/info]")
     console.print()
@@ -322,9 +327,9 @@ def _reflect_apply(args: list[str]) -> None:
     if response.additions:
         for a in response.additions:
             item_num += 1
-            console.print(f"  [{item_num}/{total_items}] + \"{a.fact}\"")
+            console.print(f'  [{item_num}/{total_items}] + "{a.fact}"')
             console.print(f"         from: {a.source}")
-            console.print(f"         to:   working/memory.md")
+            console.print("         to:   working/memory.md")
 
             if auto:
                 choice = "y"
@@ -360,9 +365,9 @@ def _reflect_apply(args: list[str]) -> None:
     if response.contradictions:
         for c in response.contradictions:
             item_num += 1
-            console.print(f"  [{item_num}/{total_items}] ! Memory says: \"{c.memory}\"")
-            console.print(f"         Log says ({c.date}): \"{c.log}\"")
-            console.print(f"         Action: update memory.md line")
+            console.print(f'  [{item_num}/{total_items}] ! Memory says: "{c.memory}"')
+            console.print(f'         Log says ({c.date}): "{c.log}"')
+            console.print("         Action: update memory.md line")
 
             if auto:
                 choice = "u"
@@ -374,7 +379,9 @@ def _reflect_apply(args: list[str]) -> None:
                     console.print("         [ok]Updated in memory.md[/ok]")
                     ensure_daily()
                     ts = datetime.now().strftime("%H:%M:%S")
-                    append_to_daily(f"- [{ts}] AUTO-PROMOTED: [reflect] Corrected: {c.memory} -> {c.log}")
+                    append_to_daily(
+                        f"- [{ts}] AUTO-PROMOTED: [reflect] Corrected: {c.memory} -> {c.log}"
+                    )
                 else:
                     console.print("         [ok]Updated in memory.md[/ok]")
                 updated += 1
@@ -387,7 +394,9 @@ def _reflect_apply(args: list[str]) -> None:
     if added > 0 or updated > 0:
         backup_and_write(mem_path, mem_content)
 
-    console.print(f"  Done: {added} added, {updated} updated, {skipped} skipped. View: [dim]hive m[/dim]")
+    console.print(
+        f"  Done: {added} added, {updated} updated, {skipped} skipped. View: [dim]hive m[/dim]"
+    )
 
 
 def _append_to_memory(mem_content: str, line: str) -> str:
@@ -397,9 +406,7 @@ def _append_to_memory(mem_content: str, line: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _update_contradiction(
-    mem_content: str, old_text: str, new_text: str, today_str: str
-) -> str:
+def _update_contradiction(mem_content: str, old_text: str, new_text: str, today_str: str) -> str:
     """Find and replace a contradicted fact in memory.
 
     Looks for a line containing the old text and replaces it with the
@@ -439,7 +446,7 @@ def _reflect_draft(args: list[str]) -> None:
         console.print("[warn]No daily logs found[/warn]")
         return
 
-    console.print(f"  Gathering \"{topic}\" from daily logs...")
+    console.print(f'  Gathering "{topic}" from daily logs...')
 
     entries: list[tuple[str, str]] = []  # (date, context_block)
     topic_lower = topic.lower().replace("-", " ")
@@ -457,7 +464,7 @@ def _reflect_draft(args: list[str]) -> None:
                 entries.append((f.stem, context))
 
     if not entries:
-        console.print(f"[warn]No entries found matching \"{topic}\"[/warn]")
+        console.print(f'[warn]No entries found matching "{topic}"[/warn]')
         console.print(f"  -> [dim]hive rc {topic}[/dim] to search all tiers")
         return
 
@@ -499,7 +506,8 @@ Do not invent or extrapolate beyond what the entries say."""
     try:
         with console.status("  Drafting with claude...", spinner="dots"):
             response = run_claude_pipe(
-                prompt, GuideDraftResponse,
+                prompt,
+                GuideDraftResponse,
                 stdin_text=entry_text,
             )
     except ClaudePipeError as e:

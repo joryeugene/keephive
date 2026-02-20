@@ -43,11 +43,14 @@ def hook_precompact(args: list[str]) -> None:
     cwd = input_data.get("cwd", "")
     debug_log = hive_dir() / ".hook-debug.log"
     with open(debug_log, "a") as f:
-        f.write(f"[{datetime.now().isoformat(timespec='seconds')}] hook-precompact called (trigger={trigger})\n")
+        f.write(
+            f"[{datetime.now().isoformat(timespec='seconds')}] hook-precompact called (trigger={trigger})\n"
+        )
 
     # Track usage
     try:
         from keephive.storage import track_event
+
         track_event("hooks", "precompact", project=cwd, source="hook")
     except Exception:
         pass
@@ -274,13 +277,15 @@ def _is_duplicate_insight(daily_path: Path, text: str) -> bool:
 
 
 # Category descriptions from the LLM prompt that get parroted back verbatim.
-_PARROTED_DESCRIPTIONS = frozenset({
-    "unfinished work or follow-up items",
-    "choices made about architecture, tools, approach",
-    "something learned that was previously unknown",
-    "something that was wrong and got fixed",
-    "non-obvious observations or patterns",
-})
+_PARROTED_DESCRIPTIONS = frozenset(
+    {
+        "unfinished work or follow-up items",
+        "choices made about architecture, tools, approach",
+        "something learned that was previously unknown",
+        "something that was wrong and got fixed",
+        "non-obvious observations or patterns",
+    }
+)
 
 _MIN_INSIGHT_LENGTH = 15
 
@@ -298,7 +303,7 @@ def _is_garbage_insight(text: str) -> bool:
 def _llm_summary(excerpts: str, pipe_fn=None) -> None:
     """Layer 2: LLM summary via claude -p."""
     try:
-        from keephive.claude import ClaudePipeError, run_claude_pipe
+        from keephive.claude import run_claude_pipe
         from keephive.models import PreCompactResponse
 
         fn = pipe_fn or run_claude_pipe
@@ -400,9 +405,7 @@ def _apply_memory_updates(updates: list) -> None:
             if new_content != content:
                 content = new_content
                 ts = datetime.now().strftime("%H:%M:%S")
-                append_to_daily(
-                    f"- [{ts}] AUTO-CORRECTED: \"{update.replaces}\" -> \"{update.text}\""
-                )
+                append_to_daily(f'- [{ts}] AUTO-CORRECTED: "{update.replaces}" -> "{update.text}"')
                 applied += 1
 
         elif update.action == MemoryAction.ADD:

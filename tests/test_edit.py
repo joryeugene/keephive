@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import patch, call
-
-import pytest
+from unittest.mock import patch
 
 
 class TestCmdEdit:
@@ -13,6 +10,7 @@ class TestCmdEdit:
         """No args shows available targets instead of opening editor."""
         with patch("subprocess.run") as mock_run:
             from keephive.commands.edit import cmd_edit
+
             cmd_edit([])
             mock_run.assert_not_called()
         out = capsys.readouterr().out
@@ -23,6 +21,7 @@ class TestCmdEdit:
     def test_memory_shortcut(self, hive_env):
         with patch("subprocess.run") as mock_run:
             from keephive.commands.edit import cmd_edit
+
             cmd_edit(["memory"])
             args = mock_run.call_args[0][0]
             assert args[1].endswith("memory.md")
@@ -30,6 +29,7 @@ class TestCmdEdit:
     def test_rules_shortcut(self, hive_env):
         with patch("subprocess.run") as mock_run:
             from keephive.commands.edit import cmd_edit
+
             cmd_edit(["rules"])
             args = mock_run.call_args[0][0]
             assert args[1].endswith("rules.md")
@@ -38,6 +38,7 @@ class TestCmdEdit:
         """'note' opens active slot file."""
         with patch("subprocess.run") as mock_run:
             from keephive.commands.edit import cmd_edit
+
             cmd_edit(["note"])
             args = mock_run.call_args[0][0]
             assert "note-" in args[1]
@@ -46,6 +47,7 @@ class TestCmdEdit:
         """'draft' opens active slot file (backward compat)."""
         with patch("subprocess.run") as mock_run:
             from keephive.commands.edit import cmd_edit
+
             cmd_edit(["draft"])
             args = mock_run.call_args[0][0]
             assert "note-" in args[1]
@@ -54,6 +56,7 @@ class TestCmdEdit:
         """'today' opens daily log."""
         with patch("subprocess.run") as mock_run:
             from keephive.commands.edit import cmd_edit
+
             cmd_edit(["today"])
             args = mock_run.call_args[0][0]
             assert "daily" in args[1]
@@ -65,6 +68,7 @@ class TestCmdEdit:
 
         with patch("subprocess.run") as mock_run:
             from keephive.commands.edit import cmd_edit
+
             cmd_edit(["my-guide.md"])
             args = mock_run.call_args[0][0]
             assert "my-guide.md" in args[1]
@@ -73,6 +77,7 @@ class TestCmdEdit:
         """'todo' target delegates to edit_todos()."""
         with patch("keephive.commands.todo.edit_todos") as mock_edit:
             from keephive.commands.edit import cmd_edit
+
             cmd_edit(["todo"])
             mock_edit.assert_called_once()
 
@@ -80,6 +85,7 @@ class TestCmdEdit:
         """Help output lists 'todo' as an edit target."""
         with patch("subprocess.run"):
             from keephive.commands.edit import cmd_edit
+
             cmd_edit([])
         out = capsys.readouterr().out
         assert "todo" in out
@@ -88,5 +94,6 @@ class TestCmdEdit:
         """Unknown target shows error message."""
         with patch("subprocess.run") as mock_run:
             from keephive.commands.edit import cmd_edit
+
             cmd_edit(["nonexistent-xyz-abc"])
             mock_run.assert_not_called()

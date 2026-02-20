@@ -30,7 +30,9 @@ def _run_gh(args: list[str], timeout: int = 10) -> list[dict]:
     try:
         r = subprocess.run(
             ["gh", *args],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
         if r.returncode == 0 and r.stdout.strip():
             return json.loads(r.stdout)
@@ -48,27 +50,56 @@ def _gather_pr_data() -> dict:
     cutoff_str = cutoff.isoformat()
 
     def fetch_open():
-        return _run_gh([
-            "pr", "list", "--author", "@me", "--state", "open",
-            "--limit", "20",
-            "--json", "number,title,isDraft,url,updatedAt,headRefName,createdAt",
-        ])
+        return _run_gh(
+            [
+                "pr",
+                "list",
+                "--author",
+                "@me",
+                "--state",
+                "open",
+                "--limit",
+                "20",
+                "--json",
+                "number,title,isDraft,url,updatedAt,headRefName,createdAt",
+            ]
+        )
 
     def fetch_merged():
-        return _run_gh([
-            "pr", "list", "--author", "@me", "--state", "merged",
-            "--search", f"merged:>={cutoff_str}",
-            "--limit", "20",
-            "--json", "number,title,url,mergedAt",
-        ])
+        return _run_gh(
+            [
+                "pr",
+                "list",
+                "--author",
+                "@me",
+                "--state",
+                "merged",
+                "--search",
+                f"merged:>={cutoff_str}",
+                "--limit",
+                "20",
+                "--json",
+                "number,title,url,mergedAt",
+            ]
+        )
 
     def fetch_closed():
-        return _run_gh([
-            "pr", "list", "--author", "@me", "--state", "closed",
-            "--search", f"closed:>={cutoff_str}",
-            "--limit", "20",
-            "--json", "number,title,url,closedAt",
-        ])
+        return _run_gh(
+            [
+                "pr",
+                "list",
+                "--author",
+                "@me",
+                "--state",
+                "closed",
+                "--search",
+                f"closed:>={cutoff_str}",
+                "--limit",
+                "20",
+                "--json",
+                "number,title,url,closedAt",
+            ]
+        )
 
     with ThreadPoolExecutor(max_workers=3) as pool:
         f_open = pool.submit(fetch_open)
@@ -125,7 +156,9 @@ def _gather_raw_data() -> dict:
     # Key insights from daily log
     entries = get_meaningful_entries(limit=10)
     insight_keywords = ("DECISION:", "INSIGHT:", "FACT:", "CORRECTION:")
-    insights = [e.strip().lstrip("~ ").strip() for e in entries if any(k in e for k in insight_keywords)]
+    insights = [
+        e.strip().lstrip("~ ").strip() for e in entries if any(k in e for k in insight_keywords)
+    ]
 
     # PR data (parallel gh calls)
     pr_data = _gather_pr_data()
@@ -213,9 +246,7 @@ def _display_deterministic(data: dict) -> str:
     return format_standup_slack_text(yesterday_slack, today_slack, [])
 
 
-def format_standup_slack_text(
-    yesterday: list[str], today: list[str], blockers: list[str]
-) -> str:
+def format_standup_slack_text(yesterday: list[str], today: list[str], blockers: list[str]) -> str:
     """Build Slack-formatted standup text from line lists."""
     parts: list[str] = []
 
@@ -248,23 +279,38 @@ def _display_llm(data: dict) -> str:
     from keephive.models import StandupResponse
 
     # Build context for the LLM
-    done_text = "\n".join(f"- [{d}] {text}" for d, text in data["recent_done"]) or "(no completed items in logs)"
-    todo_text = "\n".join(f"- [{d} {ts}] {text}" for d, ts, text in data["open_todos"]) or "(no open TODOs found)"
+    done_text = (
+        "\n".join(f"- [{d}] {text}" for d, text in data["recent_done"])
+        or "(no completed items in logs)"
+    )
+    todo_text = (
+        "\n".join(f"- [{d} {ts}] {text}" for d, ts, text in data["open_todos"])
+        or "(no open TODOs found)"
+    )
 
-    merged_text = "\n".join(
-        f"- #{pr['number']} {pr['title']} {pr['url']}"
-        for pr in data.get("merged_prs", [])
-    ) or "(no merged PRs)"
+    merged_text = (
+        "\n".join(
+            f"- #{pr['number']} {pr['title']} {pr['url']}" for pr in data.get("merged_prs", [])
+        )
+        or "(no merged PRs)"
+    )
 
-    closed_text = "\n".join(
-        f"- #{pr['number']} {pr['title']} {pr['url']}"
-        for pr in data.get("closed_prs", [])
-    ) or "(no closed PRs)"
+    closed_text = (
+        "\n".join(
+            f"- #{pr['number']} {pr['title']} {pr['url']}" for pr in data.get("closed_prs", [])
+        )
+        or "(no closed PRs)"
+    )
 
-    open_pr_text = "\n".join(
-        f"- #{pr['number']} {pr['title']}" + (" (draft)" if pr.get("isDraft") else "") + f" {pr['url']}"
-        for pr in data.get("open_prs", [])
-    ) or "(no open PRs)"
+    open_pr_text = (
+        "\n".join(
+            f"- #{pr['number']} {pr['title']}"
+            + (" (draft)" if pr.get("isDraft") else "")
+            + f" {pr['url']}"
+            for pr in data.get("open_prs", [])
+        )
+        or "(no open PRs)"
+    )
 
     insight_text = "\n".join(f"- {e}" for e in data["insights"]) or "(no insights recorded)"
 
@@ -287,8 +333,8 @@ def _display_llm(data: dict) -> str:
 Output format: three sections (yesterday, today, blockers). Each item is a single line.
 
 Rules:
-- yesterday: work completed since {cutoff.isoformat()}. Use action verbs (Merged, Completed, Shipped, Closed, Fixed). Every PR reference MUST include #{'{number}'} and the URL from the data.
-- today: planned work from open PRs, drafts, and TODOs. For non-draft open PRs: "Get #{'{number}'} reviewed and merged". For drafts: "Continue {{title}} #{'{number}'}". Include open TODOs with action verbs.
+- yesterday: work completed since {cutoff.isoformat()}. Use action verbs (Merged, Completed, Shipped, Closed, Fixed). Every PR reference MUST include #{"{number}"} and the URL from the data.
+- today: planned work from open PRs, drafts, and TODOs. For non-draft open PRs: "Get #{"{number}"} reviewed and merged". For drafts: "Continue {{title}} #{"{number}"}". Include open TODOs with action verbs.
 - blockers: ONLY real blockers. If nothing qualifies, return empty list.
 
 CRITICAL: Every item you output must trace to a specific entry in the data. Do NOT synthesize, infer, or invent work items. If a section has no data, return an empty list.
@@ -312,14 +358,16 @@ CRITICAL: Every item you output must trace to a specific entry in the data. Do N
 {insight_text}
 
 === DAILY LOG (last 2 days) ===
-{data['daily_text'][:3000]}"""
+{data["daily_text"][:3000]}"""
 
     try:
         with console.status("  Generating standup...", spinner="dots"):
             response = run_claude_pipe(prompt, StandupResponse, model="haiku")
     except ClaudePipeError as e:
         console.print(f"[err]LLM failed: {e}[/err]")
-        console.print("[dim]Falling back to raw data. Check: claude -p availability, CLAUDECODE env var[/dim]")
+        console.print(
+            "[dim]Falling back to raw data. Check: claude -p availability, CLAUDECODE env var[/dim]"
+        )
         console.print()
         return _display_deterministic(data)
 
@@ -381,6 +429,7 @@ def cmd_standup(args: list[str]) -> None:
         standup_text = _display_llm(data)
 
     import sys
+
     if sys.stdout.isatty():
         if copy_to_clipboard(standup_text):
             console.print("[dim]Copied to clipboard[/dim]")
