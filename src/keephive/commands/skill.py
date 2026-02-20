@@ -162,10 +162,17 @@ def _skill_find(args: list[str]) -> None:
 
 
 def _skill_view(name: str) -> None:
+    import sys
+
     gd = guides_dir()
     fpath = gd / f"{name}.md"
     if fpath.exists():
-        print(fpath.read_text())
+        text = fpath.read_text()
+        print(text)
+        if sys.stdout.isatty():
+            from keephive.output import copy_to_clipboard
+            if copy_to_clipboard(text):
+                console.print("[dim]Copied to clipboard[/dim]")
     else:
         console.print(f"[err]Skill not found:[/err] {name}")
 

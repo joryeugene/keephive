@@ -59,6 +59,26 @@ def prompt_choice(prompt: str, valid: list[str]) -> str:
     return ch if ch in valid else valid[-1]
 
 
+def copy_to_clipboard(text: str) -> bool:
+    """Copy text to system clipboard. Returns True on success."""
+    import shutil
+    import subprocess
+
+    encoded = text.encode()
+    for prog, extra_args in [
+        ("pbcopy", []),
+        ("xclip", ["-selection", "clipboard"]),
+        ("xsel", ["--clipboard", "--input"]),
+    ]:
+        if shutil.which(prog):
+            try:
+                subprocess.run([prog, *extra_args], input=encoded, check=True, timeout=5)
+                return True
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                return False
+    return False
+
+
 def prompt_yn(prompt: str, default_yes: bool = True) -> bool:
     """Y/n confirmation. Returns True for yes. Enter accepts the default."""
     import sys

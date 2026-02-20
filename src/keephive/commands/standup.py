@@ -9,7 +9,7 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
-from keephive.output import console, prompt_yn
+from keephive.output import console, copy_to_clipboard, prompt_yn
 from keephive.storage import collect_todos, daily_dir, get_meaningful_entries, safe_read_text, today
 
 
@@ -357,17 +357,6 @@ def format_standup_slack(response) -> str:
     return format_standup_slack_text(yesterday, today_items, response.blockers)
 
 
-def _copy_to_clipboard(text: str) -> None:
-    """Copy text to clipboard. Tries pbcopy (macOS), xclip, xsel (Linux)."""
-    for cmd in (["pbcopy"], ["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]):
-        try:
-            subprocess.run(cmd, input=text, text=True, capture_output=True, timeout=5)
-            console.print("[dim]Copied to clipboard[/dim]")
-            return
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
-
-
 def cmd_standup(args: list[str]) -> None:
     console.print(f"[bold]Standup for {today()}[/bold]")
     console.print()
@@ -391,5 +380,9 @@ def cmd_standup(args: list[str]) -> None:
     else:
         standup_text = _display_llm(data)
 
-    # Copy to clipboard (cross-platform)
-    _copy_to_clipboard(standup_text)
+    import sys
+    if sys.stdout.isatty():
+        if copy_to_clipboard(standup_text):
+            console.print("[dim]Copied to clipboard[/dim]")
+    else:
+        print(standup_text)

@@ -165,12 +165,19 @@ def _knowledge_list() -> None:
 
 def _knowledge_view(name: str) -> None:
     """View a guide by name with fuzzy matching."""
+    import sys
+
     gd = guides_dir()
     pd = prompts_dir()
 
     match = _resolve_file(name, gd, pd)
     if match:
-        print(match.read_text())
+        text = match.read_text()
+        print(text)
+        if sys.stdout.isatty():
+            from keephive.output import copy_to_clipboard
+            if copy_to_clipboard(text):
+                console.print("[dim]Copied to clipboard[/dim]")
         return
 
     # Check for ambiguous matches

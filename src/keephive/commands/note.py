@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 import os
 from pathlib import Path
 
-from keephive.output import console, prompt_yn
+from keephive.output import console, copy_to_clipboard, prompt_yn
 from keephive.storage import (
     active_slot,
     drafts_dir,
@@ -128,7 +129,7 @@ def _note_edit(slot: int | None = None) -> None:
     lines = sum(1 for l in after.splitlines() if l.strip())
     slot_num = slot or active_slot()
     if after != before and after.strip():
-        if _copy_to_clipboard(after):
+        if copy_to_clipboard(after):
             console.print(f"[ok]Note [bold]\\[{slot_num}][/bold] saved[/ok] ({lines}L) and copied to clipboard")
         else:
             console.print(f"[ok]Note [bold]\\[{slot_num}][/bold] saved[/ok] ({lines}L)")
@@ -168,34 +169,12 @@ def _note_from_template(name: str) -> None:
     lines = sum(1 for l in after.splitlines() if l.strip())
     slot_num = active_slot()
     if after.strip():
-        if _copy_to_clipboard(after):
+        if copy_to_clipboard(after):
             console.print(f"[ok]Note [bold]\\[{slot_num}][/bold] saved[/ok] ({lines}L) and copied to clipboard")
         else:
             console.print(f"[ok]Note [bold]\\[{slot_num}][/bold] saved[/ok] ({lines}L)")
 
     _print_slot_bar()
-
-
-def _copy_to_clipboard(text: str) -> bool:
-    """Copy text to system clipboard. Returns True on success."""
-    if shutil.which("pbcopy"):
-        try:
-            subprocess.run(["pbcopy"], input=text.encode(), check=True, timeout=5)
-            return True
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-            return False
-
-    if shutil.which("xclip"):
-        try:
-            subprocess.run(
-                ["xclip", "-selection", "clipboard"],
-                input=text.encode(), check=True, timeout=5,
-            )
-            return True
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-            return False
-
-    return False
 
 
 def _note_copy(slot: int | None = None) -> None:
@@ -207,7 +186,7 @@ def _note_copy(slot: int | None = None) -> None:
 
     text = path.read_text()
     slot_num = slot or active_slot()
-    if _copy_to_clipboard(text):
+    if copy_to_clipboard(text):
         lines = sum(1 for l in text.splitlines() if l.strip())
         console.print(f"[ok]Copied[/ok] note \\[{slot_num}] to clipboard ({lines}L)")
     else:
@@ -227,6 +206,9 @@ def _note_show(slot: int | None = None) -> None:
     slot_num = slot or active_slot()
     console.print(f"[bold]Note \\[{slot_num}][/bold] ({lines}L, {size}B)\n")
     print(text)
+    if sys.stdout.isatty():
+        if copy_to_clipboard(text):
+            console.print(f"[dim]Copied note [{slot_num}] to clipboard[/dim]")
 
 
 def _note_clear(slot: int | None = None) -> None:

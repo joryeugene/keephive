@@ -60,9 +60,16 @@ def _log_summarize() -> None:
         print(f"[keephive] summarize failed: {e}", file=sys.stderr)
         return
 
-    console.print(f"[bold]Today ({today()}) — summary:[/bold]")
-    for bullet in resp.bullets:
-        console.print(f"  • {bullet}")
+    plain = "\n".join(f"• {b}" for b in resp.bullets)
+    if sys.stdout.isatty():
+        console.print(f"[bold]Today ({today()}) — summary:[/bold]")
+        for bullet in resp.bullets:
+            console.print(f"  • {bullet}")
+        from keephive.output import copy_to_clipboard
+        if copy_to_clipboard(plain):
+            console.print("[dim]Copied to clipboard[/dim]")
+    else:
+        print(plain)
 
 
 def cmd_log(args: list[str]) -> None:
