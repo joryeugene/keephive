@@ -46,6 +46,10 @@ test-todo:
 test-adversarial:
     uv run pytest tests/test_e2e_adversarial.py -v -o "addopts="
 
+# Run only previously-failing tests (for debugging regressions)
+test-fail:
+    uv run pytest --lf -xvs -o "addopts="
+
 # Run all non-LLM tests (unit + integration + terminal E2E)
 test-all: test test-e2e
 
