@@ -16,6 +16,16 @@ from pathlib import Path
 
 from keephive.clock import get_now, get_today
 
+_DEBUG = os.environ.get("HIVE_DEBUG", "")
+
+
+def _debug_log(msg: str) -> None:
+    """Log to stderr when HIVE_DEBUG is set. Never raises."""
+    if _DEBUG:
+        import sys
+
+        print(f"[keephive:debug] {msg}", file=sys.stderr)
+
 
 def _strip_verified_tags(text: str) -> str:
     """Remove all [verified:YYYY-MM-DD] tags from text."""
@@ -877,7 +887,7 @@ def mark_recurring_done(pattern: str) -> tuple[str, str] | None:
             lines[-1] += "\n"
         lines.append(f"- {match_text}: {done_str}\n")
 
-    rf.write_text("".join(lines))
+    backup_and_write(rf, "".join(lines))
     return (match_text, done_str)
 
 
@@ -1062,8 +1072,8 @@ def track_event(
             proj["by_command"][name] += 1
 
         _write_stats(data)
-    except Exception:
-        pass  # Never block hooks or commands
+    except Exception as exc:
+        _debug_log(f"track_event failed: {exc}")
 
 
 # ---- FTS5 full-text search ----
@@ -1113,7 +1123,8 @@ def fts_search(query: str, limit: int = 10) -> list[dict]:
     if not db.exists():
         try:
             rebuild_fts_index()
-        except Exception:
+        except Exception as exc:
+            _debug_log(f"fts_search rebuild failed: {exc}")
             return []
     try:
         con = sqlite3.connect(str(db))
@@ -1130,7 +1141,8 @@ def fts_search(query: str, limit: int = 10) -> list[dict]:
             score = max(1, int(60 + rank * 5))
             results.append({"tier": tier, "line": line, "date": date_str, "score": score})
         return results
-    except Exception:
+    except Exception as exc:
+        _debug_log(f"fts_search query failed: {exc}")
         return []
 
 
@@ -1234,8 +1246,8 @@ def track_recall_hit(fact_line: str) -> None:
 
         sf.parent.mkdir(parents=True, exist_ok=True)
         sf.write_text(json.dumps(data))
-    except Exception:
-        pass  # Never block recall operations
+    except Exception as exc:
+        _debug_log(f"track_recall_frequency failed: {exc}")
 
 
 def get_recall_count(fact_line: str) -> int:
@@ -1270,8 +1282,8 @@ def track_recall_miss() -> None:
 
         sf.parent.mkdir(parents=True, exist_ok=True)
         sf.write_text(json.dumps(data))
-    except Exception:
-        pass  # Never block recall operations
+    except Exception as exc:
+        _debug_log(f"track_recall_miss failed: {exc}")
 
 
 def track_recall_hit_meta() -> None:
@@ -1291,8 +1303,8 @@ def track_recall_hit_meta() -> None:
 
         sf.parent.mkdir(parents=True, exist_ok=True)
         sf.write_text(json.dumps(data))
-    except Exception:
-        pass
+    except Exception as exc:
+        _debug_log(f"track_recall_hit_meta failed: {exc}")
 
 
 def get_recall_hit_rate() -> tuple[int, int]:
@@ -1524,8 +1536,8 @@ def track_session_event(
             session["compacted"] = True
 
         _write_stats(data)
-    except Exception:
-        pass  # Never block hooks
+    except Exception as exc:
+        _debug_log(f"track_session_event failed: {exc}")
 
 
 def read_sessions(days_back: int = 30) -> list[dict]:

@@ -70,6 +70,19 @@ check-private:
     @! grep -rn "ANTHROPIC_API_KEY\s*=" src/ tests/ 2>/dev/null || (echo "ERROR: API key assignment found" && exit 1)
     @echo "OK: no secrets found"
 
+# ── Install & Sync ───────────────────────────────────────────────────────────
+
+# Upgrade global install + sync hooks/MCP (run after release or pulling updates)
+upgrade:
+    uv tool upgrade keephive
+    keephive setup
+    @echo "Global install upgraded and synced"
+
+# Sync dev environment (deps + local editable install)
+sync:
+    uv sync
+    @echo "Dev environment synced"
+
 # ── Dashboard ────────────────────────────────────────────────────────────────
 
 # Live dashboard with hot reload

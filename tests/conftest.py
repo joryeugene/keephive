@@ -5,7 +5,7 @@ from __future__ import annotations
 import difflib
 import json
 import os
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -21,7 +21,9 @@ TERMINAL_OUTPUT_DIR = E2E_OUTPUT_DIR / "terminal"
 
 def make_daily(hive_env: Path, days_ago: int = 0, entries: list[str] | None = None) -> Path:
     """Create a daily log file with entries. Shared helper for tests."""
-    d = date.today() - timedelta(days=days_ago)
+    from keephive.clock import get_today
+
+    d = get_today() - timedelta(days=days_ago)
     daily = hive_env / "daily" / f"{d.isoformat()}.md"
     lines = [f"# Daily Log: {d.isoformat()}\n"]
     for e in entries or []:
@@ -70,9 +72,9 @@ def hive_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 @pytest.fixture
 def daily_with_entries(hive_env: Path):
     """Add a daily log with entries to the test environment."""
-    from datetime import date
+    from keephive.clock import get_today
 
-    today = date.today().isoformat()
+    today = get_today().isoformat()
     daily = hive_env / "daily" / f"{today}.md"
     daily.write_text(
         f"# Daily Log: {today}\n\n"
