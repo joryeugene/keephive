@@ -5,7 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from keephive.output import console
-from keephive.settings import BUILTIN_SOUNDS, DEFAULTS, DESCRIPTIONS, get_setting, read_settings, set_setting
+from keephive.settings import (
+    BUILTIN_SOUNDS,
+    DEFAULTS,
+    DESCRIPTIONS,
+    get_setting,
+    read_settings,
+    set_setting,
+)
 
 
 def _parse_bool(val: str) -> bool | None:
@@ -56,7 +63,9 @@ def cmd_set(args: list[str]) -> None:
     else:
         if key in ("sound_success", "sound_error"):
             if raw_val not in BUILTIN_SOUNDS and not Path(raw_val).exists():
-                console.print(f"[warn]Warning:[/warn] '{raw_val}' is not a builtin sound or existing file")
+                console.print(
+                    f"[warn]Warning:[/warn] '{raw_val}' is not a builtin sound or existing file"
+                )
                 console.print(f"  Builtin: {', '.join(BUILTIN_SOUNDS)}")
         set_setting(key, raw_val)
         console.print(f"  {key}  [bold]{raw_val}[/bold]")

@@ -516,7 +516,9 @@ If no strategy guide exists, note that as a gap.
 === METRICS ===
 {metrics_json}"""
 
-    return run_claude_pipe(prompt, StrategistPerspective, model="haiku", verbose=verbose, timeout=240)
+    return run_claude_pipe(
+        prompt, StrategistPerspective, model="haiku", verbose=verbose, timeout=240
+    )
 
 
 def _run_perspectives(

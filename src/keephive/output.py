@@ -109,9 +109,7 @@ def notify_sound(success: bool = True) -> None:
         sound = str(name)  # custom file path
     if not Path(sound).exists():
         return
-    subprocess.Popen(
-        ["afplay", sound], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    )
+    subprocess.Popen(["afplay", sound], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def prompt_yn(prompt: str, default_yes: bool = True) -> bool:
