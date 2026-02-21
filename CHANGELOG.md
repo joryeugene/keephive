@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Features
+
+- **Keepbee mascot spread**: Dancing robot-bee now flanks the mascot in the README hero (bee | mascot | bee), replaces the SVG hexagon favicon with an animated GIF (lazy-loaded, SVG fallback), and appears on the dashboard settings page header.
+- **Keepbee redesign**: Robot-bee animation rebuilt with component-based rendering (body, arms, wings, antennae per frame). 10 frames, deterministic RNG, pixel-art style. `make_pixel_bee.py` simplified from 524 to 322 lines.
+- **Dashboard data URI consolidation**: Shared `_load_data_uri(filename, mime)` replaces duplicated `importlib.resources` + base64 encoding logic. `_get_favicon()` lazy-caches the GIF favicon on first request.
+
+### Fixes
+
+- **Transfer import crash on corrupt archives**: `tarfile.open()` for non-gzip or corrupt files now caught with `ReadError`/`CompressionError`/`OSError`, prints error and exits cleanly instead of unhandled traceback.
+- **E2E profile delete test under HIVE_HOME**: `test_delete_active_profile` rewritten to test interactive prompt cancellation. The `active_profile()` guard is bypassed in `HIVE_HOME` mode; unit test covers it separately.
+
 ## v0.22.0
 
 ### Features
