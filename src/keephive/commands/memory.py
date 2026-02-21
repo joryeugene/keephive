@@ -484,6 +484,12 @@ def _rule_learn(dry_run: bool = False) -> None:
     )
 
 
+def cmd_rule_learn(args: list[str]) -> None:
+    """Direct entry point for `hive rl` alias. Dispatches to _rule_learn."""
+    dry_run = "--dry-run" in args
+    _rule_learn(dry_run=dry_run)
+
+
 def _remove_line(path, pattern: str, filename: str) -> None:
     """Remove first line matching pattern from a file."""
     if not pattern:

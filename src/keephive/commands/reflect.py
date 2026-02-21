@@ -35,6 +35,8 @@ def cmd_reflect(args: list[str]) -> None:
         _reflect_apply(args[1:])
     elif subcmd == "draft":
         _reflect_draft(args[1:])
+    elif subcmd == "insights":
+        _reflect_insights(args[1:])
     elif subcmd == "scan":
         _reflect_scan(args[1:])
     elif subcmd == "--json":
@@ -45,7 +47,7 @@ def cmd_reflect(args: list[str]) -> None:
         _reflect_scan([])
     else:
         console.print(f"[err]Unknown reflect subcommand:[/err] {subcmd}")
-        console.print("Usage: hive rf [scan|analyze|apply|draft <topic>]")
+        console.print("Usage: hive rf [scan|analyze|apply|draft <topic>|insights]")
 
 
 def _reflect_scan(args: list[str]) -> None:
@@ -106,7 +108,201 @@ def _reflect_scan(args: list[str]) -> None:
         console.print()
 
     console.print("  \u2192 [dim]hive rf analyze[/dim]    Find patterns with AI (~20s)")
+    console.print("  \u2192 [dim]hive rf insights[/dim]   Session quality patterns (no AI)")
     console.print("  \u2192 [dim]hive l[/dim]             View today's entries")
+
+
+def _reflect_insights(args: list[str]) -> None:
+    """Deterministic aggregation of Claude Code /insights session data.
+
+    Reads facets + session-meta files and displays outcome distributions,
+    session types, friction patterns, and per-project breakdowns.
+    No LLM calls required.
+    """
+    output_json = "--json" in args
+    queue = "--queue" in args
+
+    try:
+        from keephive.insights import aggregate_insights, read_joined_sessions
+    except ImportError:
+        console.print("[err]insights module not available[/err]")
+        return
+
+    sessions = read_joined_sessions()
+    if not sessions:
+        console.print("[dim]No session data found.[/dim]")
+        console.print("[dim]  Session data comes from Claude Code's /insights command.[/dim]")
+        console.print("[dim]  Location: ~/.claude/usage-data/facets/ + session-meta/[/dim]")
+        return
+
+    agg = aggregate_insights(sessions)
+
+    if output_json:
+        print(json.dumps(agg, indent=2))
+        return
+
+    total = agg["total_sessions"]
+    console.print(f"[bold]Session Quality[/bold] ({total} sessions)")
+    console.print()
+
+    # Outcome distribution
+    outcome_order = ["fully_achieved", "mostly_achieved", "partially_achieved", "not_achieved"]
+    console.print("[dim]Outcomes[/dim]")
+    for outcome in outcome_order:
+        count = agg["outcome_dist"].get(outcome, 0)
+        if count == 0:
+            continue
+        pct = count / total * 100
+        label = outcome.replace("_", " ")
+        bar = "\u2588" * max(1, int(pct / 5))
+        console.print(f"  {label:<22s} {bar:<20s} {count:>3d} ({pct:.0f}%)")
+    console.print()
+
+    # Session types
+    console.print("[dim]Session Types[/dim]")
+    for stype, count in sorted(agg["type_dist"].items(), key=lambda x: -x[1]):
+        pct = count / total * 100
+        label = stype.replace("_", " ")
+        console.print(f"  {label:<22s} {count:>3d} ({pct:.0f}%)")
+    console.print()
+
+    # Helpfulness
+    if agg["helpfulness_dist"]:
+        console.print("[dim]Helpfulness[/dim]")
+        for level, count in sorted(agg["helpfulness_dist"].items(), key=lambda x: -x[1]):
+            pct = count / total * 100
+            label = level.replace("_", " ")
+            console.print(f"  {label:<22s} {count:>3d} ({pct:.0f}%)")
+        console.print()
+
+    # Friction (top 5)
+    if agg["friction_dist"]:
+        console.print("[dim]Top Friction[/dim]")
+        sorted_friction = sorted(agg["friction_dist"].items(), key=lambda x: -x[1]["count"])
+        for ftype, fdata in sorted_friction[:5]:
+            label = ftype.replace("_", " ")
+            console.print(
+                f"  {label:<22s} {fdata['count']:>3d} events in {fdata['sessions']} sessions"
+            )
+        console.print()
+
+    # Detected patterns
+    if agg["patterns"]:
+        console.print("[dim]Detected Patterns[/dim]")
+        for p in agg["patterns"]:
+            if p["type"] == "type_outcome":
+                stype = p["session_type"].replace("_", " ")
+                rate = int(p["achieved_rate"] * 100)
+                tag = "[ok]" if rate >= 60 else "[warn]" if rate >= 40 else "[err]"
+                console.print(
+                    f"  {tag}{stype}[/{tag[1:]} sessions achieve goals {rate}% of the time "
+                    f"(n={p['total']})"
+                )
+            elif p["type"] == "goal_satisfaction":
+                cat = p["goal_category"].replace("_", " ")
+                score = p["avg_satisfaction"]
+                tag = "[ok]" if score >= 4 else "[warn]" if score >= 3 else "[err]"
+                console.print(
+                    f"  {tag}{cat}[/{tag[1:]} avg satisfaction {score:.1f}/5 (n={p['sessions']})"
+                )
+            elif p["type"] == "friction_by_type":
+                stype = p["session_type"].replace("_", " ")
+                rate = int(p["friction_rate"] * 100)
+                console.print(
+                    f"  {stype}: {rate}% sessions have friction "
+                    f"(avg {p['avg_friction_count']:.1f} events)"
+                )
+            elif p["type"] == "duration_by_outcome":
+                outcome = p["outcome"].replace("_", " ")
+                console.print(
+                    f"  {outcome}: avg {p['avg_duration_minutes']:.0f}m (n={p['sessions']})"
+                )
+        console.print()
+
+    # Per-project breakdown
+    if agg["per_project"]:
+        console.print("[dim]By Project[/dim]")
+        for proj, pdata in sorted(agg["per_project"].items(), key=lambda x: -x[1]["total"]):
+            achieved = pdata["outcomes"].get("fully_achieved", 0) + pdata["outcomes"].get(
+                "mostly_achieved", 0
+            )
+            rate = int(achieved / pdata["total"] * 100) if pdata["total"] else 0
+            console.print(f"  {proj:<22s} {pdata['total']:>3d} sessions · {rate}% achieved")
+        console.print()
+
+    # Top goals (compact)
+    if agg["goal_dist"]:
+        top_goals = list(agg["goal_dist"].items())[:5]
+        goal_str = ", ".join(f"{g.replace('_', ' ')} ({c})" for g, c in top_goals)
+        console.print(f"[dim]Top goals:[/dim] {goal_str}")
+        console.print()
+
+    # Queue insights to .pending-facts.md
+    insight_lines = _build_insight_lines(agg)
+
+    if queue and insight_lines:
+        _queue_insights(insight_lines)
+    elif insight_lines:
+        console.print(f"  {len(insight_lines)} pattern(s) detected")
+        console.print("  \u2192 [dim]hive rf insights --queue[/dim]  Queue to pending facts")
+        console.print("  \u2192 [dim]hive mem review[/dim]           Review pending facts")
+
+
+def _build_insight_lines(agg: dict) -> list[str]:
+    """Build INSIGHT lines from aggregate data for queuing."""
+    lines: list[str] = []
+    total = agg["total_sessions"]
+
+    for p in agg["patterns"]:
+        if p["type"] == "type_outcome" and p["total"] >= 3:
+            stype = p["session_type"].replace("_", " ")
+            rate = int(p["achieved_rate"] * 100)
+            lines.append(
+                f"INSIGHT: {stype} sessions achieve goals {rate}% of the time "
+                f"[source:insights/{total}-sessions]"
+            )
+        elif p["type"] == "friction_by_type" and p["friction_rate"] >= 0.3:
+            stype = p["session_type"].replace("_", " ")
+            rate = int(p["friction_rate"] * 100)
+            lines.append(
+                f"INSIGHT: {stype} sessions have {rate}% friction rate "
+                f"(avg {p['avg_friction_count']:.1f} events) "
+                f"[source:insights/{total}-sessions]"
+            )
+
+    # Overall outcome summary
+    achieved = agg["outcome_dist"].get("fully_achieved", 0) + agg["outcome_dist"].get(
+        "mostly_achieved", 0
+    )
+    if total > 0:
+        rate = int(achieved / total * 100)
+        lines.append(
+            f"INSIGHT: Overall session success rate is {rate}% "
+            f"({achieved}/{total} sessions) [source:insights/{total}-sessions]"
+        )
+
+    # Top friction type
+    if agg["friction_dist"]:
+        top_ftype = max(agg["friction_dist"].items(), key=lambda x: x[1]["count"])
+        lines.append(
+            f"INSIGHT: Top friction source is {top_ftype[0].replace('_', ' ')} "
+            f"({top_ftype[1]['count']} events across {top_ftype[1]['sessions']} sessions) "
+            f"[source:insights/{total}-sessions]"
+        )
+
+    return lines
+
+
+def _queue_insights(lines: list[str]) -> None:
+    """Write insight lines to .pending-facts.md for review."""
+    pending_path = hive_dir() / ".pending-facts.md"
+    pending_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(pending_path, "a") as f:
+        for line in lines:
+            f.write(f"- {line}\n")
+
+    console.print(f"[ok]Queued {len(lines)} insight(s).[/ok] Run: [bold]hive mem review[/bold]")
 
 
 def _reflect_analyze(args: list[str]) -> None:

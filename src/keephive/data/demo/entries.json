@@ -89,12 +89,39 @@
     {"text": "DECISION: Moved from monolith to 3 services split", "age_days": 45},
     {"text": "FACT: Database backup runs nightly at 02:00 UTC with 30-day retention", "age_days": 14},
     {"text": "CORRECTION: Redis connection limit is 10000, not 1000", "age_days": 6},
-    {"text": "FACT: S3 presigned URLs expire after 15 minutes for upload", "age_days": 25}
+    {"text": "FACT: S3 presigned URLs expire after 15 minutes for upload", "age_days": 25},
+    {"text": "FACT: Alembic migrations auto-generate revision IDs from model diffs", "age_days": 2},
+    {"text": "INSIGHT: Index-only scans on events table sped up dashboard queries 8x", "age_days": 4},
+    {"text": "DECISION: Chose cursor-based pagination over offset for all list endpoints", "age_days": 38},
+    {"text": "FACT: Fluent Bit log shipper buffers 5MB before flushing to Elasticsearch", "age_days": 52},
+    {"text": "CORRECTION: Frontend bundle uses ESM exclusively since v4, not CommonJS", "age_days": 58}
   ],
-  "projects": ["api-gateway", "dashboard", "data-pipeline", "auth-service"],
+  "projects": ["api-gateway", "dashboard", "data-pipeline", "auth-service", "infra-config"],
   "guides": {
     "api-patterns": "# API Design Patterns\n\nStandard patterns used across all services.\n\n## Authentication\n\nAll endpoints require JWT bearer token. Token rotation handled by auth-service.\n\n## Error Format\n\nAll errors follow RFC 7807 Problem Details format:\n```json\n{\"type\": \"about:blank\", \"title\": \"Not Found\", \"status\": 404, \"detail\": \"User 123 not found\"}\n```\n\n## Pagination\n\nCursor-based pagination via `?cursor=<opaque>&limit=50`. Never use offset pagination.\n\n## Rate Limiting\n\nSliding window algorithm. Headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset.\n",
-    "testing-strategy": "# Testing Strategy\n\nPyramid model: many unit tests, fewer integration, minimal E2E.\n\n## Unit Tests\n\nPytest with fixtures. Mock external services. Target: 80% coverage.\n\n## Integration Tests\n\nTestcontainers for PostgreSQL and Redis. Real database, real cache.\n\n## E2E Tests\n\nPlaywright for frontend flows. Run nightly, not on every PR.\n\n## Performance Tests\n\nLocust for load testing. Run before major releases against staging.\n"
+    "testing-strategy": "# Testing Strategy\n\nPyramid model: many unit tests, fewer integration, minimal E2E.\n\n## Unit Tests\n\nPytest with fixtures. Mock external services. Target: 80% coverage.\n\n## Integration Tests\n\nTestcontainers for PostgreSQL and Redis. Real database, real cache.\n\n## E2E Tests\n\nPlaywright for frontend flows. Run nightly, not on every PR.\n\n## Performance Tests\n\nLocust for load testing. Run before major releases against staging.\n",
+    "deployment-checklist": "# Deployment Checklist\n\nPre-deploy validation steps for all services.\n\n## 1. Pre-flight Checks\n\n1. All CI checks pass (lint, test, security scan)\n2. Database migrations reviewed and tested on staging\n3. Feature flags configured for gradual rollout\n4. Rollback plan documented with specific commands\n\n## 2. Environment Matrix\n\n| Environment | Cluster     | Replicas | DB Pool |\n|-------------|-------------|----------|---------|\n| staging     | us-east-1a  | 2        | 10      |\n| production  | us-east-1   | 6        | 20      |\n| dr-standby  | us-west-2   | 2        | 5       |\n\n## 3. Deploy Sequence\n\n```bash\n# 1. Tag the release\ngit tag -a v1.x.x -m \"Release v1.x.x\"\n\n# 2. Build and push image\ndocker build -t api-gateway:v1.x.x .\ndocker push registry/api-gateway:v1.x.x\n\n# 3. Rolling update (zero-downtime)\nkubectl set image deployment/api-gateway api-gateway=registry/api-gateway:v1.x.x\n\n# 4. Verify health\nkubectl rollout status deployment/api-gateway --timeout=300s\n```\n\n## 4. Post-deploy\n\n- Verify `/health` returns 200 on all pods\n- Check Prometheus metrics for error rate spike\n- Monitor Sentry for new exceptions (15 min window)\n- Confirm feature flag states match release plan\n",
+    "database-patterns": "# Database Patterns\n\nQuery optimization and schema patterns for PostgreSQL.\n\n## Connection Management\n\nAll services connect through PgBouncer in transaction mode:\n```\nmax_client_conn = 400\ndefault_pool_size = 20\nreserve_pool_size = 5\n```\n\n## Index Strategy\n\nPrefer partial indexes for hot-path queries:\n```sql\n-- Only index active users (80% of lookups)\nCREATE INDEX idx_users_active_email\n  ON users (email)\n  WHERE deleted_at IS NULL;\n\n-- Composite index for dashboard aggregation\nCREATE INDEX idx_events_project_date\n  ON events (project_id, created_at DESC)\n  INCLUDE (event_type, duration_ms);\n```\n\n## Batch Operations\n\nUse `unnest` for bulk inserts instead of multi-row VALUES:\n```sql\nINSERT INTO events (project_id, event_type, payload)\nSELECT * FROM unnest($1::int[], $2::text[], $3::jsonb[]);\n```\n\n## Migration Safety\n\n- Never add NOT NULL columns without a default\n- Always use `CREATE INDEX CONCURRENTLY` in production\n- Split large data migrations into batched updates (1000 rows/batch)\n- Test rollback path before deploying forward migration\n",
+    "error-handling": "# Error Handling\n\nClassification and response patterns for all services.\n\n## Error Taxonomy\n\n| Category    | HTTP Range | Retry | Alert   | Example                    |\n|-------------|-----------|-------|---------|----------------------------|\n| Client      | 400-499   | No    | No      | Invalid request body       |\n| Auth        | 401, 403  | No    | >50/min | Expired token, wrong scope |\n| Rate limit  | 429       | Yes   | >100/hr | Sliding window exceeded    |\n| Server      | 500-599   | Yes   | Always  | Unhandled exception        |\n| Downstream  | 502, 504  | Yes   | >10/min | External API timeout       |\n\n## Circuit Breaker Pattern\n\nExternal API calls use a three-state circuit breaker:\n```python\nclass CircuitBreaker:\n    CLOSED = \"closed\"      # Normal operation\n    OPEN = \"open\"          # Failing, reject fast\n    HALF_OPEN = \"half\"     # Testing recovery\n\n    def __init__(self, failure_threshold=5, reset_timeout=30):\n        self.state = self.CLOSED\n        self.failure_count = 0\n        self.failure_threshold = failure_threshold\n        self.reset_timeout = reset_timeout\n```\n\n## Structured Logging\n\nAll errors include correlation context:\n```json\n{\n  \"level\": \"error\",\n  \"request_id\": \"req-abc-123\",\n  \"service\": \"api-gateway\",\n  \"error_type\": \"downstream_timeout\",\n  \"target\": \"payment-api\",\n  \"latency_ms\": 5023,\n  \"retry_count\": 2\n}\n```\n"
+  },
+  "rules": [
+    "Always run tests before committing code changes",
+    "Prefer composition over inheritance in service design",
+    "Log structured JSON, never raw strings, for all error paths",
+    "Use feature flags for any user-facing change that can be rolled back",
+    "Review database query plans before adding new indexes to production"
+  ],
+  "recall_stats": {
+    "redis": 14,
+    "jwt": 11,
+    "database": 9,
+    "kubernetes": 7,
+    "celery": 6,
+    "deployment": 5,
+    "websocket": 4,
+    "pydantic": 4,
+    "feature-flags": 3,
+    "cors": 2
   },
   "recurring": [
     {"freq": "weekly", "text": "Review and verify stale facts"},
@@ -102,6 +129,7 @@
   ],
   "notes": {
     "1": "# Sprint Planning\n\n## Sprint 12 Goals\n- Complete auth-service migration\n- Dashboard performance optimization\n- API rate limiting v2\n\n## Carry-over from Sprint 11\n- Webhook retry logic (blocked on infra)\n- Sentry integration for data-pipeline\n",
+    "2": "# Architecture Decisions\n\n## ADR-007: Event Bus Selection\n\n**Status:** Accepted\n**Date:** 2025-12-15\n\n### Context\n\nNeed async communication between api-gateway, auth-service, and data-pipeline. Options: Kafka, RabbitMQ, Redis Streams.\n\n### Decision\n\nRedis Streams. Already running Redis for cache. Throughput ceiling (~100k msg/s) is well above our needs (~2k msg/s peak). Simpler ops than Kafka (no ZooKeeper, no partition rebalancing).\n\n### Consequences\n\n- Single Redis cluster is now both cache and event bus (operational coupling)\n- Consumer groups handle exactly-once semantics per service\n- If we exceed 50k msg/s sustained, revisit Kafka\n\n## ADR-008: Cursor Pagination\n\n**Status:** Accepted\n\nOffset pagination breaks under concurrent writes. Cursor-based (opaque token encoding last-seen ID + sort key) is stable regardless of inserts/deletes between pages.\n",
     "3": "# Bug Tracker\n\n- [ ] Race condition in concurrent session creation (auth-service)\n- [x] N+1 query in project listing (api-gateway)\n- [ ] Memory leak in WebSocket handler after 1000+ connections\n- [x] CORS headers missing on staging\n- [ ] Timezone mismatch in Celery beat schedule\n"
   }
 }

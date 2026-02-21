@@ -1,6 +1,6 @@
 # keephive CLI demo
-# Record: vhs assets/demo.tape
-# Requires: demo profile active (hive profile use demo)
+# Record: HIVE_HOME="$HOME/.claude/hive-demo" vhs assets/demo.tape
+# Setup:  just demo-seed
 
 Output assets/cli-demo.gif
 
@@ -23,6 +23,16 @@ Sleep 2s
 
 # Instant recall
 Type "hive rc redis"
+Enter
+Sleep 3s
+
+# TODOs at a glance
+Type "hive todo"
+Enter
+Sleep 3s
+
+# Knowledge guides
+Type "hive k"
 Enter
 Sleep 3s
 

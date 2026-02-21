@@ -13,7 +13,7 @@ HELP: dict[str, str] = {
     "remember": "Usage: hive r <text>\n  Save insight to daily log\n  Prefix with FACT:/DECISION:/TODO:/INSIGHT:/CORRECTION: for categorization",
     "recall": "Usage: hive rc <query> [--deep] [--json]\n  Search all memory tiers\n  --deep  Expand search with AI when few results found",
     "verify": "Usage: hive v [--check] [--json] [--verbose]\n  Verify facts against codebase using LLM\n  --check  Quick stale count, exit code 1 if stale\n  --verbose  Show raw LLM output",
-    "reflect": "Usage: hive rf [scan|analyze|apply|draft <topic>]\n  scan     Quick log scan (no AI)\n  analyze  Pattern detection with AI (~20s)\n  apply    Review and graduate analysis to memory\n  draft    Draft a knowledge guide from logs",
+    "reflect": "Usage: hive rf [scan|analyze|apply|draft <topic>|insights]\n  scan       Quick log scan (no AI)\n  analyze    Pattern detection with AI (~20s)\n  apply      Review and graduate analysis to memory\n  draft      Draft a knowledge guide from logs\n  insights   Session quality patterns from /insights data (no AI)",
     "log": "Usage: hive l [date|summarize] [--watch|-w] [--interval N]\n  View daily log. Date: today, yesterday, N (days ago), YYYY-MM-DD\n  summarize  AI summary of today's entries (3-5 bullets)\n  --watch/-w      Live refresh when log changes\n  --interval N    Seconds between checks (default 2)",
     "edit": "Usage: hive e [target]\n  Targets: memory, rules, claude, settings, local, today, note\n  No args: show available targets",
     "todo": "Usage: hive todo [done <pat>] [repeat [freq] [text]] [--watch|-w] [--interval N]\n  todo         List open TODOs\n  todo done X  Mark TODO matching X complete\n  todo repeat  List/add recurring tasks\n  --watch/-w      Live refresh when TODOs change\n  --interval N    Seconds between checks (default 2)",
@@ -25,7 +25,7 @@ HELP: dict[str, str] = {
     "standup": "Usage: hive su\n  Generate standup summary from daily logs + GitHub PRs\n  Uses LLM for formatting. Copies to clipboard.",
     "stats": "Usage: hive st [-p <project>] [date]\n  Usage statistics. Date: today, N (days ago), YYYY-MM-DD",
     "mem": "Usage: hive m [rm|review] <text>\n  Add or remove working memory facts\n  hive m <text>      Add fact to memory.md\n  hive m rm <pat>    Remove line matching pattern\n  hive m review      Review pending auto-captured facts",
-    "rule": "Usage: hive rule [rm|review|learn] <text>\n  Add or remove behavioral rules\n  hive rule <text>      Add rule\n  hive rule rm <pat>    Remove matching rule\n  hive rule review      Review pending rule suggestions\n  hive rule learn       Learn rules from /insights friction data\n  hive rule learn --dry-run   Preview without queuing",
+    "rule": "Usage: hive rule [rm|review|learn] <text>  (alias: rl = rule learn)\n  Add or remove behavioral rules\n  hive rule <text>      Add rule\n  hive rule rm <pat>    Remove matching rule\n  hive rule review      Review pending rule suggestions\n  hive rule learn       Learn rules from /insights friction data\n  hive rule learn --dry-run   Preview without queuing\n  hive rl               Shortcut for 'hive rule learn'",
     "session": "Usage: hive go [mode|prompt]\n  Modes: todo, verify, learn, reflect\n  Or load a custom prompt from knowledge/prompts/",
     "skill": "Usage: hive sk [publish <name>|unpublish <name>|sync|find <q>]\n  Manage skill plugins",
     "update": "Usage: hive up\n  Upgrade keephive to the latest version in-place",
@@ -72,6 +72,7 @@ _CANONICAL: dict[str, str] = {
     "sesh": "session",
     "up": "update",
     "draft": "note",
+    "rl": "rule",
     "ws": "serve",
     "pf": "profile",
 }
@@ -98,7 +99,7 @@ _CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
     ("doctor", "Check setup + find duplicates", "dr", {"dr", "doctor"}),
     ("standup", "Generate standup summary", "su", {"su", "standup"}),
     ("gc", "Archive old logs", "g", {"g", "gc"}),
-    ("rule [learn|review]", "Add/remove/learn rules", "", {"rule"}),
+    ("rule [learn|review]", "Add/remove/learn rules", "rl", {"rule", "rl"}),
     ("set [key] [val]", "View/change settings", "", {"set"}),
     ("skill", "Manage skill plugins", "sk", {"sk", "skill"}),
     ("update", "Upgrade keephive in-place", "up", {"up", "update"}),
@@ -192,12 +193,12 @@ Usage: hive <command> [args]
     knowledge [name]  View/edit knowledge guides        k
     note              Multi-slot scratchpad              n
     mem [rm] <text>   Add/remove working memory         m
+    rule [learn|review] Add/remove/learn rules           rl
     serve [port]      Live web dashboard""")
 
     if show_all:
         print("""
   Plumbing
-    rule [learn|review]  Add/remove/learn rules
     todo repeat       Manage recurring tasks
     set [key] [val]   View/change settings
     sound-test        Play notification sound
@@ -293,6 +294,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "m": ("keephive.commands.memory", "cmd_mem"),
     "mem": ("keephive.commands.memory", "cmd_mem"),
     "rule": ("keephive.commands.memory", "cmd_rule"),
+    "rl": ("keephive.commands.memory", "cmd_rule_learn"),
     "to": ("keephive.commands.todo", "cmd_todo"),
     "td": ("keephive.commands.todo", "cmd_td"),
     "todo": ("keephive.commands.todo", "cmd_todo"),

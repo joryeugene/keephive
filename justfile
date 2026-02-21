@@ -106,3 +106,40 @@ watch-log:
 # TODOs in live-watch mode
 watch-todo:
     uv run python -m keephive todo --watch
+
+# ── Demo Assets ────────────────────────────────────────────────────────────
+
+# Reset demo profile with rich seed data (60 days)
+demo-seed:
+    HIVE_HOME="$HOME/.claude/hive-demo" uv run python -m keephive seed --force --days 60
+
+# Record CLI demo GIF (requires vhs: brew install charmbracelet/tap/vhs)
+demo-gif: demo-seed
+    HIVE_HOME="$HOME/.claude/hive-demo" vhs assets/demo.tape
+    gifsicle --optimize=3 --lossy=80 --colors=128 assets/cli-demo.gif -o assets/cli-demo.gif
+    @ls -lh assets/cli-demo.gif
+
+# Take dashboard screenshots (requires shot-scraper: uv tool install shot-scraper)
+demo-screenshots: demo-seed
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export HIVE_HOME="$HOME/.claude/hive-demo"
+    # Start serve in background
+    uv run python -m keephive serve 13847 &
+    SERVER_PID=$!
+    # Wait for ready
+    for i in $(seq 1 20); do
+        curl -sf http://localhost:13847/ > /dev/null && break || sleep 0.5
+    done
+    # Capture screenshots
+    shot-scraper http://localhost:13847/ -o assets/dashboard-home.png --width 1200 --height 900
+    shot-scraper http://localhost:13847/stats -o assets/dashboard-stats.png --width 1200 --height 900
+    shot-scraper http://localhost:13847/know -o assets/dashboard-knowledge.png --width 1200 --height 900
+    # Cleanup
+    kill $SERVER_PID 2>/dev/null || true
+    @echo "Screenshots captured:"
+    @ls -lh assets/dashboard-*.png
+
+# Regenerate all demo assets (GIF + screenshots)
+demo-assets: demo-gif demo-screenshots
+    @echo "All demo assets regenerated from demo profile"

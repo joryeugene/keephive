@@ -898,6 +898,31 @@ def _display_full(data: dict) -> None:
             tool_parts.append(part)
         console.print(f"  tools: {'  ·  '.join(tool_parts)}")
 
+    # Session Quality (from /insights facets data)
+    try:
+        from keephive.insights import aggregate_insights, read_joined_sessions
+
+        insight_sessions = read_joined_sessions()
+        if insight_sessions:
+            agg = aggregate_insights(insight_sessions)
+            i_total = agg["total_sessions"]
+            achieved = agg["outcome_dist"].get("fully_achieved", 0) + agg["outcome_dist"].get(
+                "mostly_achieved", 0
+            )
+            achieved_pct = int(achieved / i_total * 100) if i_total else 0
+
+            top_friction = ""
+            if agg["friction_dist"]:
+                top_f = max(agg["friction_dist"].items(), key=lambda x: x[1]["count"])
+                top_friction = f" · top friction: {top_f[0].replace('_', ' ')}"
+
+            console.print()
+            console.print("[dim]Session Quality[/dim]" + f" ({i_total} sessions)")
+            console.print(f"  {achieved_pct}% achieved{top_friction}")
+            console.print("  \u2192 [dim]hive rf insights[/dim] for full breakdown")
+    except Exception:
+        pass
+
     # Trends section
     if trends["metrics"]:
         console.print()

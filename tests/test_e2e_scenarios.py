@@ -641,3 +641,44 @@ class TestWatchMode:
         final = term.wait_for("Watch stopped")
         final.lacks("Traceback", "Error")
         save_terminal_output("watch/todo_start_stop", term)
+
+
+# ============================================================
+#  Category 11: Insights & Discoverability
+# ============================================================
+
+
+@pytest.mark.terminal
+class TestInsightsAndDiscoverability:
+    def test_rf_insights_basic(self, term, save_terminal_output):
+        """hive rf insights shows output structure (uses real facets data)."""
+        screen = term.type("python -m keephive rf insights")
+        # Either shows data or the "no data" message; both are valid
+        screen.lacks("Traceback", "Error")
+        save_terminal_output("insights/rf_insights_basic", term)
+
+    def test_rf_insights_json(self, term, save_terminal_output):
+        """hive rf insights --json outputs valid JSON."""
+        screen = term.type("python -m keephive rf insights --json")
+        screen.lacks("Traceback", "Error")
+        save_terminal_output("insights/rf_insights_json", term)
+
+    def test_rl_alias(self, term, save_terminal_output):
+        """hive rl --dry-run works as shortcut for rule learn."""
+        screen = term.type("python -m keephive rl --dry-run")
+        # Shows friction summary or "no data" message
+        screen.lacks("Traceback", "Unknown command")
+        save_terminal_output("insights/rl_alias", term)
+
+    def test_help_shows_rule_in_manage(self, term, save_terminal_output):
+        """hive help shows rule under Manage section."""
+        screen = term.type("python -m keephive help")
+        screen.has("rule")
+        screen.lacks("Traceback")
+        save_terminal_output("insights/help_rule_manage", term)
+
+    def test_help_reflect_shows_insights(self, term, save_terminal_output):
+        """hive help rf shows insights subcommand."""
+        screen = term.type("python -m keephive help rf")
+        screen.has("insights")
+        save_terminal_output("insights/help_reflect_insights", term)

@@ -31,6 +31,7 @@ Prefer `just <recipe>` over raw commands. See `just --list` or the `justfile` fo
 - `output.py`: Console markup, `prompt_yn()`, `prompt_choice()`. Shared output helpers.
 - `nudge.py`: Shared nudge infrastructure (counter-based, status-aware, rotating messages).
 - `storage.py`: All file I/O for ~/.claude/hive/ directory. Includes stats tracking, profiles, session metrics.
+- `insights.py`: Pure deterministic aggregation of Claude Code `/insights` session data. Reads `~/.claude/usage-data/facets/` + `session-meta/`, joins on session_id, produces outcome/type/satisfaction/goal/friction distributions and cross-field pattern detection. No LLM.
 - `commands/audit.py`: Three-perspective LLM audit (parallel) + Cook synthesis. Uses `run_claude_pipe()` for all 4 calls.
 - `commands/memory.py`: `hive mem` and `hive rule` (add/remove/learn/review). `rule learn` reads `/insights` friction data from `~/.claude/usage-data/facets/`, maps to behavioral rules, deduplicates via trigram overlap, queues in `.pending-rules.md`.
 - `commands/edit.py`: `hive e` targets (memory, rules, claude, today, todo, etc.). Opens `$EDITOR`.
@@ -44,7 +45,7 @@ Prefer `just <recipe>` over raw commands. See `just --list` or the `justfile` fo
 - `commands/todo.py`: TODO lifecycle: list, add, done, edit, recurring. Fuzzy dedup at 0.8 similarity threshold.
 - `commands/transfer.py`: Export/import hive data as tar.gz with manifest.json.
 - `commands/verify.py`: LLM-powered fact verification. Checks facts against codebase, auto-corrects when deterministic.
-- `commands/reflect.py`: Four-stage flow: scan (deterministic) → analyze (LLM) → apply (interactive review) → draft (generate guide).
+- `commands/reflect.py`: Five-stage flow: scan (deterministic) → analyze (LLM) → apply (interactive review) → draft (generate guide) → insights (session quality patterns from /insights facets, no LLM).
 - `commands/standup.py`: Standup generation from daily logs + GitHub PR data. Weekend-aware cutoff, clipboard copy.
 - `commands/doctor.py`: Health check (hooks, MCP, deps, data). Uses LLM for semantic TODO deduplication.
 - `commands/setup.py`: Registers MCP server in ~/.claude.json and hooks in ~/.claude/settings.json. Auto-syncs global install.

@@ -16,13 +16,13 @@ from PIL import Image
 
 # ── Color palette ────────────────────────────────────────────────
 C = {
-    ".": None,                  # transparent
-    "B": (45, 45, 45, 255),     # black (outline, eyes)
-    "O": (232, 155, 59, 255),   # orange body
-    "L": (240, 176, 80, 255),   # light orange highlight
-    "D": (196, 122, 42, 255),   # dark orange shadow
-    "S": (93, 78, 55, 255),     # dark stripe
-    "A": (240, 192, 64, 255),   # antenna balls
+    ".": None,  # transparent
+    "B": (45, 45, 45, 255),  # black (outline, eyes)
+    "O": (232, 155, 59, 255),  # orange body
+    "L": (240, 176, 80, 255),  # light orange highlight
+    "D": (196, 122, 42, 255),  # dark orange shadow
+    "S": (93, 78, 55, 255),  # dark stripe
+    "A": (240, 192, 64, 255),  # antenna balls
     "W": (255, 255, 255, 255),  # eye highlight
     "R": (240, 128, 128, 255),  # rosy cheeks
     "H": (220, 200, 170, 255),  # head/face light area
@@ -30,10 +30,10 @@ C = {
     "F": (180, 165, 140, 255),  # feet/darker limbs
     "T": (160, 140, 110, 255),  # antenna stalk
     "Y": (250, 210, 100, 255),  # antenna ball highlight
-    "K": (70, 60, 50, 255),     # dark outline accent
+    "K": (70, 60, 50, 255),  # dark outline accent
 }
 
-SCALE = 8   # 32 * 8 = 256px
+SCALE = 8  # 32 * 8 = 256px
 
 # ── Frame grids (32x32 each) ────────────────────────────────────
 # Each frame is a list of 32 strings, each 32 chars.

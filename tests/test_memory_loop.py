@@ -456,7 +456,7 @@ class TestAutoReverify:
 
 
 class TestAccumulationWarnings:
-    def test_warn_many_facts(self):
+    def test_warn_many_facts(self, hive_env):
         """Warns when memory has >40 facts."""
         from keephive.hooks.sessionstart import _accumulation_warnings
 
@@ -481,7 +481,7 @@ class TestAccumulationWarnings:
         warnings = _accumulation_warnings("# Working Memory\n\n- Normal fact\n")
         assert any("7 fact" in w and "pending review" in w for w in warnings)
 
-    def test_warn_critical_stale(self):
+    def test_warn_critical_stale(self, hive_env):
         """Warns CRITICAL for facts stale >60 days."""
         from keephive.hooks.sessionstart import _accumulation_warnings
 
@@ -491,7 +491,7 @@ class TestAccumulationWarnings:
         warnings = _accumulation_warnings(content)
         assert any("CRITICAL" in w for w in warnings)
 
-    def test_no_warnings_when_healthy(self):
+    def test_no_warnings_when_healthy(self, hive_env):
         """No warnings for healthy memory."""
         from keephive.hooks.sessionstart import _accumulation_warnings
 

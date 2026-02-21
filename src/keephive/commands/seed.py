@@ -13,6 +13,8 @@ from keephive.storage import (
     ensure_dirs,
     guides_dir,
     hive_dir,
+    recall_stats_file,
+    rules_file,
     slot_file,
     stats_file,
     working_dir,
@@ -27,7 +29,7 @@ def _load_entries() -> dict:
 
 def cmd_seed(args: list[str]) -> None:
     """Seed current hive directory with demo data."""
-    days = 45
+    days = 60
     force = "--force" in args
 
     for arg in args:
@@ -67,6 +69,9 @@ def cmd_seed(args: list[str]) -> None:
     _seed_recurring(entries)
     _seed_notes(entries)
     _seed_evidence(entries, rng)
+    _seed_rules(entries)
+    _seed_recall_stats(entries, rng)
+    _seed_pending_rules()
 
     console.print(f"[green]Seeded {days} days of demo data[/green]")
     console.print(f"[dim]Data: {target}[/dim]")
@@ -158,7 +163,24 @@ def _seed_stats(entries: dict, days: int, rng: random.Random) -> None:
     """Generate .stats.json with realistic usage patterns."""
     today = get_today()
     projects = entries["projects"]
-    commands = ["r", "rc", "s", "v", "t", "td", "l", "e", "st", "a", "rf"]
+    commands = [
+        "r",
+        "rc",
+        "s",
+        "v",
+        "t",
+        "td",
+        "l",
+        "e",
+        "st",
+        "a",
+        "rf",
+        "su",
+        "dr",
+        "go",
+        "n",
+        "k",
+    ]
     hook_names = ["sessionstart", "precompact", "posttooluse", "userpromptsubmit"]
 
     data: dict = {"days": {}}
@@ -297,3 +319,55 @@ def _seed_evidence(entries: dict, rng: random.Random) -> None:
     ef = evidence_file()
     ef.parent.mkdir(parents=True, exist_ok=True)
     ef.write_text(json.dumps(data, indent=2))
+
+
+def _seed_rules(entries: dict) -> None:
+    """Write rules.md from entries rules array."""
+    rules = entries.get("rules", [])
+    if not rules:
+        return
+    rf = rules_file()
+    rf.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["# Rules\n"]
+    for rule in rules:
+        lines.append(f"- {rule}")
+    rf.write_text("\n".join(lines) + "\n")
+
+
+def _seed_recall_stats(entries: dict, rng: random.Random) -> None:
+    """Write .recall-stats.json with realistic recall counts keyed by fact hash."""
+    import hashlib
+
+    recall_map = entries.get("recall_stats", {})
+    if not recall_map:
+        return
+
+    today = get_today()
+    memory_facts = entries.get("memory_facts", [])
+    data: dict = {}
+
+    for item in memory_facts:
+        text = item["text"].strip()
+        # Match facts to recall topics by keyword overlap
+        for topic, count in recall_map.items():
+            if topic.lower() in text.lower():
+                key = hashlib.sha256(text.encode()).hexdigest()[:16]
+                age = item["age_days"]
+                last_date = (today - timedelta(days=max(0, age - rng.randint(0, 3)))).isoformat()
+                data[key] = {"count": count, "last": last_date}
+                break
+
+    sf = recall_stats_file()
+    sf.parent.mkdir(parents=True, exist_ok=True)
+    sf.write_text(json.dumps(data, indent=2))
+
+
+def _seed_pending_rules() -> None:
+    """Write .pending-rules.md with sample pending suggestions."""
+    path = hive_dir() / ".pending-rules.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "# Pending Rule Suggestions\n\n"
+        "- [3 sessions: repeated_error] Verify API response schema before updating TypeScript interfaces\n"
+        "- [2 sessions: missed_test] Add negative test cases when implementing error handling paths\n"
+    )
