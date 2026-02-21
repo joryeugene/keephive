@@ -16,14 +16,19 @@ E2E_OUTPUT_DIR = Path(__file__).parent / "e2e_outputs"
 
 
 def _load_latest_output(command: str) -> dict | None:
-    """Load the most recent saved E2E output for a command."""
+    """Load the most recent valid saved E2E output for a command.
+
+    Skips artifacts that contain LLM error messages (stale runs).
+    """
     cmd_dir = E2E_OUTPUT_DIR / command
     if not cmd_dir.exists():
         return None
     files = sorted(cmd_dir.glob("*.json"))
-    if not files:
-        return None
-    return json.loads(files[-1].read_text())
+    for f in reversed(files):
+        data = json.loads(f.read_text())
+        if "LLM failed" not in data.get("output", ""):
+            return data
+    return None
 
 
 class TestLifecycleOutputVerification:

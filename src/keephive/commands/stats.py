@@ -349,7 +349,7 @@ def _knowledge_health() -> dict:
         except (json.JSONDecodeError, OSError):
             pass
 
-    capture_recall_ratio = (facts_recalled / total_facts * 100) if total_facts > 0 else 0.0
+    capture_recall_ratio = min(100.0, (facts_recalled / total_facts * 100)) if total_facts > 0 else 0.0
     fact_survival_rate = (first_valid / first_total * 100) if first_total > 0 else 0.0
 
     total_bucketed = fresh + aging + stale_count

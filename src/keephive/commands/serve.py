@@ -1274,7 +1274,9 @@ def _safe_call(fn, *args, **kwargs):
         return None
 
 
-def _compute_tool_trends(sessions: list[dict], week_start: str, prev_week_start: str) -> dict[str, str]:
+def _compute_tool_trends(
+    sessions: list[dict], week_start: str, prev_week_start: str
+) -> dict[str, str]:
     """Compute week-over-week tool usage trend arrows from session data.
 
     Returns {tool_name: "▲N%" or "▼N%"} for tools with >= 2% change.
