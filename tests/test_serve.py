@@ -471,7 +471,10 @@ def test_all_view_log_home_truncates(hive_env):
     fake_entries = [{"time": f"10:{i:02d}", "text": f"Entry {i}", "cat": ""} for i in range(30)]
     data = {"entries": fake_entries, "date": "2026-01-01"}
     html = _render_log_home_panel(data)
-    assert "more entries above" in html
+    assert "show next 25" in html
+    assert "show all 30" in html
+    assert "loadLogMore(50)" in html
+    assert "loadLogMore(0)" in html
 
 
 # ---- New feature: log date navigation ----

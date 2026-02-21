@@ -214,6 +214,9 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .todo-color{color:#e3b341}.correction{color:#ffa657}.done-cat{color:#3fb950}.auto-cat{color:#8b949e}
 .log-see-more{display:block;padding:6px 0;font-size:12px;color:#58a6ff;text-decoration:none;text-align:center}
 .log-see-more:hover{color:#79c0ff}
+.log-show-more{display:flex;gap:8px;justify-content:center;padding:8px 0 4px}
+.log-show-more button{font-size:11px;padding:3px 10px;border-radius:10px;cursor:pointer;border:1px solid #30363d;background:#21262d;color:#8b949e;transition:border-color .1s,color .1s}
+.log-show-more button:hover{border-color:#58a6ff;color:#c9d1d9}
 .todo-item{padding:5px 10px;border-bottom:1px solid #21262d;display:flex;gap:8px;align-items:baseline;font-size:12px;border-radius:4px;transition:background .1s}
 .todo-item:last-child{border-bottom:none}
 .todo-item:hover{background:#1c2128}
@@ -288,7 +291,7 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .fact-text{color:#c9d1d9}
 .empty{color:#8b949e;font-size:12px;padding:16px 20px;font-style:italic;text-align:center;background:#0d1117;border:1px dashed #30363d;border-radius:6px;margin:4px 0}
 .cmd-hints{display:flex;flex-wrap:wrap;gap:5px;padding:6px 12px;border-bottom:1px solid #21262d;background:#0a0e13}
-.cmd-hint{font-family:monospace;font-size:11px;color:#8b949e;background:#161b22;border:1px solid #30363d;border-radius:3px;padding:2px 7px;cursor:copy;user-select:all;transition:border-color .15s,background .15s}
+.cmd-hint{font-family:monospace;font-size:11px;color:#8b949e;background:#161b22;border:1px solid #30363d;border-radius:3px;padding:2px 7px;cursor:default;user-select:all;transition:border-color .15s,background .15s}
 .cmd-hint:hover{border-color:#58a6ff;color:#c9d1d9;background:#1c2128}
 .standup-section{margin-bottom:8px}
 .standup-label{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px}
@@ -559,6 +562,23 @@ _JS = """
   window.loadLog=function(dateStr){
     logDate=dateStr;
     fetch('/api/fragment?view=log&date='+dateStr)
+      .then(function(r){return r.text();})
+      .then(function(h){
+        var mc=document.getElementById('main-content');
+        if(!mc)return;
+        var logPanel=mc.querySelector('[data-panel="log"]');
+        if(logPanel){
+          var tmp=document.createElement('div');
+          tmp.innerHTML=h;
+          var np=tmp.firstElementChild;
+          if(np)logPanel.replaceWith(np);
+        }
+      });
+  };
+  window.loadLogMore=function(limit){
+    var url='/api/fragment?view=log&limit='+limit;
+    if(logDate)url+='&date='+logDate;
+    fetch(url)
       .then(function(r){return r.text();})
       .then(function(h){
         var mc=document.getElementById('main-content');
@@ -1592,7 +1612,14 @@ def _render_log_panel(
             f'<a class="log-see-more" href="{_e(see_more_url)}">See all {total} entries \u2192</a>'
         )
     elif truncated:
-        see_more_html = f'<div class="empty" style="text-align:center;padding-top:6px">{total - limit} more entries above</div>'
+        remaining = total - limit
+        next_limit = limit + 25
+        see_more_html = (
+            f'<div class="log-show-more">'
+            f'<button onclick="loadLogMore({next_limit})">{remaining} more &mdash; show next 25</button>'
+            f'<button onclick="loadLogMore(0)">show all {total}</button>'
+            f"</div>"
+        )
 
     # Filter bar: only when enough entries with type diversity
     filter_html = ""
@@ -2578,7 +2605,12 @@ class _HiveHandler(BaseHTTPRequestHandler):
             # Special case: view=log returns just the log panel (for date navigation)
             if view_name == "log":
                 data = _get_log_data(log_date)
-                body = _render_log_panel(data).encode()
+                limit_str = qs.get("limit", ["25"])[0]
+                try:
+                    log_limit = int(limit_str)
+                except ValueError:
+                    log_limit = 25
+                body = _render_log_panel(data, limit=log_limit, show_nav=True).encode()
             else:
                 if view_name not in VIEWS:
                     view_name = "home"
