@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.15.1
+
+### Fixes
+
+- **Favicon rendering**: Base64-encode the SVG favicon data URI so the HTML parser no longer truncates it at `<polygon`. Amber honeycomb hexagon now appears in the browser tab.
+
 ### Context injection
 
 - **Project attribution**: PreCompact hook now tags each classified insight with `[project:name]` in the daily log. Cross-project search and attribution enabled.
