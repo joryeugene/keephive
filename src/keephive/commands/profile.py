@@ -25,8 +25,7 @@ def _validate_name(name: str) -> str | None:
         return None
     if not _NAME_RE.match(name):
         return (
-            f"Invalid profile name: {name!r}. "
-            "Use lowercase letters, digits, hyphens. Max 30 chars."
+            f"Invalid profile name: {name!r}. Use lowercase letters, digits, hyphens. Max 30 chars."
         )
     return None
 
@@ -73,7 +72,9 @@ def _list_profiles() -> None:
 
     current = active_profile()
     if current:
-        console.print(f"\n[dim]Active: {current}  |  hive profile use default  to switch back[/dim]")
+        console.print(
+            f"\n[dim]Active: {current}  |  hive profile use default  to switch back[/dim]"
+        )
     else:
         console.print(f"\n[dim]Active: default  |  Data: {hive_dir()}[/dim]")
 

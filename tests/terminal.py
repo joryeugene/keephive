@@ -39,9 +39,7 @@ class Screen:
     def has(self, *texts: str) -> "Screen":
         """Assert all texts appear in output."""
         for t in texts:
-            assert t in self.plain, (
-                f"Expected {t!r} in output of `{self.command}`:\n{self.plain}"
-            )
+            assert t in self.plain, f"Expected {t!r} in output of `{self.command}`:\n{self.plain}"
         return self
 
     def lacks(self, *texts: str) -> "Screen":
@@ -54,17 +52,13 @@ class Screen:
 
     def has_ansi(self) -> "Screen":
         """Assert ANSI escape codes are present."""
-        assert "\x1b[" in self.ansi, (
-            f"No ANSI codes in output of `{self.command}`"
-        )
+        assert "\x1b[" in self.ansi, f"No ANSI codes in output of `{self.command}`"
         return self
 
     def line_count_between(self, lo: int, hi: int) -> "Screen":
         """Assert line count is within range."""
         n = len(self.lines)
-        assert lo <= n <= hi, (
-            f"Expected {lo}-{hi} lines, got {n} from `{self.command}`"
-        )
+        assert lo <= n <= hi, f"Expected {lo}-{hi} lines, got {n} from `{self.command}`"
         return self
 
     def matches(self, pattern: str) -> "Screen":
@@ -99,8 +93,12 @@ class Terminal:
         # Scaffold hive directory
         self.hive_home.mkdir(parents=True, exist_ok=True)
         for sub in [
-            "working", "daily", "knowledge/guides",
-            "knowledge/prompts", "working/notes", "archive",
+            "working",
+            "daily",
+            "knowledge/guides",
+            "knowledge/prompts",
+            "working/notes",
+            "archive",
         ]:
             (self.hive_home / sub).mkdir(parents=True, exist_ok=True)
 
@@ -125,10 +123,15 @@ class Terminal:
     def _start(self) -> None:
         """Create a detached tmux session."""
         cmd = [
-            "tmux", "new-session", "-d",
-            "-s", self.session,
-            "-x", str(self.width),
-            "-y", str(self.height),
+            "tmux",
+            "new-session",
+            "-d",
+            "-s",
+            self.session,
+            "-x",
+            str(self.width),
+            "-y",
+            str(self.height),
         ]
         for k, v in self._env.items():
             if v:
@@ -180,12 +183,14 @@ class Terminal:
             if any(ln.strip() == END_MARKER for ln in raw.split("\n")):
                 ansi = self._capture(ansi=True)
                 screen = self._extract(raw, ansi, command)
-                self._history.append({
-                    "command": command,
-                    "plain": screen.plain,
-                    "line_count": len(screen.lines),
-                    "timestamp": time.time(),
-                })
+                self._history.append(
+                    {
+                        "command": command,
+                        "plain": screen.plain,
+                        "line_count": len(screen.lines),
+                        "timestamp": time.time(),
+                    }
+                )
                 return screen
             time.sleep(POLL_INTERVAL)
 
@@ -198,7 +203,8 @@ class Terminal:
         """Send a single character (for y/n prompts). No Enter."""
         subprocess.run(
             ["tmux", "send-keys", "-t", self.session, char],
-            capture_output=True, check=True,
+            capture_output=True,
+            check=True,
         )
 
     def screen(self) -> Screen:
@@ -245,7 +251,8 @@ class Terminal:
         """Send keystrokes + Enter to the tmux session."""
         subprocess.run(
             ["tmux", "send-keys", "-t", self.session, text, "Enter"],
-            capture_output=True, check=True,
+            capture_output=True,
+            check=True,
         )
 
     def _capture(self, ansi: bool = False) -> str:

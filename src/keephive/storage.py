@@ -153,12 +153,14 @@ def list_profiles() -> list[dict]:
 
     # Default profile always exists conceptually
     default_dir = cd / "hive"
-    profiles.append({
-        "name": "default",
-        "path": str(default_dir),
-        "active": current is None,
-        "exists": default_dir.exists(),
-    })
+    profiles.append(
+        {
+            "name": "default",
+            "path": str(default_dir),
+            "active": current is None,
+            "exists": default_dir.exists(),
+        }
+    )
 
     # Named profiles: hive-<name> directories
     if cd.exists():
@@ -166,12 +168,14 @@ def list_profiles() -> list[dict]:
             if p.is_dir() and p.name.startswith("hive-"):
                 name = p.name[5:]  # strip "hive-" prefix
                 if name:  # skip empty
-                    profiles.append({
-                        "name": name,
-                        "path": str(p),
-                        "active": current == name,
-                        "exists": True,
-                    })
+                    profiles.append(
+                        {
+                            "name": name,
+                            "path": str(p),
+                            "active": current == name,
+                            "exists": True,
+                        }
+                    )
 
     return profiles
 

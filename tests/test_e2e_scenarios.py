@@ -74,8 +74,7 @@ class TestKnowledgeLifecycle:
         """FACT stale at 30+ days, not at 29. Uses working memory directly."""
         # Write fact to working memory with a specific verified date
         (term.hive_home / "working" / "memory.md").write_text(
-            "# Working Memory\n\n"
-            "- FACT: boundary test [verified:2026-01-01]\n"
+            "# Working Memory\n\n- FACT: boundary test [verified:2026-01-01]\n"
         )
 
         # Day 29: not stale yet (30-day threshold for FACTs)
@@ -90,8 +89,7 @@ class TestKnowledgeLifecycle:
     def test_staleness_boundary_decision(self, term):
         """DECISION stale at 90+ days, not at 89. Uses working memory directly."""
         (term.hive_home / "working" / "memory.md").write_text(
-            "# Working Memory\n\n"
-            "- DECISION: Use Redis for caching [verified:2026-01-01]\n"
+            "# Working Memory\n\n- DECISION: Use Redis for caching [verified:2026-01-01]\n"
         )
 
         term.set_date("2026-03-31")  # Day 89
@@ -114,8 +112,7 @@ class TestKnowledgeLifecycle:
         """Full 30-day lifecycle: fresh memory -> stale memory."""
         # Seed working memory with a verified fact
         (term.hive_home / "working" / "memory.md").write_text(
-            "# Working Memory\n\n"
-            "- FACT: lifecycle test [verified:2026-01-01]\n"
+            "# Working Memory\n\n- FACT: lifecycle test [verified:2026-01-01]\n"
         )
 
         # Day 1: fresh

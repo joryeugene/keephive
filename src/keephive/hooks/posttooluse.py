@@ -56,8 +56,6 @@ def hook_posttooluse(_args: list[str]) -> None:
 
             debug_log = hive_dir() / ".hook-debug.log"
             with open(debug_log, "a") as f:
-                f.write(
-                    f"[{get_now().isoformat(timespec='seconds')}] posttooluse error: {e}\n"
-                )
+                f.write(f"[{get_now().isoformat(timespec='seconds')}] posttooluse error: {e}\n")
         except Exception:
             pass

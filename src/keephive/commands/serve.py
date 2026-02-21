@@ -3679,9 +3679,7 @@ def render_fragment(view_name: str, extra_params: dict | None = None) -> str:
                 f'<div class="grid-panel" data-panel-id="{_e(name)}">{panel_html}</div>'
             )
         cols = len(row)
-        parts.append(
-            f'<div class="grid-row grid-cols-{cols}">{"".join(row_panels)}</div>'
-        )
+        parts.append(f'<div class="grid-row grid-cols-{cols}">{"".join(row_panels)}</div>')
     return "\n".join(parts)
 
 

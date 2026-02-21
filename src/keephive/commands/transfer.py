@@ -161,7 +161,4 @@ def cmd_import(args: list[str]) -> None:
 
     source_profile = manifest.get("profile", "unknown")
     console.print(f"[green]Imported from: {archive_path}[/green]")
-    console.print(
-        f"[dim]Source profile: {source_profile}  |  "
-        f"Target: {target}[/dim]"
-    )
+    console.print(f"[dim]Source profile: {source_profile}  |  Target: {target}[/dim]")

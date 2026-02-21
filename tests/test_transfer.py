@@ -18,8 +18,14 @@ def transfer_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("HIVE_SKIP_LLM", "1")
 
     # Create directory structure
-    for sub in ["working", "daily", "knowledge/guides",
-                "knowledge/prompts", "working/notes", "archive"]:
+    for sub in [
+        "working",
+        "daily",
+        "knowledge/guides",
+        "knowledge/prompts",
+        "working/notes",
+        "archive",
+    ]:
         (hive_dir / sub).mkdir(parents=True, exist_ok=True)
 
     # Add test data
@@ -92,8 +98,14 @@ def test_roundtrip_export_import(transfer_env, tmp_path, monkeypatch):
     # Import into a new directory
     import_dir = tmp_path / "import-hive"
     import_dir.mkdir()
-    for sub in ["working", "daily", "knowledge/guides",
-                "knowledge/prompts", "working/notes", "archive"]:
+    for sub in [
+        "working",
+        "daily",
+        "knowledge/guides",
+        "knowledge/prompts",
+        "working/notes",
+        "archive",
+    ]:
         (import_dir / sub).mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setenv("HIVE_HOME", str(import_dir))
@@ -126,6 +138,7 @@ def test_import_rejects_path_traversal(transfer_env, tmp_path, monkeypatch):
 
     with pytest.raises(SystemExit):
         from keephive.commands.transfer import cmd_import
+
         cmd_import([str(evil_path)])
 
 

@@ -20,8 +20,14 @@ def profile_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Create default hive dir
     default_hive = claude_dir / "hive"
     default_hive.mkdir()
-    for sub in ["working", "daily", "knowledge/guides", "knowledge/prompts",
-                "working/notes", "archive"]:
+    for sub in [
+        "working",
+        "daily",
+        "knowledge/guides",
+        "knowledge/prompts",
+        "working/notes",
+        "archive",
+    ]:
         (default_hive / sub).mkdir(parents=True, exist_ok=True)
 
     # Patch _claude_dir to use our temp dir
