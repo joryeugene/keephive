@@ -16,6 +16,7 @@ from keephive.storage import (
     active_slot,
     backup_and_write,
     count_stale_facts,
+    daily_file,
     due_recurring,
     get_meaningful_entries,
     get_stale_facts,
@@ -25,6 +26,7 @@ from keephive.storage import (
     open_todos,
     read_memory,
     read_rules,
+    safe_read_text,
     slot_file,
 )
 
@@ -212,6 +214,12 @@ def build_context(cwd: str, project_name: str) -> str:
         if guide_text:
             parts.append(guide_text)
 
+    # 7. Cross-project activity hint
+    if project_name:
+        cross_hint = _cross_project_hint(project_name)
+        if cross_hint:
+            parts.append(cross_hint)
+
     return "\n\n".join(parts)
 
 
@@ -250,28 +258,34 @@ def _data_quality_warnings() -> list[str]:
 
 
 def _match_guides(project_name: str, cwd: str = "") -> str:
-    """Find guides matching the current project or working directory path."""
+    """Find guides matching the current project or working directory path.
+
+    Two-pass approach:
+    1. Collect always-inject guides (``always: true`` in front matter)
+    2. Collect project-matched guides (by tag, path, or filename)
+    Always-inject guides fill slots first; project-matched guides fill remaining slots.
+    Budget: max 3 guides, 1500 words total.
+    """
     import re as _re
 
     gd = guides_dir()
     if not gd.exists():
         return ""
 
-    matched_parts: list[str] = []
-    total_words = 0
     max_words = 1500
     max_guides = 3
-    count = 0
+
+    # Intermediate: (guide_path, content_without_frontmatter)
+    always_guides: list[tuple[Path, str]] = []
+    project_guides: list[tuple[Path, str]] = []
 
     for guide in sorted(gd.glob("*.md")):
-        if count >= max_guides:
-            break
-
         text = guide.read_text()
+        is_always = False
         matched = False
         paths_patterns: list[str] = []
 
-        # Check tags/projects in front matter
+        # Parse front matter
         if text.startswith("---"):
             fm_lines = []
             for line in text.splitlines()[1:]:
@@ -279,7 +293,14 @@ def _match_guides(project_name: str, cwd: str = "") -> str:
                     break
                 fm_lines.append(line)
             fm_text = " ".join(fm_lines).lower()
-            if project_name.lower() in fm_text:
+
+            # Check always: true
+            always_match = _re.search(r"always:\s*(true|yes)", fm_text)
+            if always_match:
+                is_always = True
+
+            # Check tags/projects match
+            if not is_always and project_name.lower() in fm_text:
                 matched = True
 
             # Extract paths: [...] from front matter for cwd matching
@@ -288,17 +309,17 @@ def _match_guides(project_name: str, cwd: str = "") -> str:
                 paths_patterns = [p.strip().strip("'\"") for p in paths_match.group(1).split(",")]
 
         # Check cwd against paths patterns
-        if not matched and cwd and paths_patterns:
+        if not is_always and not matched and cwd and paths_patterns:
             for pattern in paths_patterns:
                 if pattern and pattern in cwd:
                     matched = True
                     break
 
         # Fallback: filename matches project
-        if not matched and project_name.lower() in guide.stem.lower():
+        if not is_always and not matched and project_name.lower() in guide.stem.lower():
             matched = True
 
-        if matched:
+        if is_always or matched:
             # Strip front matter for injection
             content = text
             if text.startswith("---"):
@@ -310,15 +331,64 @@ def _match_guides(project_name: str, cwd: str = "") -> str:
                         break
                 content = "\n".join(lines[end_idx:])
 
-            words = len(content.split())
-            if total_words + words <= max_words:
-                matched_parts.append(f"--- Guide: {guide.stem} ---\n{content}")
-                total_words += words
-                count += 1
+            if is_always:
+                always_guides.append((guide, content))
+            else:
+                project_guides.append((guide, content))
+
+    # Fill slots: always guides first, then project-matched
+    matched_parts: list[str] = []
+    total_words = 0
+    count = 0
+
+    for guide, content in always_guides + project_guides:
+        if count >= max_guides:
+            break
+        words = len(content.split())
+        if total_words + words <= max_words:
+            matched_parts.append(f"--- Guide: {guide.stem} ---\n{content}")
+            total_words += words
+            count += 1
 
     if matched_parts:
         return "## Relevant Knowledge Guides\n" + "\n".join(matched_parts)
     return ""
+
+
+def _cross_project_hint(current_project: str) -> str:
+    """Scan recent daily logs for insights from other projects.
+
+    Looks for ``[project:X]`` tags in the last 7 days of daily logs,
+    counts insights per project (excluding the current one), and returns
+    a one-liner hint enabling cross-project recall.
+
+    Returns empty string when no cross-project tags are found.
+    """
+    import re
+    from datetime import date, timedelta
+
+    tag_re = re.compile(r"\[project:([^\]]+)\]")
+    counts: dict[str, int] = {}
+    today = date.today()
+
+    for days_ago in range(7):
+        day_str = (today - timedelta(days=days_ago)).isoformat()
+        df = daily_file(day_str)
+        if not df.exists():
+            continue
+        content = safe_read_text(df)
+        for match in tag_re.finditer(content):
+            proj = match.group(1)
+            if proj.lower() != current_project.lower():
+                counts[proj] = counts.get(proj, 0) + 1
+
+    if not counts:
+        return ""
+
+    # Sort by count descending
+    ranked = sorted(counts.items(), key=lambda x: x[1], reverse=True)
+    parts = [f"{name} ({n} insight{'s' if n != 1 else ''})" for name, n in ranked]
+    return f"Recent work on other projects: {', '.join(parts)}. Use hive_recall() to search across projects."
 
 
 def _auto_reverify() -> list[str]:

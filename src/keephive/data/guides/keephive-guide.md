@@ -75,7 +75,7 @@ When Claude Code compacts a conversation, keephive's PreCompact hook:
 1. Reads the full transcript from disk (JSONL)
 2. Extracts messages with budget distribution (50% user / 50% assistant)
 3. Pipes excerpts to `claude -p` for structured classification (DECISION/FACT/CORRECTION/TODO/INSIGHT)
-4. Writes classified insights directly to the daily log
+4. Writes classified insights to the daily log with project attribution (`[project:name]` tag)
 
 ### Smart context injection
 
@@ -84,8 +84,9 @@ When a new session starts, keephive's SessionStart hook injects:
 - Working memory (core verified facts)
 - Behavioral rules
 - Stale fact warnings
-- Matching knowledge guides (by project name/tag)
+- Matching knowledge guides (by project name/tag, or `always: true` for universal guides)
 - Open TODOs and recent activity
+- Cross-project activity hints (when insights from other projects exist in recent logs)
 
 When `hive go` launches a session, it writes a timestamp file (`.session-launched`) that the SessionStart hook reads. If the timestamp is <15 seconds old, the hook skips injection to avoid doubling context. This prevents the 2× duplication that would otherwise occur.
 
@@ -113,7 +114,7 @@ When keephive runs as an MCP server, Claude Code calls these natively:
 | `hive_prompt_write(name, content)`    | `hive pe <name>`       | Create/update prompt       |
 | `hive_mem(action, text)`              | `hive mem`             | Manage memory facts        |
 | `hive_rule(action, text)`             | `hive rule`            | Manage rules               |
-| `hive_log(day)`                       | `hive l`               | View daily log             |
+| `hive_log(day)`                       | `hive l`               | View daily log (entries may include [project:name] tags) |
 | `hive_audit()`                        | `hive audit`           | Quality Pulse analysis     |
 | `hive_recurring(action, freq, text)`  | `hive todo repeat`     | Manage recurring tasks (list/add/rm/done) |
 | `hive_stats(project, date)`           | `hive stats`           | Usage statistics           |

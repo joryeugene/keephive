@@ -77,8 +77,9 @@ def hook_precompact(args: list[str]) -> None:
                 append_to_daily(excerpts)
 
     # Layer 2: LLM summary (skip if HIVE_SKIP_LLM=1 or no excerpts)
+    project_name = Path(cwd).name if cwd else ""
     if excerpts and not os.environ.get("HIVE_SKIP_LLM"):
-        _llm_summary(excerpts)
+        _llm_summary(excerpts, project_name=project_name)
 
 
 def _find_transcript(input_data: dict) -> str | None:
@@ -300,7 +301,7 @@ def _is_garbage_insight(text: str) -> bool:
     return False
 
 
-def _llm_summary(excerpts: str, pipe_fn=None) -> None:
+def _llm_summary(excerpts: str, pipe_fn=None, project_name: str = "") -> None:
     """Layer 2: LLM summary via claude -p."""
     try:
         from keephive.claude import run_claude_pipe
@@ -364,7 +365,8 @@ Optionally include rule_suggestions (max 2, empty list if none): short imperativ
                     continue
                 if not _is_duplicate_insight(df, desc):
                     ts = datetime.now().strftime("%H:%M:%S")
-                    append_to_daily(f"- [{ts}] {insight.category.value}: {desc}")
+                    proj_tag = f" [project:{project_name}]" if project_name else ""
+                    append_to_daily(f"- [{ts}] {insight.category.value}: {desc}{proj_tag}")
                     written += 1
 
             if written:
@@ -377,7 +379,7 @@ Optionally include rule_suggestions (max 2, empty list if none): short imperativ
 
         # Apply memory updates (auto-promote / auto-correct)
         if response.memory_updates:
-            _apply_memory_updates(response.memory_updates)
+            _apply_memory_updates(response.memory_updates, project_name=project_name)
 
         if response.rule_suggestions:
             _queue_rule_suggestions(response.rule_suggestions)
@@ -388,7 +390,7 @@ Optionally include rule_suggestions (max 2, empty list if none): short imperativ
             f.write(f"[{datetime.now().isoformat(timespec='seconds')}] Layer 2 failed: {e}\n")
 
 
-def _apply_memory_updates(updates: list) -> None:
+def _apply_memory_updates(updates: list, project_name: str = "") -> None:
     """Apply memory updates from LLM response to memory.md.
 
     - ADD: append to ## Auto-Captured section
@@ -402,6 +404,7 @@ def _apply_memory_updates(updates: list) -> None:
     content = safe_read_text(mem_path) if mem_path.exists() else ""
     today_str = datetime.now().strftime("%Y-%m-%d")
     applied = 0
+    proj_tag = f" [project:{project_name}]" if project_name else ""
 
     for update in updates[:3]:  # Hard cap: 3 per compaction
         if update.action == MemoryAction.CORRECT and update.replaces:
@@ -410,7 +413,9 @@ def _apply_memory_updates(updates: list) -> None:
             if new_content != content:
                 content = new_content
                 ts = datetime.now().strftime("%H:%M:%S")
-                append_to_daily(f'- [{ts}] AUTO-CORRECTED: "{update.replaces}" -> "{update.text}"')
+                append_to_daily(
+                    f'- [{ts}] AUTO-CORRECTED: "{update.replaces}" -> "{update.text}"{proj_tag}'
+                )
                 applied += 1
 
         elif update.action == MemoryAction.ADD:
@@ -418,7 +423,7 @@ def _apply_memory_updates(updates: list) -> None:
             if not _is_duplicate_in_memory(content, update.text):
                 content = _add_to_auto_captured(content, update.text, today_str)
                 ts = datetime.now().strftime("%H:%M:%S")
-                append_to_daily(f"- [{ts}] AUTO-PROMOTED: {update.text}")
+                append_to_daily(f"- [{ts}] AUTO-PROMOTED: {update.text}{proj_tag}")
                 applied += 1
 
     if applied > 0:

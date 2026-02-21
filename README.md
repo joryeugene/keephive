@@ -1,7 +1,11 @@
 # keephive
 
-[![GitHub release](https://img.shields.io/github/v/release/joryeugene/keephive.svg)](https://github.com/joryeugene/keephive/releases/latest)
-[![PyPI version](https://img.shields.io/pypi/v/keephive.svg)](https://pypi.org/project/keephive/)
+<p align="center">
+  <a href="https://pypi.org/project/keephive/"><img src="https://img.shields.io/pypi/v/keephive.svg" alt="PyPI"></a>
+  <a href="https://pypi.org/project/keephive/"><img src="https://img.shields.io/pypi/pyversions/keephive.svg" alt="Python"></a>
+  <a href="https://github.com/joryeugene/keephive/releases/latest"><img src="https://img.shields.io/github/v/release/joryeugene/keephive.svg" alt="GitHub release"></a>
+  <a href="https://github.com/joryeugene/keephive/blob/main/LICENSE"><img src="https://img.shields.io/github/license/joryeugene/keephive.svg" alt="License"></a>
+</p>
 
 A knowledge sidecar for Claude Code. It captures what you learn, verifies it stays true, and surfaces it when relevant.
 
@@ -10,6 +14,8 @@ A knowledge sidecar for Claude Code. It captures what you learn, verifies it sta
 </p>
 
 Claude Code forgets everything between sessions. keephive rides alongside it using hooks, an MCP server, and context injection to give it persistent, verified memory.
+
+---
 
 ## Install
 
@@ -41,7 +47,10 @@ hive up                    # upgrade in place (recommended)
 uv tool upgrade keephive   # manual alternative; run keephive setup after
 ```
 
-Run `keephive setup` again after upgrading manually to sync hooks and the MCP server registration to the new binary path.
+> [!TIP]
+> Run `keephive setup` again after upgrading manually to sync hooks and the MCP server registration to the new binary path.
+
+---
 
 ## Quick start
 
@@ -77,13 +86,15 @@ keephive v0.15.0
   hive go (session) | hive l (log) | hive rf (reflect) | hive help
 ```
 
+---
+
 ## How it works
 
 keephive uses the three extension points Claude Code exposes:
 
 1. **Hooks** fire on events (session start, conversation compact, user prompt). They capture insights and inject context without any agent action.
 2. **MCP server** gives Claude Code native tool access (`hive_remember`, `hive_recall`, etc.) so the agent can read and write memory directly.
-3. **Context injection** surfaces verified facts, behavioral rules, stale warnings, matching knowledge guides, and open TODOs at the start of every session via the SessionStart hook's `additionalContext` field.
+3. **Context injection** surfaces verified facts, behavioral rules, stale warnings, matching knowledge guides, open TODOs, and cross-project activity hints at the start of every session via the SessionStart hook's `additionalContext` field.
 
 ### The loop
 
@@ -106,7 +117,7 @@ flowchart TD
         direction LR
         START([New session]) -->|"SessionStart:<br>inject context"| WORK([Working])
         WORK -->|"PostToolUse · UserPromptSubmit:<br>nudge, ui-queue inject"| WORK
-        WORK -->|context full| PC["PreCompact:<br>extract → log"]
+        WORK -->|context full| PC["PreCompact:<br>extract → log<br>(+ project tag)"]
         PC -->|next session| START
     end
 
@@ -150,11 +161,16 @@ flowchart TD
 | Hook             | Trigger               | What it does                                           |
 | ---------------- | --------------------- | ------------------------------------------------------ |
 | SessionStart     | New session           | Injects memory, rules, TODOs, stale warnings           |
-| PreCompact       | Conversation compacts | Extracts insights from transcript, writes to daily log |
+| PreCompact       | Conversation compacts | Extracts insights from transcript, writes to daily log with project attribution |
 | PostToolUse      | After Edit/Write      | Periodic nudge to record decisions                     |
 | UserPromptSubmit | User sends prompt     | Periodic nudge to record decisions                     |
 
+---
+
 ## Commands
+
+<details>
+<summary><b>Full command reference</b> (35 commands)</summary>
 
 | Command                 | Short             | What                                       |
 | ----------------------- | ----------------- | ------------------------------------------ |
@@ -193,7 +209,10 @@ flowchart TD
 | `hive serve [port]`     | `hive ws`         | Live web dashboard (localhost:3847)        |
 | `hive ui`               |                   | Show / manage UI feedback queue            |
 
-### Features in depth
+</details>
+
+<details>
+<summary><b>Features in depth</b></summary>
 
 #### Dashboard
 
@@ -222,6 +241,19 @@ Auto-refresh (configurable interval), Cmd+K search, split-pane resizing, CRUD fo
 
 `hive rc <query>` uses an SQLite FTS5 index over all daily logs and the archive for ranked full-text search. Run `hive gc` to rebuild the index. Falls back to grep if the index is absent.
 
+#### Guide front matter
+
+Knowledge guides support optional YAML front matter for controlling injection:
+
+| Field | Effect |
+|-------|--------|
+| `tags: [tag1, tag2]` | Matched against project name for auto-injection |
+| `projects: [proj1]` | Matched against project name for auto-injection |
+| `paths: ["/path/pattern"]` | Matched against working directory for auto-injection |
+| `always: true` | Injected into every session regardless of project |
+
+Guides without front matter match only by filename (project name as substring).
+
 #### Notes
 
 `hive n` is a multi-slot scratchpad. Each slot persists across sessions, auto-copies to clipboard on save, and can be initialized from a prompt template (`hive n <template>`). Use `hive n.2` or `hive 2` to switch to slot 2 and open it in `$EDITOR`.
@@ -234,7 +266,7 @@ Auto-refresh (configurable interval), Cmd+K search, split-pane resizing, CRUD fo
 
 `hive e <target>` opens files in `$EDITOR`. Targets: memory, rules, todo (with diff-on-save), CLAUDE.md, settings, daily log, notes. Run `hive e` with no arguments to see all targets.
 
-### Sessions
+#### Sessions
 
 `hive go` launches an interactive Claude session with your full keephive context pre-loaded.
 
@@ -267,13 +299,23 @@ Auto-refresh (configurable interval), Cmd+K search, split-pane resizing, CRUD fo
 
 `hive p` lists reusable prompt templates stored in `knowledge/prompts/`. Use them to start notes (`hive n <template>`) or launch custom sessions (`hive session <template>`).
 
-### MCP tools
+</details>
+
+<details>
+<summary><b>MCP tools</b></summary>
 
 All commands are also available as MCP tools for Claude Code to call directly:
 
 `hive_remember`, `hive_recall`, `hive_status`, `hive_todo`, `hive_todo_done`, `hive_knowledge`, `hive_knowledge_write`, `hive_prompt`, `hive_prompt_write`, `hive_mem`, `hive_rule`, `hive_log`, `hive_audit`, `hive_recurring`, `hive_stats`, `hive_fts_search`, `hive_standup`, `hive_ps`
 
+</details>
+
+---
+
 ## Configuration
+
+<details>
+<summary><b>Environment variables</b></summary>
 
 | Variable              | Default          | Description                            |
 | --------------------- | ---------------- | -------------------------------------- |
@@ -283,13 +325,19 @@ All commands are also available as MCP tools for Claude Code to call directly:
 | `ANTHROPIC_API_KEY`   | (unset)          | Enables LLM features inside Claude Code sessions. Never needed from a terminal. |
 | `NO_COLOR`            | (unset)          | Disable terminal colors                |
 
+</details>
+
+---
+
 ## LLM features
 
-**TL;DR: If you have Claude Code, you pay nothing extra. Ever.**
-
-keephive calls `claude -p`, which runs under your existing Claude Code subscription. `ANTHROPIC_API_KEY` is never checked from a terminal or a hook — you cannot accidentally bill yourself.
+> [!IMPORTANT]
+> **If you have Claude Code, you pay nothing extra. Ever.** keephive calls `claude -p`, which runs under your existing Claude Code subscription. `ANTHROPIC_API_KEY` is never checked from a terminal or a hook.
 
 The API path exists for one specific case: running LLM commands (`hive a`, `hive v`, etc.) _inside_ a Claude Code session rather than from a separate terminal. That is the only time `ANTHROPIC_API_KEY` is consulted.
+
+<details>
+<summary><b>Billing tiers and LLM-powered commands</b></summary>
 
 ### Two tiers
 
@@ -320,7 +368,12 @@ Hooks (PreCompact, etc.) run without the `CLAUDECODE` environment variable, so t
 
 ### Disable automatic LLM calls
 
-Set `HIVE_SKIP_LLM=1` to skip the PreCompact hook's extraction step. SessionStart never calls an LLM.
+> [!NOTE]
+> Set `HIVE_SKIP_LLM=1` to skip the PreCompact hook's extraction step. SessionStart never calls an LLM.
+
+</details>
+
+---
 
 ## Development
 

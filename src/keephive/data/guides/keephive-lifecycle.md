@@ -30,7 +30,7 @@ Tiers from most stable (top) to most ephemeral (bottom).
 | hive rule add "text", hive rule rm "text"                  |
 +============================================================+
 | KNOWLEDGE GUIDES  ~/.../knowledge/guides/<name>.md         |
-| Rich structured docs per topic, injected by tag            |
+| Rich structured docs per topic, injected by tag or always  |
 | hive ke <name> to edit, hive k <name> to view              |
 +============================================================+
 | DAILY LOG  ~/.claude/hive/YYYY-MM-DD.md                    |
@@ -63,9 +63,9 @@ Tiers from most stable (top) to most ephemeral (bottom).
 ## Hook Roles
 
 - **SessionStart**: Injects working memory, rules, matched knowledge guides,
-  stale warnings, open TODOs, recent log summary.
+  stale warnings, open TODOs, and cross-project activity hints.
 - **PreCompact**: Layer 1 deterministic scan + Layer 2 claude -p haiku.
-  Writes classified entries (FACT/DECISION/etc.) to daily log.
+  Writes classified entries (FACT/DECISION/etc.) to daily log with project attribution.
 - **PostToolUse**: Counter-based nudge after Edit/Write to remind
   `hive_remember` of key changes.
 - **UserPromptSubmit**: TODO detection, UI queue injection, counter nudge.

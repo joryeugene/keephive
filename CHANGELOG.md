@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Context injection
+
+- **Project attribution**: PreCompact hook now tags each classified insight with `[project:name]` in the daily log. Cross-project search and attribution enabled.
+- **`always: true` guides**: Knowledge guides with `always: true` in their YAML front matter are injected into every session regardless of the current project name. Use this for universal principles that apply everywhere.
+- **Cross-project hints**: SessionStart hook scans recent daily logs for insights from other projects and injects a one-liner hint, enabling the agent to `hive_recall()` across projects when relevant.
+
 ## v0.15.0
 
 ### Dashboard

@@ -255,7 +255,8 @@ def hive_knowledge(name: str = "") -> str:
 
 @mcp.tool()
 def hive_log(day: str = "") -> str:
-    """View daily log. Defaults to today. Pass YYYY-MM-DD, 'yesterday', or N (days ago)."""
+    """View daily log. Defaults to today. Pass YYYY-MM-DD, 'yesterday', or N (days ago).
+    Entries from PreCompact may include [project:name] tags for cross-project attribution."""
     _track_mcp("log")
     from keephive.commands.log import _nearby_logs
     from keephive.storage import parse_date_arg

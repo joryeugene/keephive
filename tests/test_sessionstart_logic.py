@@ -326,3 +326,178 @@ class TestSessionSignal:
         assert "hookSpecificOutput" in result
         # Context should be non-empty (has memory, rules etc from hive_env fixture)
         assert result["hookSpecificOutput"]["additionalContext"] != ""
+
+
+# ---- always: true guide injection ----
+
+
+class TestAlwaysGuides:
+    def test_always_true_matches_any_project(self, hive_env):
+        """A guide with always: true injects for any project name."""
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "universal-principles.md").write_text(
+            "---\ntags: [principles]\nalways: true\n---\n# Universal Principles\n\nAlways verify.\n"
+        )
+
+        from keephive.hooks.sessionstart import _match_guides
+
+        result = _match_guides("totally-unrelated-project")
+        assert "Universal Principles" in result
+
+    def test_always_true_takes_priority(self, hive_env):
+        """Always guides fill slots before project-matched guides."""
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "always-a.md").write_text("---\nalways: true\n---\n# Always A\n\nContent A.\n")
+        (gd / "always-b.md").write_text("---\nalways: true\n---\n# Always B\n\nContent B.\n")
+        (gd / "myproj-guide.md").write_text("# MyProj Guide\n\nProject content.\n")
+
+        from keephive.hooks.sessionstart import _match_guides
+
+        result = _match_guides("myproj")
+        assert "Always A" in result
+        assert "Always B" in result
+        assert "MyProj Guide" in result
+        # All three should fit within budget (3 guides max)
+        assert result.count("--- Guide:") == 3
+
+    def test_always_true_respects_budget(self, hive_env):
+        """Word budget still caps total injection even for always guides."""
+        gd = hive_env / "knowledge" / "guides"
+        # Create a guide that consumes the entire 1500-word budget
+        (gd / "always-big.md").write_text(
+            "---\nalways: true\n---\n# Big Guide\n\n" + "word " * 1500 + "\n"
+        )
+        (gd / "always-small.md").write_text(
+            "---\nalways: true\n---\n# Small Guide\n\nTiny content.\n"
+        )
+
+        from keephive.hooks.sessionstart import _match_guides
+
+        result = _match_guides("anyproject")
+        # The big guide exceeds budget alone; only the small one fits (or big alone, depending on sort)
+        # Since sorted alphabetically, always-big comes first and takes all budget
+        assert result.count("--- Guide:") <= 2
+
+    def test_always_false_not_injected(self, hive_env):
+        """A guide with always: false is not force-injected for non-matching projects."""
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "opt-out.md").write_text(
+            "---\ntags: [something]\nalways: false\n---\n# Opt Out\n\nNot for everyone.\n"
+        )
+
+        from keephive.hooks.sessionstart import _match_guides
+
+        result = _match_guides("unrelated-project")
+        assert result == ""
+
+    def test_no_always_field_unchanged(self, hive_env):
+        """Guides without always: field work exactly as before (project matching)."""
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "legacy-guide.md").write_text(
+            "---\ntags: [myapp]\n---\n# Legacy Guide\n\nOld content.\n"
+        )
+
+        from keephive.hooks.sessionstart import _match_guides
+
+        # Should match via tag
+        result = _match_guides("myapp")
+        assert "Legacy Guide" in result
+
+        # Should not match for unrelated project
+        result2 = _match_guides("other-project")
+        assert result2 == ""
+
+
+# ---- cross-project activity hint ----
+
+
+class TestCrossProjectHint:
+    def test_finds_other_projects(self, hive_env):
+        """Tagged entries from other projects appear in the hint."""
+        make_daily(
+            hive_env,
+            days_ago=0,
+            entries=[
+                "- [10:00:00] FACT: JWT uses RS256 [project:nucleus]",
+                "- [10:05:00] DECISION: Use Redis for caching [project:nucleus]",
+                "- [10:10:00] FACT: API rate limited to 100 req/s [project:mobile-app]",
+            ],
+        )
+
+        from keephive.hooks.sessionstart import _cross_project_hint
+
+        result = _cross_project_hint("keephive")
+        assert "nucleus" in result
+        assert "mobile-app" in result
+        assert "2 insights" in result  # nucleus has 2
+        assert "1 insight)" in result  # mobile-app has 1
+
+    def test_excludes_current_project(self, hive_env):
+        """Entries tagged with the current project are not in the hint."""
+        make_daily(
+            hive_env,
+            days_ago=0,
+            entries=[
+                "- [10:00:00] FACT: Auth uses JWT [project:myapp]",
+                "- [10:05:00] FACT: Tests pass [project:myapp]",
+            ],
+        )
+
+        from keephive.hooks.sessionstart import _cross_project_hint
+
+        result = _cross_project_hint("myapp")
+        assert result == ""
+
+    def test_empty_when_no_tags(self, hive_env):
+        """Returns empty string when no [project:] tags exist in logs."""
+        make_daily(
+            hive_env,
+            days_ago=0,
+            entries=[
+                "- [10:00:00] FACT: Something without a project tag",
+            ],
+        )
+
+        from keephive.hooks.sessionstart import _cross_project_hint
+
+        result = _cross_project_hint("keephive")
+        assert result == ""
+
+    def test_counts_correctly(self, hive_env):
+        """Multiple projects are counted and sorted by frequency."""
+        make_daily(
+            hive_env,
+            days_ago=0,
+            entries=[
+                "- [10:00:00] FACT: Fact A [project:alpha]",
+                "- [10:01:00] FACT: Fact B [project:alpha]",
+                "- [10:02:00] FACT: Fact C [project:alpha]",
+                "- [10:03:00] FACT: Fact D [project:beta]",
+            ],
+        )
+
+        from keephive.hooks.sessionstart import _cross_project_hint
+
+        result = _cross_project_hint("gamma")
+        assert "alpha (3 insights)" in result
+        assert "beta (1 insight)" in result
+        # alpha should come first (more insights)
+        assert result.index("alpha") < result.index("beta")
+
+    def test_scans_multiple_days(self, hive_env):
+        """Tags from logs across multiple days are collected."""
+        make_daily(
+            hive_env,
+            days_ago=0,
+            entries=["- [10:00:00] FACT: Today [project:alpha]"],
+        )
+        make_daily(
+            hive_env,
+            days_ago=3,
+            entries=["- [10:00:00] FACT: Three days ago [project:alpha]"],
+        )
+
+        from keephive.hooks.sessionstart import _cross_project_hint
+
+        result = _cross_project_hint("beta")
+        assert "alpha (2 insights)" in result

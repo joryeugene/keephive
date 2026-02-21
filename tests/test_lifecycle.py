@@ -647,3 +647,82 @@ class TestRecurringLifecycle:
 
         content = safe_read_text(recurring_file())
         assert "T" in content  # ISO timestamp with time component
+
+
+class TestPreCompactProjectAttribution:
+    """PreCompact hook tags daily log entries with [project:name]."""
+
+    def test_llm_summary_includes_project_tag(self, hive_env):
+        """Insights written by _llm_summary include the project tag."""
+        from keephive.hooks.precompact import _llm_summary
+        from keephive.models import PreCompactResponse
+        from keephive.storage import daily_file
+
+        fake_response = PreCompactResponse(
+            insights=[
+                {
+                    "category": "FACT",
+                    "description": "Auth service uses JWT with RS256",
+                },
+            ],
+            memory_updates=[],
+        )
+
+        def fake_pipe(*a, **kw):
+            return fake_response
+
+        _llm_summary("some excerpts", pipe_fn=fake_pipe, project_name="nucleus")
+
+        content = daily_file().read_text()
+        assert "[project:nucleus]" in content
+        assert "Auth service uses JWT with RS256" in content
+
+    def test_llm_summary_no_tag_when_empty_cwd(self, hive_env):
+        """No [project:] tag appears when project_name is empty."""
+        from keephive.hooks.precompact import _llm_summary
+        from keephive.models import PreCompactResponse
+        from keephive.storage import daily_file
+
+        fake_response = PreCompactResponse(
+            insights=[
+                {
+                    "category": "DECISION",
+                    "description": "Chose Postgres over SQLite for multi-user support",
+                },
+            ],
+            memory_updates=[],
+        )
+
+        def fake_pipe(*a, **kw):
+            return fake_response
+
+        _llm_summary("some excerpts", pipe_fn=fake_pipe, project_name="")
+
+        content = daily_file().read_text()
+        assert "[project:" not in content
+        assert "Chose Postgres over SQLite" in content
+
+    def test_auto_promote_includes_project_tag(self, hive_env):
+        """AUTO-PROMOTED entries in the daily log include the project tag."""
+        from keephive.hooks.precompact import _llm_summary
+        from keephive.models import PreCompactResponse
+        from keephive.storage import daily_file
+
+        fake_response = PreCompactResponse(
+            insights=[],
+            memory_updates=[
+                {
+                    "action": "add",
+                    "text": "Auth uses RS256 JWT tokens",
+                },
+            ],
+        )
+
+        def fake_pipe(*a, **kw):
+            return fake_response
+
+        _llm_summary("some excerpts", pipe_fn=fake_pipe, project_name="myapp")
+
+        content = daily_file().read_text()
+        assert "AUTO-PROMOTED" in content
+        assert "[project:myapp]" in content

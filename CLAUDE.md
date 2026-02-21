@@ -35,8 +35,8 @@ A knowledge sidecar for Claude Code.
 - `commands/standup.py`: Standup generation from daily logs + GitHub PR data. Weekend-aware cutoff, clipboard copy.
 - `commands/doctor.py`: Health check (hooks, MCP, deps, data). Uses LLM for semantic TODO deduplication.
 - `commands/setup.py`: Registers MCP server in ~/.claude.json and hooks in ~/.claude/settings.json. Auto-syncs global install.
-- `hooks/sessionstart.py`: Injects context at session start. No LLM call.
-- `hooks/precompact.py`: Layer 1 extraction (deterministic) + Layer 2 auto-write to daily log (claude -p).
+- `hooks/sessionstart.py`: Injects context at session start (memory, rules, TODOs, matched guides, cross-project hints). No LLM call.
+- `hooks/precompact.py`: Layer 1 extraction (deterministic) + Layer 2 auto-write to daily log with project attribution (claude -p).
 - `hooks/posttooluse.py`: Counter-based periodic nudge after Edit/Write tool use.
 - `hooks/userpromptsubmit.py`: Counter-based periodic nudge + TODO detection from user prompts. Also injects `.ui-queue` content before nudge when present.
 - `commands/serve.py`: Live web dashboard (HTTP server, 8 views, markdown rendering, auto-refresh, `/ui-feedback` POST endpoint). Zero external deps.
