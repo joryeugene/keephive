@@ -45,6 +45,7 @@ def hive_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Set environment
     monkeypatch.setenv("HIVE_HOME", str(hive_dir))
     monkeypatch.setenv("HIVE_SKIP_LLM", "1")
+    monkeypatch.delenv("HIVE_SESSION_LAUNCHED", raising=False)
 
     # Create directories
     (hive_dir / "working").mkdir()

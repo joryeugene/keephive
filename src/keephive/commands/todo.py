@@ -97,7 +97,8 @@ def _render_todo(*, watch: bool = False) -> None:
             f"  [dim]{done_this_week} done this week \u00b7 {completion_rate}% completion rate (7d)[/dim]"
         )
 
-    show_hint('hive t "task" to add, hive td <pat> to complete')
+    if not watch:
+        show_hint('hive t "task" to add, hive td <pat> to complete')
 
 
 def _watch_paths_todo() -> list[Path]:
@@ -129,7 +130,9 @@ def cmd_todo(args: list[str]) -> None:
 
     remaining, watch, interval = parse_watch_args(args)
     if watch:
-        watch_loop(_render_todo, _watch_paths_todo, interval)
+        from functools import partial
+
+        watch_loop(partial(_render_todo, watch=True), _watch_paths_todo, interval)
         return
 
     _render_todo()

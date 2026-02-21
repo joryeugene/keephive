@@ -11,32 +11,57 @@ Set Theme "GitHub Dark"
 Set Padding 20
 Set TypingSpeed 40ms
 
-# Status overview
+# ── Arrive: what's my current state? ──
 Type "hive"
 Enter
 Sleep 3s
 
-# Capture a fact
-Type "hive r 'FACT: Redis cluster uses 6-node ring with 3 replicas'"
+# ── Capture: learned something new ──
+Type "hive r 'FACT: API uses JWT RS256, tokens expire after 1h'"
 Enter
 Sleep 2s
 
-# Instant recall
-Type "hive rc redis"
+# ── Recall: find it back instantly ──
+Type "hive rc jwt"
+Enter
+Sleep 2.5s
+
+# ── Track: add a new task ──
+Type "hive t 'Migrate auth tokens to asymmetric signing'"
+Enter
+Sleep 2s
+
+# ── Close: knock one off the list ──
+Type "hive td 'rate'"
+Enter
+Sleep 2s
+
+# ── Jot: quick thought to the scratchpad ──
+Type "hive 1 'Review auth endpoints for token refresh'"
+Enter
+Sleep 1.5s
+
+# ── Copy: note to clipboard ──
+Type "hive nc"
+Enter
+Sleep 1.5s
+
+# ── Review: what happened today? ──
+Type "hive l"
 Enter
 Sleep 3s
 
-# TODOs at a glance
-Type "hive todo"
+# ── Reference: knowledge guide by prefix ──
+Type "hive k api"
 Enter
 Sleep 3s
 
-# Knowledge guides
-Type "hive k"
+# ── Prompt: view a template by prefix ──
+Type "hive p code"
 Enter
-Sleep 3s
+Sleep 2.5s
 
-# Activity stats
+# ── Big picture: activity sparkline ──
 Type "hive stats"
 Enter
 Sleep 3s

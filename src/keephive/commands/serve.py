@@ -168,6 +168,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans
 nav{background:#161b22;border-bottom:1px solid #30363d;padding:0 16px;display:flex;align-items:center;gap:2px;position:sticky;top:0;z-index:100}
 .nav-brand{color:#f0f6fc;font-weight:700;font-size:14px;padding:10px 10px 10px 0;margin-right:10px;border-right:1px solid #30363d;text-decoration:none;display:flex;align-items:center;gap:6px}
 .nav-logo{width:28px;height:28px;image-rendering:pixelated}
+.profile-badge{color:#58a6ff;font-size:11px;font-weight:400;padding:2px 6px;border:1px solid #30363d;border-radius:3px;margin-left:4px;vertical-align:middle}
 .nav-tab{color:#8b949e;text-decoration:none;padding:10px 10px;border-bottom:2px solid transparent;font-size:12px;white-space:nowrap;transition:color .1s}
 .nav-tab:hover{color:#c9d1d9}.nav-tab.active{color:#f0f6fc;border-bottom-color:#58a6ff;font-weight:600}
 .nav-right{margin-left:auto;display:flex;align-items:center;gap:8px;padding-left:12px}
@@ -3894,6 +3895,12 @@ def render_page(view_name: str, port: int) -> str:
         brand_html = f'<a class="nav-brand" href="/"><img src="{bee_uri}" alt="hive" class="nav-logo">hive</a>'
     else:
         brand_html = '<a class="nav-brand" href="/">hive</a>'
+
+    from keephive.storage import active_profile
+
+    prof = active_profile()
+    if prof:
+        brand_html += f' <span class="profile-badge">{_e(prof)}</span>'
 
     content = render_fragment(view_name)
 

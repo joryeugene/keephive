@@ -13,6 +13,7 @@ from keephive.storage import (
     ensure_dirs,
     guides_dir,
     hive_dir,
+    prompts_dir,
     recall_stats_file,
     rules_file,
     slot_file,
@@ -66,6 +67,7 @@ def cmd_seed(args: list[str]) -> None:
     _seed_memory(entries)
     _seed_stats(entries, days, rng)
     _seed_guides(entries)
+    _seed_prompts(entries)
     _seed_recurring(entries)
     _seed_notes(entries)
     _seed_evidence(entries, rng)
@@ -264,6 +266,15 @@ def _seed_guides(entries: dict) -> None:
 
     for name, content in entries.get("guides", {}).items():
         (gd / f"{name}.md").write_text(content)
+
+
+def _seed_prompts(entries: dict) -> None:
+    """Write prompt templates."""
+    pd = prompts_dir()
+    pd.mkdir(parents=True, exist_ok=True)
+
+    for name, content in entries.get("prompts", {}).items():
+        (pd / f"{name}.md").write_text(content)
 
 
 def _seed_recurring(entries: dict) -> None:

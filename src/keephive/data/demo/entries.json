@@ -111,6 +111,10 @@
     "Use feature flags for any user-facing change that can be rolled back",
     "Review database query plans before adding new indexes to production"
   ],
+  "prompts": {
+    "code-review": "# Code Review\n\nReview the staged git diff for:\n- Security issues (injection, auth bypass, data leaks)\n- Performance concerns (N+1 queries, unnecessary allocations)\n- Logic errors and edge cases\n- Style consistency with existing codebase\n\nFor each issue found, cite the file and line number.",
+    "pr-review": "# PR Review\n\nReview the pull request changes:\n1. Read the PR description and linked issues\n2. Check each changed file for correctness\n3. Verify test coverage for new code paths\n4. Flag any breaking changes or migration needs\n\nProvide a summary with approve/request-changes recommendation."
+  },
   "recall_stats": {
     "redis": 14,
     "jwt": 11,
