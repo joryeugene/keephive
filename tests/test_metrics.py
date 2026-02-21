@@ -34,9 +34,7 @@ class TestKnowledgeHealth:
     def test_all_fresh_facts(self, hive_env):
         today = date.today().isoformat()
         (hive_env / "working" / "memory.md").write_text(
-            "# Working Memory\n\n"
-            f"- Fact A [verified:{today}]\n"
-            f"- Fact B [verified:{today}]\n"
+            f"# Working Memory\n\n- Fact A [verified:{today}]\n- Fact B [verified:{today}]\n"
         )
         from keephive.commands.stats import _knowledge_health
 
@@ -49,8 +47,7 @@ class TestKnowledgeHealth:
 
     def test_stale_facts_bucketed(self, hive_env):
         (hive_env / "working" / "memory.md").write_text(
-            "# Working Memory\n\n"
-            "- Ancient fact [verified:2020-01-01]\n"
+            "# Working Memory\n\n- Ancient fact [verified:2020-01-01]\n"
         )
         from keephive.commands.stats import _knowledge_health
 
@@ -62,9 +59,7 @@ class TestKnowledgeHealth:
     def test_capture_recall_ratio(self, hive_env):
         today = date.today().isoformat()
         (hive_env / "working" / "memory.md").write_text(
-            "# Working Memory\n\n"
-            f"- Fact A [verified:{today}]\n"
-            f"- Fact B [verified:{today}]\n"
+            f"# Working Memory\n\n- Fact A [verified:{today}]\n- Fact B [verified:{today}]\n"
         )
         # Create recall stats: 1 of 2 facts recalled
         recall_file = hive_env / ".recall-stats.json"
@@ -141,12 +136,16 @@ class TestCaptureMix:
         assert cm["counts"] == {}
 
     def test_counts_by_category(self, hive_env):
-        make_daily(hive_env, 0, [
-            "- [10:00:00] FACT: something",
-            "- [10:01:00] FACT: another",
-            "- [10:02:00] DECISION: chose X",
-            "- [10:03:00] TODO: do something",
-        ])
+        make_daily(
+            hive_env,
+            0,
+            [
+                "- [10:00:00] FACT: something",
+                "- [10:01:00] FACT: another",
+                "- [10:02:00] DECISION: chose X",
+                "- [10:03:00] TODO: do something",
+            ],
+        )
 
         from keephive.commands.stats import _capture_mix
 
@@ -159,10 +158,14 @@ class TestCaptureMix:
     def test_consistency_score(self, hive_env):
         # Create entries for all 14 days (consistency uses 14-day window)
         for i in range(14):
-            make_daily(hive_env, i, [
-                "- [10:00:00] FACT: daily fact",
-                "- [10:01:00] TODO: daily task",
-            ])
+            make_daily(
+                hive_env,
+                i,
+                [
+                    "- [10:00:00] FACT: daily fact",
+                    "- [10:01:00] TODO: daily task",
+                ],
+            )
 
         from keephive.commands.stats import _capture_mix
 
@@ -416,12 +419,16 @@ class TestCountLogEntriesByPrefix:
         assert result == {}
 
     def test_counts_categories(self, hive_env):
-        make_daily(hive_env, 0, [
-            "- [10:00:00] FACT: something",
-            "- [10:01:00] FACT: another",
-            "- [10:02:00] DECISION: chose X",
-            "- [10:03:00] INSIGHT: pattern found",
-        ])
+        make_daily(
+            hive_env,
+            0,
+            [
+                "- [10:00:00] FACT: something",
+                "- [10:01:00] FACT: another",
+                "- [10:02:00] DECISION: chose X",
+                "- [10:03:00] INSIGHT: pattern found",
+            ],
+        )
 
         from keephive.storage import count_log_entries_by_prefix
 
@@ -477,8 +484,7 @@ class TestPendingRulesInjection:
     def test_sessionstart_with_pending_rules(self, hive_env):
         """SessionStart injects pending rules hint when file has content."""
         (hive_env / ".pending-rules.md").write_text(
-            "- Always verify before committing\n"
-            "- Use type hints\n"
+            "- Always verify before committing\n- Use type hints\n"
         )
         from keephive.hooks.sessionstart import build_context
 
@@ -539,9 +545,7 @@ class TestRememberCategoryBreakdown:
         today = date.today().isoformat()
         daily = hive_env / "daily" / f"{today}.md"
         daily.write_text(
-            f"# Daily Log: {today}\n\n"
-            "- [10:00:00] FACT: first\n"
-            "- [10:01:00] TODO: task\n"
+            f"# Daily Log: {today}\n\n- [10:00:00] FACT: first\n- [10:01:00] TODO: task\n"
         )
 
         from keephive.commands.remember import cmd_remember

@@ -30,9 +30,7 @@ from keephive.storage import (
 VERIFY_TOOLS = ["Read", "Grep", "Glob", "WebSearch"]
 
 
-def _build_verify_prompt(
-    facts: list[tuple[int, str, str]], versions: str
-) -> str:
+def _build_verify_prompt(facts: list[tuple[int, str, str]], versions: str) -> str:
     """Build the verification prompt for a batch of facts."""
     facts_lines = []
     for i, (_, fact, _) in enumerate(facts):
@@ -149,8 +147,7 @@ def cmd_verify(args: list[str]) -> None:
     for batch_num, batch_facts in enumerate(batches, 1):
         if len(batches) > 1:
             console.print(
-                f"  [bold]Batch {batch_num}/{len(batches)}[/bold]"
-                f" ({len(batch_facts)} facts)"
+                f"  [bold]Batch {batch_num}/{len(batches)}[/bold] ({len(batch_facts)} facts)"
             )
 
         prompt = _build_verify_prompt(batch_facts, versions)

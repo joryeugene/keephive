@@ -34,8 +34,7 @@ def test_strip_preserves_content_with_brackets():
 def test_normalize_strips_double_tags(tmp_path: Path):
     mem = tmp_path / "memory.md"
     mem.write_text(
-        "# Working Memory\n\n"
-        "- FACT: something [verified:2026-02-20] [verified:2026-02-20]\n"
+        "# Working Memory\n\n- FACT: something [verified:2026-02-20] [verified:2026-02-20]\n"
     )
     stats = normalize_memory(mem)
     assert stats["double_tags"] == 1
@@ -47,8 +46,7 @@ def test_normalize_strips_double_tags(tmp_path: Path):
 def test_normalize_keeps_last_date(tmp_path: Path):
     mem = tmp_path / "memory.md"
     mem.write_text(
-        "# Working Memory\n\n"
-        "- FACT: changed [verified:2026-02-10] [verified:2026-02-21]\n"
+        "# Working Memory\n\n- FACT: changed [verified:2026-02-10] [verified:2026-02-21]\n"
     )
     stats = normalize_memory(mem)
     assert stats["double_tags"] == 1
@@ -73,10 +71,7 @@ def test_normalize_removes_resolved_todos(tmp_path: Path):
 
 def test_normalize_fixes_double_dash(tmp_path: Path):
     mem = tmp_path / "memory.md"
-    mem.write_text(
-        "# Working Memory\n\n"
-        "- - FACT: double dash [verified:2026-02-21]\n"
-    )
+    mem.write_text("# Working Memory\n\n- - FACT: double dash [verified:2026-02-21]\n")
     stats = normalize_memory(mem)
     assert stats["malformed_prefix"] == 1
     content = mem.read_text()
@@ -165,9 +160,7 @@ def test_add_to_auto_captured_strips_existing_tag():
     from keephive.hooks.precompact import _add_to_auto_captured
 
     content = "# Working Memory\n\n## Auto-Captured\n- existing [verified:2026-02-20]\n"
-    result = _add_to_auto_captured(
-        content, "new fact [verified:2026-02-19]", "2026-02-21"
-    )
+    result = _add_to_auto_captured(content, "new fact [verified:2026-02-19]", "2026-02-21")
     # Should have exactly one [verified:] tag for the new line
     new_lines = [l for l in result.splitlines() if "new fact" in l]
     assert len(new_lines) == 1

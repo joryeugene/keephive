@@ -59,7 +59,9 @@ def test_help_corrupt_stats(monkeypatch, capsys):
     def _raise():
         raise json.JSONDecodeError("bad", "", 0)
 
-    monkeypatch.setattr(keephive.storage, "read_stats", lambda: (_ for _ in ()).throw(ValueError("corrupt")))
+    monkeypatch.setattr(
+        keephive.storage, "read_stats", lambda: (_ for _ in ()).throw(ValueError("corrupt"))
+    )
     # _command_usage catches all exceptions
     _help()
     out = capsys.readouterr().out
@@ -78,10 +80,12 @@ def _patch_stats(monkeypatch, stats_data: dict):
 
 def test_help_adaptive_recent(monkeypatch, capsys):
     """Commands used in last 7 days appear in Recent section, sorted by frequency."""
-    stats = _make_stats({
-        _today_str(1): {"s": 10, "status": 2, "v": 5},
-        _today_str(2): {"r": 3},
-    })
+    stats = _make_stats(
+        {
+            _today_str(1): {"s": 10, "status": 2, "v": 5},
+            _today_str(2): {"r": 3},
+        }
+    )
     _patch_stats(monkeypatch, stats)
 
     _help()
@@ -110,10 +114,12 @@ def test_help_adaptive_recent(monkeypatch, capsys):
 def test_help_adaptive_discover(monkeypatch, capsys):
     """Undiscovered commands appear in Discover section in priority order."""
     # Only status and remember ever used
-    stats = _make_stats({
-        _today_str(1): {"s": 5},
-        _today_str(30): {"r": 1},  # old but counts for all-time
-    })
+    stats = _make_stats(
+        {
+            _today_str(1): {"s": 5},
+            _today_str(30): {"r": 1},  # old but counts for all-time
+        }
+    )
     _patch_stats(monkeypatch, stats)
 
     _help()
@@ -128,9 +134,11 @@ def test_help_adaptive_discover(monkeypatch, capsys):
 def test_help_discover_cap(monkeypatch, capsys):
     """Discover shows at most 6 commands, with overflow message."""
     # Only status ever used (index 0)
-    stats = _make_stats({
-        _today_str(1): {"s": 1},
-    })
+    stats = _make_stats(
+        {
+            _today_str(1): {"s": 1},
+        }
+    )
     _patch_stats(monkeypatch, stats)
 
     _help()
@@ -182,9 +190,11 @@ def test_help_all_used(monkeypatch, capsys):
 def test_help_no_recent(monkeypatch, capsys):
     """Commands used only >7 days ago: no Recent section, Discover shows unused."""
     # Only status used, but 10 days ago
-    stats = _make_stats({
-        _today_str(10): {"s": 5, "r": 3},
-    })
+    stats = _make_stats(
+        {
+            _today_str(10): {"s": 5, "r": 3},
+        }
+    )
     _patch_stats(monkeypatch, stats)
 
     _help()
@@ -198,9 +208,11 @@ def test_help_no_recent(monkeypatch, capsys):
 
 def test_command_usage_aggregation(monkeypatch):
     """Aliases aggregate to the same family (e.g. 's' and 'status' both count for status)."""
-    stats = _make_stats({
-        _today_str(1): {"s": 5, "status": 3},
-    })
+    stats = _make_stats(
+        {
+            _today_str(1): {"s": 5, "status": 3},
+        }
+    )
     _patch_stats(monkeypatch, stats)
 
     recent, all_time = _command_usage(7)
@@ -211,16 +223,16 @@ def test_command_usage_aggregation(monkeypatch):
 
 def test_command_usage_note_slots(monkeypatch):
     """note.N patterns count toward the note family."""
-    stats = _make_stats({
-        _today_str(1): {"note.3": 2, "note.0": 1, "n": 4},
-    })
+    stats = _make_stats(
+        {
+            _today_str(1): {"note.3": 2, "note.0": 1, "n": 4},
+        }
+    )
     _patch_stats(monkeypatch, stats)
 
     recent, all_time = _command_usage(7)
     # note family is index 7
-    note_idx = next(
-        i for i, (label, _, _, _) in enumerate(_CMD_FAMILIES) if label == "note"
-    )
+    note_idx = next(i for i, (label, _, _, _) in enumerate(_CMD_FAMILIES) if label == "note")
     assert note_idx in recent
     assert recent[note_idx] == 7  # 2 + 1 + 4
 

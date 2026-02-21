@@ -341,9 +341,7 @@ class TestParseClaudeResponse:
                 {"type": "system", "subtype": "init", "cwd": "/test", "tools": []},
                 {
                     "type": "assistant",
-                    "content": [
-                        {"type": "text", "text": "I investigated but ran out of turns..."}
-                    ],
+                    "content": [{"type": "text", "text": "I investigated but ran out of turns..."}],
                 },
                 {
                     "type": "result",

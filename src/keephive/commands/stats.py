@@ -291,7 +291,9 @@ def _knowledge_health() -> dict:
             m = re.search(r"\[verified:(\d{4}-\d{2}-\d{2})\]", line)
             if m:
                 total_facts += 1
-                fact_text = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line).lstrip("- ").strip()
+                fact_text = (
+                    re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line).lstrip("- ").strip()
+                )
                 score = score_fact_decay(fact_text, m.group(1))
                 if score > 0.6:
                     fresh += 1
@@ -433,12 +435,8 @@ def _session_productivity(days_back: int = 30) -> dict:
     week_ago = (date.today() - timedelta(days=7)).isoformat()
 
     # Prompts today/week
-    prompts_today = sum(
-        s.get("prompts", 0) for s in sessions if s.get("day") == today_str
-    )
-    prompts_week = sum(
-        s.get("prompts", 0) for s in sessions if s.get("day", "") >= week_ago
-    )
+    prompts_today = sum(s.get("prompts", 0) for s in sessions if s.get("day") == today_str)
+    prompts_week = sum(s.get("prompts", 0) for s in sessions if s.get("day", "") >= week_ago)
 
     # Session depth buckets
     shallow = medium = deep = 0
@@ -469,9 +467,7 @@ def _session_productivity(days_back: int = 30) -> dict:
 
     mx = max(trend_data) if trend_data else 0
     if mx > 0:
-        trend_sparkline = "".join(
-            _SPARK_CHARS[min(8, round(v / mx * 8))] for v in trend_data
-        )
+        trend_sparkline = "".join(_SPARK_CHARS[min(8, round(v / mx * 8))] for v in trend_data)
     else:
         trend_sparkline = ""
 
@@ -594,7 +590,12 @@ def _weekly_trends(data: dict) -> dict:
 
     metrics = []
     for label, this, prev, fmt in [
-        ("Prompts", sum(s.get("prompts", 0) for s in sess_this), sum(s.get("prompts", 0) for s in sess_prev), "d"),
+        (
+            "Prompts",
+            sum(s.get("prompts", 0) for s in sess_this),
+            sum(s.get("prompts", 0) for s in sess_prev),
+            "d",
+        ),
         ("Convos", len(sess_this), len(sess_prev), "d"),
         ("P/convo", _avg_p(sess_this), _avg_p(sess_prev), ".0f"),
         ("Insights", insights_this, insights_prev, "d"),
@@ -602,14 +603,16 @@ def _weekly_trends(data: dict) -> dict:
         ("Verified", verified_this, verified_prev, "d"),
     ]:
         pct, trend = _delta(float(this), float(prev))
-        metrics.append({
-            "label": label,
-            "this": this,
-            "prev": prev,
-            "delta_pct": pct,
-            "trend": trend,
-            "fmt": fmt,
-        })
+        metrics.append(
+            {
+                "label": label,
+                "this": this,
+                "prev": prev,
+                "delta_pct": pct,
+                "trend": trend,
+                "fmt": fmt,
+            }
+        )
 
     return {"metrics": metrics}
 
@@ -741,7 +744,14 @@ def _productivity_pulse(
 
     # Weighted composite
     score = int(
-        (freshness_score * 25 + recall_score * 20 + depth_score * 20 + todo_rate * 15 + verify_score * 10 + streak_score * 10)
+        (
+            freshness_score * 25
+            + recall_score * 20
+            + depth_score * 20
+            + todo_rate * 15
+            + verify_score * 10
+            + streak_score * 10
+        )
     )
     score = max(0, min(100, score))
 
@@ -842,8 +852,7 @@ def _display_full(data: dict) -> None:
         filtered = [p for p in cat_parts if "done" not in p.lower()]
         if todo_count > 0 and done_count > 0:
             filtered = [
-                f"{todo_count} todos ({done_count} done)" if "todo" in p else p
-                for p in filtered
+                f"{todo_count} todos ({done_count} done)" if "todo" in p else p for p in filtered
             ]
         console.print(f"  {capture['sparkline_str']}  {' · '.join(filtered)}")
         if capture["consistency"] > 0:
@@ -973,15 +982,15 @@ def _display_full(data: dict) -> None:
 
     # Most recalled
     recalled = [
-        r for r in recalled
-        if r.get("text", "").strip()
-        and "fact removed" not in r.get("text", "").lower()
+        r
+        for r in recalled
+        if r.get("text", "").strip() and "fact removed" not in r.get("text", "").lower()
     ]
     if recalled:
         console.print()
         console.print("[dim]Most Recalled[/dim]")
         for r in recalled:
-            console.print(f"  \"{r['text']}\" ({r['count']}\u00d7)")
+            console.print(f'  "{r["text"]}" ({r["count"]}\u00d7)')
 
     # Projects: 1 line each
     projects = _all_projects(days_data)

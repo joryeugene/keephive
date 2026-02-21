@@ -239,9 +239,7 @@ def build_context(cwd: str, project_name: str) -> str:
                 n = sum(1 for ln in pr_content.splitlines() if ln.strip().startswith("- "))
                 if n > 0:
                     s = "s" if n != 1 else ""
-                    parts.append(
-                        f"{n} pending rule suggestion{s}. Run: hive rule review"
-                    )
+                    parts.append(f"{n} pending rule suggestion{s}. Run: hive rule review")
     except Exception:
         pass
 

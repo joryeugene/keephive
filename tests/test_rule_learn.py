@@ -15,12 +15,16 @@ def _make_facet(facets_dir: Path, friction_counts: dict[str, int], session_id: s
     """Create a facet JSON file with given friction counts."""
     sid = session_id or f"test-{len(list(facets_dir.glob('*.json')))}"
     fpath = facets_dir / f"{sid}.json"
-    fpath.write_text(json.dumps({
-        "underlying_goal": "test",
-        "friction_counts": friction_counts,
-        "friction_detail": "",
-        "session_id": sid,
-    }))
+    fpath.write_text(
+        json.dumps(
+            {
+                "underlying_goal": "test",
+                "friction_counts": friction_counts,
+                "friction_detail": "",
+                "session_id": sid,
+            }
+        )
+    )
     return fpath
 
 
@@ -79,10 +83,13 @@ class TestRuleAlreadyCovered:
 
         existing = "- Always run tests after changes."
         # "clarifying question" shares no significant trigrams with test-running rules
-        assert _rule_already_covered(
-            "Ask a clarifying question before acting on ambiguous requests",
-            existing,
-        ) is False
+        assert (
+            _rule_already_covered(
+                "Ask a clarifying question before acting on ambiguous requests",
+                existing,
+            )
+            is False
+        )
 
     def test_candidate_with_no_trigrams(self):
         from keephive.commands.memory import _rule_already_covered
@@ -214,9 +221,7 @@ class TestRuleLearn:
 
         # Pre-populate rules.md with the wrong_approach rule text
         rf = rules_file()
-        rf.write_text(
-            "# Working Rules\n\n- " + FRICTION_RULES["wrong_approach"] + "\n"
-        )
+        rf.write_text("# Working Rules\n\n- " + FRICTION_RULES["wrong_approach"] + "\n")
 
         _rule_learn()
         out = capsys.readouterr().out
@@ -224,6 +229,7 @@ class TestRuleLearn:
         # wrong_approach should be skipped (already covered), buggy_code should be queued
         if "Queued" in out:
             from keephive.storage import hive_dir
+
             content = (hive_dir() / ".pending-rules.md").read_text()
             assert "wrong_approach" not in content
             assert "buggy_code" in content
@@ -297,9 +303,7 @@ class TestRuleReviewAnnotations:
         from keephive.storage import hive_dir, rules_file
 
         pending = hive_dir() / ".pending-rules.md"
-        pending.write_text(
-            "- [5 sessions: wrong_approach] Before starting, state your approach.\n"
-        )
+        pending.write_text("- [5 sessions: wrong_approach] Before starting, state your approach.\n")
 
         # Auto-accept
         monkeypatch.setattr("builtins.input", lambda _: "y")
@@ -318,9 +322,7 @@ class TestRuleReviewAnnotations:
         from keephive.storage import hive_dir
 
         pending = hive_dir() / ".pending-rules.md"
-        pending.write_text(
-            "- [8 sessions: buggy_code] Run tests after changes.\n"
-        )
+        pending.write_text("- [8 sessions: buggy_code] Run tests after changes.\n")
 
         monkeypatch.setattr("builtins.input", lambda _: "n")
 

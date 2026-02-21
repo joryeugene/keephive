@@ -221,9 +221,7 @@ def _help(show_all: bool = False) -> None:
 
     # Build sections
     recent_items = sorted(recent.items(), key=lambda kv: -kv[1])
-    discover_indices = [
-        i for i in range(len(_CMD_FAMILIES)) if i not in all_time
-    ]
+    discover_indices = [i for i in range(len(_CMD_FAMILIES)) if i not in all_time]
     discover_cap = 6
 
     # Edge case: both sections would be empty (used everything, none recent)

@@ -109,7 +109,9 @@ def cmd_remember(args: list[str]) -> None:
             if c > 0:
                 cat_parts.append(f"{c} {cat_name.lower()}s")
         if cat_parts:
-            console.print(f"    -> daily/{df.name}  ({entry_count} entries: {', '.join(cat_parts)})")
+            console.print(
+                f"    -> daily/{df.name}  ({entry_count} entries: {', '.join(cat_parts)})"
+            )
         else:
             console.print(f"    -> daily/{df.name}  ({entry_count} entries today)")
     except Exception:

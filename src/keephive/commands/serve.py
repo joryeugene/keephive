@@ -1696,7 +1696,7 @@ def _render_status_brief_panel(data: dict) -> str:
     pipeline_str = ""
     if fresh_pct > 0 or capture_recall > 0:
         pipeline_str = (
-            f' &nbsp;|&nbsp; <span>{fresh_pct:.0f}%</span> fresh'
+            f" &nbsp;|&nbsp; <span>{fresh_pct:.0f}%</span> fresh"
             f" &middot; <span>{capture_recall:.0f}%</span> recall"
         )
     return (
@@ -2428,7 +2428,9 @@ def _render_recent_facts_panel(data: dict) -> str:
         )
     if not rows:
         rows = '<div class="empty">No recent insights</div>'
-    facts_hints = _cmd_hints(['hive remember "FACT: ..."', "hive recall <query>", "hive reflect scan"])
+    facts_hints = _cmd_hints(
+        ['hive remember "FACT: ..."', "hive recall <query>", "hive reflect scan"]
+    )
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Recent insights">'
         f'<div class="card-header"><span class="card-title">Recent Insights</span><span class="card-meta">past 7d</span></div>'
@@ -3142,7 +3144,11 @@ def _get_pipeline_data() -> dict:
     actions: list[dict] = []
     days_data = stats.get("days", {})
     pipeline_cmds = {
-        "verify": {"label": "verify", "hint": "hive verify", "desc": "check facts against codebase"},
+        "verify": {
+            "label": "verify",
+            "hint": "hive verify",
+            "desc": "check facts against codebase",
+        },
         "reflect": {"label": "reflect", "hint": "hive reflect", "desc": "find patterns in logs"},
         "audit": {"label": "audit", "hint": "hive audit", "desc": "quality analysis"},
     }
@@ -3313,16 +3319,15 @@ def _render_pipeline_panel(data: dict) -> str:
                 f"</div>"
             )
         actions_html = (
-            f'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #21262d">'
-            f"{rows}</div>"
+            f'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #21262d">{rows}</div>'
         )
 
     # Most recalled facts (compact, fills vertical space)
     recalled = data.get("recalled", [])
     recalled = [
-        r for r in recalled
-        if r.get("text", "").strip()
-        and "fact removed" not in r.get("text", "").lower()
+        r
+        for r in recalled
+        if r.get("text", "").strip() and "fact removed" not in r.get("text", "").lower()
     ]
     recalled_html = ""
     if recalled:
@@ -3434,9 +3439,9 @@ def _render_recalled_panel(data: dict) -> str:
 
     # Filter out removed/empty facts
     recalled = [
-        r for r in recalled
-        if r.get("text", "").strip()
-        and "fact removed" not in r.get("text", "").lower()
+        r
+        for r in recalled
+        if r.get("text", "").strip() and "fact removed" not in r.get("text", "").lower()
     ]
 
     if not recalled:

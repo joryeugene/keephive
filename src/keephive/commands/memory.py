@@ -175,7 +175,7 @@ def _rule_review() -> None:
         annotation_match = _FRICTION_ANNOTATION_RE.match(rule_text)
         if annotation_match:
             annotation = annotation_match.group(0).strip()
-            clean_rule = rule_text[annotation_match.end():]
+            clean_rule = rule_text[annotation_match.end() :]
             console.print(f"\n  [dim]{annotation}[/dim]")
             console.print("  Suggested rule:")
             console.print(f"  [bold]{clean_rule}[/bold]")
@@ -316,9 +316,7 @@ def _rule_learn(dry_run: bool = False) -> None:
     for ftype, fdata in sorted(friction.items(), key=lambda x: -x[1]["count"]):
         actionable = ftype in FRICTION_RULES
         marker = " *" if actionable else ""
-        console.print(
-            f"  {ftype:<26s} {fdata['count']:>5d}  {fdata['sessions']:>8d}{marker}"
-        )
+        console.print(f"  {ftype:<26s} {fdata['count']:>5d}  {fdata['sessions']:>8d}{marker}")
     console.print("\n  [dim]* = actionable (has a mapped rule)[/dim]")
 
     # 3. Filter: only types in FRICTION_RULES with >= 3 unique sessions
@@ -346,7 +344,9 @@ def _rule_learn(dry_run: bool = False) -> None:
         new_candidates.append((ftype, rule_text, session_count))
 
     if not new_candidates:
-        console.print(f"\n[dim]All {len(candidates)} candidate(s) already covered by existing rules.[/dim]")
+        console.print(
+            f"\n[dim]All {len(candidates)} candidate(s) already covered by existing rules.[/dim]"
+        )
         return
 
     # 5. Display candidates
