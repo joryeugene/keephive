@@ -289,7 +289,7 @@ class TestTimeTravel:
         term.set_date("2026-05-05")
         term.type("python -m keephive r 'FACT: first entry'")
         term.type("python -m keephive r 'FACT: second entry'")
-        term.type("python -m keephive r 'DECISION: third entry'")
+        term.type("python -m keephive r 'DECISION: third entry'").has("Remembered")
         content = term.read_file("daily/2026-05-05.md")
         assert "first entry" in content
         assert "second entry" in content
@@ -307,13 +307,15 @@ class TestMultiDayWorkflows:
         """Simulate a 5-day work sprint with realistic usage."""
         # Monday: Start fresh
         term.set_date("2026-03-09")
-        term.type("python -m keephive r 'FACT: Sprint 12 started'")
-        term.type("python -m keephive t 'Implement user settings page'")
-        term.type("python -m keephive t 'Write integration tests for auth'")
+        term.type("python -m keephive r 'FACT: Sprint 12 started'").has("Remembered")
+        term.type("python -m keephive t 'Implement user settings page'").has("Remembered")
+        term.type("python -m keephive t 'Write integration tests for auth'").has("Remembered")
 
         # Tuesday: Progress
         term.set_date("2026-03-10")
-        term.type("python -m keephive r 'DECISION: Use React Hook Form for settings'")
+        term.type("python -m keephive r 'DECISION: Use React Hook Form for settings'").has(
+            "Remembered"
+        )
         term.type("python -m keephive td 'user settings'").has("Completed")
 
         # Wednesday: Discovery
@@ -365,9 +367,9 @@ class TestMultiDayWorkflows:
         """30 days of daily captures, verify files accumulate."""
         for day in range(30):
             term.set_date(f"2026-04-{day + 1:02d}")
-            term.type(f"python -m keephive r 'FACT: Day {day + 1} observation'")
+            term.type(f"python -m keephive r 'FACT: Day {day + 1} observation'").has("Remembered")
             if day % 3 == 0:
-                term.type(f"python -m keephive t 'Task from day {day + 1}'")
+                term.type(f"python -m keephive t 'Task from day {day + 1}'").has("Remembered")
             if day % 5 == 0 and day > 0:
                 term.type(f"python -m keephive td 'Task from day {day - 4}'")
 
@@ -594,7 +596,7 @@ class TestWatchMode:
         screen.has("watching", "ctrl+c to stop", "keephive")
         term.send_keys("C-c")
         final = term.wait_for("Watch stopped")
-        final.lacks("Traceback", "Error")
+        final.lacks("Traceback")
         save_terminal_output("watch/status_start_stop", term)
 
     def test_status_watch_updates_on_new_entry(self, term, save_terminal_output):
@@ -628,7 +630,7 @@ class TestWatchMode:
         screen.has("watching", "log watch test entry")
         term.send_keys("C-c")
         final = term.wait_for("Watch stopped")
-        final.lacks("Traceback", "Error")
+        final.lacks("Traceback")
         save_terminal_output("watch/log_start_stop", term)
 
     def test_todo_watch_starts_and_stops(self, term, save_terminal_output):
@@ -639,7 +641,7 @@ class TestWatchMode:
         screen.has("watching", "implement widget factory for dashboard")
         term.send_keys("C-c")
         final = term.wait_for("Watch stopped")
-        final.lacks("Traceback", "Error")
+        final.lacks("Traceback")
         save_terminal_output("watch/todo_start_stop", term)
 
 

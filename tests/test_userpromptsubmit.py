@@ -383,8 +383,13 @@ class TestUsageTracking:
         hooks = day_data.get("hooks", {})
         assert hooks.get("userpromptsubmit", 0) >= 1
 
-    def test_tracks_session_prompt_event(self, hive_env):
-        """Each invocation records a prompt event for the session."""
+    def test_no_session_prompt_tracking(self, hive_env):
+        """Hook does NOT write per-session prompt counts to stats.
+
+        Session prompt counting was intentionally removed because Claude Code
+        session-meta provides accurate user_message_count. Hook invocations
+        overcount (~71x) due to sub-agent spawns and tool continuations.
+        """
         from keephive.clock import get_today
         from keephive.storage import read_stats
 
@@ -395,8 +400,7 @@ class TestUsageTracking:
         stats = read_stats()
         day_key = get_today().isoformat()
         sessions = stats["days"].get(day_key, {}).get("sessions", {})
-        assert session_id in sessions
-        assert sessions[session_id]["prompts"] >= 2
+        assert session_id not in sessions
 
 
 # ---- Edge-case tests: counter behavior ----

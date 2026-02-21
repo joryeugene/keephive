@@ -20,6 +20,8 @@ Prefer `just <recipe>` over raw commands. See `just --list` or the `justfile` fo
 | `just lint`                                | ruff check + format check                          |
 | `just fmt`                                 | ruff format in place                               |
 | `just serve`                               | Live dashboard with hot reload                     |
+| `just test-save`                           | Run tests, save output to .test-results.txt         |
+| `just test-save-one tests/test_X.py`       | Single file with output saved to disk               |
 | `just check`                               | All checks (test + lint + secrets)                  |
 | `hivedev s`                                | Status against real data (local dev build)          |
 | `hivedev v`                                | Verify stale facts (needs claude -p, 10-20s)        |
@@ -32,7 +34,7 @@ Prefer `just <recipe>` over raw commands. See `just --list` or the `justfile` fo
 - `models.py`: Pydantic models for every structured response (VerifyResponse, PreCompactResponse, ReflectAnalyzeResponse, VaultPerspective, CleanerPerspective, StrategistPerspective, AuditSynthesis).
 - `output.py`: Console markup, `prompt_yn()`, `prompt_choice()`. Shared output helpers.
 - `nudge.py`: Shared nudge infrastructure. Priority-based lifecycle state machine (TODOs > stale facts > pending facts > unreflected logs > context-specific). Intervals: prompt/tool every 5, stop every 8.
-- `storage.py`: All file I/O for ~/.claude/hive/ directory. Includes stats tracking, profiles, session metrics.
+- `storage.py`: All file I/O for ~/.claude/hive/ directory. Includes stats tracking, profiles, session metrics. `read_cc_sessions()` reads Claude Code session-meta as authoritative session data (user messages, tools, duration, code impact). `session_metrics()` prefers CC data, falls back to keephive data.
 - `insights.py`: Pure deterministic aggregation of Claude Code `/insights` session data. Reads `~/.claude/usage-data/facets/` + `session-meta/`, joins on session_id, produces outcome/type/satisfaction/goal/friction distributions and cross-field pattern detection. No LLM.
 - `commands/audit.py`: Three-perspective LLM audit (parallel) + Cook synthesis. Uses `run_claude_pipe()` for all 4 calls.
 - `commands/memory.py`: `hive mem` and `hive rule` (add/remove/learn/review). `rule learn` reads `/insights` friction data from `~/.claude/usage-data/facets/`, maps to behavioral rules, deduplicates via trigram overlap, queues in `.pending-rules.md`.
@@ -60,6 +62,28 @@ Prefer `just <recipe>` over raw commands. See `just --list` or the `justfile` fo
 - `hooks/taskcompleted.py`: TaskCompleted hook. Auto-logs DONE entry to daily log when a task is marked complete.
 - `commands/serve.py`: Live web dashboard (HTTP server, 8 views, markdown rendering, auto-refresh, `/ui-feedback` POST endpoint). Zero external deps.
 - `commands/ui.py`: UI feedback queue CLI (`hive ui`/`ui-install`/`ui-clear`) + bookmarklet source as `javascript:` URL.
+
+## Session Data Architecture
+
+keephive and Claude Code track sessions independently. They serve different purposes and must not be confused.
+
+**Claude Code** (source of truth for session analytics):
+- Location: `~/.claude/usage-data/session-meta/{session_id}.json`
+- Written at session end. Contains: `user_message_count`, `tool_counts` (all tools), `duration_minutes`, `lines_added/removed`, `input/output_tokens`, `git_commits`
+- Also: `facets/{session_id}.json` has outcome, satisfaction, friction. Read by `insights.py`.
+- Read by: `storage.read_cc_sessions()`, called from `session_metrics()`, `_session_productivity()`, and serve.py panels.
+
+**keephive** (source of truth for workflow analytics):
+- Location: `~/.claude/hive/.stats.json`
+- Written by hooks during session. Contains: command usage, hourly patterns, project breakdown, daily aggregates, compacted flag
+- Also: `.prompt-counter`, `.tool-counter`, `.stop-counter` for nudge cadence (tuned for hook invocation frequency, not user counts)
+
+**Critical rules:**
+- Session IDs from hooks and session-meta are different ID spaces. Zero overlap. Never join on session_id across these systems.
+- keephive's `session["prompts"]` is hook invocation count (~71x real user messages). Never display as "user messages."
+- keephive's `session["tools"]` only has Edit/Write (2 of ~15). For full tool data, use session-meta `tool_counts`.
+- For session display in `hive stats` and `hive serve`: use `read_cc_sessions()` which reads session-meta.
+- Test isolation: `HIVE_CC_META_DIR` env var overrides session-meta path. Set to empty temp dir in `hive_env` fixture.
 
 ## The Rule
 

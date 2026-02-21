@@ -102,6 +102,15 @@ class Terminal:
         ]:
             (self.hive_home / sub).mkdir(parents=True, exist_ok=True)
 
+        # Minimal starship config: fast `$ ` prompt instead of the user's
+        # multi-line starship theme.  Without this, starship runs git-status
+        # and env checks for EVERY prompt render (0.5-2s each), causing
+        # send-keys to pile up in the input buffer and END markers to never
+        # appear as clean separate lines (the root cause of TimeoutErrors
+        # in terminal driver tests).
+        starship_cfg = base_dir / "starship.toml"
+        starship_cfg.write_text('format = "> "\n')
+
         # Find project venv so `python` resolves inside tmux
         project_root = Path(__file__).resolve().parent.parent
         venv_bin = project_root / ".venv" / "bin"
@@ -109,9 +118,16 @@ class Terminal:
         if venv_bin.exists():
             path = f"{venv_bin}:{path}"
 
+        # Isolate Claude Code session-meta reads so stats/status output
+        # is deterministic (empty) instead of reflecting host activity.
+        cc_meta = base_dir / "cc-session-meta"
+        cc_meta.mkdir(exist_ok=True)
+
         self._env = {
             "HIVE_HOME": str(self.hive_home),
             "HIVE_SKIP_LLM": "1",
+            "HIVE_CC_META_DIR": str(cc_meta),
+            "STARSHIP_CONFIG": str(starship_cfg),
             "TERM": "xterm-256color",
             "HOME": os.environ.get("HOME", ""),
             "PATH": path,
@@ -147,7 +163,7 @@ class Terminal:
             capture_output=True,
         )
 
-        time.sleep(0.3)  # Wait for shell prompt
+        time.sleep(0.5)  # Wait for shell + .zshrc + starship init
 
         # zsh's .zshrc overrides PATH from tmux -e, so re-prepend venv bin.
         # Use $PATH shell reference to keep the command short (the full PATH
@@ -157,6 +173,26 @@ class Terminal:
         if venv_bin.exists():
             self._send(f"export PATH={venv_bin}:$PATH")
             time.sleep(0.1)
+
+        # Force a fast static prompt. Starship registers precmd hooks in zsh
+        # that run the starship binary on EVERY prompt render (0.5-2s each
+        # for git-status, env checks, etc.). Even re-exporting STARSHIP_CONFIG
+        # to our minimal config is unreliable: .zshrc may override it, starship
+        # may cache configs, and the binary call still adds latency.
+        # Nuclear fix: clear ALL zsh prompt hooks and set a static PROMPT.
+        # In test sessions we need zero shell hooks.
+        self._send("precmd_functions=(); preexec_functions=(); PROMPT='> '; RPROMPT=''")
+        time.sleep(0.3)  # wait for the new prompt to render
+
+        # Clear screen + scrollback to wipe startup residue (starship parse
+        # errors, PATH export echoes, etc.). Without this, wait_for() sees
+        # old errors in the scrollback since it doesn't clear before reading.
+        self._send("clear")
+        time.sleep(0.1)
+        subprocess.run(
+            ["tmux", "clear-history", "-t", self.session],
+            capture_output=True,
+        )
 
     def type(self, command: str, timeout: float = DEFAULT_TIMEOUT) -> Screen:
         """Type a command, wait for completion, return screen content.

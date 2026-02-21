@@ -5,6 +5,7 @@ from __future__ import annotations
 import difflib
 import json
 import os
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -46,6 +47,10 @@ def hive_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("HIVE_HOME", str(hive_dir))
     monkeypatch.setenv("HIVE_SKIP_LLM", "1")
     monkeypatch.delenv("HIVE_SESSION_LAUNCHED", raising=False)
+    # Isolate CC session-meta reads from host system data
+    cc_meta = tmp_path / "cc-session-meta"
+    cc_meta.mkdir()
+    monkeypatch.setenv("HIVE_CC_META_DIR", str(cc_meta))
 
     # Create directories
     (hive_dir / "working").mkdir()
@@ -205,11 +210,90 @@ def save_terminal_output():
     return _save
 
 
+def _normalize_golden(text: str) -> str:
+    """Normalize non-deterministic output for golden file comparison.
+
+    Replaces:
+    - Wall-clock timestamps: HIVE_DATE overrides date but not time, so
+      [HH:MM:SS] changes every run.
+    - Pytest temp paths: /tmp/.../pytest-NNN/... changes every session.
+    - Version strings: change on each release.
+    - Stats/Status volatile values: read from real ~/.claude/usage-data/
+      which is not isolated by HIVE_HOME.
+    - Sparkline bars: vary with underlying data.
+    """
+    # Timestamps
+    text = re.sub(r"\d{2}:\d{2}:\d{2}", "HH:MM:SS", text)
+    text = re.sub(r"(?<!\d)\d{2}:\d{2}(?!:\d)", "HH:MM", text)
+    # Pytest temp paths
+    text = re.sub(r"pytest-\d+", "pytest-NNN", text)
+    # Version strings
+    text = re.sub(r"v\d+\.\d+\.\d+", "vX.Y.Z", text)
+    # Sparkline/bar chart characters (volatile with underlying data)
+    text = re.sub(r"[▁▂▃▄▅▆▇█]+", "▓", text)
+    # --- Stats/Status: volatile counters from real ~/.claude/usage-data/ ---
+    text = re.sub(r"\d+ prompts/convo", "N prompts/convo", text)
+    text = re.sub(r"median \d+", "median N", text)
+    text = re.sub(r"\d+ cmds today", "N cmds today", text)
+    text = re.sub(r"\d+ this week", "N this week", text)
+    text = re.sub(r"\d+d streak", "Nd streak", text)
+    text = re.sub(r"best: \d+d", "best: Nd", text)
+    text = re.sub(r"\d+ prompts today", "N prompts today", text)
+    # Session quality from real /insights facets
+    text = re.sub(r"\d+% achieved", "N% achieved", text)
+    text = re.sub(r"\(\d+ sessions\)", "(N sessions)", text)
+    # Session size distribution
+    text = re.sub(r"\d+ (small|medium|large|huge)", r"N \1", text)
+    text = re.sub(r"compaction: \d+%", "compaction: N%", text)
+    # Trends values (entirely from real data)
+    text = re.sub(
+        r"(Prompts|Convos|P/convo|Insights|TODOs done|Verified)"
+        r"\s+\d+\s+\d+\s+[-+]?\d+%",
+        r"\1  N  N  N%",
+        text,
+    )
+    text = re.sub(
+        r"(Prompts|Convos|P/convo|Insights|TODOs done|Verified)"
+        r"\s+\d+\s+\d+\s+=",
+        r"\1  N  N  =",
+        text,
+    )
+    # Activity day rows: volatile counts and dates
+    text = re.sub(
+        r"(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+[▓─]+\s+\d+",
+        r"\1  ▓  N",
+        text,
+    )
+    # Source percentages and hook counts
+    text = re.sub(r"(claude code|terminal|web)\s+\d+%", r"\1  N%", text)
+    text = re.sub(
+        r"(precompact|userpromptsubmit|posttooluse|sessionstart"
+        r"|stop|sessionend|taskcompleted)\s+\d+",
+        r"\1  N",
+        text,
+    )
+    # Tool usage percentages
+    text = re.sub(r"(Read|Edit|Write|Bash|Glob|Grep) \d+%", r"\1 N%", text)
+    text = re.sub(r"[▼▲]\d+%", "△N%", text)
+    # Project lines: real projects appear alongside seeded ones
+    text = re.sub(r"\d+ cmds ·", "N cmds ·", text)
+    text = re.sub(r"\d+ sessions ·", "N sessions ·", text)
+    text = re.sub(r"\d+d active", "Nd active", text)
+    text = re.sub(r"last: \d+d ago", "last: Nd ago", text)
+    text = re.sub(r"last: yesterday", "last: recently", text)
+    # Session counts in header
+    text = re.sub(r"today \d+  ·  week \d+", "today N  ·  week N", text)
+    return text
+
+
 def assert_golden(screen: object, golden_name: str, update: bool = False) -> None:
     """Compare screen output against golden file baseline.
 
     Run with --update-golden to regenerate baselines:
         uv run pytest -m terminal --update-golden -o "addopts="
+
+    Non-deterministic values (timestamps, temp paths) are normalized before
+    comparison so golden files don't break on every run.
     """
     golden_path = GOLDEN_DIR / f"{golden_name}.txt"
     plain = screen.plain  # type: ignore[attr-defined]
@@ -219,12 +303,13 @@ def assert_golden(screen: object, golden_name: str, update: bool = False) -> Non
         golden_path.write_text(plain)
         return
 
-    expected = golden_path.read_text()
-    if plain.strip() != expected.strip():
+    expected = _normalize_golden(golden_path.read_text())
+    actual = _normalize_golden(plain)
+    if actual.strip() != expected.strip():
         diff = "\n".join(
             difflib.unified_diff(
                 expected.splitlines(),
-                plain.splitlines(),
+                actual.splitlines(),
                 fromfile=f"golden/{golden_name}.txt",
                 tofile="actual",
                 lineterm="",

@@ -8,6 +8,7 @@ No LLM calls. All computation is local.
 from __future__ import annotations
 
 import json
+import os
 from collections import defaultdict
 from pathlib import Path
 
@@ -15,6 +16,12 @@ from pathlib import Path
 def _usage_data_dir() -> Path:
     """Root of Claude Code usage data."""
     return Path.home() / ".claude" / "usage-data"
+
+
+def _session_meta_dir() -> Path:
+    """Session-meta directory, respecting HIVE_CC_META_DIR for test isolation."""
+    env = os.environ.get("HIVE_CC_META_DIR")
+    return Path(env) if env else _usage_data_dir() / "session-meta"
 
 
 def read_facets_full() -> dict[str, dict]:
@@ -46,7 +53,7 @@ def read_session_meta() -> dict[str, dict]:
     Each value includes project_path, duration_minutes, tool_counts,
     user_message_count, start_time, etc. Silently skips malformed files.
     """
-    meta_dir = _usage_data_dir() / "session-meta"
+    meta_dir = _session_meta_dir()
     if not meta_dir.exists():
         return {}
 

@@ -64,14 +64,9 @@ def hook_userpromptsubmit(args: list[str]) -> None:
     except Exception:
         pass
 
-    # Track session prompt (before UI queue check — prompt happened regardless)
-    try:
-        from keephive.storage import track_session_event
-
-        cwd = input_data.get("cwd", "")
-        track_session_event(session_id, "prompt", project=cwd)
-    except Exception:
-        pass
+    # Session prompt counting removed: Claude Code session-meta provides
+    # accurate user_message_count. Hook invocations overcount (~71x) due to
+    # sub-agent spawns and tool continuations.
 
     # Check UI feedback queue — inject before nudge
     try:

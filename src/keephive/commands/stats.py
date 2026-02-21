@@ -424,51 +424,66 @@ def _capture_mix(days_back: int = 7) -> dict:
 def _session_productivity(days_back: int = 30) -> dict:
     """Compute session productivity metrics.
 
+    Prefers Claude Code session-meta as source of truth (accurate user
+    message counts, full tool breakdown, code impact metrics).
+
     Returns dict with:
       prompts_today, prompts_week, convos_today, convos_week,
       avg_prompts_per_convo, median_prompts, prompts_trend_sparkline,
       depth_shallow, depth_medium, depth_deep,
       tool_distribution: [(tool, pct, trend_str), ...],
       compaction_rate, avg_turns_per_session, median_turns_per_session,
-      prompts_per_turn
-
-    Ghost sessions (0 prompts, 0 tools, <5s) are excluded.
+      prompts_per_turn,
+      lines_added_week, lines_removed_week, files_modified_week,
+      git_commits_week, total_input_tokens, total_output_tokens,
+      success_rate, source
     """
-    from keephive.storage import is_ghost_session, read_sessions
+    from keephive.storage import is_ghost_session, read_cc_sessions, read_sessions
 
     sm = session_metrics(days_back=days_back)
-    sessions = [s for s in read_sessions(days_back=days_back) if not is_ghost_session(s)]
+
+    # Use same data source as session_metrics: CC if available, else keephive
+    cc_sessions = read_cc_sessions(days_back=days_back)
+    use_cc = len(cc_sessions) > 0
+
+    if use_cc:
+        sessions = cc_sessions
+        msg_key = "user_messages"
+        tool_key = "tool_counts"
+    else:
+        sessions = [s for s in read_sessions(days_back=days_back) if not is_ghost_session(s)]
+        msg_key = "prompts"
+        tool_key = "tools"
 
     today_str = get_today().isoformat()
     week_ago = (get_today() - timedelta(days=7)).isoformat()
 
-    # Prompts today/week
-    prompts_today = sum(s.get("prompts", 0) for s in sessions if s.get("day") == today_str)
-    prompts_week = sum(s.get("prompts", 0) for s in sessions if s.get("day", "") >= week_ago)
+    # User messages today/week
+    prompts_today = sum(s.get(msg_key, 0) for s in sessions if s.get("day") == today_str)
+    prompts_week = sum(s.get(msg_key, 0) for s in sessions if s.get("day", "") >= week_ago)
 
-    # Session depth buckets
+    # Session depth buckets (thresholds tuned for real user message counts)
     shallow = medium = deep = 0
     for s in sessions:
         if s.get("day", "") < week_ago:
             continue
-        prompts = s.get("prompts", 0)
-        unique_tools = len(s.get("tools", {}))
-        compacted = s.get("compacted", False)
-        if prompts >= 40 and unique_tools >= 4 and compacted:
+        user_msgs = s.get(msg_key, 0)
+        unique_tools = len(s.get(tool_key, {}))
+        if user_msgs >= 20 and unique_tools >= 4:
             deep += 1
-        elif prompts >= 20 or unique_tools >= 3:
+        elif user_msgs >= 10 or unique_tools >= 3:
             medium += 1
         else:
             shallow += 1
 
-    # Prompts-per-convo 14-day sparkline
+    # Messages-per-convo 14-day sparkline
     trend_data: list[float] = []
     for i in range(13, -1, -1):
         d = get_today() - timedelta(days=i)
         day_s = d.isoformat()
         day_sessions = [s for s in sessions if s.get("day") == day_s]
         if day_sessions:
-            avg = sum(s.get("prompts", 0) for s in day_sessions) / len(day_sessions)
+            avg = sum(s.get(msg_key, 0) for s in day_sessions) / len(day_sessions)
             trend_data.append(avg)
         else:
             trend_data.append(0)
@@ -485,7 +500,7 @@ def _session_productivity(days_back: int = 30) -> dict:
     tools_prev: dict[str, int] = {}
     for s in sessions:
         day = s.get("day", "")
-        for tool, count in s.get("tools", {}).items():
+        for tool, count in s.get(tool_key, {}).items():
             if day >= week_ago:
                 tools_this[tool] = tools_this.get(tool, 0) + count
             elif day >= prev_week_start:
@@ -494,7 +509,7 @@ def _session_productivity(days_back: int = 30) -> dict:
     total_this = sum(tools_this.values()) or 1
     total_prev = sum(tools_prev.values()) or 1
     tool_dist: list[tuple[str, int, str]] = []
-    for tool in sorted(tools_this, key=lambda t: -tools_this[t])[:5]:
+    for tool in sorted(tools_this, key=lambda t: -tools_this[t])[:8]:
         pct = int(tools_this[tool] / total_this * 100)
         prev_pct = int(tools_prev.get(tool, 0) / total_prev * 100)
         delta = pct - prev_pct
@@ -503,6 +518,25 @@ def _session_productivity(days_back: int = 30) -> dict:
         else:
             trend_str = ""
         tool_dist.append((tool, pct, trend_str))
+
+    # Success rate from facets (CC sessions only, same ID space)
+    success_rate = 0.0
+    if use_cc:
+        try:
+            from keephive.insights import read_facets_full
+
+            facets = read_facets_full()
+            week_sessions = [s for s in sessions if s.get("day", "") >= week_ago]
+            if week_sessions:
+                achieved = sum(
+                    1
+                    for s in week_sessions
+                    if facets.get(s.get("session_id", ""), {}).get("outcome", "")
+                    in ("fully_achieved", "mostly_achieved")
+                )
+                success_rate = achieved / len(week_sessions)
+        except Exception:
+            pass
 
     return {
         "prompts_today": prompts_today,
@@ -520,6 +554,14 @@ def _session_productivity(days_back: int = 30) -> dict:
         "depth_deep": deep,
         "tool_distribution": tool_dist,
         "compaction_rate": sm["compaction_rate"],
+        "lines_added_week": sm.get("lines_added_week", 0),
+        "lines_removed_week": sm.get("lines_removed_week", 0),
+        "files_modified_week": sm.get("files_modified_week", 0),
+        "git_commits_week": sm.get("git_commits_week", 0),
+        "total_input_tokens": sm.get("total_input_tokens", 0),
+        "total_output_tokens": sm.get("total_output_tokens", 0),
+        "success_rate": success_rate,
+        "source": sm.get("source", "keephive"),
     }
 
 
@@ -543,17 +585,23 @@ def _weekly_trends(data: dict) -> dict:
         elif prev_week_start <= day_str < prev_week_end:
             cmds_prev += total
 
-    # Sessions
-    from keephive.storage import read_sessions
+    # Sessions: prefer CC data, fall back to keephive
+    from keephive.storage import read_cc_sessions, read_sessions
 
-    sessions = read_sessions(14)
-    sess_this = [s for s in sessions if s["day"] >= this_week_start]
-    sess_prev = [s for s in sessions if prev_week_start <= s["day"] < prev_week_end]
+    cc_sessions = read_cc_sessions(days_back=14)
+    if cc_sessions:
+        sessions = cc_sessions
+        _msg_key = "user_messages"
+    else:
+        sessions = read_sessions(14)
+        _msg_key = "prompts"
+    sess_this = [s for s in sessions if s.get("day", "") >= this_week_start]
+    sess_prev = [s for s in sessions if prev_week_start <= s.get("day", "") < prev_week_end]
 
     def _avg_p(slist: list) -> float:
         if not slist:
             return 0.0
-        return sum(s.get("prompts", 0) for s in slist) / len(slist)
+        return sum(s.get(_msg_key, 0) for s in slist) / len(slist)
 
     # Insights (categorized entries this/prev week from daily logs)
     insights_this = insights_prev = 0
@@ -602,9 +650,9 @@ def _weekly_trends(data: dict) -> dict:
     metrics = []
     for label, this, prev, fmt in [
         (
-            "Prompts",
-            sum(s.get("prompts", 0) for s in sess_this),
-            sum(s.get("prompts", 0) for s in sess_prev),
+            "Messages" if cc_sessions else "Prompts",
+            sum(s.get(_msg_key, 0) for s in sess_this),
+            sum(s.get(_msg_key, 0) for s in sess_prev),
             "d",
         ),
         ("Convos", len(sess_this), len(sess_prev), "d"),
@@ -870,8 +918,10 @@ def _display_full(data: dict) -> None:
             console.print(f"  consistency: {capture['consistency']}%")
 
     # Sessions section
+    is_cc = sess_prod.get("source") == "claude_code"
+    msg_label = "msgs" if is_cc else "prompts"
     console.print()
-    console.print("[dim]Sessions[/dim]")
+    console.print("[dim]Sessions[/dim]" + (" [dim](from Claude Code)[/dim]" if is_cc else ""))
     console.print(
         f"  today [bold]{sess_prod['convos_today']}[/bold]  ·  "
         f"week [bold]{sess_prod['convos_week']}[/bold]  ·  "
@@ -879,11 +929,12 @@ def _display_full(data: dict) -> None:
     )
     if sess_prod["prompts_today"] > 0 or sess_prod["prompts_week"] > 0:
         console.print(
-            f"  {sess_prod['prompts_today']} prompts today · {sess_prod['prompts_week']} this week"
+            f"  {sess_prod['prompts_today']} {msg_label} today"
+            f" · {sess_prod['prompts_week']} this week"
         )
     if sess_prod["avg_prompts_per_convo"] > 0:
         line = (
-            f"  avg [bold]{sess_prod['avg_prompts_per_convo']:.0f}[/bold] prompts/convo"
+            f"  avg [bold]{sess_prod['avg_prompts_per_convo']:.0f}[/bold] {msg_label}/convo"
             f" · median {sess_prod['median_prompts']:.0f}"
         )
         if sess_prod["prompts_trend_sparkline"]:
@@ -911,6 +962,37 @@ def _display_full(data: dict) -> None:
                 part += f" {trend_str}"
             tool_parts.append(part)
         console.print(f"  tools: {'  ·  '.join(tool_parts)}")
+
+    # Code velocity (CC-only metrics)
+    lines_added = sess_prod.get("lines_added_week", 0)
+    lines_removed = sess_prod.get("lines_removed_week", 0)
+    files_modified = sess_prod.get("files_modified_week", 0)
+    if lines_added > 0 or lines_removed > 0:
+        console.print(
+            f"  code: [ok]+{lines_added}[/ok]/[warn]-{lines_removed}[/warn] lines"
+            f" · {files_modified} files"
+        )
+
+    # Git activity + success rate
+    git_commits = sess_prod.get("git_commits_week", 0)
+    success_rate = sess_prod.get("success_rate", 0)
+    extra_parts = []
+    if git_commits > 0:
+        extra_parts.append(f"{git_commits} commits")
+    if success_rate > 0:
+        extra_parts.append(f"{int(success_rate * 100)}% achieved")
+    if extra_parts:
+        console.print(f"  {' · '.join(extra_parts)}")
+
+    # Token usage
+    input_tok = sess_prod.get("total_input_tokens", 0)
+    output_tok = sess_prod.get("total_output_tokens", 0)
+    if output_tok > 0:
+        ratio = input_tok / output_tok if output_tok else 0
+        console.print(
+            f"  tokens: {output_tok // 1000}K out · {input_tok // 1000}K in"
+            f" ({ratio:.1f}x read:write)"
+        )
 
     # Session Quality (from /insights facets data)
     try:
@@ -1311,16 +1393,28 @@ def stats_text(project: str = "", date_arg: str = "") -> str:
     try:
         sm = session_metrics(days_back=30)
         if sm["total_sessions"] > 0:
+            is_cc = sm.get("source") == "claude_code"
+            msg_label = "msgs" if is_cc else "prompts"
             lines.append(
                 f"\nSessions: {sm['sessions_today']} today | {sm['sessions_this_week']} this week | "
-                f"{sm['total_sessions']} total"
+                f"{sm['total_sessions']} total" + (" (from Claude Code)" if is_cc else "")
             )
             lines.append(
-                f"Avg {sm['avg_prompts_per_session']:.0f} prompts/session | "
+                f"Avg {sm['avg_prompts_per_session']:.0f} {msg_label}/session | "
                 f"Avg {sm['avg_duration_minutes']:.0f}m duration"
             )
             if sm["compaction_rate"] > 0:
                 lines.append(f"Compaction rate: {int(sm['compaction_rate'] * 100)}%")
+            # Code velocity
+            la = sm.get("lines_added_week", 0)
+            lr = sm.get("lines_removed_week", 0)
+            if la > 0 or lr > 0:
+                lines.append(
+                    f"Code this week: +{la}/-{lr} lines, {sm.get('files_modified_week', 0)} files"
+                )
+            gc = sm.get("git_commits_week", 0)
+            if gc > 0:
+                lines.append(f"Git commits this week: {gc}")
     except Exception as exc:
         import sys
 

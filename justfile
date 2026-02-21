@@ -34,6 +34,18 @@ test-integration:
 test-one target:
     uv run pytest {{target}} -xvs
 
+# Run terminal driver self-tests only (fast sanity check for tmux driver)
+test-driver:
+    uv run pytest tests/test_terminal_driver.py -xvs -o "addopts="
+
+# Run TODO/nudge E2E tests only
+test-todo:
+    uv run pytest tests/test_e2e_todo_nudge.py -v -o "addopts="
+
+# Run adversarial E2E tests only
+test-adversarial:
+    uv run pytest tests/test_e2e_adversarial.py -v -o "addopts="
+
 # Run all non-LLM tests (unit + integration + terminal E2E)
 test-all: test test-e2e
 
@@ -48,6 +60,36 @@ test-smoke:
 # Profile test timing (find slow tests)
 test-timing:
     uv run pytest --durations=20 -q
+
+# Run tests and save results to .test-results.txt (for Claude Code / CI output capture)
+test-save:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ts=$(date +%Y%m%d_%H%M%S)
+    echo "=== Test run: $ts ===" | tee .test-results.txt
+    uv run pytest -q 2>&1 | tee -a .test-results.txt
+    echo "EXIT:$?" >> .test-results.txt
+    echo "Results saved to .test-results.txt"
+
+# Run specific tests and save results (e.g. just test-save-one tests/test_stats.py)
+test-save-one target:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ts=$(date +%Y%m%d_%H%M%S)
+    echo "=== Test run: $ts — {{target}} ===" | tee .test-results.txt
+    uv run pytest {{target}} -xvs 2>&1 | tee -a .test-results.txt
+    echo "EXIT:$?" >> .test-results.txt
+    echo "Results saved to .test-results.txt"
+
+# Run E2E tests and save results (terminal tests need -o "addopts=" to override pyproject)
+test-save-e2e:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ts=$(date +%Y%m%d_%H%M%S)
+    echo "=== E2E run: $ts ===" | tee .test-results.txt
+    uv run pytest -m terminal -v --tb=short -o "addopts=" 2>&1 | tee -a .test-results.txt
+    echo "EXIT:$?" >> .test-results.txt
+    echo "Results saved to .test-results.txt"
 
 # Lint with ruff
 lint:

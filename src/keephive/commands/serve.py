@@ -1307,7 +1307,7 @@ def _compute_tool_trends(
     tools_prev_wk: dict[str, int] = {}
     for s in sessions:
         day = s.get("day", "")
-        for tool, count in s.get("tools", {}).items():
+        for tool, count in (s.get("tool_counts") or s.get("tools") or {}).items():
             if day >= week_start:
                 tools_this_wk[tool] = tools_this_wk.get(tool, 0) + count
             elif day >= prev_week_start:
@@ -1602,14 +1602,20 @@ def _get_stats_data() -> dict:
     today_hours: dict[str, int] = today_day.get("hours", {})
 
     # Tool breakdown from session metrics (for What You Use panel)
-    from keephive.storage import count_log_entries_with_prefix, read_sessions, session_metrics
+    from keephive.storage import (
+        count_log_entries_with_prefix,
+        read_cc_sessions,
+        read_sessions,
+        session_metrics,
+    )
 
     sm = _safe_call(session_metrics, days_back=30) or {}
     tool_totals = sm.get("tool_totals", {}) if isinstance(sm, dict) else {}
     tool_pct = sm.get("tool_pct", {}) if isinstance(sm, dict) else {}
 
-    # Tool trend arrows (week-over-week)
-    sessions = _safe_call(read_sessions, days_back=14) or []
+    # Tool trend arrows (week-over-week, prefer CC data)
+    cc_sess = _safe_call(read_cc_sessions, days_back=14) or []
+    sessions = cc_sess if cc_sess else (_safe_call(read_sessions, days_back=14) or [])
     prev_week_start = (get_today() - timedelta(days=13)).isoformat()
     tool_trends = _compute_tool_trends(sessions, week_start, prev_week_start)
 
@@ -2775,22 +2781,37 @@ def _render_knowledge_tabbed_panel(data: dict) -> str:
 
 
 def _get_session_data() -> dict:
-    """Session metrics for the sessions panel: histogram + session list."""
+    """Session metrics for the sessions panel: histogram + session list.
+
+    Prefers Claude Code session-meta for accurate user message counts
+    and full tool breakdown. Falls back to keephive hook data.
+    """
     from datetime import timedelta
 
     from keephive.clock import get_today
     from keephive.storage import (
+        read_cc_sessions,
         read_sessions,
         session_metrics,
     )
 
     sm = session_metrics(days_back=30)
+    use_cc = sm.get("source") == "claude_code"
 
-    # Prompt histogram buckets (absorbed from sessions-detail)
-    sessions = read_sessions(7)
+    # Use same data source for histogram and session list
+    if use_cc:
+        sessions = read_cc_sessions(days_back=7)
+        msg_key = "user_messages"
+        tool_key = "tool_counts"
+    else:
+        sessions = read_sessions(7)
+        msg_key = "prompts"
+        tool_key = "tools"
+
+    # Message histogram buckets
     buckets = {"0": 0, "1-5": 0, "6-10": 0, "11-20": 0, "21-50": 0, "51+": 0}
     for s in sessions:
-        p = s.get("prompts", 0)
+        p = s.get(msg_key, 0)
         if p == 0:
             buckets["0"] += 1
         elif p <= 5:
@@ -2804,11 +2825,11 @@ def _get_session_data() -> dict:
         else:
             buckets["51+"] += 1
 
-    # Prompts today and this week
+    # Messages today and this week
     today_str = get_today().isoformat()
     week_ago = (get_today() - timedelta(days=7)).isoformat()
-    prompts_today = sum(s.get("prompts", 0) for s in sessions if s.get("day") == today_str)
-    prompts_week = sum(s.get("prompts", 0) for s in sessions if s.get("day", "") >= week_ago)
+    prompts_today = sum(s.get(msg_key, 0) for s in sessions if s.get("day") == today_str)
+    prompts_week = sum(s.get(msg_key, 0) for s in sessions if s.get("day", "") >= week_ago)
 
     # Recent sessions (most recent first, limit 20)
     recent = sorted(sessions, key=lambda x: x.get("started", ""), reverse=True)[:20]
@@ -2818,15 +2839,14 @@ def _get_session_data() -> dict:
     medium = 0
     deep = 0
     for s in sessions:
-        p = s.get("prompts", 0)
-        unique_tools = len(s.get("tools", {}))
-        compacted = s.get("compacted", False)
-        if p >= 40 and unique_tools >= 4 and compacted:
+        user_msgs = s.get(msg_key, 0)
+        unique_tools = len(s.get(tool_key, {}))
+        if user_msgs >= 20 and unique_tools >= 4:
             deep += 1
-        elif p < 20 and unique_tools <= 2:
-            shallow += 1
-        else:
+        elif user_msgs >= 10 or unique_tools >= 3:
             medium += 1
+        else:
+            shallow += 1
 
     # Tool distribution with week-over-week trends
     prev_week_start = (get_today() - timedelta(days=13)).isoformat()
@@ -2857,6 +2877,13 @@ def _render_sessions_panel(data: dict) -> str:
     buckets = data.get("buckets", {})
     recent = data.get("recent", [])
 
+    # Source-aware field keys and labels
+    use_cc = data.get("source") == "claude_code"
+    msg_key = "user_messages" if use_cc else "prompts"
+    tool_key = "tool_counts" if use_cc else "tools"
+    msg_label = "msgs" if use_cc else "prompts"
+    msg_unit = "m" if use_cc else "p"
+
     if total == 0 and not recent:
         return (
             '<div class="card" tabindex="0" role="region" aria-label="Sessions">'
@@ -2875,9 +2902,9 @@ def _render_sessions_panel(data: dict) -> str:
     depth_html = ""
     if d_shallow + d_medium + d_deep > 0:
         depth_html = (
-            f'<div class="stat-item" title="Sessions with 40+ prompts, 4+ tools, and compacted"><span class="stat-value">{d_deep}</span><span class="stat-label">deep sessions</span></div>'
-            f'<div class="stat-item" title="Sessions with 20+ prompts or 3+ tools"><span class="stat-value">{d_medium}</span><span class="stat-label">medium sessions</span></div>'
-            f'<div class="stat-item" title="Sessions with fewer than 20 prompts and 2 or fewer tools"><span class="stat-value">{d_shallow}</span><span class="stat-label">brief sessions</span></div>'
+            f'<div class="stat-item" title="Sessions with 20+ {msg_label}, 4+ unique tools"><span class="stat-value">{d_deep}</span><span class="stat-label">deep sessions</span></div>'
+            f'<div class="stat-item" title="Sessions with 10+ {msg_label} or 3+ tools"><span class="stat-value">{d_medium}</span><span class="stat-label">medium sessions</span></div>'
+            f'<div class="stat-item" title="Sessions with fewer than 10 {msg_label} and 2 or fewer tools"><span class="stat-value">{d_shallow}</span><span class="stat-label">brief sessions</span></div>'
         )
 
     # Median prompts display
@@ -2887,21 +2914,63 @@ def _render_sessions_panel(data: dict) -> str:
         else ""
     )
 
-    # Prompts today/week stats
+    # Messages today/week stats
     prompts_period_html = ""
     if prompts_today > 0 or prompts_week > 0:
         prompts_period_html = (
-            f'<div class="stat-item"><span class="stat-value">{prompts_today}</span><span class="stat-label">prompts today</span></div>'
-            f'<div class="stat-item"><span class="stat-value">{prompts_week}</span><span class="stat-label">prompts this week</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{prompts_today}</span><span class="stat-label">{msg_label} today</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{prompts_week}</span><span class="stat-label">{msg_label} this week</span></div>'
         )
+
+    # New metrics from CC data (code velocity, git, tokens, success rate)
+    new_metrics_html = ""
+    if use_cc:
+        parts = []
+        lines_add = data.get("lines_added_week", 0)
+        lines_rm = data.get("lines_removed_week", 0)
+        files_mod = data.get("files_modified_week", 0)
+        if lines_add or lines_rm:
+            parts.append(
+                f'<div class="stat-item" title="Code changes this week">'
+                f'<span class="stat-value">+{lines_add}/-{lines_rm}</span>'
+                f'<span class="stat-label">lines ({files_mod} files)</span></div>'
+            )
+        git_commits = data.get("git_commits_week", 0)
+        if git_commits:
+            parts.append(
+                f'<div class="stat-item" title="Git commits this week">'
+                f'<span class="stat-value">{git_commits}</span>'
+                f'<span class="stat-label">commits</span></div>'
+            )
+        success_rate = data.get("success_rate", 0)
+        if success_rate > 0:
+            parts.append(
+                f'<div class="stat-item" title="Sessions achieving their goal (from /insights)">'
+                f'<span class="stat-value">{success_rate:.0%}</span>'
+                f'<span class="stat-label">success rate</span></div>'
+            )
+        out_tokens = data.get("total_output_tokens", 0)
+        in_tokens = data.get("total_input_tokens", 0)
+        if out_tokens:
+            ratio = f" ({in_tokens / out_tokens:.1f}x read:write)" if out_tokens > 0 else ""
+            parts.append(
+                f'<div class="stat-item" title="Token usage this week">'
+                f'<span class="stat-value">{out_tokens // 1000}K out</span>'
+                f'<span class="stat-label">tokens{ratio}</span></div>'
+            )
+        if parts:
+            new_metrics_html = (
+                f'<div class="stat-row" style="margin-bottom:4px">{"".join(parts)}</div>'
+            )
 
     header_stats = (
         f'<div class="stat-row" style="margin-bottom:8px">'
-        f'<div class="stat-item"><span class="stat-value">{avg_prompts:.0f}{median_html}</span><span class="stat-label">avg prompts/session</span></div>'
+        f'<div class="stat-item"><span class="stat-value">{avg_prompts:.0f}{median_html}</span><span class="stat-label">avg {msg_label}/session</span></div>'
         f'<div class="stat-item"><span class="stat-value">{avg_dur:.0f}m</span><span class="stat-label">avg session length</span></div>'
         f"{prompts_period_html}"
         f"{depth_html}"
         f"</div>"
+        f"{new_metrics_html}"
     )
 
     # Prompt histogram (absorbed from sessions-detail)
@@ -2916,8 +2985,9 @@ def _render_sessions_panel(data: dict) -> str:
             h = max(2, round(count / max_b * 70)) if count > 0 else 2
             bars += f'<div class="prompt-hist-bar" style="height:{h}px"><span>{count}</span></div>'
             labels += f"<span>{_e(label)}</span>"
+        hist_label = "Messages per session" if use_cc else "Prompts per session"
         hist_html = (
-            f'<div style="font-size:11px;color:#484f58;padding:6px 12px 0">Prompts per session</div>'
+            f'<div style="font-size:11px;color:#484f58;padding:6px 12px 0">{hist_label}</div>'
             f'<div class="prompt-hist">{bars}</div>'
             f'<div class="prompt-hist-labels">{labels}</div>'
         )
@@ -2929,30 +2999,27 @@ def _render_sessions_panel(data: dict) -> str:
         for s in recent:
             started = s.get("started", "")
             time_str = started[11:16] if len(started) > 16 else started[:5]
-            prompts = s.get("prompts", 0)
+            msgs = s.get(msg_key, 0)
             proj = s.get("project", "")
             if "/" in proj:
                 proj = proj.rsplit("/", 1)[-1]
-            tools = s.get("tools", {})
+            tools = s.get(tool_key, s.get("tools", {}))
             tool_str = ", ".join(
-                f"{t}:{c}" for t, c in sorted(tools.items(), key=lambda x: -x[1])[:3]
+                f"{t}:{c}" for t, c in sorted(tools.items(), key=lambda x: -x[1])[:5]
             )
-            # Depth classification for tooltip
+            # Depth classification for tooltip (aligned with _get_session_data thresholds)
             unique_tools = len(tools)
-            compacted = s.get("compacted", False)
-            if prompts >= 40 and unique_tools >= 4 and compacted:
+            if msgs >= 20 and unique_tools >= 4:
                 depth_label = "deep"
-            elif prompts < 20 and unique_tools <= 2:
-                depth_label = "shallow"
-            else:
+            elif msgs >= 10 or unique_tools >= 3:
                 depth_label = "medium"
-            depth_title = f"{depth_label} session: {prompts} prompts, {unique_tools} tools"
-            if compacted:
-                depth_title += ", compacted"
+            else:
+                depth_label = "shallow"
+            depth_title = f"{depth_label} session: {msgs} {msg_label}, {unique_tools} tools"
             items += (
                 f'<div class="session-item" tabindex="0" title="{_e(depth_title)}">'
                 f'<span class="session-time">{_e(time_str)}</span>'
-                f'<span class="session-prompts" title="prompts">{prompts}p</span>'
+                f'<span class="session-prompts" title="{msg_label}">{msgs}{msg_unit}</span>'
                 f'<span class="session-proj">{_e(proj)}</span>'
                 f'<span class="session-tools">{_e(tool_str)}</span>'
                 f"</div>"
@@ -2974,7 +3041,7 @@ def _get_trend_data() -> dict:
     from datetime import timedelta
 
     from keephive.clock import get_today
-    from keephive.storage import read_sessions, read_stats
+    from keephive.storage import read_cc_sessions, read_sessions, read_stats
 
     stats = read_stats()
     days = stats.get("days", {})
@@ -2995,22 +3062,33 @@ def _get_trend_data() -> dict:
         elif day_str >= prev_week_start and day_str < prev_week_end:
             cmds_prev += total
 
-    # Session metrics this/prev week
-    sessions = read_sessions(14)
-    sess_this = [s for s in sessions if s["day"] >= this_week_start]
-    sess_prev = [s for s in sessions if prev_week_start <= s["day"] < prev_week_end]
+    # Session metrics this/prev week (prefer CC data)
+    cc_sessions = read_cc_sessions(days_back=14)
+    if cc_sessions:
+        sessions = cc_sessions
+        _mk = "user_messages"
+    else:
+        sessions = read_sessions(14)
+        _mk = "prompts"
+    sess_this = [s for s in sessions if s.get("day", "") >= this_week_start]
+    sess_prev = [s for s in sessions if prev_week_start <= s.get("day", "") < prev_week_end]
 
     sess_count_this = len(sess_this)
     sess_count_prev = len(sess_prev)
 
-    def _avg_prompts(slist: list) -> float:
+    def _avg_msgs(slist: list) -> float:
         if not slist:
             return 0.0
-        return sum(s.get("prompts", 0) for s in slist) / len(slist)
+        return sum(s.get(_mk, 0) for s in slist) / len(slist)
 
     def _avg_duration(slist: list) -> float:
         durs: list[float] = []
         for s in slist:
+            # CC data has duration_minutes directly
+            dur_min = s.get("duration_minutes", 0)
+            if dur_min and dur_min > 0:
+                durs.append(dur_min)
+                continue
             started = s.get("started", "")
             last_seen = s.get("last_seen", "")
             if started and last_seen:
@@ -3026,8 +3104,8 @@ def _get_trend_data() -> dict:
                     pass
         return sum(durs) / len(durs) if durs else 0.0
 
-    prompts_this = _avg_prompts(sess_this)
-    prompts_prev = _avg_prompts(sess_prev)
+    prompts_this = _avg_msgs(sess_this)
+    prompts_prev = _avg_msgs(sess_prev)
     dur_this = _avg_duration(sess_this)
     dur_prev = _avg_duration(sess_prev)
 
@@ -3092,7 +3170,7 @@ def _get_trend_data() -> dict:
                 "fmt": "d",
             },
             {
-                "label": "Prompts/session",
+                "label": "Msgs/session" if cc_sessions else "Prompts/session",
                 "this": prompts_this,
                 "prev": prompts_prev,
                 "trend": _trend(prompts_this, prompts_prev),

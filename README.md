@@ -9,12 +9,12 @@
 </p>
 
 <table><tr>
-<td align="center">
-  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/mascot.png" width="240" alt="keephive mascot" />
-</td>
 <td>
   <h3>A knowledge sidecar for Claude Code</h3>
   <p>It captures what you learn, verifies it stays true, and surfaces it when relevant.</p>
+</td>
+<td align="center">
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/mascot.png" width="240" alt="keephive mascot" />
 </td>
 </tr></table>
 
@@ -204,13 +204,19 @@ flowchart TD
         WORK -->|session ends| SEND["SessionEnd:<br>finalize stats"]
     end
 
-    subgraph STORE["Knowledge Store"]
+    subgraph STORE["Knowledge Store (~/.claude/hive/)"]
         MEM[("Memory<br>30–90d TTL")]
         GUIDES[("Guides")]
         RULES[("Rules")]
         LOG[("Daily log")]
         TODOS[("TODOs")]
         PENDING[(".pending-facts")]
+        STATS[(".stats.json<br>workflow analytics")]
+    end
+
+    subgraph CC["Claude Code Data (~/.claude/usage-data/)"]
+        META[("session-meta/<br>msgs, tools, duration,<br>lines, tokens, commits")]
+        FACETS[("facets/<br>outcome, friction,<br>satisfaction")]
     end
 
     subgraph MANUAL["On-demand (CLI · MCP)"]
@@ -220,6 +226,7 @@ flowchart TD
         REV["hive mem review"]
         RFL["hive rf · reflect"]
         DASH["hive serve · dashboard<br>+ bookmarklet"]
+        STCMD["hive stats · hive insights"]
     end
 
     START -->|reads| STORE
@@ -234,7 +241,13 @@ flowchart TD
     REV --> MEM
     RFL --> GUIDES
     DASH -.->|reads| STORE
-    SEND -.->|".stats.json"| STORE
+    DASH -.->|"session analytics"| CC
+    STCMD -.->|"session analytics"| CC
+    STCMD -.->|"workflow analytics"| STORE
+    SEND -.->|".stats.json"| STATS
+
+    classDef ccdata fill:#1a1a2e,stroke:#4a9eff,stroke-width:2px,color:#4a9eff
+    class META,FACETS ccdata
 ```
 
 ### Memory tiers

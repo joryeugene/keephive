@@ -32,15 +32,9 @@ def hook_posttooluse(_args: list[str]) -> None:
     except Exception:
         pass
 
-    # Track session tool use
-    try:
-        from keephive.storage import track_session_event
-
-        tool_name = input_data.get("tool_name", "")
-        cwd = input_data.get("cwd", "")
-        track_session_event(session_id, "tool", project=cwd, tool_name=tool_name)
-    except Exception:
-        pass
+    # Session tool counting removed: Claude Code session-meta provides
+    # full tool_counts for ALL tools. PostToolUse only fires for Edit|Write,
+    # giving at most 2 tool types (of ~15 available).
 
     try:
         from keephive.nudge import build_nudge_output, get_tool_nudge, should_nudge

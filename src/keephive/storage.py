@@ -1611,66 +1611,159 @@ def is_ghost_session(s: dict) -> bool:
     return False
 
 
+def read_cc_sessions(days_back: int = 30) -> list[dict]:
+    """Read Claude Code session-meta files as authoritative session data.
+
+    Returns list of session dicts with standardized field names:
+      session_id, user_messages, tool_counts, duration_minutes,
+      project, started, day, lines_added, lines_removed,
+      files_modified, input_tokens, output_tokens, git_commits, git_pushes
+    Filters by start_time within the date range.
+    Falls back to empty list if session-meta dir doesn't exist.
+    Ghost sessions (user_message_count == 0) are excluded.
+    """
+    # Allow test isolation via env var. Default: real Claude Code session-meta.
+    env_dir = os.environ.get("HIVE_CC_META_DIR")
+    meta_dir = Path(env_dir) if env_dir else Path.home() / ".claude" / "usage-data" / "session-meta"
+    if not meta_dir.exists():
+        return []
+
+    cutoff = (get_today() - timedelta(days=days_back)).isoformat()
+    home = str(Path.home())
+    result: list[dict] = []
+
+    for fpath in meta_dir.glob("*.json"):
+        try:
+            data = json.loads(fpath.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        # Skip ghost sessions
+        if data.get("user_message_count", 0) == 0:
+            continue
+
+        # Parse start_time and filter by date range
+        start_time = data.get("start_time", "")
+        if not start_time:
+            continue
+
+        # start_time is ISO 8601 with Z suffix: "2026-02-18T16:13:44.146Z"
+        try:
+            day_str = start_time[:10]  # "2026-02-18"
+            date.fromisoformat(day_str)  # validate
+        except (ValueError, IndexError):
+            continue
+
+        if day_str < cutoff:
+            continue
+
+        # Normalize project path
+        project = data.get("project_path", "")
+        if project and project.startswith(home):
+            project = "~" + project[len(home) :]
+
+        result.append(
+            {
+                "session_id": data.get("session_id", fpath.stem),
+                "user_messages": data.get("user_message_count", 0),
+                "tool_counts": data.get("tool_counts", {}),
+                "duration_minutes": data.get("duration_minutes", 0),
+                "project": project,
+                "started": start_time,
+                "day": day_str,
+                "lines_added": data.get("lines_added", 0),
+                "lines_removed": data.get("lines_removed", 0),
+                "files_modified": data.get("files_modified", 0),
+                "input_tokens": data.get("input_tokens", 0),
+                "output_tokens": data.get("output_tokens", 0),
+                "git_commits": data.get("git_commits", 0),
+                "git_pushes": data.get("git_pushes", 0),
+            }
+        )
+
+    result.sort(key=lambda x: x.get("started", ""))
+    return result
+
+
 def session_metrics(days_back: int = 30) -> dict:
     """Compute derived session metrics from the last N days.
 
-    Returns dict with total_sessions, sessions_today, sessions_this_week,
-    avg/median prompts per session, avg duration, tool breakdown,
-    compaction rate, per-project counts, daily session counts,
-    and turn-based metrics.
+    Prefers Claude Code session-meta as source of truth for session analytics
+    (user messages, tool counts, duration, code impact). Falls back to
+    keephive's hook-tracked sessions when session-meta is unavailable.
 
-    Ghost sessions (0 prompts, 0 tools, <5s) are excluded from averages.
+    Returns dict with total_sessions, sessions_today, sessions_this_week,
+    avg/median user messages per session, avg duration, tool breakdown,
+    compaction rate, per-project counts, daily session counts,
+    code velocity, token usage, and git activity.
     """
     from statistics import median
 
-    all_sessions = read_sessions(days_back=days_back)
-    # Filter ghost sessions from averages
-    sessions = [s for s in all_sessions if not is_ghost_session(s)]
+    # Prefer Claude Code session-meta data (accurate user message counts,
+    # full tool breakdown, code impact metrics). Fall back to keephive
+    # hook-tracked sessions if session-meta is unavailable.
+    cc_sessions = read_cc_sessions(days_back=days_back)
+    use_cc = len(cc_sessions) > 0
+
+    if use_cc:
+        sessions = cc_sessions
+    else:
+        all_sessions = read_sessions(days_back=days_back)
+        sessions = [s for s in all_sessions if not is_ghost_session(s)]
+
     today_str = get_today().isoformat()
     week_ago = (get_today() - timedelta(days=7)).isoformat()
 
     total = len(sessions)
-    today_count = sum(1 for s in sessions if s["day"] == today_str)
-    week_count = sum(1 for s in sessions if s["day"] >= week_ago)
+    today_count = sum(1 for s in sessions if s.get("day", "") == today_str)
+    week_count = sum(1 for s in sessions if s.get("day", "") >= week_ago)
 
-    # Prompts
-    prompt_counts = [s.get("prompts", 0) for s in sessions]
-    avg_prompts = sum(prompt_counts) / total if total else 0.0
-    med_prompts = float(median(prompt_counts)) if prompt_counts else 0.0
+    # User messages (CC: user_messages, fallback: prompts)
+    msg_key = "user_messages" if use_cc else "prompts"
+    msg_counts = [s.get(msg_key, 0) for s in sessions]
+    avg_msgs = sum(msg_counts) / total if total else 0.0
+    med_msgs = float(median(msg_counts)) if msg_counts else 0.0
 
-    # Turns
+    # Turns (keephive-only, not available from CC)
     turn_counts = [s.get("turns", 0) for s in sessions if s.get("turns", 0) > 0]
     avg_turns = sum(turn_counts) / len(turn_counts) if turn_counts else 0.0
     med_turns = float(median(turn_counts)) if turn_counts else 0.0
     prompts_per_turn = (
-        sum(prompt_counts) / sum(turn_counts) if turn_counts and sum(turn_counts) > 0 else 0.0
+        sum(msg_counts) / sum(turn_counts) if turn_counts and sum(turn_counts) > 0 else 0.0
     )
 
-    # Duration (minutes) - prefer ended timestamp over last_seen
+    # Duration (CC: duration_minutes field, fallback: timestamp diff)
     durations: list[float] = []
-    for s in sessions:
-        started = s.get("started", "")
-        end_ts = s.get("ended", s.get("last_seen", ""))
-        if started and end_ts:
-            try:
-                t0 = datetime.fromisoformat(started)
-                t1 = datetime.fromisoformat(end_ts)
-                mins = (t1 - t0).total_seconds() / 60.0
-                if mins >= 0:
-                    durations.append(mins)
-            except ValueError:
-                pass
+    if use_cc:
+        for s in sessions:
+            d = s.get("duration_minutes", 0)
+            if d and d > 0:
+                durations.append(float(d))
+    else:
+        for s in sessions:
+            started = s.get("started", "")
+            end_ts = s.get("ended", s.get("last_seen", ""))
+            if started and end_ts:
+                try:
+                    t0 = datetime.fromisoformat(started)
+                    t1 = datetime.fromisoformat(end_ts)
+                    mins = (t1 - t0).total_seconds() / 60.0
+                    if mins >= 0:
+                        durations.append(mins)
+                except ValueError:
+                    pass
     avg_duration = sum(durations) / len(durations) if durations else 0.0
 
-    # Tool breakdown
+    # Tool breakdown (CC: tool_counts, fallback: tools)
+    tool_key = "tool_counts" if use_cc else "tools"
     tool_totals: dict[str, int] = {}
     for s in sessions:
-        for tool, count in s.get("tools", {}).items():
+        for tool, count in s.get(tool_key, {}).items():
             tool_totals[tool] = tool_totals.get(tool, 0) + count
     total_tool_uses = sum(tool_totals.values()) or 1
     tool_pct = {t: c / total_tool_uses for t, c in tool_totals.items()}
 
-    # Compaction rate
+    # Compaction rate (keephive-only flag, not available from CC)
     compacted = sum(1 for s in sessions if s.get("compacted"))
     compaction_rate = compacted / total if total else 0.0
 
@@ -1686,15 +1779,26 @@ def session_metrics(days_back: int = 30) -> dict:
     for i in range(13, -1, -1):
         d = get_today() - timedelta(days=i)
         day_s = d.isoformat()
-        count = sum(1 for s in sessions if s["day"] == day_s)
+        count = sum(1 for s in sessions if s.get("day", "") == day_s)
         daily_sessions.append((day_s, count))
+
+    # Code velocity (CC-only metrics)
+    week_sessions = [s for s in sessions if s.get("day", "") >= week_ago]
+    lines_added_week = sum(s.get("lines_added", 0) for s in week_sessions)
+    lines_removed_week = sum(s.get("lines_removed", 0) for s in week_sessions)
+    files_modified_week = sum(s.get("files_modified", 0) for s in week_sessions)
+    git_commits_week = sum(s.get("git_commits", 0) for s in week_sessions)
+
+    # Token usage (CC-only)
+    total_input_tokens = sum(s.get("input_tokens", 0) for s in week_sessions)
+    total_output_tokens = sum(s.get("output_tokens", 0) for s in week_sessions)
 
     return {
         "total_sessions": total,
         "sessions_today": today_count,
         "sessions_this_week": week_count,
-        "avg_prompts_per_session": avg_prompts,
-        "median_prompts_per_session": med_prompts,
+        "avg_prompts_per_session": avg_msgs,
+        "median_prompts_per_session": med_msgs,
         "avg_turns_per_session": avg_turns,
         "median_turns_per_session": med_turns,
         "prompts_per_turn": prompts_per_turn,
@@ -1704,4 +1808,11 @@ def session_metrics(days_back: int = 30) -> dict:
         "compaction_rate": compaction_rate,
         "sessions_by_project": by_project,
         "daily_sessions": daily_sessions,
+        "lines_added_week": lines_added_week,
+        "lines_removed_week": lines_removed_week,
+        "files_modified_week": files_modified_week,
+        "git_commits_week": git_commits_week,
+        "total_input_tokens": total_input_tokens,
+        "total_output_tokens": total_output_tokens,
+        "source": "claude_code" if use_cc else "keephive",
     }

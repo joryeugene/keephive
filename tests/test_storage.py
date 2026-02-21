@@ -850,6 +850,178 @@ class TestSessionMetrics:
         assert metrics["compaction_rate"] == pytest.approx(0.5)
 
 
+# ---- Claude Code session-meta (read_cc_sessions) ----
+
+
+def _write_cc_session(meta_dir, session_id, **fields):
+    """Helper: write a fake session-meta JSON file."""
+    import json
+
+    data = {
+        "session_id": session_id,
+        "user_message_count": fields.get("user_message_count", 5),
+        "tool_counts": fields.get("tool_counts", {"Read": 10, "Edit": 3, "Bash": 2}),
+        "duration_minutes": fields.get("duration_minutes", 15),
+        "start_time": fields.get("start_time", "2026-01-15T10:00:00Z"),
+        "project_path": fields.get("project_path", "/home/user/my-project"),
+        "lines_added": fields.get("lines_added", 50),
+        "lines_removed": fields.get("lines_removed", 10),
+        "files_modified": fields.get("files_modified", 3),
+        "input_tokens": fields.get("input_tokens", 50000),
+        "output_tokens": fields.get("output_tokens", 20000),
+        "git_commits": fields.get("git_commits", 1),
+    }
+    (meta_dir / f"{session_id}.json").write_text(json.dumps(data))
+
+
+class TestReadCcSessions:
+    def test_empty_dir(self, hive_env, monkeypatch):
+        """Returns empty list when session-meta dir has no files."""
+        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
+        from keephive.storage import read_cc_sessions
+
+        result = read_cc_sessions(days_back=30)
+        assert result == []
+
+    def test_reads_session_files(self, hive_env, monkeypatch, tmp_path):
+        """Reads and normalizes session-meta JSON files."""
+        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
+        meta_dir = tmp_path / "cc-meta"
+        meta_dir.mkdir()
+        monkeypatch.setenv("HIVE_CC_META_DIR", str(meta_dir))
+
+        _write_cc_session(meta_dir, "sess-001", start_time="2026-01-15T09:00:00Z")
+        _write_cc_session(meta_dir, "sess-002", start_time="2026-01-14T14:00:00Z")
+
+        from keephive.storage import read_cc_sessions
+
+        sessions = read_cc_sessions(days_back=7)
+        assert len(sessions) == 2
+        # Check field normalization
+        s = sessions[0]
+        assert "user_messages" in s
+        assert "tool_counts" in s
+        assert "day" in s
+        assert s["user_messages"] == 5
+        assert "Read" in s["tool_counts"]
+
+    def test_filters_by_date(self, hive_env, monkeypatch, tmp_path):
+        """Sessions outside the date range are excluded."""
+        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
+        meta_dir = tmp_path / "cc-meta"
+        meta_dir.mkdir()
+        monkeypatch.setenv("HIVE_CC_META_DIR", str(meta_dir))
+
+        _write_cc_session(meta_dir, "recent", start_time="2026-01-14T10:00:00Z")
+        _write_cc_session(meta_dir, "old", start_time="2025-12-01T10:00:00Z")
+
+        from keephive.storage import read_cc_sessions
+
+        sessions = read_cc_sessions(days_back=7)
+        assert len(sessions) == 1
+        assert sessions[0]["session_id"] == "recent"
+
+    def test_skips_ghost_sessions(self, hive_env, monkeypatch, tmp_path):
+        """Sessions with 0 user messages are filtered out."""
+        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
+        meta_dir = tmp_path / "cc-meta"
+        meta_dir.mkdir()
+        monkeypatch.setenv("HIVE_CC_META_DIR", str(meta_dir))
+
+        _write_cc_session(meta_dir, "real", user_message_count=5)
+        _write_cc_session(meta_dir, "ghost", user_message_count=0)
+
+        from keephive.storage import read_cc_sessions
+
+        sessions = read_cc_sessions(days_back=30)
+        assert len(sessions) == 1
+        assert sessions[0]["session_id"] == "real"
+
+    def test_project_path_normalized(self, hive_env, monkeypatch, tmp_path):
+        """Project path gets ~ normalization for home directory."""
+        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
+        meta_dir = tmp_path / "cc-meta"
+        meta_dir.mkdir()
+        monkeypatch.setenv("HIVE_CC_META_DIR", str(meta_dir))
+
+        from pathlib import Path
+
+        home = str(Path.home())
+        _write_cc_session(meta_dir, "sess-home", project_path=f"{home}/my-project")
+
+        from keephive.storage import read_cc_sessions
+
+        sessions = read_cc_sessions(days_back=30)
+        assert sessions[0]["project"] == "~/my-project"
+
+    def test_day_field_derived(self, hive_env, monkeypatch, tmp_path):
+        """day field is ISO date string from start_time."""
+        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
+        meta_dir = tmp_path / "cc-meta"
+        meta_dir.mkdir()
+        monkeypatch.setenv("HIVE_CC_META_DIR", str(meta_dir))
+
+        _write_cc_session(meta_dir, "sess-day", start_time="2026-01-15T14:30:00Z")
+
+        from keephive.storage import read_cc_sessions
+
+        sessions = read_cc_sessions(days_back=7)
+        assert sessions[0]["day"] == "2026-01-15"
+
+    def test_nonexistent_dir_returns_empty(self, hive_env, monkeypatch, tmp_path):
+        """Returns empty list when meta dir doesn't exist."""
+        monkeypatch.setenv("HIVE_CC_META_DIR", str(tmp_path / "nonexistent"))
+        from keephive.storage import read_cc_sessions
+
+        assert read_cc_sessions(days_back=30) == []
+
+
+class TestSessionMetricsWithCcData:
+    """session_metrics() prefers Claude Code data when available."""
+
+    def test_uses_cc_data_when_available(self, hive_env, monkeypatch, tmp_path):
+        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
+        meta_dir = tmp_path / "cc-meta"
+        meta_dir.mkdir()
+        monkeypatch.setenv("HIVE_CC_META_DIR", str(meta_dir))
+
+        _write_cc_session(
+            meta_dir,
+            "cc-001",
+            user_message_count=12,
+            tool_counts={"Read": 20, "Edit": 5, "Bash": 3, "Grep": 8},
+            start_time="2026-01-15T10:00:00Z",
+            lines_added=100,
+            lines_removed=30,
+            files_modified=5,
+            git_commits=2,
+            input_tokens=80000,
+            output_tokens=30000,
+        )
+
+        from keephive.storage import session_metrics
+
+        m = session_metrics(days_back=7)
+        assert m["source"] == "claude_code"
+        assert m["total_sessions"] == 1
+        assert m["avg_prompts_per_session"] == 12.0
+        assert m["lines_added_week"] == 100
+        assert m["git_commits_week"] == 2
+        assert m["total_output_tokens"] == 30000
+
+    def test_falls_back_to_keephive_data(self, hive_env, monkeypatch):
+        """When no CC data exists, uses keephive session data."""
+        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
+        from keephive.storage import session_metrics, track_session_event
+
+        track_session_event("kh-001", "start")
+        track_session_event("kh-001", "prompt")
+
+        m = session_metrics(days_back=7)
+        assert m["source"] == "keephive"
+        assert m["total_sessions"] == 1
+
+
 # ---- Memory decay ----
 
 
