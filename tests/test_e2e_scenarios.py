@@ -501,3 +501,80 @@ class TestErrorPaths:
         (term.hive_home / ".stats.json").write_text("{corrupted")
         term.type("python -m keephive stats")
         # Should recover, not crash
+
+
+# ============================================================
+#  Category 9: Golden File Expansion
+# ============================================================
+
+
+@pytest.mark.terminal
+class TestGoldenExpansion:
+    def test_todo_empty_golden(self, term, save_terminal_output, update_golden):
+        """Golden: empty TODO list."""
+        screen = term.type("python -m keephive todo")
+        screen.has("No open TODOs")
+        save_terminal_output("golden/todo_empty", term)
+        assert_golden(screen, "todo_empty", update=update_golden)
+
+    def test_todo_seeded_golden(self, term_seeded, save_terminal_output, update_golden):
+        """Golden: TODO list with seeded data."""
+        screen = term_seeded.type("python -m keephive todo")
+        save_terminal_output("golden/todo_seeded", term_seeded)
+        assert_golden(screen, "todo_seeded", update=update_golden)
+
+    def test_recall_hit_golden(self, term, save_terminal_output, update_golden):
+        """Golden: recall with a matching fact."""
+        term.type("python -m keephive r 'FACT: Redis supports pub/sub messaging'")
+        screen = term.type("python -m keephive rc Redis")
+        screen.has("Redis", "pub/sub")
+        save_terminal_output("golden/recall_hit", term)
+        assert_golden(screen, "recall_hit", update=update_golden)
+
+    def test_recall_miss_golden(self, term, save_terminal_output, update_golden):
+        """Golden: recall with no matches."""
+        screen = term.type("python -m keephive rc nonexistent_zebra_query")
+        screen.has("No results")
+        save_terminal_output("golden/recall_miss", term)
+        assert_golden(screen, "recall_miss", update=update_golden)
+
+    def test_doctor_clean_golden(self, term, save_terminal_output, update_golden):
+        """Golden: doctor on clean state."""
+        screen = term.type("python -m keephive doctor")
+        screen.has("hive doctor")
+        save_terminal_output("golden/doctor_clean", term)
+        assert_golden(screen, "doctor_clean", update=update_golden)
+
+    def test_version_golden(self, term, save_terminal_output, update_golden):
+        """Golden: version output."""
+        screen = term.type("python -m keephive --version")
+        screen.matches(r"keephive v\d+\.\d+\.\d+")
+        save_terminal_output("golden/version", term)
+        assert_golden(screen, "version", update=update_golden)
+
+    def test_gc_dryrun_golden(self, term, save_terminal_output, update_golden):
+        """Golden: gc --dry-run on empty hive."""
+        screen = term.type("python -m keephive gc --dry-run")
+        screen.has("Garbage collection", "Nothing to archive")
+        save_terminal_output("golden/gc_dryrun", term)
+        assert_golden(screen, "gc_dryrun", update=update_golden)
+
+    def test_remember_confirm_golden(self, term, save_terminal_output, update_golden):
+        """Golden: remember showing confirmation output."""
+        screen = term.type("python -m keephive r 'FACT: Golang uses goroutines for concurrency'")
+        screen.has("Remembered", "FACT")
+        save_terminal_output("golden/remember_confirm", term)
+        assert_golden(screen, "remember_confirm", update=update_golden)
+
+    def test_log_seeded_golden(self, term_seeded, save_terminal_output, update_golden):
+        """Golden: log view with seeded data."""
+        screen = term_seeded.type("python -m keephive l")
+        save_terminal_output("golden/log_seeded", term_seeded)
+        assert_golden(screen, "log_seeded", update=update_golden)
+
+    def test_profile_list_golden(self, term, save_terminal_output, update_golden):
+        """Golden: profile list showing default."""
+        screen = term.type("python -m keephive profile list")
+        screen.has("Profiles", "default")
+        save_terminal_output("golden/profile_list", term)
+        assert_golden(screen, "profile_list", update=update_golden)
