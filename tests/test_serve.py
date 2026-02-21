@@ -921,8 +921,18 @@ def test_search_filters_session_lines(hive_env):
 
     def fake_search(query):
         return [
-            {"tier": "daily", "score": 70, "date": "2026-01-01", "line": "- [10:00:00] FACT: useful memory"},
-            {"tier": "daily", "score": 60, "date": "2026-01-01", "line": "- [13:31:47] session [proj] /Users/test"},
+            {
+                "tier": "daily",
+                "score": 70,
+                "date": "2026-01-01",
+                "line": "- [10:00:00] FACT: useful memory",
+            },
+            {
+                "tier": "daily",
+                "score": 60,
+                "date": "2026-01-01",
+                "line": "- [13:31:47] session [proj] /Users/test",
+            },
         ]
 
     port = 13860
@@ -964,7 +974,14 @@ def test_search_strips_log_prefix(hive_env):
     from keephive.commands.serve import HTTPServer, _HiveHandler
 
     def fake_search(query):
-        return [{"tier": "daily", "score": 70, "date": "2026-01-01", "line": "- [10:00:00] FACT: clean result"}]
+        return [
+            {
+                "tier": "daily",
+                "score": 70,
+                "date": "2026-01-01",
+                "line": "- [10:00:00] FACT: clean result",
+            }
+        ]
 
     port = 13861
     _HiveHandler.server_port = port

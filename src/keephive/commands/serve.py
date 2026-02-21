@@ -1759,6 +1759,7 @@ def _render_knowledge_panel(data: dict) -> str:
 
     # Build command mapping for smart deduplication (Phase 9)
     from keephive.cli import _CANONICAL
+
     _cmd_aliases: dict[str, str] = {}  # guide_stem -> "hive <cmd>"
     _alias_to_canon = {v: v for v in set(_CANONICAL.values())}
     for g in guides:
@@ -1782,7 +1783,7 @@ def _render_knowledge_panel(data: dict) -> str:
             f'<div class="acc-header">'
             f'<span class="acc-toggle">&#9654;</span>'
             f'<span class="acc-name">{_e(g["name"])}</span>'
-            f'{cmd_badge}'
+            f"{cmd_badge}"
             f'<span class="acc-type">guide</span>'
             f"</div>{body}</div>"
         )
