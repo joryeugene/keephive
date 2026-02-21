@@ -20,6 +20,7 @@ from keephive.storage import (
     get_evidence_for_fact,
     get_stale_facts,
     memory_file,
+    normalize_memory,
     store_evidence,
     today,
     version_context,
@@ -161,7 +162,7 @@ def cmd_verify(args: list[str]) -> None:
                     VerifyResponse,
                     model="sonnet",
                     tools=VERIFY_TOOLS,
-                    max_turns=12,
+                    max_turns=25,
                     timeout=240,
                     verbose=verbose,
                 )
@@ -231,6 +232,20 @@ def cmd_verify(args: list[str]) -> None:
         console.print(
             f"[dim]Updated {total_updated} fact(s), refreshed {total_refreshed} in working/memory.md[/dim]"
         )
+
+    # Post-verify cleanup: normalize memory.md quality
+    cleanup = normalize_memory(mem)
+    cleanup_parts = []
+    if cleanup["double_tags"]:
+        cleanup_parts.append(f"{cleanup['double_tags']} double tags fixed")
+    if cleanup["resolved_todos"]:
+        cleanup_parts.append(f"{cleanup['resolved_todos']} resolved TODOs removed")
+    if cleanup["deduped"]:
+        cleanup_parts.append(f"{cleanup['deduped']} duplicates merged")
+    if cleanup["malformed_prefix"]:
+        cleanup_parts.append(f"{cleanup['malformed_prefix']} prefixes fixed")
+    if cleanup_parts:
+        console.print(f"  [dim]Cleanup: {', '.join(cleanup_parts)}[/dim]")
 
     console.print()
     console.print(

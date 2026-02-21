@@ -15,6 +15,57 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 
+def _strip_verified_tags(text: str) -> str:
+    """Remove all [verified:YYYY-MM-DD] tags from text."""
+    return re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", text).strip()
+
+
+def normalize_memory(mem_path: Path) -> dict:
+    """Clean up known memory.md quality issues. Returns counts.
+
+    Fixes: duplicate [verified:] tags, resolved TODOs still present,
+    malformed '- - ' prefixes, and near-duplicate lines.
+    """
+    if not mem_path.exists():
+        return {"double_tags": 0, "resolved_todos": 0, "malformed_prefix": 0, "deduped": 0}
+
+    lines = mem_path.read_text().splitlines()
+    cleaned: list[str] = []
+    stats = {"double_tags": 0, "resolved_todos": 0, "malformed_prefix": 0, "deduped": 0}
+    seen_normalized: set[str] = set()
+
+    for line in lines:
+        # Skip resolved TODOs
+        if "TODO (RESOLVED)" in line or "TODO: (RESOLVED)" in line:
+            stats["resolved_todos"] += 1
+            continue
+
+        # Fix double-dash prefix: "- - " -> "- "
+        if line.startswith("- - "):
+            line = "- " + line[4:]
+            stats["malformed_prefix"] += 1
+
+        # Collapse multiple [verified:] tags to one (keep last date)
+        tags = re.findall(r"\[verified:(\d{4}-\d{2}-\d{2})\]", line)
+        if len(tags) > 1:
+            clean = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line).rstrip()
+            line = f"{clean} [verified:{tags[-1]}]"
+            stats["double_tags"] += 1
+
+        # Deduplicate by normalized content (strip tags + whitespace)
+        if line.startswith("- "):
+            norm = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line).strip().lower()
+            if norm in seen_normalized:
+                stats["deduped"] += 1
+                continue
+            seen_normalized.add(norm)
+
+        cleaned.append(line)
+
+    mem_path.write_text("\n".join(cleaned) + "\n")
+    return stats
+
+
 def parse_date_arg(arg: str) -> str:
     """Parse a date argument into an ISO date string.
 

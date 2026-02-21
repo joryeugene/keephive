@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 from keephive.storage import (
+    _strip_verified_tags,
     append_to_daily,
     backup_and_write,
     capture_budget,
@@ -476,7 +477,7 @@ def _correct_in_memory(content: str, old_text: str, new_text: str, today_str: st
         # Remove any existing verified tag for comparison
         stripped_no_tag = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", stripped)
         if old_lower in stripped_no_tag.lower():
-            lines[i] = f"- {new_text} [verified:{today_str}]"
+            lines[i] = f"- {_strip_verified_tags(new_text)} [verified:{today_str}]"
             return "\n".join(lines)
     return content  # No match found, don't change
 
@@ -486,7 +487,7 @@ def _add_to_auto_captured(content: str, text: str, today_str: str) -> str:
 
     Creates the section if it doesn't exist.
     """
-    new_line = f"- {text} [verified:{today_str}]"
+    new_line = f"- {_strip_verified_tags(text)} [verified:{today_str}]"
     marker = "## Auto-Captured"
 
     if marker in content:

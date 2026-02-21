@@ -12,6 +12,7 @@ from keephive.claude import ClaudePipeError, run_claude_pipe
 from keephive.models import GuideDraftResponse, ReflectAnalyzeResponse
 from keephive.output import console, notify_sound, prompt_choice, prompt_yn
 from keephive.storage import (
+    _strip_verified_tags,
     append_to_daily,
     backup_and_write,
     daily_dir,
@@ -345,7 +346,7 @@ def _reflect_apply(args: list[str]) -> None:
             else:
                 choice = prompt_choice("         (y)es  (n)o  (e)dit ? ", ["y", "n", "e"])
             if choice == "y":
-                line = f"- {a.fact} [verified:{today_str}]"
+                line = f"- {_strip_verified_tags(a.fact)} [verified:{today_str}]"
                 mem_content = _append_to_memory(mem_content, line)
                 ensure_daily()
                 ts = datetime.now().strftime("%H:%M:%S")
@@ -359,7 +360,7 @@ def _reflect_apply(args: list[str]) -> None:
             elif choice == "e":
                 edited = input("         Edit text: ").strip()
                 if edited:
-                    line = f"- {edited} [verified:{today_str}]"
+                    line = f"- {_strip_verified_tags(edited)} [verified:{today_str}]"
                     mem_content = _append_to_memory(mem_content, line)
                     console.print("         [ok]Added to memory.md[/ok]")
                     added += 1
@@ -424,17 +425,18 @@ def _update_contradiction(mem_content: str, old_text: str, new_text: str, today_
     corrected version.
     """
     old_lower = old_text.lower().strip()
+    clean_new = _strip_verified_tags(new_text)
     lines = mem_content.split("\n")
     for i, line in enumerate(lines):
         stripped = line.lstrip("- ").strip()
         # Remove any existing verified tag for comparison
         stripped_no_tag = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", stripped)
         if stripped_no_tag.lower().strip() == old_lower or old_lower in stripped_no_tag.lower():
-            new_line = f"- {new_text} [verified:{today_str}]"
+            new_line = f"- {clean_new} [verified:{today_str}]"
             lines[i] = new_line
             return "\n".join(lines)
     # If no match found, append as new
-    return _append_to_memory(mem_content, f"- {new_text} [verified:{today_str}]")
+    return _append_to_memory(mem_content, f"- {clean_new} [verified:{today_str}]")
 
 
 def _reflect_draft(args: list[str]) -> None:
