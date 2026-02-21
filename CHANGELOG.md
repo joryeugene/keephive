@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+## v0.22.0
+
+### Features
+
+- **Lifecycle nudge engine**: Priority-based state machine replaces static message rotation. Nudge order: open TODOs > stale facts > pending facts > unreflected logs > context-specific fallback. Intervals: prompt/tool every 5, stop every 8.
+- **Stop hook**: Turn counter per session with periodic micro-nudges (interval 8) to capture decisions or mark TODOs done.
+- **SessionEnd hook**: Finalizes session stats with accurate end timestamp. Silent (no stdout).
+- **TaskCompleted hook**: Auto-logs DONE entry to daily log when a task is marked complete.
+- **PreCompact TODO discipline**: Speculative TODO detection demotes LLM narration to FACT, caps at 2 user-requested TODOs per compaction, auto-closes resolved TODOs via `completed_todos` field with match validation.
+- **Ghost session filter**: Excludes IDE restart artifacts (0 prompts, 0 tools, <5s) from all session metrics.
+- **Dashboard profile badge**: Nav bar shows active profile name when a non-default profile is selected.
+- **Dashboard enhancements**: Tool trend arrows, pulse component breakdown, sparkline tooltips, session depth labels.
+- **Demo asset pipeline**: `just demo-gif` and `just demo-screenshots` recipes. VHS tape script with 10-command walkthrough. Prompt template seeding in demo data.
+- **`h` entrypoint**: Shortest possible alias for keephive CLI.
+
+### Fixes
+
+- **Audit model resilience**: `VaultPerspective`, `CleanerPerspective`, `StrategistPerspective` now default `issues` to `[]`. Prevents Pydantic crash when LLM omits the field.
+- **Stats silent exception swallowing**: Session Quality and Session Metrics `except Exception: pass` replaced with stderr logging. Bugs in `insights.py` are now visible.
+- **Todo watch hint spam**: `show_hint()` suppressed in `--watch` mode via `functools.partial` kwarg gating.
+- **Test isolation for `hive go` sessions**: `hive_env` fixture clears `HIVE_SESSION_LAUNCHED` env var. Prevents session guard from skipping context injection when tests run inside a `hive go` session.
+- **`_compute_tool_trends` helper**: Extracted from inline dashboard code (DRY).
+- **`is_ghost_session` public API**: Renamed from private to public for reuse.
+- **`_match_open_todo` validation**: Added match validation for auto-close TODO flow.
+- **Removed dead `stop_hook_active` guard**.
+- **Date-validated `_unreflected_log_count`**: Now validates date strings before counting.
+
+### Tests
+
+- 1774 tests total (unit/integration + terminal E2E). New: `test_e2e_todo_nudge.py` (611 lines, full nudge lifecycle). Expanded: `test_nudge.py`, `test_precompact.py`.
+
+### Developer
+
+- Python minimum bumped to 3.13. Dropped 3.12 classifier.
+- README restructured with feature table and lifecycle diagram.
+
 ## v0.20.0
 
 ### Features
