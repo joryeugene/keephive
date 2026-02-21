@@ -227,6 +227,37 @@ def test_hook_queue_injection_skips_nudge(hive_env, capsys):
     assert out.count("{") == out.count("}")  # balanced JSON, not two concatenated objects
 
 
+def test_hook_queue_still_tracks_prompt(hive_env, capsys):
+    """Regression: prompt tracking must happen even when UI queue triggers early return.
+
+    Before the fix, the UI queue early-return skipped track_session_event(),
+    producing sessions with 0 prompts but nonzero tool counts (e.g. '0p, Edit:2').
+    """
+    from keephive.storage import read_stats, ui_queue_path
+
+    session_id = "test-session-queue-prompt"
+
+    # Set up UI queue so the early return fires
+    queue = ui_queue_path()
+    queue.write_text(json.dumps({"page": "http://x", "selector": ".y"}))
+
+    _call_hook({"session_id": session_id, "cwd": "/tmp/fake"})
+
+    # Queue was consumed (early return happened)
+    assert not queue.exists(), "Queue should have been consumed"
+
+    # Prompt must still have been tracked despite the early return
+    stats = read_stats()
+    today = list(stats.get("days", {}).keys())
+    assert today, "Stats should have today's entry"
+    sessions = stats["days"][today[0]].get("sessions", {})
+    assert session_id in sessions, "Session should be recorded"
+    assert sessions[session_id]["prompts"] >= 1, (
+        f"Prompt count should be >= 1, got {sessions[session_id]['prompts']}. "
+        "UI queue early-return must not skip prompt tracking."
+    )
+
+
 # ---- Queue session scoping (Fix 5) ----
 
 

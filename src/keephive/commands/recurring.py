@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
+from keephive.clock import get_now
 from keephive.output import console
 from keephive.storage import (
     append_to_daily,
@@ -281,7 +282,7 @@ def _recurring_done(pattern: str) -> bool:
 
     match_text, _ = result
     ensure_daily()
-    ts = datetime.now().strftime("%H:%M:%S")
+    ts = get_now().strftime("%H:%M:%S")
     append_to_daily(f"- [{ts}] DONE: {match_text}")
     console.print(
         f"[ok]Done[/ok] {match_text} (next due per schedule)  [dim](td undo to reopen)[/dim]"

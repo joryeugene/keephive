@@ -35,6 +35,10 @@ HELP: dict[str, str] = {
     "sound-test": "Usage: hive sound-test [error]\n  Play configured notification sound\n  No args: play success sound\n  error: play error sound",
     "serve": "Usage: hive serve [port] [--hot]\n  Live web dashboard at localhost:3847 (default)\n  Views: / (home) /dev /know (guides+memory+notes) /stats\n  --hot  Watch source files, auto-restart on change",
     "ui": "Usage: hive ui [install|clear]\n  ui           Show pending UI feedback queue\n  ui-install   Print bookmarklet URL (drag to bookmarks bar)\n  ui-clear     Clear pending feedback",
+    "profile": "Usage: hive profile [list|use|create|delete] [name] [--seed]\n  list          Show all profiles\n  use <name>    Switch to profile\n  create <name> Create new profile\n  delete <name> Delete profile and data\n  --seed        Populate with demo data on create",
+    "seed": "Usage: hive seed [--days N] [--force]\n  Seed current profile with realistic demo data\n  --days N   Number of days of history (default 45)\n  --force    Overwrite existing data without prompt",
+    "export": "Usage: hive export [output_path]\n  Export current profile data as tar.gz archive\n  Default: ./hive-{profile}-YYYYMMDD.tar.gz",
+    "import": "Usage: hive import <path.tar.gz> [--profile name]\n  Import data from archive\n  --profile name  Create new profile and import there",
 }
 
 # Map aliases to canonical names for help lookup
@@ -69,6 +73,7 @@ _CANONICAL: dict[str, str] = {
     "up": "update",
     "draft": "note",
     "ws": "serve",
+    "pf": "profile",
 }
 
 # Command families: (display_label, description, shorthand, tracked_aliases)
@@ -101,6 +106,10 @@ _CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
     ("setup", "Initial setup", "", {"setup"}),
     ("sound-test", "Play notification sound", "", {"sound-test"}),
     ("ui [install|clr]", "UI feedback queue", "", {"ui", "ui-install", "ui-clear"}),
+    ("profile [cmd]", "Manage data profiles", "pf", {"pf", "profile"}),
+    ("seed [--days N]", "Seed demo data", "", {"seed"}),
+    ("export [path]", "Export data as tar.gz", "", {"export"}),
+    ("import <path>", "Import data archive", "", {"import"}),
 ]
 
 
@@ -112,15 +121,16 @@ def _command_usage(days: int = 7) -> tuple[dict[int, int], set[int]]:
       all_time_indices: set of family indices ever used
     """
     try:
-        from datetime import date, timedelta
+        from datetime import timedelta
 
+        from keephive.clock import get_today
         from keephive.storage import read_stats
 
         data = read_stats()
         if not data.get("days"):
             return {}, set()
 
-        cutoff = (date.today() - timedelta(days=days)).isoformat()
+        cutoff = (get_today() - timedelta(days=days)).isoformat()
         recent: dict[int, int] = {}
         all_time: set[int] = set()
 
@@ -319,6 +329,11 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "ui": ("keephive.commands.ui", "cmd_ui"),
     "ui-install": ("keephive.commands.ui", "cmd_ui_install"),
     "ui-clear": ("keephive.commands.ui", "cmd_ui_clear"),
+    "profile": ("keephive.commands.profile", "cmd_profile"),
+    "pf": ("keephive.commands.profile", "cmd_profile"),
+    "seed": ("keephive.commands.seed", "cmd_seed"),
+    "export": ("keephive.commands.transfer", "cmd_export"),
+    "import": ("keephive.commands.transfer", "cmd_import"),
     "hook-precompact": ("keephive.hooks.precompact", "hook_precompact"),
     "hook-sessionstart": ("keephive.hooks.sessionstart", "hook_sessionstart"),
     "hook-posttooluse": ("keephive.hooks.posttooluse", "hook_posttooluse"),
@@ -435,7 +450,9 @@ def main(args: list[str] | None = None) -> None:
 
             from keephive.storage import _detect_source, track_event
 
-            track_event("commands", cmd, project=os.getcwd(), source=_detect_source())
+            # Canonicalize so aliases (v/verify, rf/reflect) map to one stats key
+            tracked_cmd = _CANONICAL.get(cmd, cmd)
+            track_event("commands", tracked_cmd, project=os.getcwd(), source=_detect_source())
         except Exception:
             pass
 

@@ -14,6 +14,8 @@ import shutil
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from keephive.clock import get_now, get_today
+
 
 def _strip_verified_tags(text: str) -> str:
     """Remove all [verified:YYYY-MM-DD] tags from text."""
@@ -77,14 +79,14 @@ def parse_date_arg(arg: str) -> str:
         "2026-02-15" -> literal ISO date
     """
     if not arg or arg == "today":
-        return date.today().isoformat()
+        return get_today().isoformat()
 
     if arg == "yesterday":
-        return (date.today() - timedelta(days=1)).isoformat()
+        return (get_today() - timedelta(days=1)).isoformat()
 
     if arg.isdigit():
         days_ago = int(arg)
-        return (date.today() - timedelta(days=days_ago)).isoformat()
+        return (get_today() - timedelta(days=days_ago)).isoformat()
 
     # Try ISO date
     if re.match(r"^\d{4}-\d{2}-\d{2}$", arg):
@@ -102,9 +104,87 @@ def safe_read_text(path: Path) -> str:
     return path.read_text(errors="replace")
 
 
+# ---- Profile support ----
+
+_PROFILE_FILE = ".hive-profile"
+
+
+def _claude_dir() -> Path:
+    """The ~/.claude directory."""
+    return Path.home() / ".claude"
+
+
+def active_profile() -> str | None:
+    """Return the active profile name, or None for default.
+
+    HIVE_HOME env var bypasses profiles entirely (for tests and backward compat).
+    """
+    if os.environ.get("HIVE_HOME"):
+        return None
+    pf = _claude_dir() / _PROFILE_FILE
+    if pf.exists():
+        name = pf.read_text().strip()
+        return name or None
+    return None
+
+
+def set_active_profile(name: str | None) -> None:
+    """Set the active profile. None = default (removes profile file)."""
+    pf = _claude_dir() / _PROFILE_FILE
+    if name is None:
+        pf.unlink(missing_ok=True)
+    else:
+        pf.parent.mkdir(parents=True, exist_ok=True)
+        pf.write_text(name)
+
+
+def profile_dir(name: str) -> Path:
+    """Directory for a named profile. 'default' = ~/.claude/hive."""
+    if name == "default":
+        return _claude_dir() / "hive"
+    return _claude_dir() / f"hive-{name}"
+
+
+def list_profiles() -> list[dict]:
+    """List all profiles. Returns [{name, path, active, fact_count}]."""
+    cd = _claude_dir()
+    current = active_profile()
+    profiles = []
+
+    # Default profile always exists conceptually
+    default_dir = cd / "hive"
+    profiles.append({
+        "name": "default",
+        "path": str(default_dir),
+        "active": current is None,
+        "exists": default_dir.exists(),
+    })
+
+    # Named profiles: hive-<name> directories
+    if cd.exists():
+        for p in sorted(cd.iterdir()):
+            if p.is_dir() and p.name.startswith("hive-"):
+                name = p.name[5:]  # strip "hive-" prefix
+                if name:  # skip empty
+                    profiles.append({
+                        "name": name,
+                        "path": str(p),
+                        "active": current == name,
+                        "exists": True,
+                    })
+
+    return profiles
+
+
 def hive_dir() -> Path:
-    """Root hive directory, respecting HIVE_HOME env var."""
-    return Path(os.environ.get("HIVE_HOME", Path.home() / ".claude" / "hive"))
+    """Root hive directory. Priority: HIVE_HOME env > active profile > default."""
+    env = os.environ.get("HIVE_HOME")
+    if env:
+        return Path(env).expanduser()
+    prof = active_profile()
+    if prof:
+        return _claude_dir() / f"hive-{prof}"
+    return _claude_dir() / "hive"
 
 
 def working_dir() -> Path:
@@ -184,11 +264,11 @@ def ensure_dirs() -> None:
 
 
 def today() -> str:
-    return date.today().isoformat()
+    return get_today().isoformat()
 
 
 def yesterday() -> str:
-    return (date.today() - timedelta(days=1)).isoformat()
+    return (get_today() - timedelta(days=1)).isoformat()
 
 
 def daily_file(day: str | None = None) -> Path:
@@ -298,7 +378,7 @@ def count_stale_facts() -> int:
     if not mem.exists():
         return 0
 
-    today_d = date.today()
+    today_d = get_today()
     count = 0
 
     for line in mem.read_text().splitlines():
@@ -327,7 +407,7 @@ def get_stale_facts() -> list[tuple[int, str, str]]:
     if not mem.exists():
         return []
 
-    today_d = date.today()
+    today_d = get_today()
     results = []
 
     for i, line in enumerate(mem.read_text().splitlines(), 1):
@@ -466,7 +546,7 @@ def collect_todos() -> tuple[list[tuple[str, str, str]], set[str]]:
     if not d.exists():
         return [], set()
 
-    cutoff = (date.today() - timedelta(days=30)).isoformat()
+    cutoff = (get_today() - timedelta(days=30)).isoformat()
     todos: list[tuple[str, str, str]] = []
     dones: set[str] = set()
 
@@ -576,7 +656,7 @@ def recent_dones(days: int = 3) -> list[tuple[str, str]]:
 
     Returns list of (date_str, text) for DONEs in the last N days.
     """
-    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    cutoff = (get_today() - timedelta(days=days)).isoformat()
     dones: list[tuple[str, str]] = []
     d = daily_dir()
     if not d.exists():
@@ -707,8 +787,8 @@ def _parse_recurring_status() -> list[tuple[str, str, float]]:
                 last_done[m.group(1).strip().lower()] = m.group(2)
 
     result: list[tuple[str, str, float]] = []
-    now = datetime.now()
-    t = date.today()
+    now = get_now()
+    t = get_today()
     for freq, text in tasks:
         interval_days = parse_freq(freq)
         last = last_done.get(text.lower())
@@ -774,9 +854,9 @@ def mark_recurring_done(pattern: str) -> tuple[str, str] | None:
     # Use datetime for hour-based tasks, date for day-based
     uses_hours = match_freq and match_freq.endswith("h")
     if uses_hours:
-        done_str = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        done_str = get_now().strftime("%Y-%m-%dT%H:%M:%S")
     else:
-        done_str = date.today().isoformat()
+        done_str = get_today().isoformat()
 
     # Update or add Last Completed entry
     lines = content.splitlines(keepends=True)
@@ -840,8 +920,8 @@ def get_key_entries_past_days(days: int = 7, limit: int = 10) -> list[tuple[str,
     if not dd.exists():
         return []
 
-    today_str = date.today().isoformat()
-    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    today_str = get_today().isoformat()
+    cutoff = (get_today() - timedelta(days=days)).isoformat()
 
     results: list[tuple[str, str]] = []
 
@@ -930,7 +1010,7 @@ def track_event(
     """
     try:
         data = read_stats()
-        day = date.today().isoformat()
+        day = get_today().isoformat()
 
         if day not in data["days"]:
             data["days"][day] = {}
@@ -944,7 +1024,7 @@ def track_event(
         day_data[category][name] += 1
 
         # Track hourly activity
-        hour_key = datetime.now().strftime("%H")  # "00"-"23"
+        hour_key = get_now().strftime("%H")  # "00"-"23"
         if "hours" not in day_data:
             day_data["hours"] = {}
         day_data["hours"][hour_key] = day_data["hours"].get(hour_key, 0) + 1
@@ -1053,7 +1133,7 @@ def fts_search(query: str, limit: int = 10) -> list[dict]:
 def count_log_entries_with_prefix(prefix: str, days: int = 90) -> int:
     """Count daily log entries containing a given prefix across recent logs."""
     count = 0
-    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    cutoff = (get_today() - timedelta(days=days)).isoformat()
     dd = daily_dir()
     if not dd.exists():
         return 0
@@ -1071,7 +1151,7 @@ def count_log_entries_by_prefix(days_back: int = 7) -> dict[str, int]:
     Returns dict like {"FACT": 23, "DECISION": 8, "TODO": 12, "INSIGHT": 5, "CORRECTION": 2}.
     Only counts timestamped entries (- [HH:MM:SS] PREFIX:) and bare prefix entries (- PREFIX:).
     """
-    cutoff = (date.today() - timedelta(days=days_back)).isoformat()
+    cutoff = (get_today() - timedelta(days=days_back)).isoformat()
     dd = daily_dir()
     if not dd.exists():
         return {}
@@ -1101,7 +1181,7 @@ def count_log_entries_by_prefix_daily(days_back: int = 14) -> list[tuple[str, in
     """
     result: list[tuple[str, int]] = []
     for i in range(days_back - 1, -1, -1):
-        d = date.today() - timedelta(days=i)
+        d = get_today() - timedelta(days=i)
         day_str = d.isoformat()
         count = count_daily_entries(day_str)
         result.append((day_str, count))
@@ -1145,7 +1225,7 @@ def track_recall_hit(fact_line: str) -> None:
         key = hashlib.sha256(fact_line.strip().encode()).hexdigest()[:16]
         entry = data.get(key, {"count": 0, "last": ""})
         entry["count"] = entry.get("count", 0) + 1
-        entry["last"] = date.today().isoformat()
+        entry["last"] = get_today().isoformat()
         data[key] = entry
 
         sf.parent.mkdir(parents=True, exist_ok=True)
@@ -1282,7 +1362,7 @@ def store_evidence(
 
     entry["last_verdict"] = verdict
     entry["last_reason"] = reason
-    entry["last_date"] = date.today().isoformat()
+    entry["last_date"] = get_today().isoformat()
 
     # Extract file:line references from the reason text
     locations = re.findall(r"[\w/.-]+\.(?:py|js|ts|md|json|yaml|toml|cfg|ini|txt)(?::\d+)?", reason)
@@ -1293,7 +1373,7 @@ def store_evidence(
     history = entry.get("history", [])
     history.append(
         {
-            "date": date.today().isoformat(),
+            "date": get_today().isoformat(),
             "verdict": verdict,
             "reason": reason[:200],
         }
@@ -1361,7 +1441,7 @@ def score_fact_decay(fact_text: str, verified_date_str: str) -> float:
     threshold = stale_days_for_fact(fact_text)
     try:
         vdate = date.fromisoformat(verified_date_str)
-        days_old = (date.today() - vdate).days
+        days_old = (get_today() - vdate).days
         recency = max(0.0, 1.0 - days_old / (threshold * 2.0))
     except ValueError:
         recency = 0.0
@@ -1405,7 +1485,7 @@ def track_session_event(
         return
     try:
         data = read_stats()
-        day = date.today().isoformat()
+        day = get_today().isoformat()
 
         if day not in data["days"]:
             data["days"][day] = {}
@@ -1415,7 +1495,7 @@ def track_session_event(
             day_data["sessions"] = {}
         sessions = day_data["sessions"]
 
-        now = datetime.now().isoformat(timespec="seconds")
+        now = get_now().isoformat(timespec="seconds")
 
         if session_id not in sessions:
             home = str(Path.home())
@@ -1451,7 +1531,7 @@ def read_sessions(days_back: int = 30) -> list[dict]:
     session_id and day keys for reference.
     """
     data = read_stats()
-    cutoff = (date.today() - timedelta(days=days_back)).isoformat()
+    cutoff = (get_today() - timedelta(days=days_back)).isoformat()
     result: list[dict] = []
     for day_str, day_data in data.get("days", {}).items():
         if day_str < cutoff:
@@ -1473,8 +1553,8 @@ def session_metrics(days_back: int = 30) -> dict:
     from statistics import median
 
     sessions = read_sessions(days_back=days_back)
-    today_str = date.today().isoformat()
-    week_ago = (date.today() - timedelta(days=7)).isoformat()
+    today_str = get_today().isoformat()
+    week_ago = (get_today() - timedelta(days=7)).isoformat()
 
     total = len(sessions)
     today_count = sum(1 for s in sessions if s["day"] == today_str)
@@ -1523,7 +1603,7 @@ def session_metrics(days_back: int = 30) -> dict:
     # Daily session counts (14 days for sparkline)
     daily_sessions: list[tuple[str, int]] = []
     for i in range(13, -1, -1):
-        d = date.today() - timedelta(days=i)
+        d = get_today() - timedelta(days=i)
         day_s = d.isoformat()
         count = sum(1 for s in sessions if s["day"] == day_s)
         daily_sessions.append((day_s, count))

@@ -6,6 +6,7 @@ import os
 import subprocess
 from datetime import date, datetime
 
+from keephive.clock import get_now, get_today
 from keephive.output import console
 from keephive.storage import (
     append_to_daily,
@@ -62,7 +63,7 @@ def cmd_todo(args: list[str]) -> None:
         console.print("[bold]Open TODOs:[/bold]")
         console.print("  No open TODOs")
     else:
-        t = date.today()
+        t = get_today()
         console.print("[bold]Open TODOs:[/bold]")
         for d, ts, text in reversed(todos):
             try:
@@ -92,7 +93,7 @@ def cmd_todo(args: list[str]) -> None:
         console.print()
         console.print("[bold]Recently Done:[/bold]")
         for d, text in reversed(dones[-5:]):
-            age = (date.today() - date.fromisoformat(d)).days
+            age = (get_today() - date.fromisoformat(d)).days
             if age == 0:
                 age_s = "today"
             elif age == 1:
@@ -183,7 +184,7 @@ def edit_todos() -> None:
         return
 
     ensure_daily()
-    ts = datetime.now().strftime("%H:%M:%S")
+    ts = get_now().strftime("%H:%M:%S")
 
     for text in sorted(removed):
         append_to_daily(f"- [{ts}] DONE: {text}")
@@ -267,7 +268,7 @@ def _todo_done(pattern: str) -> None:
         return
 
     ensure_daily()
-    ts = datetime.now().strftime("%H:%M:%S")
+    ts = get_now().strftime("%H:%M:%S")
     append_to_daily(f"- [{ts}] DONE: {match}")
     console.print(f"  [ok]Completed:[/ok] {match}  [dim](td undo to reopen)[/dim]")
 

@@ -9,6 +9,8 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
+from keephive.clock import get_now, get_today
+
 from keephive.output import console, notify_sound, prompt_yn
 from keephive.storage import (
     append_to_daily,
@@ -64,9 +66,7 @@ def cmd_remember(args: list[str]) -> None:
         return
 
     ensure_daily()
-    from datetime import datetime
-
-    timestamp = datetime.now().strftime("%H:%M:%S")
+    timestamp = get_now().strftime("%H:%M:%S")
 
     # Detect explicit category
     category = ""
@@ -356,7 +356,7 @@ def _search_all_tiers(query: str) -> list[dict]:
     results: list[dict] = []
     q_lower = query.lower()
     sd = stale_days()
-    today_d = date.today()
+    today_d = get_today()
     cutoff = today_d - timedelta(days=sd)
 
     # Tier 1: Working memory

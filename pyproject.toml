@@ -42,8 +42,9 @@ build-backend = "uv_build"
 [tool.pytest.ini_options]
 markers = [
     "llm: real claude -p calls (slow, requires claude CLI)",
+    "terminal: real tmux terminal tests (requires tmux)",
 ]
-addopts = "-m 'not llm' --strict-markers"
+addopts = "-m 'not llm and not terminal' --strict-markers"
 
 [dependency-groups]
 dev = [

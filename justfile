@@ -11,9 +11,21 @@ default:
 test:
     uv run pytest
 
+# Run terminal E2E tests (real tmux, ~65s)
+test-e2e:
+    uv run pytest -m terminal -v -o "addopts="
+
+# Regenerate golden file baselines
+test-golden:
+    uv run pytest -m terminal --update-golden -o "addopts="
+
 # Run LLM integration tests (slow, requires claude CLI)
 test-llm:
     uv run pytest -m llm -v -o "addopts="
+
+# Run a single test file or pattern (e.g. just test-one tests/test_smoke.py)
+test-one target:
+    uv run pytest {{target}} -xvs
 
 # Lint with ruff
 lint:
@@ -23,6 +35,10 @@ lint:
 # Format in place
 fmt:
     uv run ruff format src/ tests/
+
+# Live dashboard with hot reload
+serve:
+    uv run python -m keephive serve --hot
 
 # Check for accidentally committed secrets / private data
 check-private:

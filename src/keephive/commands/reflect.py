@@ -8,6 +8,7 @@ import re
 import time
 from datetime import date, datetime
 
+from keephive.clock import get_now, get_today
 from keephive.claude import ClaudePipeError, run_claude_pipe
 from keephive.models import GuideDraftResponse, ReflectAnalyzeResponse
 from keephive.output import console, notify_sound, prompt_choice, prompt_yn
@@ -184,7 +185,7 @@ Rules:
 
     # Persist summary to daily log
     ensure_daily()
-    ts = datetime.now().strftime("%H:%M:%S")
+    ts = get_now().strftime("%H:%M:%S")
     pattern_count = len(response.patterns)
     addition_count = len(response.additions)
     append_to_daily(f"- [{ts}] REFLECT: {pattern_count} pattern(s), {addition_count} addition(s)")
@@ -325,7 +326,7 @@ def _reflect_apply(args: list[str]) -> None:
 
     mem_path = memory_file()
     mem_content = mem_path.read_text() if mem_path.exists() else ""
-    today_str = date.today().isoformat()
+    today_str = get_today().isoformat()
 
     added = 0
     updated = 0
@@ -349,7 +350,7 @@ def _reflect_apply(args: list[str]) -> None:
                 line = f"- {_strip_verified_tags(a.fact)} [verified:{today_str}]"
                 mem_content = _append_to_memory(mem_content, line)
                 ensure_daily()
-                ts = datetime.now().strftime("%H:%M:%S")
+                ts = get_now().strftime("%H:%M:%S")
                 if auto:
                     console.print("         [ok]Added to memory.md[/ok]")
                     append_to_daily(f"- [{ts}] AUTO-PROMOTED: [reflect] {a.fact}")
@@ -387,7 +388,7 @@ def _reflect_apply(args: list[str]) -> None:
             if choice == "u":
                 mem_content = _update_contradiction(mem_content, c.memory, c.log, today_str)
                 ensure_daily()
-                ts = datetime.now().strftime("%H:%M:%S")
+                ts = get_now().strftime("%H:%M:%S")
                 if auto:
                     console.print("         [ok]Updated in memory.md[/ok]")
                     append_to_daily(
@@ -555,7 +556,7 @@ Do not invent or extrapolate beyond what the entries say."""
         guide_path.write_text(response.content)
         console.print(f"  [ok]Saved.[/ok] View with: hive k {safe_name}")
         ensure_daily()
-        ts = datetime.now().strftime("%H:%M:%S")
+        ts = get_now().strftime("%H:%M:%S")
         append_to_daily(f"- [{ts}] REFLECT: Drafted guide: {safe_name}")
     else:
         console.print("  [dim]Discarded.[/dim]")

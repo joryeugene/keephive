@@ -9,6 +9,7 @@ from datetime import date, timedelta
 
 from rich.table import Table
 
+from keephive.clock import get_today
 from keephive.output import console
 from keephive.storage import (
     count_log_entries_by_prefix,
@@ -176,7 +177,7 @@ def _calculate_streak(days_data: dict) -> tuple[int, int]:
             current = 1
 
     # Current streak (counting back from today)
-    today = date.today()
+    today = get_today()
     curr_streak = 0
     check = today
     while check in active_dates:
@@ -192,7 +193,7 @@ def _sparkline(daily_counts: dict[str, int], days: int = 7) -> list[tuple[str, i
     Returns list of (date_label, count) tuples.
     """
     result = []
-    today = date.today()
+    today = get_today()
     for i in range(days - 1, -1, -1):
         d = today - timedelta(days=i)
         day_str = d.isoformat()
@@ -226,7 +227,7 @@ def _relative_day(day_str: str) -> str:
         d = date.fromisoformat(day_str)
     except ValueError:
         return day_str
-    delta = (date.today() - d).days
+    delta = (get_today() - d).days
     if delta == 0:
         return "today"
     if delta == 1:
@@ -305,7 +306,7 @@ def _knowledge_health() -> dict:
     first_valid = 0
     first_total = 0
     corrected_this_week = 0
-    week_ago = (date.today() - timedelta(days=7)).isoformat()
+    week_ago = (get_today() - timedelta(days=7)).isoformat()
 
     for entry in evidence.values():
         if not isinstance(entry, dict) or "verify_count" not in entry:
@@ -427,8 +428,8 @@ def _session_productivity(days_back: int = 30) -> dict:
     sm = session_metrics(days_back=days_back)
     sessions = read_sessions(days_back=days_back)
 
-    today_str = date.today().isoformat()
-    week_ago = (date.today() - timedelta(days=7)).isoformat()
+    today_str = get_today().isoformat()
+    week_ago = (get_today() - timedelta(days=7)).isoformat()
 
     # Prompts today/week
     prompts_today = sum(s.get("prompts", 0) for s in sessions if s.get("day") == today_str)
@@ -452,7 +453,7 @@ def _session_productivity(days_back: int = 30) -> dict:
     # Prompts-per-convo 14-day sparkline
     trend_data: list[float] = []
     for i in range(13, -1, -1):
-        d = date.today() - timedelta(days=i)
+        d = get_today() - timedelta(days=i)
         day_s = d.isoformat()
         day_sessions = [s for s in sessions if s.get("day") == day_s]
         if day_sessions:
@@ -468,7 +469,7 @@ def _session_productivity(days_back: int = 30) -> dict:
         trend_sparkline = ""
 
     # Tool distribution with week-over-week trend
-    prev_week_start = (date.today() - timedelta(days=13)).isoformat()
+    prev_week_start = (get_today() - timedelta(days=13)).isoformat()
     tools_this: dict[str, int] = {}
     tools_prev: dict[str, int] = {}
     for s in sessions:
@@ -514,7 +515,7 @@ def _weekly_trends(data: dict) -> dict:
     Returns dict with list of {label, this, prev, delta_pct, trend} items.
     """
     days_data = data.get("days", {})
-    today_d = date.today()
+    today_d = get_today()
     this_week_start = (today_d - timedelta(days=6)).isoformat()
     prev_week_start = (today_d - timedelta(days=13)).isoformat()
     prev_week_end = (today_d - timedelta(days=7)).isoformat()
@@ -726,7 +727,7 @@ def _productivity_pulse(
             last_verify_date = entry.get("last_date", "")
     if last_verify_date:
         try:
-            days_since = (date.today() - date.fromisoformat(last_verify_date)).days
+            days_since = (get_today() - date.fromisoformat(last_verify_date)).days
             verify_score = max(0.0, 1.0 - days_since / 30.0)
         except ValueError:
             verify_score = 0.0
@@ -927,7 +928,7 @@ def _display_full(data: dict) -> None:
     # Activity chart (7-day bars)
     daily_cmd_counts: dict[str, int] = {}
     for i in range(6, -1, -1):
-        d = date.today() - timedelta(days=i)
+        d = get_today() - timedelta(days=i)
         day_s = d.isoformat()
         dd = days_data.get(day_s, {})
         daily_cmd_counts[day_s] = _count_category(dd, "commands")
@@ -951,7 +952,7 @@ def _display_full(data: dict) -> None:
         bar_display = bar if bar else "\u2500"
         today_marker = "  \u2190" if i == len(spark) - 1 else ""
         try:
-            d = date.today() - timedelta(days=len(spark) - 1 - i)
+            d = get_today() - timedelta(days=len(spark) - 1 - i)
             day_name = d.strftime("%a")
         except Exception:
             day_name = "   "
@@ -1019,7 +1020,7 @@ def _display_full(data: dict) -> None:
             status = "[warn]not yet run[/warn]"
         else:
             try:
-                days_ago = (date.today() - date.fromisoformat(last_date)).days
+                days_ago = (get_today() - date.fromisoformat(last_date)).days
                 if days_ago == 0:
                     status = "[ok]today[/ok]"
                 elif days_ago == 1:
@@ -1155,7 +1156,7 @@ def _display_project(data: dict, project_filter: str, date_filter: str = "") -> 
     )
 
     # Hourly sparkline (for today only)
-    today_str = date.today().isoformat()
+    today_str = get_today().isoformat()
     today_proj_data = days_data.get(today_str, {})
     today_hours = today_proj_data.get("hours", {})
     if today_hours:
@@ -1237,7 +1238,7 @@ def stats_text(project: str = "", date_arg: str = "") -> str:
         return "\n".join(lines)
 
     # Full summary
-    today_str = date.today().isoformat()
+    today_str = get_today().isoformat()
 
     today_data = days_data.get(today_str, {})
     today_cmds = _count_category(today_data, "commands")

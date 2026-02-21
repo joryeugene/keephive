@@ -12,6 +12,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from keephive.clock import get_now, get_today
+
 from keephive.storage import (
     active_slot,
     backup_and_write,
@@ -112,7 +114,7 @@ def hook_sessionstart(args: list[str]) -> None:
     except Exception:
         debug_log = hive_dir() / ".hook-debug.log"
         with open(debug_log, "a") as f:
-            f.write(f"[{datetime.now().isoformat()}] sessionstart encoding FAILED\n")
+            f.write(f"[{get_now().isoformat()}] sessionstart encoding FAILED\n")
         sys.stdout.write(
             json.dumps(
                 {
@@ -184,7 +186,7 @@ def build_context(cwd: str, project_name: str) -> str:
     if todos:
         from datetime import date
 
-        t = date.today()
+        t = get_today()
         todo_lines = ["## Open TODOs"]
         for d, ts, text in reversed(todos[-5:]):
             try:
@@ -291,7 +293,7 @@ def _data_quality_warnings() -> list[str]:
         warnings.append(f"{dupe_count} duplicate TODO pair(s) found. Run: hive doctor")
 
     # Stale TODOs
-    t = date.today()
+    t = get_today()
     stale = [text for d, _, text in ot if d < (t - timedelta(days=7)).isoformat()]
     if stale:
         warnings.append(f"{len(stale)} TODO(s) older than 7 days")
@@ -411,11 +413,11 @@ def _cross_project_hint(current_project: str) -> str:
     Returns empty string when no cross-project tags are found.
     """
     import re
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     tag_re = re.compile(r"\[project:([^\]]+)\]")
     counts: dict[str, int] = {}
-    today = date.today()
+    today = get_today()
 
     for days_ago in range(7):
         day_str = (today - timedelta(days=days_ago)).isoformat()
@@ -447,7 +449,7 @@ def _auto_reverify() -> list[str]:
     Returns list of re-verified fact descriptions for the summary line.
     """
     import re
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     stale = get_stale_facts()
     if not stale:
@@ -455,7 +457,7 @@ def _auto_reverify() -> list[str]:
 
     # Collect recent daily entries (7 days)
     recent_entries: list[str] = []
-    today = date.today()
+    today = get_today()
     for days_ago in range(7):
         day_str = (today - timedelta(days=days_ago)).isoformat()
         entries = get_meaningful_entries(day=day_str, limit=50)
@@ -517,7 +519,7 @@ def _accumulation_warnings(mem_content: str) -> list[str]:
     or has too many auto-captured facts.
     """
     import re
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     warnings: list[str] = []
     if not mem_content:
@@ -544,7 +546,7 @@ def _accumulation_warnings(mem_content: str) -> list[str]:
         warnings.append(f"{auto_count} auto-captured facts pending review. Curate: hive rf apply")
 
     # Check for critically stale facts (>60 days)
-    cutoff_60 = (date.today() - timedelta(days=60)).isoformat()
+    cutoff_60 = (get_today() - timedelta(days=60)).isoformat()
     critical_stale = 0
     for line in mem_content.splitlines():
         m = re.search(r"\[verified:(\d{4}-\d{2}-\d{2})\]", line)

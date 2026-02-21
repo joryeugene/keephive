@@ -619,7 +619,7 @@ class TestRunViaApi:
         _run_via_api("test", VerifyResponse, "sonnet", None, 30, False)
 
         call_args = mock_client.messages.create.call_args
-        assert call_args.kwargs["model"] == "claude-sonnet-4-5-20250514"
+        assert call_args.kwargs["model"] == "claude-sonnet-4-6"
 
     def test_missing_anthropic_gives_setup_guidance(self, monkeypatch):
         """Missing anthropic error tells user to run keephive setup."""

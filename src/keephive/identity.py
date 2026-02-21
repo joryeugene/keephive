@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from datetime import date
 
+from keephive.clock import get_today
+
 # --- Effectiveness facts (seeded into default memory.md) ---
 
 EFFECTIVENESS_FACTS: list[str] = [
@@ -110,7 +112,7 @@ DEFAULT_RULES: list[tuple[str, str]] = [
 
 def render_default_memory() -> str:
     """Render the default memory.md content for hive setup."""
-    today = date.today().isoformat()
+    today = get_today().isoformat()
     lines = [
         "# Working Memory",
         "",

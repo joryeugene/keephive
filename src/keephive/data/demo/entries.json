@@ -1,0 +1,107 @@
+{
+  "facts": [
+    "API gateway uses JWT with 15-minute expiry and refresh token rotation",
+    "PostgreSQL connection pool capped at 20 connections per worker",
+    "React dashboard lazy-loads route components via React.lazy() and Suspense",
+    "Redis cache TTL defaults to 300s for API responses, 3600s for user profiles",
+    "Worker threads spawn from a fixed pool of 8 (matching CPU cores on prod)",
+    "GraphQL resolvers batch via DataLoader to avoid N+1 queries",
+    "CORS allows origins from *.example.com and localhost:3000 in dev",
+    "Rate limiter uses sliding window algorithm at 100 req/min per API key",
+    "Database migrations run via Alembic with auto-generated revision IDs",
+    "Feature flags stored in Redis, polled every 30s with local cache fallback",
+    "S3 presigned URLs expire after 15 minutes for upload, 1 hour for download",
+    "Kubernetes pods have 512Mi memory limit and 250m CPU request",
+    "Celery task queue uses Redis broker with 3 retry attempts on failure",
+    "Frontend bundle split into vendor (React/lodash) and app chunks",
+    "OAuth2 PKCE flow used for SPA authentication, no client secret stored",
+    "WebSocket connections use Socket.IO with Redis adapter for multi-instance",
+    "CI pipeline caches node_modules and pip wheels, build time ~4min",
+    "Prometheus metrics exposed on /metrics endpoint, scraped every 15s",
+    "Log aggregation via Fluent Bit shipping to Elasticsearch cluster",
+    "Database backup runs nightly at 02:00 UTC with 30-day retention"
+  ],
+  "decisions": [
+    "Chose SQLAlchemy over raw SQL for type safety and migration support",
+    "Moved authentication from middleware to decorator pattern for granular control",
+    "Adopted Pydantic v2 for all API request/response validation",
+    "Selected Vite over webpack for frontend build tooling (10x faster HMR)",
+    "Went with server-sent events over polling for real-time notifications",
+    "Chose PostgreSQL JSONB for dynamic config instead of separate config service",
+    "Adopted trunk-based development with short-lived feature branches",
+    "Selected pytest over unittest for better fixture composition",
+    "Moved from monolith to 3 services: api-gateway, auth-service, data-pipeline",
+    "Chose Redis Streams over Kafka for event bus (simpler ops, sufficient throughput)"
+  ],
+  "insights": [
+    "Batching database writes reduces p99 latency from 180ms to 45ms",
+    "Connection pooling with PgBouncer dropped average query time by 60%",
+    "Prefetching next page data during scroll reduces perceived load time",
+    "Moving validation to Pydantic eliminated 3 entire error-handling layers",
+    "Feature flag checks at the component level avoid unnecessary API calls",
+    "Splitting large Celery tasks into subtasks improved worker utilization 40%",
+    "Using dataclasses for internal DTOs reduced memory footprint by 25%",
+    "Index-only scans on the events table sped up dashboard queries 8x"
+  ],
+  "corrections": [
+    "Rate limiter uses sliding window, not fixed window as previously documented",
+    "Auth token expiry is 30 minutes, not 15 minutes as stated in wiki",
+    "Redis connection limit is 10000, not 1000 per the deployment docs",
+    "Frontend uses ESM imports exclusively, CommonJS support was removed in v4",
+    "Celery beat schedule timezone is UTC, not local time as configured"
+  ],
+  "todos": [
+    "Add retry logic to webhook delivery for transient failures",
+    "Set up Sentry error tracking for the data-pipeline service",
+    "Write integration tests for the OAuth2 refresh token flow",
+    "Profile and optimize the dashboard aggregation query (>2s on large datasets)",
+    "Add request ID propagation across all microservice boundaries",
+    "Document the deployment runbook for the new Kubernetes cluster",
+    "Implement circuit breaker pattern for external payment API calls",
+    "Review and update API rate limits based on last month usage data"
+  ],
+  "dones": [
+    "Implemented connection pooling for Redis cache layer",
+    "Migrated user table to include JSONB preferences column",
+    "Set up automated database backup verification",
+    "Added health check endpoints to all three services",
+    "Fixed race condition in concurrent session creation",
+    "Deployed Prometheus and Grafana monitoring stack",
+    "Upgraded React from v17 to v18 with concurrent features",
+    "Resolved N+1 query issue in the project listing endpoint",
+    "Added OpenAPI spec auto-generation from Pydantic models",
+    "Configured CORS headers for the staging environment"
+  ],
+  "memory_facts": [
+    {"text": "FACT: API gateway uses JWT with 15-minute expiry and refresh token rotation", "age_days": 3},
+    {"text": "FACT: PostgreSQL connection pool capped at 20 connections per worker", "age_days": 7},
+    {"text": "DECISION: Chose Redis Streams over Kafka for event bus (simpler ops)", "age_days": 12},
+    {"text": "FACT: Rate limiter uses sliding window at 100 req/min per API key", "age_days": 5},
+    {"text": "DECISION: Adopted Pydantic v2 for all API validation", "age_days": 18},
+    {"text": "FACT: Kubernetes pods have 512Mi memory limit and 250m CPU request", "age_days": 22},
+    {"text": "CORRECTION: Auth token expiry is 30 minutes, not 15 as documented", "age_days": 2},
+    {"text": "INSIGHT: Connection pooling with PgBouncer dropped query time by 60%", "age_days": 15},
+    {"text": "FACT: CI pipeline caches node_modules and pip wheels, build time ~4min", "age_days": 28},
+    {"text": "DECISION: Selected Vite over webpack for frontend build tooling", "age_days": 35},
+    {"text": "FACT: WebSocket connections use Socket.IO with Redis adapter", "age_days": 10},
+    {"text": "INSIGHT: Splitting Celery tasks into subtasks improved utilization 40%", "age_days": 20},
+    {"text": "FACT: Feature flags stored in Redis, polled every 30s", "age_days": 8},
+    {"text": "DECISION: Moved from monolith to 3 services split", "age_days": 45},
+    {"text": "FACT: Database backup runs nightly at 02:00 UTC with 30-day retention", "age_days": 14},
+    {"text": "CORRECTION: Redis connection limit is 10000, not 1000", "age_days": 6},
+    {"text": "FACT: S3 presigned URLs expire after 15 minutes for upload", "age_days": 25}
+  ],
+  "projects": ["api-gateway", "dashboard", "data-pipeline", "auth-service"],
+  "guides": {
+    "api-patterns": "# API Design Patterns\n\nStandard patterns used across all services.\n\n## Authentication\n\nAll endpoints require JWT bearer token. Token rotation handled by auth-service.\n\n## Error Format\n\nAll errors follow RFC 7807 Problem Details format:\n```json\n{\"type\": \"about:blank\", \"title\": \"Not Found\", \"status\": 404, \"detail\": \"User 123 not found\"}\n```\n\n## Pagination\n\nCursor-based pagination via `?cursor=<opaque>&limit=50`. Never use offset pagination.\n\n## Rate Limiting\n\nSliding window algorithm. Headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset.\n",
+    "testing-strategy": "# Testing Strategy\n\nPyramid model: many unit tests, fewer integration, minimal E2E.\n\n## Unit Tests\n\nPytest with fixtures. Mock external services. Target: 80% coverage.\n\n## Integration Tests\n\nTestcontainers for PostgreSQL and Redis. Real database, real cache.\n\n## E2E Tests\n\nPlaywright for frontend flows. Run nightly, not on every PR.\n\n## Performance Tests\n\nLocust for load testing. Run before major releases against staging.\n"
+  },
+  "recurring": [
+    {"freq": "weekly", "text": "Review and verify stale facts"},
+    {"freq": "daily", "text": "Review test coverage gaps and add 1 test for weakest area"}
+  ],
+  "notes": {
+    "1": "# Sprint Planning\n\n## Sprint 12 Goals\n- Complete auth-service migration\n- Dashboard performance optimization\n- API rate limiting v2\n\n## Carry-over from Sprint 11\n- Webhook retry logic (blocked on infra)\n- Sentry integration for data-pipeline\n",
+    "3": "# Bug Tracker\n\n- [ ] Race condition in concurrent session creation (auth-service)\n- [x] N+1 query in project listing (api-gateway)\n- [ ] Memory leak in WebSocket handler after 1000+ connections\n- [x] CORS headers missing on staging\n- [ ] Timezone mismatch in Celery beat schedule\n"
+  }
+}

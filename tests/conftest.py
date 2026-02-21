@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import json
 import os
 from datetime import date, datetime, timedelta
@@ -14,6 +15,8 @@ import pytest
 os.environ.setdefault("NO_COLOR", "1")
 
 E2E_OUTPUT_DIR = Path(__file__).parent / "e2e_outputs"
+GOLDEN_DIR = E2E_OUTPUT_DIR / "golden"
+TERMINAL_OUTPUT_DIR = E2E_OUTPUT_DIR / "terminal"
 
 
 def make_daily(hive_env: Path, days_ago: int = 0, entries: list[str] | None = None) -> Path:
@@ -140,3 +143,88 @@ def save_e2e_output():
         (cmd_dir / f"{ts}.json").write_text(json.dumps(record, indent=2))
 
     return _save
+
+
+# ---- Terminal E2E fixtures ----
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--update-golden",
+        action="store_true",
+        default=False,
+        help="Update golden file baselines for terminal tests",
+    )
+
+
+@pytest.fixture
+def update_golden(request: pytest.FixtureRequest) -> bool:
+    return bool(request.config.getoption("--update-golden"))
+
+
+@pytest.fixture
+def term(tmp_path: Path):
+    """Fresh terminal session with empty hive directory."""
+    from terminal import Terminal
+
+    t = Terminal(tmp_path)
+    yield t
+    t.close()
+
+
+@pytest.fixture
+def term_seeded(tmp_path: Path):
+    """Terminal session with 45 days of seeded demo data."""
+    from terminal import Terminal
+
+    t = Terminal(tmp_path)
+    t.seed(45)
+    yield t
+    t.close()
+
+
+@pytest.fixture
+def save_terminal_output():
+    """Save terminal test history as JSON artifact for output tracking."""
+
+    def _save(scenario: str, terminal: object, metadata: dict | None = None) -> None:
+        out_dir = TERMINAL_OUTPUT_DIR / scenario
+        out_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        record = {
+            "timestamp": ts,
+            "scenario": scenario,
+            "history": terminal._history,  # type: ignore[attr-defined]
+            "metadata": metadata or {},
+        }
+        (out_dir / f"{ts}.json").write_text(json.dumps(record, indent=2, default=str))
+
+    return _save
+
+
+def assert_golden(screen: object, golden_name: str, update: bool = False) -> None:
+    """Compare screen output against golden file baseline.
+
+    Run with --update-golden to regenerate baselines:
+        uv run pytest -m terminal --update-golden -o "addopts="
+    """
+    golden_path = GOLDEN_DIR / f"{golden_name}.txt"
+    plain = screen.plain  # type: ignore[attr-defined]
+
+    if update or not golden_path.exists():
+        golden_path.parent.mkdir(parents=True, exist_ok=True)
+        golden_path.write_text(plain)
+        return
+
+    expected = golden_path.read_text()
+    if plain.strip() != expected.strip():
+        diff = "\n".join(
+            difflib.unified_diff(
+                expected.splitlines(),
+                plain.splitlines(),
+                fromfile=f"golden/{golden_name}.txt",
+                tofile="actual",
+                lineterm="",
+            )
+        )
+        raise AssertionError(f"Output differs from golden file:\n{diff}")

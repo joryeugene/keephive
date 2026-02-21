@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 
+from keephive.clock import get_now, get_today
 from mcp.server.fastmcp import FastMCP
 
 from keephive.storage import (
@@ -40,7 +41,7 @@ def hive_remember(text: str) -> str:
     _track_mcp("remember")
     ensure_dirs()
     ensure_daily()
-    ts = datetime.now().strftime("%H:%M:%S")
+    ts = get_now().strftime("%H:%M:%S")
     append_to_daily(f"- [{ts}] {text}")
 
     category = ""
@@ -121,7 +122,7 @@ def hive_status() -> str:
     todos = open_todos()
     if todos:
         parts.append(f"\n{len(todos)} open TODO(s):")
-        t = date.today()
+        t = get_today()
         for d, ts, text in reversed(todos[-5:]):
             try:
                 td = date.fromisoformat(d)
@@ -153,7 +154,7 @@ def hive_todo() -> str:
         return "No open TODOs"
 
     lines = [f"{len(todos)} open TODO(s):"]
-    t = date.today()
+    t = get_today()
     for d, ts, text in reversed(todos):
         try:
             td = date.fromisoformat(d)
@@ -193,7 +194,7 @@ def hive_todo_done(pattern: str) -> str:
         return f'No open TODO or recurring task matching "{pattern}"'
 
     ensure_daily()
-    ts = datetime.now().strftime("%H:%M:%S")
+    ts = get_now().strftime("%H:%M:%S")
     append_to_daily(f"- [{ts}] DONE: {match}")
     return f"Completed: {match}"
 
@@ -412,7 +413,7 @@ def hive_recurring(action: str = "list", freq: str = "", text: str = "") -> str:
             return f"No recurring task matching: {text}"
         match_text, _ = result
         ensure_daily()
-        ts = datetime.now().strftime("%H:%M:%S")
+        ts = get_now().strftime("%H:%M:%S")
         append_to_daily(f"- [{ts}] DONE: {match_text}")
         return f"Done: {match_text} (next due per schedule)"
     else:

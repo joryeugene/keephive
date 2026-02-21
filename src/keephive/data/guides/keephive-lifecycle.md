@@ -17,8 +17,13 @@ Tiers from most stable (top) to most ephemeral (bottom).
 +============================================================+
 | PROJECT CLAUDE.MD  <repo>/CLAUDE.md                        |
 | Repo conventions, dev commands, architecture notes         |
-| "uv run pytest", "release flow: dev->main rebase"          |
+| "just test", "release flow: dev->main rebase"              |
 | Edited by: user or Claude (with ask)                       |
++============================================================+
+| JUSTFILE  <repo>/justfile                                  |
+| Executable dev commands. The "how to run it" scratchpad.   |
+| `just test`, `just serve`, `just lint`, `just check`       |
+| Edited by: user or Claude. Self-documenting via comments.  |
 +============================================================+
 | WORKING MEMORY  ~/.claude/hive/memory.md                   |
 | Verified cross-session facts. 30-90d TTL.                  |
@@ -60,6 +65,7 @@ Tiers from most stable (top) to most ephemeral (bottom).
 | Rich structured doc for a topic | Knowledge guide | `hive ke <name>` |
 | Universal style/tool preference | Global CLAUDE.md | Edit manually |
 | Project-specific invariant | Project CLAUDE.md | Edit manually |
+| Repeatable dev command | justfile | `just <recipe>` |
 
 ## Hook Roles
 
@@ -79,6 +85,17 @@ Tiers from most stable (top) to most ephemeral (bottom).
 - `knowledge guide` + `hive v` -> fact check -> stale facts flagged
 - `/insights` friction data + `hive rule learn` -> `.pending-rules.md` -> `hive rule review` -> `rules.md`
 
+## The Justfile as Workspace Scratchpad
+
+Every repo should have a `justfile` (or Makefile) that captures repeatable commands. This is the executable counterpart to CLAUDE.md: where CLAUDE.md says *what* and *why*, the justfile says *how to run it*.
+
+- Commands you type more than twice belong in the justfile
+- `just --list` is self-documenting (comments become descriptions)
+- New agents in fresh sessions get the full command vocabulary without reading docs
+- Recipes compose: `just check` runs `test + lint + check-private`
+
+When you add a new test tier, build step, or dev server, add a recipe. When CLAUDE.md references a raw `uv run` command, check if a `just` recipe exists first.
+
 ## Anti-patterns
 
 - Ephemeral session details in working memory (clutter, slow to verify)
@@ -86,3 +103,4 @@ Tiers from most stable (top) to most ephemeral (bottom).
 - Rich structured docs in working memory (wrong tier, use knowledge guides)
 - Treating daily log as permanent (promote or it gets archived by `hive gc`)
 - Adding to rules what belongs in global CLAUDE.md (rules are per-session nudges)
+- Raw `uv run pytest -m X -v -o "addopts="` in CLAUDE.md when a `just` recipe exists

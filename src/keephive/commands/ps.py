@@ -7,6 +7,7 @@ import re
 import subprocess
 from datetime import date, timedelta
 
+from keephive.clock import get_today
 from keephive.output import console
 from keephive.storage import daily_file, read_stats
 
@@ -129,7 +130,7 @@ def _project_name(path: str) -> str:
 
 def _today_cmd_count(stats: dict, project_key: str) -> int:
     """Count commands for a project today."""
-    today_str = date.today().isoformat()
+    today_str = get_today().isoformat()
     day_data = stats.get("days", {}).get(today_str, {})
     return day_data.get("projects", {}).get(project_key, {}).get("commands", 0)
 
@@ -161,7 +162,7 @@ def _last_entry_age(stats: dict, project_key: str) -> str:
         d = date.fromisoformat(last_day)
     except ValueError:
         return last_day
-    delta = (date.today() - d).days
+    delta = (get_today() - d).days
     if delta == 0:
         return "today"
     if delta == 1:
@@ -171,7 +172,7 @@ def _last_entry_age(stats: dict, project_key: str) -> str:
 
 def _recent_projects(stats: dict, cwd: str, days: int = 30) -> list[dict]:
     """Return projects active in the last N days, sorted by recency."""
-    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    cutoff = (get_today() - timedelta(days=days)).isoformat()
     days_data = stats.get("days", {})
 
     seen: dict[str, dict] = {}

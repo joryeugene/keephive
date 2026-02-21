@@ -6,9 +6,11 @@ import json
 from datetime import date, timedelta
 
 from keephive import __version__
+from keephive.clock import get_today
 from keephive.output import console
 from keephive.storage import (
     NOTE_SLOT_COUNT,
+    active_profile,
     active_slot,
     count_daily_entries,
     count_stale_facts,
@@ -37,7 +39,7 @@ def _suggest_next() -> tuple[str, str]:
     mem = memory_file()
     critical_stale = 0
     if mem.exists():
-        cutoff_60 = (date.today() - timedelta(days=60)).isoformat()
+        cutoff_60 = (get_today() - timedelta(days=60)).isoformat()
         for line in mem.read_text().splitlines():
             m = re.search(r"\[verified:(\d{4}-\d{2}-\d{2})\]", line)
             if m and m.group(1) < cutoff_60:
@@ -50,7 +52,7 @@ def _suggest_next() -> tuple[str, str]:
     todos = open_todos()
     old_todos = 0
     if todos:
-        cutoff_3d = (date.today() - timedelta(days=3)).isoformat()
+        cutoff_3d = (get_today() - timedelta(days=3)).isoformat()
         for d, _, _ in todos:
             if d < cutoff_3d:
                 old_todos += 1
@@ -97,7 +99,7 @@ def _suggest_next() -> tuple[str, str]:
     try:
         found_recent_audit = False
         for days_ago in range(7):
-            day_str = (date.today() - timedelta(days=days_ago)).isoformat()
+            day_str = (get_today() - timedelta(days=days_ago)).isoformat()
             log_path = daily_dir() / f"{day_str}.md"
             if log_path.exists():
                 content = log_path.read_text()
@@ -180,7 +182,9 @@ def cmd_status(args: list[str]) -> None:
         return
 
     console.print()
-    console.print(f"[bold]keephive[/bold] v{__version__}")
+    prof = active_profile()
+    prof_tag = f"  [dim]profile: {prof}[/dim]" if prof else ""
+    console.print(f"[bold]keephive[/bold] v{__version__}{prof_tag}")
 
     # Health indicators
     def _dot(ok: bool, label: str) -> str:
@@ -249,10 +253,10 @@ def cmd_status(args: list[str]) -> None:
 
         stats = read_stats()
         days_data = stats.get("days", {})
-        today_str = date.today().isoformat()
+        today_str = get_today().isoformat()
         today_data_st = days_data.get(today_str, {})
         today_cmds = sum(today_data_st.get("commands", {}).values())
-        week_ago = (date.today() - timedelta(days=7)).isoformat()
+        week_ago = (get_today() - timedelta(days=7)).isoformat()
         week_cmds = sum(
             sum(dd.get("commands", {}).values()) for ds, dd in days_data.items() if ds >= week_ago
         )
@@ -350,7 +354,7 @@ def cmd_status(args: list[str]) -> None:
     # Open TODOs
     todos = open_todos()
     if todos:
-        t = date.today()
+        t = get_today()
         shown = list(reversed(todos[-3:]))
         console.print(f"  [bold]{len(todos)} open TODO(s):[/bold]")
         for d, _ts, text in shown:

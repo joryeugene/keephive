@@ -9,6 +9,7 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
+from keephive.clock import get_today
 from keephive.output import console, copy_to_clipboard, notify_sound, prompt_yn
 from keephive.storage import collect_todos, daily_dir, get_meaningful_entries, safe_read_text, today
 
@@ -18,7 +19,7 @@ def _weekend_aware_cutoff() -> date:
 
     On Monday, returns Friday. Otherwise returns yesterday.
     """
-    t = date.today()
+    t = get_today()
     weekday = t.weekday()  # 0=Monday
     if weekday == 0:
         return t - timedelta(days=3)  # Friday
@@ -119,7 +120,7 @@ def _gather_raw_data() -> dict:
     Returns dict with keys: recent_done, open_todos, insights,
     open_prs, merged_prs, closed_prs, daily_text.
     """
-    t = date.today()
+    t = get_today()
     cutoff = _weekend_aware_cutoff()
     todos, _ = collect_todos()
 

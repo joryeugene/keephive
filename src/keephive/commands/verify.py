@@ -140,7 +140,7 @@ def cmd_verify(args: list[str]) -> None:
     # Backup before any writes
     backup_and_write(mem, mem.read_text())
 
-    from datetime import datetime
+    from keephive.clock import get_now
 
     ensure_daily()
 
@@ -176,7 +176,7 @@ def cmd_verify(args: list[str]) -> None:
             total_refreshed += refreshed
 
             # Persist verdicts to daily log per batch
-            ts = datetime.now().strftime("%H:%M:%S")
+            ts = get_now().strftime("%H:%M:%S")
             for v in response.verdicts:
                 idx = v.index - 1
                 if 0 <= idx < len(batch_facts):

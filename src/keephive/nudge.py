@@ -84,9 +84,9 @@ def _status_nudge() -> str | None:
 
 
 def _today_str() -> str:
-    from datetime import date
+    from keephive.clock import get_today
 
-    return date.today().isoformat()
+    return get_today().isoformat()
 
 
 # ---- Nudge rotations ----

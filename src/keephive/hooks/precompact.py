@@ -15,6 +15,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from keephive.clock import get_now
+
 from keephive.storage import (
     _strip_verified_tags,
     append_to_daily,
@@ -45,7 +47,7 @@ def hook_precompact(args: list[str]) -> None:
     debug_log = hive_dir() / ".hook-debug.log"
     with open(debug_log, "a") as f:
         f.write(
-            f"[{datetime.now().isoformat(timespec='seconds')}] hook-precompact called (trigger={trigger})\n"
+            f"[{get_now().isoformat(timespec='seconds')}] hook-precompact called (trigger={trigger})\n"
         )
 
     # Track usage
@@ -375,7 +377,7 @@ Optionally include rule_suggestions (max 2, empty list if none): short imperativ
                 if _is_garbage_insight(desc):
                     continue
                 if not _is_duplicate_insight(df, desc):
-                    ts = datetime.now().strftime("%H:%M:%S")
+                    ts = get_now().strftime("%H:%M:%S")
                     proj_tag = f" [project:{project_name}]" if project_name else ""
                     append_to_daily(f"- [{ts}] {insight.category.value}: {desc}{proj_tag}")
                     written += 1
@@ -384,7 +386,7 @@ Optionally include rule_suggestions (max 2, empty list if none): short imperativ
                 debug_log = hive_dir() / ".hook-debug.log"
                 with open(debug_log, "a") as f:
                     f.write(
-                        f"[{datetime.now().isoformat(timespec='seconds')}] "
+                        f"[{get_now().isoformat(timespec='seconds')}] "
                         f"Layer 2: wrote {written} insight(s) to daily log\n"
                     )
 
@@ -398,7 +400,7 @@ Optionally include rule_suggestions (max 2, empty list if none): short imperativ
     except Exception as e:
         debug_log = hive_dir() / ".hook-debug.log"
         with open(debug_log, "a") as f:
-            f.write(f"[{datetime.now().isoformat(timespec='seconds')}] Layer 2 failed: {e}\n")
+            f.write(f"[{get_now().isoformat(timespec='seconds')}] Layer 2 failed: {e}\n")
 
 
 def _apply_memory_updates(updates: list, project_name: str = "") -> None:
@@ -413,7 +415,7 @@ def _apply_memory_updates(updates: list, project_name: str = "") -> None:
 
     mem_path = memory_file()
     content = safe_read_text(mem_path) if mem_path.exists() else ""
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = get_now().strftime("%Y-%m-%d")
     applied = 0
     proj_tag = f" [project:{project_name}]" if project_name else ""
 
@@ -423,7 +425,7 @@ def _apply_memory_updates(updates: list, project_name: str = "") -> None:
             new_content = _correct_in_memory(content, update.replaces, update.text, today_str)
             if new_content != content:
                 content = new_content
-                ts = datetime.now().strftime("%H:%M:%S")
+                ts = get_now().strftime("%H:%M:%S")
                 append_to_daily(
                     f'- [{ts}] AUTO-CORRECTED: "{update.replaces}" -> "{update.text}"{proj_tag}'
                 )
@@ -433,7 +435,7 @@ def _apply_memory_updates(updates: list, project_name: str = "") -> None:
             # Check for duplicates against memory content
             if not _is_duplicate_in_memory(content, update.text):
                 content = _add_to_auto_captured(content, update.text, today_str)
-                ts = datetime.now().strftime("%H:%M:%S")
+                ts = get_now().strftime("%H:%M:%S")
                 append_to_daily(f"- [{ts}] AUTO-PROMOTED: {update.text}{proj_tag}")
                 applied += 1
 
@@ -443,7 +445,7 @@ def _apply_memory_updates(updates: list, project_name: str = "") -> None:
         debug_log = hive_dir() / ".hook-debug.log"
         with open(debug_log, "a") as f:
             f.write(
-                f"[{datetime.now().isoformat(timespec='seconds')}] "
+                f"[{get_now().isoformat(timespec='seconds')}] "
                 f"Memory auto-updated: {applied} change(s)\n"
             )
 

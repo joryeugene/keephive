@@ -8,6 +8,7 @@ import shutil
 import subprocess
 from datetime import date, timedelta
 
+from keephive.clock import get_today
 from keephive.output import console
 from keephive.storage import (
     archive_dir,
@@ -36,7 +37,7 @@ def cmd_gc(args: list[str]) -> None:
 
     # 1. Archive old daily logs
     sd = stale_days()
-    cutoff = (date.today() - timedelta(days=sd)).isoformat()
+    cutoff = (get_today() - timedelta(days=sd)).isoformat()
     dd = daily_dir()
     ad = archive_dir()
 
@@ -183,6 +184,8 @@ def _rebuild_index() -> None:
     """Rebuild the .index.json file."""
     from datetime import datetime
 
+    from keephive.clock import get_now
+
     wd = working_dir()
     kd = knowledge_dir()
     gd = guides_dir()
@@ -198,7 +201,7 @@ def _rebuild_index() -> None:
                 fact_count += sum(1 for line in f.read_text().splitlines() if line.startswith("- "))
 
     data = {
-        "rebuilt": datetime.now().isoformat(timespec="seconds"),
+        "rebuilt": get_now().isoformat(timespec="seconds"),
         "fact_count": fact_count,
         "guides": sum(1 for _ in gd.glob("*.md")) if gd.exists() else 0,
         "prompts": sum(1 for _ in pd.glob("*.md")) if pd.exists() else 0,

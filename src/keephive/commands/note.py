@@ -60,12 +60,12 @@ def _note_file(slot: int | None = None) -> Path:
 
 
 def cmd_note(args: list[str]) -> None:
-    """Router: no args=edit, copy/show/clear/list/digit/template."""
+    """Router: no args=list, copy/show/clear/list/digit/template."""
     ensure_dirs()
     _ensure_migration()
 
     if not args:
-        _note_edit()
+        _note_list()
         return
 
     sub = args[0]
@@ -246,8 +246,7 @@ def _build_todo_buffer(note_content: str, candidates: set[str]) -> str:
 
 def _note_extract_todos(slot: int) -> None:
     """Extract action items from note slot and offer to add as TODOs."""
-    from datetime import datetime as _datetime
-
+    from keephive.clock import get_now
     from keephive.storage import append_to_daily, ensure_daily
 
     path = slot_file(slot)
@@ -313,7 +312,7 @@ def _note_extract_todos(slot: int) -> None:
         return
 
     ensure_daily()
-    ts = _datetime.now().strftime("%H:%M:%S")
+    ts = get_now().strftime("%H:%M:%S")
     for item in selected:
         append_to_daily(f"- [{ts}] TODO: {item}")
     console.print(f"\n  Added {len(selected)} TODO(s).")
@@ -456,6 +455,10 @@ def _note_list() -> None:
                 console.print(f"  [bold]{label}.[/bold] {first_line}  [dim]({lines}L)[/dim]")
             else:
                 console.print(f"  [dim]{label}.[/dim] {first_line}  [dim]({lines}L)[/dim]")
+
+    console.print(
+        "\n  [dim]n <slot> open  |  n show  |  n copy  |  n clear  |  n <slot> todo  extract[/dim]"
+    )
 
 
 def _slot_bar() -> str:

@@ -10,6 +10,8 @@ import json
 import sys
 from datetime import datetime
 
+from keephive.clock import get_now
+
 
 def _format_ui_context(data: dict) -> str:
     """Format UI feedback queue data as a context block for Claude."""
@@ -55,7 +57,24 @@ def hook_userpromptsubmit(args: list[str]) -> None:
     if not session_id:
         return
 
-    # Check UI feedback queue first — inject before nudge
+    # Track usage (before UI queue check — prompt happened regardless)
+    try:
+        from keephive.storage import track_event
+
+        track_event("hooks", "userpromptsubmit", source="hook")
+    except Exception:
+        pass
+
+    # Track session prompt (before UI queue check — prompt happened regardless)
+    try:
+        from keephive.storage import track_session_event
+
+        cwd = input_data.get("cwd", "")
+        track_session_event(session_id, "prompt", project=cwd)
+    except Exception:
+        pass
+
+    # Check UI feedback queue — inject before nudge
     try:
         from pathlib import Path
 
@@ -75,23 +94,6 @@ def hook_userpromptsubmit(args: list[str]) -> None:
     except Exception:
         pass  # Never block the prompt
 
-    # Track usage
-    try:
-        from keephive.storage import track_event
-
-        track_event("hooks", "userpromptsubmit", source="hook")
-    except Exception:
-        pass
-
-    # Track session prompt
-    try:
-        from keephive.storage import track_session_event
-
-        cwd = input_data.get("cwd", "")
-        track_session_event(session_id, "prompt", project=cwd)
-    except Exception:
-        pass
-
     try:
         from keephive.nudge import build_nudge_output, get_prompt_nudge, should_nudge
 
@@ -107,6 +109,6 @@ def hook_userpromptsubmit(args: list[str]) -> None:
 
             debug_log = hive_dir() / ".hook-debug.log"
             with open(debug_log, "a") as f:
-                f.write(f"[{datetime.now().isoformat()}] userpromptsubmit error: {e}\n")
+                f.write(f"[{get_now().isoformat()}] userpromptsubmit error: {e}\n")
         except Exception:
             pass

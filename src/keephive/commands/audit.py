@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
 
+from keephive.clock import get_now, get_today
 from keephive.output import console, notify_sound, prompt_yn
 from keephive.storage import (
     append_to_daily,
@@ -50,7 +51,7 @@ def _analyze_vault() -> dict:
 
     if mem.exists():
         text = mem.read_text()
-        cutoff = date.today() - timedelta(days=30)
+        cutoff = get_today() - timedelta(days=30)
         for line in text.splitlines():
             m = re.search(r"\[verified:(\d{4}-\d{2}-\d{2})\]", line)
             if m:
@@ -102,7 +103,7 @@ def _analyze_cleaner() -> dict:
     """
     todos_all, dones_set = collect_todos()
     ot = open_todos()
-    t = date.today()
+    t = get_today()
 
     velocity = _todo_velocity_7d()
 
@@ -142,7 +143,7 @@ def _todo_velocity_7d() -> dict:
     if not d.exists():
         return {"created": 0, "completed": 0}
 
-    cutoff = (date.today() - timedelta(days=7)).isoformat()
+    cutoff = (get_today() - timedelta(days=7)).isoformat()
     created = 0
     completed = 0
 
@@ -175,7 +176,7 @@ def _days_since_last_entry() -> int:
         if has_entries:
             try:
                 file_date = date.fromisoformat(fpath.stem)
-                return (date.today() - file_date).days
+                return (get_today() - file_date).days
             except ValueError:
                 continue
     return 999
@@ -218,7 +219,7 @@ def _topic_distribution_7d() -> dict[str, int]:
     if not d.exists():
         return {}
 
-    cutoff = (date.today() - timedelta(days=7)).isoformat()
+    cutoff = (get_today() - timedelta(days=7)).isoformat()
     categories: Counter[str] = Counter()
 
     for fpath in sorted(d.glob("*.md")):
@@ -241,7 +242,7 @@ def _active_days(window: int = 7) -> int:
     if not d.exists():
         return 0
 
-    cutoff = (date.today() - timedelta(days=window)).isoformat()
+    cutoff = (get_today() - timedelta(days=window)).isoformat()
     count = 0
     for fpath in sorted(d.glob("*.md")):
         if fpath.stem < cutoff:
@@ -306,7 +307,7 @@ def _gather_daily_logs_text(days: int = 7) -> str:
     if not d.exists():
         return "(no daily logs)"
 
-    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    cutoff = (get_today() - timedelta(days=days)).isoformat()
     parts: list[str] = []
 
     for fpath in sorted(d.glob("*.md")):
@@ -325,7 +326,7 @@ def _gather_corrections_text(days: int = 7) -> str:
     if not d.exists():
         return "(no corrections)"
 
-    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    cutoff = (get_today() - timedelta(days=days)).isoformat()
     lines: list[str] = []
 
     for fpath in sorted(d.glob("*.md")):
@@ -346,7 +347,7 @@ def _gather_decisions_text(days: int = 7) -> str:
     if not d.exists():
         return "(no decisions)"
 
-    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    cutoff = (get_today() - timedelta(days=days)).isoformat()
     lines: list[str] = []
 
     for fpath in sorted(d.glob("*.md")):
@@ -371,7 +372,7 @@ def _gather_verify_results(days: int = 7) -> str:
     if not d.exists():
         return "(no verify results)"
 
-    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    cutoff = (get_today() - timedelta(days=days)).isoformat()
     lines: list[str] = []
 
     for fpath in sorted(d.glob("*.md")):
@@ -623,7 +624,7 @@ def _check_previous_play() -> dict | None:
     if not d.exists():
         return None
 
-    cutoff = (date.today() - timedelta(days=14)).isoformat()
+    cutoff = (get_today() - timedelta(days=14)).isoformat()
     plays: list[tuple[str, str]] = []
 
     for fpath in sorted(d.glob("*.md")):
@@ -641,7 +642,7 @@ def _check_previous_play() -> dict | None:
     _, dones = collect_todos()
 
     completed = last_play.lower() in dones
-    age = (date.today() - date.fromisoformat(last_date)).days
+    age = (get_today() - date.fromisoformat(last_date)).days
 
     return {
         "action": last_play,
@@ -845,7 +846,7 @@ def display_perspectives_only(vault_r, cleaner_r, strategist_r, score: int) -> N
 def save_audit_insights(synthesis, score: int) -> int:
     """Append audit insights to today's daily log. Returns count saved."""
     ensure_daily()
-    ts = datetime.now().strftime("%H:%M:%S")
+    ts = get_now().strftime("%H:%M:%S")
     count = 0
 
     # 3 INSIGHTs: connection, tension, wild card
@@ -879,7 +880,7 @@ def _count_category_entries(category: str, days: int = 7) -> int:
     if not d.exists():
         return 0
 
-    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    cutoff = (get_today() - timedelta(days=days)).isoformat()
     count = 0
     pattern = re.compile(rf"^- \[\d{{2}}:\d{{2}}:\d{{2}}\]\s*{category}:|^- {category}:")
 

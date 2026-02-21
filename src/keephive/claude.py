@@ -25,7 +25,7 @@ T = TypeVar("T", bound=BaseModel)
 # Model name mapping for the Anthropic API
 _API_MODELS: dict[str, str] = {
     "haiku": "claude-haiku-4-5-20251001",
-    "sonnet": "claude-sonnet-4-5-20250514",
+    "sonnet": "claude-sonnet-4-6",
 }
 
 

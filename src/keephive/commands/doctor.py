@@ -8,6 +8,8 @@ import re
 import shutil
 from datetime import date, timedelta
 from difflib import SequenceMatcher
+
+from keephive.clock import get_today
 from pathlib import Path
 
 from keephive.health import (
@@ -218,7 +220,7 @@ def cmd_doctor(args: list[str]) -> None:
 
 def _data_quality_checks() -> tuple[int, list[str]]:
     """Run data quality checks on TODOs. Returns (issue_count, findings)."""
-    t = date.today()
+    t = get_today()
     todos_all, dones_set = collect_todos()
     ot = [(d, ts, text) for d, ts, text in todos_all if text.lower() not in dones_set]
     extra_issues = 0

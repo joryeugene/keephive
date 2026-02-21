@@ -746,12 +746,13 @@ def test_js_toggles_open_class_on_header(hive_env):
 # ---- Fix 5: Auto-expand first accordion on /know (tabbed view) ----
 
 
-def test_js_auto_expand_know(hive_env):
+def test_js_has_restore_state(hive_env):
+    """JS uses restoreState() instead of inline auto-expand."""
     from keephive.commands.serve import _JS
 
-    assert "view==='know'" in _JS or "view==\\'know\\'" in _JS
-    assert "firstBody" in _JS
-    assert "firstHdr" in _JS
+    assert "restoreState()" in _JS
+    assert "saveState" in _JS
+    assert "loadState" in _JS
 
 
 # ---- Fix 2: Memory panel uses markdown rendering ----
@@ -1144,8 +1145,8 @@ def test_css_acc_body_md_max_height():
 # ---- Round 3: Fix 3 - align-items:start on grid-2 ----
 
 
-def test_css_grid2_align_items_start():
-    """grid-2 must use align-items:start to prevent dead space below short panels."""
+def test_css_grid_row_align_items_start():
+    """grid-row must use align-items:start to prevent dead space below short panels."""
     from keephive.commands.serve import _CSS
 
     assert "align-items:start" in _CSS
@@ -1154,40 +1155,33 @@ def test_css_grid2_align_items_start():
 # ---- Round 3: Fix 4 - split-pane ----
 
 
-def test_render_fragment_two_col_uses_split_pane(hive_env):
-    """Two-column rows must emit split-pane structure, not grid-2."""
+def test_render_fragment_two_col_uses_grid_row(hive_env):
+    """Two-column rows must emit grid-row grid-cols-2 structure."""
     from keephive.commands.serve import render_fragment
 
-    html = render_fragment("stats")  # stats view has ["stats", "ps"] — a 2-col row
-    assert "split-pane" in html
-    assert "split-left" in html
-    assert "split-right" in html
-    assert "split-divider" in html
+    html = render_fragment("stats")  # stats view has 2-col rows
+    assert "grid-row" in html
+    assert "grid-cols-2" in html
+    assert "grid-panel" in html
+    assert "data-panel-id" in html
 
 
-def test_render_fragment_split_pane_not_grid2(hive_env):
-    """Two-column rows must NOT use grid-2."""
+def test_render_fragment_no_split_pane(hive_env):
+    """Render fragment must NOT use split-pane or grid-2."""
     from keephive.commands.serve import render_fragment
 
     html = render_fragment("stats")
+    assert "split-pane" not in html
     assert "grid-2" not in html
 
 
-def test_css_has_split_pane_rules():
+def test_css_has_grid_row_rules():
     from keephive.commands.serve import _CSS
 
-    assert ".split-pane{" in _CSS
-    assert ".split-divider{" in _CSS
-    assert ".split-divider::after{" in _CSS
-
-
-def test_js_has_split_pane_drag():
-    from keephive.commands.serve import _JS
-
-    assert "split-divider" in _JS
-    assert "mousedown" in _JS
-    assert "mousemove" in _JS
-    assert "mouseup" in _JS
+    assert ".grid-row{" in _CSS
+    assert ".grid-cols-1{" in _CSS
+    assert ".grid-cols-2{" in _CSS
+    assert ".grid-cols-3{" in _CSS
 
 
 # ---- Round 3: Fix 6 - no show-more ----
@@ -2928,22 +2922,25 @@ def test_all_panels_have_tabindex():
 
 
 def test_home_view_row_structure(hive_env):
-    """Home view fragment has correct split-pane wrapping for row-based nav.
+    """Home view fragment has correct grid-row wrapping for row-based nav.
 
-    The JS _rows() walks #main-content children looking for split-pane (2-col)
-    and direct .card (solo). Verify the HTML structure matches expectations.
+    The JS _rows() walks #main-content children looking for .grid-row containers.
+    Verify the HTML structure matches expectations.
     """
     import re
 
-    from keephive.commands.serve import render_fragment
+    from keephive.commands.serve import VIEWS, render_fragment
 
     html = render_fragment("home")
-    # Row 0: status+ps in a split-pane
-    assert "split-pane" in html
-    # Solo cards (log-home, standup) are NOT wrapped in split-pane
-    # Count split-panes: should be 2 (status+ps, todos+recurring)
-    splits = html.count("split-pane")
-    assert splits == 2, f"Expected 2 split-panes, got {splits}"
+    # All rows wrapped in grid-row
+    assert "grid-row" in html
+    # No old split-pane markup
+    assert "split-pane" not in html
+    assert "split-divider" not in html
+    # Count grid-rows: should match number of rows in VIEWS definition
+    expected_rows = len(VIEWS["home"]["rows"])
+    actual_rows = html.count("grid-row grid-cols-")
+    assert actual_rows == expected_rows, f"Expected {expected_rows} grid-rows, got {actual_rows}"
     # Every card in the fragment has tabindex
     cards = re.findall(r'<div class="card"[^>]*>', html)
     for tag in cards:
@@ -2974,3 +2971,67 @@ def test_js_refresh_preserves_inner_mode():
 
     assert "savedInner=_innerMode" in _JS
     assert "savedInnerIdx=_innerIdx" in _JS
+
+
+# ---- Dashboard State Persistence + CSS Grid Layout ----
+
+
+def test_render_fragment_uses_grid_rows(hive_env):
+    """render_fragment wraps panels in grid-row containers."""
+    from keephive.commands.serve import render_fragment
+
+    html = render_fragment("home")
+    assert "grid-row" in html
+    assert "grid-panel" in html
+    assert "data-panel-id" in html
+    # Must NOT contain old split-pane markup
+    assert "split-pane" not in html
+    assert "split-divider" not in html
+
+
+def test_render_fragment_grid_cols_match_row_size(hive_env):
+    """grid-cols-N class matches the number of panels in each row."""
+    from keephive.commands.serve import VIEWS, render_fragment
+
+    for view_name, view_def in VIEWS.items():
+        html = render_fragment(view_name)
+        for row in view_def.get("rows", []):
+            expected_class = f"grid-cols-{len(row)}"
+            assert expected_class in html, f"{view_name} missing {expected_class}"
+
+
+def test_css_has_grid_row_styles(hive_env):
+    """CSS contains grid-row layout rules."""
+    from keephive.commands.serve import _CSS
+
+    assert ".grid-row" in _CSS
+    assert ".grid-cols-1" in _CSS
+    assert ".grid-cols-2" in _CSS
+
+
+def test_css_no_split_pane_styles():
+    """CSS no longer contains split-pane styles."""
+    from keephive.commands.serve import _CSS
+
+    assert ".split-pane" not in _CSS
+    assert ".split-divider" not in _CSS
+    assert ".split-left" not in _CSS
+    assert ".split-right" not in _CSS
+
+
+def test_js_has_state_persistence():
+    """JS contains localStorage state persistence functions."""
+    from keephive.commands.serve import _JS
+
+    assert "saveState" in _JS
+    assert "loadState" in _JS
+    assert "restoreState" in _JS
+    assert "localStorage" in _JS
+
+
+def test_js_no_split_pane_drag():
+    """JS no longer contains split-pane drag handler."""
+    from keephive.commands.serve import _JS
+
+    assert "split-divider" not in _JS
+    assert "split-pane" not in _JS

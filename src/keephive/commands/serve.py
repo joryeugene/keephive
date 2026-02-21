@@ -164,15 +164,11 @@ select.refresh-select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;
 #search-input:focus{border-color:#58a6ff}
 #search-input::placeholder{color:#6e7681}
 main{max-width:1400px;margin:0 auto;padding:16px}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;align-items:start}
-@media(max-width:900px){.grid-2{grid-template-columns:1fr}}
-.split-pane{display:flex;gap:0;margin-bottom:16px;align-items:stretch}
-.split-left{flex:1;min-width:200px;display:flex;flex-direction:column}
-.split-right{flex:1;min-width:200px;display:flex;flex-direction:column}
-.split-left>.card,.split-right>.card{flex:1}
-.split-divider{width:8px;cursor:col-resize;background:transparent;flex-shrink:0;position:relative;margin:0 4px}
-.split-divider::after{content:'';position:absolute;top:20%;bottom:20%;left:3px;width:2px;background:#30363d;border-radius:1px}
-.split-divider:hover::after,.split-divider.dragging::after{background:#58a6ff}
+.grid-row{display:grid;gap:12px;margin-bottom:12px;align-items:start}
+.grid-cols-1{grid-template-columns:1fr}
+.grid-cols-2{grid-template-columns:1fr 1fr}
+.grid-cols-3{grid-template-columns:1fr 1fr 1fr}
+@media(max-width:900px){.grid-cols-2,.grid-cols-3{grid-template-columns:1fr}}
 .card{background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:hidden;margin-bottom:12px;transition:border-color .1s}
 .card-header{padding:7px 14px;background:#1e252e;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .card-title{font-weight:600;font-size:13px;color:#f0f6fc}
@@ -361,6 +357,8 @@ mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 .todo-item.hive-focus,.log-entry.hive-focus{background:#1c2230;box-shadow:inset 2px 0 0 #58a6ff}
 .accordion.hive-focus>.acc-header{background:#1a2332}
 .note-tile.hive-focus{border-color:#58a6ff;background:#1a2332}
+.setting-row.hive-focus{background:#1c2230;box-shadow:inset 2px 0 0 #58a6ff}
+.session-item.hive-focus{background:#1c2230;box-shadow:inset 2px 0 0 #58a6ff}
 .card.hive-focus{border-color:#58a6ff}
 #g-prefix{position:fixed;bottom:16px;right:16px;background:#161b22;border:1px solid #58a6ff;border-radius:6px;padding:4px 10px;font-family:monospace;font-size:14px;color:#58a6ff;z-index:300;display:none;pointer-events:none}
 #help-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:400;background:rgba(0,0,0,0.7);justify-content:center;align-items:center}
@@ -457,6 +455,77 @@ _JS = """
   var _searchIdx=-1;
   var _searchDebounce=null;
 
+  // --- State persistence ---
+  function saveState(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {}
+  }
+  function loadState(key, fallback) {
+    try { var v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : fallback; } catch(e) { return fallback; }
+  }
+  function saveAccState() {
+    var names = [];
+    document.querySelectorAll('.acc-header.open').forEach(function(hdr) {
+      var nm = hdr.querySelector('.acc-name');
+      if (nm) names.push(nm.textContent);
+    });
+    saveState('hive-acc-' + view, names);
+  }
+  function restoreState() {
+    // Log type filter
+    var sf = loadState('hive-log-filter', '');
+    var btns = document.querySelectorAll('.log-filter-btn');
+    if (btns.length && sf) {
+      btns.forEach(function(b) {
+        b.classList.toggle('active', b.dataset.type === sf);
+        b.setAttribute('aria-pressed', String(b.dataset.type === sf));
+      });
+      document.querySelectorAll('.log-entry').forEach(function(e) {
+        e.classList.toggle('filtered', e.dataset.type !== sf);
+      });
+    }
+    // Accordions (per-view)
+    var accNames = loadState('hive-acc-' + view, null);
+    if (accNames !== null && Array.isArray(accNames)) {
+      document.querySelectorAll('.acc-header').forEach(function(hdr) {
+        var nm = hdr.querySelector('.acc-name');
+        if (!nm) return;
+        var open = accNames.indexOf(nm.textContent) !== -1;
+        var body = hdr.nextElementSibling;
+        if (body && body.classList.contains('acc-body')) {
+          hdr.classList.toggle('open', open);
+          body.classList.toggle('open', open);
+        }
+      });
+    } else if (view === 'know') {
+      var fb = document.querySelector('.tab-content.active .acc-body');
+      var fh = document.querySelector('.tab-content.active .acc-header');
+      if (fb) fb.classList.add('open');
+      if (fh) fh.classList.add('open');
+    }
+    // Note tile
+    var slot = loadState('hive-note-tile', null);
+    if (slot !== null) {
+      document.querySelectorAll('.note-tile').forEach(function(t) {
+        var s = t.querySelector('.note-tile-slot');
+        if (s && s.textContent.trim() === String(slot))
+          t.classList.add('expanded');
+      });
+    }
+    // Tab selection (know view)
+    var tab = loadState('hive-tab-know', null);
+    if (tab && view === 'know') {
+      var card = document.querySelector('.card');
+      if (card) {
+        card.querySelectorAll('.tab-btn').forEach(function(b) {
+          b.classList.toggle('active', b.dataset.tab === tab);
+        });
+        card.querySelectorAll('.tab-content').forEach(function(tc) {
+          tc.classList.toggle('active', tc.dataset.tab === tab);
+        });
+      }
+    }
+  }
+
   // --- Helpers ---
   function escHtml(s){
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -466,29 +535,21 @@ _JS = """
     return Array.from(document.querySelectorAll('#main-content .card[tabindex]'));
   }
   // Build row structure: array of arrays of card indices.
-  // Each row = cards sharing the same layout container (split-pane, grid-2, or solo).
+  // Each row = cards sharing the same grid-row container.
   function _rows(){
     var mc=document.getElementById('main-content');
     if(!mc)return [];
     var cards=_cards();
     if(!cards.length)return [];
     var rows=[];var seen=new Set();
-    // Walk top-level children of #main-content
-    var children=mc.children;
+    var children=mc.querySelectorAll('.grid-row');
     for(var i=0;i<children.length;i++){
       var child=children[i];
       var rowCards=[];
-      if(child.classList.contains('split-pane')||child.classList.contains('grid-2')){
-        // Multi-card row: find all cards inside
-        var inner=child.querySelectorAll('.card[tabindex]');
-        for(var j=0;j<inner.length;j++){
-          var ci=cards.indexOf(inner[j]);
-          if(ci>=0&&!seen.has(ci)){rowCards.push(ci);seen.add(ci);}
-        }
-      }else if(child.matches&&child.matches('.card[tabindex]')){
-        // Solo card row
-        var ci2=cards.indexOf(child);
-        if(ci2>=0&&!seen.has(ci2)){rowCards.push(ci2);seen.add(ci2);}
+      var inner=child.querySelectorAll('.card[tabindex]');
+      for(var j=0;j<inner.length;j++){
+        var ci=cards.indexOf(inner[j]);
+        if(ci>=0&&!seen.has(ci)){rowCards.push(ci);seen.add(ci);}
       }
       if(rowCards.length)rows.push(rowCards);
     }
@@ -505,11 +566,11 @@ _JS = """
   }
   // Inner items within a specific card
   function _innerItems(card){
-    return Array.from(card.querySelectorAll('.todo-item[tabindex], .log-entry[tabindex], .accordion[tabindex], .note-tile[tabindex]'));
+    return Array.from(card.querySelectorAll('.todo-item[tabindex], .log-entry[tabindex], .accordion[tabindex], .note-tile[tabindex], .setting-row[tabindex], .session-item[tabindex]'));
   }
   // All focusables (flat, for search-result nav)
   function _focusables(){
-    return Array.from(document.querySelectorAll('#main-content .card[tabindex], #main-content .todo-item[tabindex], #main-content .log-entry[tabindex], #main-content .accordion[tabindex], #main-content .note-tile[tabindex]'));
+    return Array.from(document.querySelectorAll('#main-content .card[tabindex], #main-content .todo-item[tabindex], #main-content .log-entry[tabindex], #main-content .accordion[tabindex], #main-content .note-tile[tabindex], #main-content .setting-row[tabindex], #main-content .session-item[tabindex]'));
   }
   function _clearAllFocus(){
     _focusables().forEach(function(el){el.classList.remove('hive-focus');});
@@ -561,9 +622,24 @@ _JS = """
     fetch(url)
       .then(function(r){return r.text();})
       .then(function(h){
-        if(mc){mc.innerHTML=h;mc.classList.remove('is-loading');}
+        if(mc){
+          var tmp=document.createElement('div');
+          tmp.innerHTML=h;
+          var newPanels=tmp.querySelectorAll('.grid-panel[data-panel-id]');
+          if(newPanels.length){
+            newPanels.forEach(function(np){
+              var id=np.getAttribute('data-panel-id');
+              var ep=mc.querySelector('.grid-panel[data-panel-id="'+id+'"]');
+              if(ep)ep.innerHTML=np.innerHTML;
+            });
+          } else {
+            mc.innerHTML=h;
+          }
+          mc.classList.remove('is-loading');
+        }
         lastSuccess=Date.now();
         updateTs();
+        restoreState();
         if(savedIdx>=0){
           if(savedInner){
             // Restore card focus, then re-enter inner mode
@@ -606,6 +682,7 @@ _JS = """
   // --- Log date navigation ---
   window.loadLog=function(dateStr){
     logDate=dateStr;
+    saveState('hive-log-date', dateStr);
     fetch('/api/fragment?view=log&date='+dateStr)
       .then(function(r){return r.text();})
       .then(function(h){
@@ -649,6 +726,7 @@ _JS = """
       b.classList.toggle('open',!isOpen);
       h.classList.toggle('open',!isOpen);
       if(acc)acc.setAttribute('aria-expanded',String(!isOpen));
+      saveAccState();
     }
   });
 
@@ -663,15 +741,14 @@ _JS = """
       t.setAttribute('aria-expanded','false');
     });
     if(!wasExpanded){tile.classList.add('expanded');tile.setAttribute('aria-expanded','true');}
+    var es=document.querySelector('.note-tile.expanded .note-tile-slot');
+    saveState('hive-note-tile', es ? es.textContent.trim() : null);
   });
 
-  // --- Auto-expand first accordion on /know (memory/notes tabs) ---
-  if(view==='know'){
-    var firstBody=document.querySelector('.tab-content.active .acc-body');
-    var firstHdr=document.querySelector('.tab-content.active .acc-header');
-    if(firstBody){firstBody.classList.add('open');}
-    if(firstHdr){firstHdr.classList.add('open');}
-  }
+  // --- Restore persisted state ---
+  logDate = loadState('hive-log-date', null);
+  if (logDate) { refresh(); }
+  restoreState();
 
   // --- Search overlay ---
   function doSearch(rawQ){
@@ -811,6 +888,7 @@ _JS = """
       if(!type){entry.classList.remove('filtered');}
       else{entry.classList.toggle('filtered',entry.dataset.type!==type);}
     });
+    saveState('hive-log-filter', type || '');
   });
 
   // --- Note slot switcher ---
@@ -821,33 +899,6 @@ _JS = """
       .then(function(d){if(d.ok)refresh();})
       .catch(function(){document.querySelectorAll('.slot-btn').forEach(function(b){b.disabled=false;});});
   };
-
-  // --- Split pane drag ---
-  document.addEventListener('mousedown',function(e){
-    var d=e.target.closest('.split-divider');
-    if(!d)return;
-    e.preventDefault();
-    var left=d.previousElementSibling;
-    var right=d.nextElementSibling;
-    var startX=e.clientX;
-    var startLeft=left.getBoundingClientRect().width;
-    var startRight=right.getBoundingClientRect().width;
-    var total=startLeft+startRight;
-    d.classList.add('dragging');
-    function move(ev){
-      var dx=ev.clientX-startX;
-      var newLeft=Math.max(200,Math.min(total-200,startLeft+dx));
-      left.style.flex='0 0 '+newLeft+'px';
-      right.style.flex='0 0 '+(total-newLeft)+'px';
-    }
-    function up(){
-      d.classList.remove('dragging');
-      document.removeEventListener('mousemove',move);
-      document.removeEventListener('mouseup',up);
-    }
-    document.addEventListener('mousemove',move);
-    document.addEventListener('mouseup',up);
-  });
 
   // --- Edit modal ---
   var _editType='';var _editName='';var _editSlot=0;
@@ -911,10 +962,11 @@ _JS = """
     container.querySelectorAll('.tab-content').forEach(function(tc){
       tc.classList.toggle('active',tc.dataset.tab===target);
     });
+    saveState('hive-tab-know', target);
   });
 
   // --- Keyboard navigation ---
-  var _VIEW_KEYS={h:'/',d:'/dev',k:'/know',s:'/stats'};
+  var _VIEW_KEYS={h:'/',d:'/dev',k:'/know',s:'/stats',c:'/settings'};
 
   function _clearG(){
     _gPending=false;
@@ -1051,6 +1103,7 @@ _JS = """
             if(accI)accI.click();
             else if(curI.classList.contains('note-tile'))curI.click();
             else if(curI.classList.contains('todo-item')){var db=curI.querySelector('.todo-done-btn');if(db)db.click();}
+            else if(curI.classList.contains('setting-row')){var scb=curI.querySelector('.setting-cb');if(scb){scb.checked=!scb.checked;scb.dispatchEvent(new Event('change',{bubbles:true}));}else{var ssel=curI.querySelector('.setting-select');if(ssel)ssel.focus();}}
           }
         }
       }
@@ -1248,10 +1301,11 @@ def _get_status_data() -> dict:
     except Exception:
         todo_count = 0
 
-    from datetime import date as _date
     from datetime import timedelta as _timedelta
 
-    yesterday = (_date.today() - _timedelta(days=1)).isoformat()
+    from keephive.clock import get_today as _get_today
+
+    yesterday = (_get_today() - _timedelta(days=1)).isoformat()
 
     # Activity metrics from stats (for merged activity section)
     activity_today = 0
@@ -1263,8 +1317,8 @@ def _get_status_data() -> dict:
 
         _stats = read_stats()
         _days = _stats.get("days", {})
-        _today_str = _date.today().isoformat()
-        _week_start = (_date.today() - _timedelta(days=7)).isoformat()
+        _today_str = _get_today().isoformat()
+        _week_start = (_get_today() - _timedelta(days=7)).isoformat()
         _today_day = _days.get(_today_str, {})
         activity_today = sum(_today_day.get("commands", {}).values())
         activity_hours = _today_day.get("hours", {})
@@ -1348,9 +1402,9 @@ def _get_log_data(date_str: str | None = None) -> dict:
 
     path = daily_file(date_str)
     if not path.exists():
-        from datetime import date
+        from keephive.clock import get_today
 
-        used_date = date_str if date_str else date.today().isoformat()
+        used_date = date_str if date_str else get_today().isoformat()
         return {"entries": [], "date": used_date}
     entries = []
     for line in safe_read_text(path).splitlines():
@@ -1371,9 +1425,9 @@ def _get_log_data(date_str: str | None = None) -> dict:
                 elif rest.upper().startswith("AUTO-PROMOTED:"):
                     cat = "auto"
             entries.append({"time": ts[:5], "text": rest, "cat": cat})
-    from datetime import date
+    from keephive.clock import get_today
 
-    used_date = date_str if date_str else date.today().isoformat()
+    used_date = date_str if date_str else get_today().isoformat()
     return {"entries": entries, "date": used_date}
 
 
@@ -1430,12 +1484,13 @@ def _get_notes_data() -> dict:
 def _get_stats_data() -> dict:
     from datetime import date, timedelta
 
+    from keephive.clock import get_today
     from keephive.storage import read_stats
 
     stats = read_stats()
     days = stats.get("days", {})
-    today = date.today().isoformat()
-    week_start = (date.today() - timedelta(days=7)).isoformat()
+    today = get_today().isoformat()
+    week_start = (get_today() - timedelta(days=7)).isoformat()
 
     # Aggregate command counts
     cmd_totals: dict[str, int] = {}
@@ -1471,13 +1526,13 @@ def _get_stats_data() -> dict:
     # 14-day per-day command totals for sparkline (label, count, iso_date)
     daily_spark: list[tuple[str, int, str]] = []
     for i in range(13, -1, -1):
-        d = date.today() - timedelta(days=i)
+        d = get_today() - timedelta(days=i)
         day_s = d.isoformat()
         total_cmds = sum(days.get(day_s, {}).get("commands", {}).values())
         daily_spark.append((d.strftime("%b %d"), total_cmds, day_s))
 
     # Today's hourly data
-    today_str = date.today().isoformat()
+    today_str = get_today().isoformat()
     today_day = days.get(today_str, {})
     today_hours: dict[str, int] = today_day.get("hours", {})
 
@@ -1717,6 +1772,8 @@ def _render_log_panel(
     from datetime import date as _date
     from datetime import timedelta
 
+    from keephive.clock import get_today as _get_today
+
     entries = data.get("entries", [])
     date_str = data.get("date", "")
     total = len(entries)
@@ -1729,7 +1786,7 @@ def _render_log_panel(
     # Date navigation (only when show_nav=True)
     nav_html = ""
     if show_nav:
-        today_str = _date.today().isoformat()
+        today_str = _get_today().isoformat()
         try:
             cur = _date.fromisoformat(date_str)
             prev_str = (cur - timedelta(days=1)).isoformat()
@@ -1829,7 +1886,7 @@ def _render_log_panel(
 
     data_panel_attr = ' data-panel="log"' if show_nav else ""
     aria_log = ' tabindex="0" role="region" aria-label="Daily log"'
-    title = "Today's Log" if not date_str or date_str == _date.today().isoformat() else "Log"
+    title = "Today's Log" if not date_str or date_str == _get_today().isoformat() else "Log"
     log_hints = _cmd_hints(['hive remember "FACT: ..."', "hive log", "hive log summarize"])
     log_input = (
         '<form class="panel-input" data-action="/api/remember" data-field="text">'
@@ -1864,13 +1921,15 @@ def _render_log_home_panel(data: dict) -> str:
 def _render_todo_panel(data: dict, limit: int = 0) -> str:
     from datetime import date
 
+    from keephive.clock import get_today
+
     todos = data.get("todos", [])
     total = len(todos)
     if limit > 0:
         todos = list(reversed(todos))[:limit]
     else:
         todos = list(reversed(todos))
-    today_str = date.today().isoformat()
+    today_str = get_today().isoformat()
     rows = ""
     for d, _, text in todos:
         try:
@@ -2482,12 +2541,13 @@ def _get_stats_summary_data() -> dict:
     """Compact stats for the home view: today, week, streak, hourly."""
     from datetime import date, timedelta
 
+    from keephive.clock import get_today
     from keephive.storage import read_stats
 
     data = read_stats()
     days = data.get("days", {})
-    today_str = date.today().isoformat()
-    week_start = (date.today() - timedelta(days=7)).isoformat()
+    today_str = get_today().isoformat()
+    week_start = (get_today() - timedelta(days=7)).isoformat()
 
     today_data = days.get(today_str, {})
     today_total = sum(today_data.get("commands", {}).values())
@@ -2739,9 +2799,9 @@ def _render_sessions_panel(data: dict) -> str:
                 f"{t}:{c}" for t, c in sorted(tools.items(), key=lambda x: -x[1])[:3]
             )
             items += (
-                f'<div class="session-item">'
+                f'<div class="session-item" tabindex="0">'
                 f'<span class="session-time">{_e(time_str)}</span>'
-                f'<span class="session-prompts">{prompts}</span>'
+                f'<span class="session-prompts" title="prompts">{prompts}p</span>'
                 f'<span class="session-proj">{_e(proj)}</span>'
                 f'<span class="session-tools">{_e(tool_str)}</span>'
                 f"</div>"
@@ -2762,11 +2822,12 @@ def _get_trend_data() -> dict:
     """Week-over-week comparison for 8 KPIs + event source breakdown."""
     from datetime import date, timedelta
 
+    from keephive.clock import get_today
     from keephive.storage import read_sessions, read_stats
 
     stats = read_stats()
     days = stats.get("days", {})
-    today = date.today()
+    today = get_today()
 
     # Week boundaries
     this_week_start = (today - timedelta(days=6)).isoformat()
@@ -3030,7 +3091,7 @@ def _render_settings_panel(data: dict) -> str:
         else:
             control = f"<span>{_e(str(val))}</span>"
         rows.append(
-            f'<div class="setting-row">'
+            f'<div class="setting-row" tabindex="0">'
             f'<span class="setting-label">{_e(key)}</span>'
             f"{control}"
             f'<span class="setting-desc">{desc}</span>'
@@ -3148,14 +3209,27 @@ def _get_pipeline_data() -> dict:
             "label": "verify",
             "hint": "hive verify",
             "desc": "check facts against codebase",
+            "aliases": {"v", "verify"},
         },
-        "reflect": {"label": "reflect", "hint": "hive reflect", "desc": "find patterns in logs"},
-        "audit": {"label": "audit", "hint": "hive audit", "desc": "quality analysis"},
+        "reflect": {
+            "label": "reflect",
+            "hint": "hive reflect",
+            "desc": "find patterns in logs",
+            "aliases": {"rf", "reflect"},
+        },
+        "audit": {
+            "label": "audit",
+            "hint": "hive audit",
+            "desc": "quality analysis",
+            "aliases": {"a", "audit"},
+        },
     }
     for cmd, meta in pipeline_cmds.items():
+        aliases = meta.get("aliases", {cmd})
         last_date = None
         for day in sorted(days_data.keys(), reverse=True):
-            if cmd in days_data[day].get("commands", {}):
+            day_cmds = days_data[day].get("commands", {})
+            if any(a in day_cmds for a in aliases):
                 last_date = day
                 break
         ctx = ""
@@ -3278,12 +3352,14 @@ def _render_pipeline_panel(data: dict) -> str:
         pills_html = f'<div style="margin-top:4px">{pills}</div>'
 
     # Pipeline action statuses (actionable callouts)
+    from datetime import date
+
     actions = data.get("actions", [])
     actions_html = ""
     if actions:
-        from datetime import date
+        from keephive.clock import get_today
 
-        today = date.today().isoformat()
+        today = get_today().isoformat()
         rows = ""
         for act in actions:
             last = act.get("last_date")
@@ -3596,21 +3672,16 @@ def render_fragment(view_name: str, extra_params: dict | None = None) -> str:
         return '<div class="empty">Unknown view</div>'
     parts = []
     for row in view_def.get("rows", []):
-        if len(row) == 1:
-            parts.append(_render_panel_safe(row[0], extra_params))
-        elif len(row) == 2:
-            left = _render_panel_safe(row[0], extra_params)
-            right = _render_panel_safe(row[1], extra_params)
-            parts.append(
-                f'<div class="split-pane">'
-                f'<div class="split-left">{left}</div>'
-                f'<div class="split-divider" title="Drag to resize"></div>'
-                f'<div class="split-right">{right}</div>'
-                f"</div>"
+        row_panels = []
+        for name in row:
+            panel_html = _render_panel_safe(name, extra_params)
+            row_panels.append(
+                f'<div class="grid-panel" data-panel-id="{_e(name)}">{panel_html}</div>'
             )
-        else:
-            cols = "".join(_render_panel_safe(name, extra_params) for name in row)
-            parts.append(f'<div class="grid-2">{cols}</div>')
+        cols = len(row)
+        parts.append(
+            f'<div class="grid-row grid-cols-{cols}">{"".join(row_panels)}</div>'
+        )
     return "\n".join(parts)
 
 
@@ -3679,6 +3750,7 @@ def render_page(view_name: str, port: int) -> str:
       <span class="help-key">gd</span><span class="help-desc">Dev (/dev)</span>
       <span class="help-key">gk</span><span class="help-desc">Knowledge (/know)</span>
       <span class="help-key">gs</span><span class="help-desc">Stats (/stats)</span>
+      <span class="help-key">gc</span><span class="help-desc">Settings (/settings)</span>
     </div>
     <h3>Actions</h3>
     <div class="help-keys">
@@ -3922,11 +3994,10 @@ class _HiveHandler(BaseHTTPRequestHandler):
                 error = "text required"
             else:
                 try:
-                    from datetime import datetime
-
+                    from keephive.clock import get_now
                     from keephive.storage import append_to_daily
 
-                    ts = datetime.now().strftime("%H:%M:%S")
+                    ts = get_now().strftime("%H:%M:%S")
                     append_to_daily(f"- [{ts}] {text}")
                 except Exception as exc:
                     ok = False
@@ -3939,11 +4010,10 @@ class _HiveHandler(BaseHTTPRequestHandler):
                 error = "text required"
             else:
                 try:
-                    from datetime import datetime
-
+                    from keephive.clock import get_now
                     from keephive.storage import append_to_daily
 
-                    ts = datetime.now().strftime("%H:%M:%S")
+                    ts = get_now().strftime("%H:%M:%S")
                     append_to_daily(f"- [{ts}] TODO: {text}")
                 except Exception as exc:
                     ok = False

@@ -34,12 +34,9 @@ class TestWeekendAwareCutoff:
         """On Monday, cutoff should be Friday (3 days back)."""
         from keephive.commands.standup import _weekend_aware_cutoff
 
-        # Patch date.today to return a Monday
         monday = date(2026, 2, 16)  # This is a Monday
         assert monday.weekday() == 0
-        with patch("keephive.commands.standup.date") as mock_date:
-            mock_date.today.return_value = monday
-            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        with patch("keephive.commands.standup.get_today", return_value=monday):
             result = _weekend_aware_cutoff()
         assert result == date(2026, 2, 13)  # Friday
 
@@ -49,9 +46,7 @@ class TestWeekendAwareCutoff:
 
         tuesday = date(2026, 2, 17)  # Tuesday
         assert tuesday.weekday() == 1
-        with patch("keephive.commands.standup.date") as mock_date:
-            mock_date.today.return_value = tuesday
-            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        with patch("keephive.commands.standup.get_today", return_value=tuesday):
             result = _weekend_aware_cutoff()
         assert result == date(2026, 2, 16)  # Monday
 
@@ -61,9 +56,7 @@ class TestWeekendAwareCutoff:
 
         wednesday = date(2026, 2, 18)  # Wednesday
         assert wednesday.weekday() == 2
-        with patch("keephive.commands.standup.date") as mock_date:
-            mock_date.today.return_value = wednesday
-            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        with patch("keephive.commands.standup.get_today", return_value=wednesday):
             result = _weekend_aware_cutoff()
         assert result == date(2026, 2, 17)  # Tuesday
 
