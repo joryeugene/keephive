@@ -1229,3 +1229,164 @@ def score_fact_decay(fact_text: str, verified_date_str: str) -> float:
     recall_score = min(1.0, recall_count / 10.0)
 
     return recency * 0.4 + ref_score * 0.2 + importance * 0.2 + recall_score * 0.2
+
+
+# ---- Session tracking ----
+
+
+def track_session_event(
+    session_id: str,
+    event: str,
+    project: str = "",
+    tool_name: str = "",
+) -> None:
+    """Track a session lifecycle event in daily stats.
+
+    Creates or updates a session entry keyed by session_id under the current day.
+
+    Args:
+        session_id: Claude Code session identifier.
+        event: One of "start", "prompt", "tool", "compact".
+        project: Full cwd path (normalized to ~ prefix).
+        tool_name: Tool name for "tool" events (Edit, Write, etc.).
+    """
+    if not session_id:
+        return
+    try:
+        data = read_stats()
+        day = date.today().isoformat()
+
+        if day not in data["days"]:
+            data["days"][day] = {}
+        day_data = data["days"][day]
+
+        if "sessions" not in day_data:
+            day_data["sessions"] = {}
+        sessions = day_data["sessions"]
+
+        now = datetime.now().isoformat(timespec="seconds")
+
+        if session_id not in sessions:
+            home = str(Path.home())
+            proj_key = project.replace(home, "~") if project.startswith(home) else project
+            sessions[session_id] = {
+                "project": proj_key,
+                "started": now,
+                "last_seen": now,
+                "prompts": 0,
+                "tools": {},
+                "compacted": False,
+            }
+
+        session = sessions[session_id]
+        session["last_seen"] = now
+
+        if event == "prompt":
+            session["prompts"] += 1
+        elif event == "tool" and tool_name:
+            session["tools"][tool_name] = session["tools"].get(tool_name, 0) + 1
+        elif event == "compact":
+            session["compacted"] = True
+
+        _write_stats(data)
+    except Exception:
+        pass  # Never block hooks
+
+
+def read_sessions(days_back: int = 30) -> list[dict]:
+    """Read all session records from the last N days.
+
+    Returns a flat list sorted by started timestamp. Each dict includes
+    session_id and day keys for reference.
+    """
+    data = read_stats()
+    cutoff = (date.today() - timedelta(days=days_back)).isoformat()
+    result: list[dict] = []
+    for day_str, day_data in data.get("days", {}).items():
+        if day_str < cutoff:
+            continue
+        for sid, sdata in day_data.get("sessions", {}).items():
+            entry = {**sdata, "session_id": sid, "day": day_str}
+            result.append(entry)
+    result.sort(key=lambda x: x.get("started", ""))
+    return result
+
+
+def session_metrics(days_back: int = 30) -> dict:
+    """Compute derived session metrics from the last N days.
+
+    Returns dict with total_sessions, sessions_today, sessions_this_week,
+    avg/median prompts per session, avg duration, tool breakdown,
+    compaction rate, per-project counts, and daily session counts.
+    """
+    from statistics import median
+
+    sessions = read_sessions(days_back=days_back)
+    today_str = date.today().isoformat()
+    week_ago = (date.today() - timedelta(days=7)).isoformat()
+
+    total = len(sessions)
+    today_count = sum(1 for s in sessions if s["day"] == today_str)
+    week_count = sum(1 for s in sessions if s["day"] >= week_ago)
+
+    # Prompts
+    prompt_counts = [s.get("prompts", 0) for s in sessions]
+    avg_prompts = sum(prompt_counts) / total if total else 0.0
+    med_prompts = float(median(prompt_counts)) if prompt_counts else 0.0
+
+    # Duration (minutes)
+    durations: list[float] = []
+    for s in sessions:
+        started = s.get("started", "")
+        last_seen = s.get("last_seen", "")
+        if started and last_seen:
+            try:
+                t0 = datetime.fromisoformat(started)
+                t1 = datetime.fromisoformat(last_seen)
+                mins = (t1 - t0).total_seconds() / 60.0
+                if mins >= 0:
+                    durations.append(mins)
+            except ValueError:
+                pass
+    avg_duration = sum(durations) / len(durations) if durations else 0.0
+
+    # Tool breakdown
+    tool_totals: dict[str, int] = {}
+    for s in sessions:
+        for tool, count in s.get("tools", {}).items():
+            tool_totals[tool] = tool_totals.get(tool, 0) + count
+    total_tool_uses = sum(tool_totals.values()) or 1
+    tool_pct = {t: c / total_tool_uses for t, c in tool_totals.items()}
+
+    # Compaction rate
+    compacted = sum(1 for s in sessions if s.get("compacted"))
+    compaction_rate = compacted / total if total else 0.0
+
+    # Per-project
+    by_project: dict[str, int] = {}
+    for s in sessions:
+        proj = s.get("project", "")
+        if proj:
+            by_project[proj] = by_project.get(proj, 0) + 1
+
+    # Daily session counts (14 days for sparkline)
+    daily_sessions: list[tuple[str, int]] = []
+    for i in range(13, -1, -1):
+        d = date.today() - timedelta(days=i)
+        day_s = d.isoformat()
+        count = sum(1 for s in sessions if s["day"] == day_s)
+        daily_sessions.append((day_s, count))
+
+    return {
+        "total_sessions": total,
+        "sessions_today": today_count,
+        "sessions_this_week": week_count,
+        "avg_prompts_per_session": avg_prompts,
+        "median_prompts_per_session": med_prompts,
+        "avg_duration_minutes": avg_duration,
+        "tool_totals": tool_totals,
+        "tool_pct": tool_pct,
+        "compaction_rate": compaction_rate,
+        "sessions_by_project": by_project,
+        "daily_sessions": daily_sessions,
+    }

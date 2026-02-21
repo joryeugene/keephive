@@ -2344,6 +2344,152 @@ def _render_knowledge_tabbed_panel(data: dict) -> str:
     )
 
 
+def _get_session_data() -> dict:
+    """Session metrics for the sessions panel."""
+    from keephive.storage import session_metrics
+
+    sm = session_metrics(days_back=30)
+
+    # Build 14-day sparkline with iso dates
+    from datetime import date as _date
+    from datetime import timedelta as _td
+
+    daily_spark: list[tuple[str, int, str]] = []
+    for i in range(13, -1, -1):
+        d = _date.today() - _td(days=i)
+        day_s = d.isoformat()
+        count = 0
+        for ds, c in sm.get("daily_sessions", []):
+            if ds == day_s:
+                count = c
+                break
+        daily_spark.append((d.strftime("%b %d"), count, day_s))
+
+    return {**sm, "daily_spark": daily_spark}
+
+
+def _render_sessions_panel(data: dict) -> str:
+    """Session metrics panel with sparkline, KPIs, and tool breakdown."""
+    total = data.get("total_sessions", 0)
+    today_count = data.get("sessions_today", 0)
+    week_count = data.get("sessions_this_week", 0)
+    avg_prompts = data.get("avg_prompts_per_session", 0)
+    avg_dur = data.get("avg_duration_minutes", 0)
+    tool_totals = data.get("tool_totals", {})
+    tool_pct = data.get("tool_pct", {})
+    compaction_rate = data.get("compaction_rate", 0)
+    daily_spark = data.get("daily_spark", [])
+
+    if total == 0:
+        return (
+            '<div class="card" tabindex="0" role="region" aria-label="Sessions">'
+            '<div class="card-header"><span class="card-title">Sessions</span></div>'
+            '<div class="card-body"><div class="empty">No session data yet</div></div>'
+            "</div>"
+        )
+
+    # Sparkline (reuse same pattern as stats panel)
+    sparkline_html = ""
+    has_data = any(item[1] > 0 for item in daily_spark)
+    if daily_spark and has_data:
+        max_c = max(item[1] for item in daily_spark) or 1
+        bars = ""
+        labels = ""
+        for i, item in enumerate(daily_spark):
+            label = item[0]
+            count = item[1]
+            iso_date = item[2] if len(item) >= 3 else ""
+            is_today = i == len(daily_spark) - 1
+
+            h = max(2, round(count / max_c * 48)) if count > 0 else 2
+            is_weekend = False
+            dow_letter = ""
+            if iso_date:
+                try:
+                    from datetime import date as _date
+
+                    d = _date.fromisoformat(iso_date)
+                    dow_letter = "MTWTFSS"[d.weekday()]
+                    is_weekend = d.weekday() >= 5
+                except (ValueError, IndexError):
+                    pass
+
+            if is_today:
+                cls = " today"
+                extra_bg = ""
+            elif is_weekend:
+                cls = " weekend"
+                extra_bg = ""
+            else:
+                cls = ""
+                if count > 0:
+                    ratio = count / max_c
+                    sat = 50 + round(ratio * 30)
+                    lum = 25 + round(ratio * 20)
+                    extra_bg = f";background:hsl(160,{sat}%,{lum}%)"
+                else:
+                    extra_bg = ";background:#161b22"
+
+            bars += f'<div class="spark-bar{cls}" style="height:{h}px{extra_bg}" title="{_e(label)}: {count} sessions"></div>'
+            wk_cls = ' class="weekend"' if is_weekend else ""
+            labels += f"<span{wk_cls}>{dow_letter}</span>"
+
+        sparkline_html = (
+            f'<div class="sparkline-wrap">'
+            f'<div class="sparkline">{bars}</div>'
+            f'<div class="spark-labels">{labels}</div>'
+            f"</div>"
+        )
+
+    # KPI row
+    kpi_html = (
+        f'<div class="stat-row" style="margin-bottom:12px">'
+        f'<div class="stat-item"><span class="stat-value">{today_count}</span><span class="stat-label">today</span></div>'
+        f'<div class="stat-item"><span class="stat-value">{week_count}</span><span class="stat-label">this week</span></div>'
+        f'<div class="stat-item"><span class="stat-value">{total}</span><span class="stat-label">total</span></div>'
+        f'<div class="stat-item"><span class="stat-value">{avg_prompts:.0f}</span><span class="stat-label">avg prompts</span></div>'
+        f'<div class="stat-item"><span class="stat-value">{avg_dur:.0f}m</span><span class="stat-label">avg duration</span></div>'
+        f"</div>"
+    )
+
+    # Tool breakdown
+    tools_html = ""
+    if tool_totals:
+        sorted_tools = sorted(tool_totals.items(), key=lambda x: -x[1])[:6]
+        max_tool = sorted_tools[0][1] if sorted_tools else 1
+        rows = ""
+        for tool, count in sorted_tools:
+            pct = int(tool_pct.get(tool, 0) * 100)
+            bar_w = max(2, round(count / max_tool * 100))
+            rows += (
+                f'<div style="display:flex;align-items:center;gap:8px;margin:2px 0">'
+                f'<span style="width:50px;text-align:right;color:#8b949e;font-size:12px">{_e(tool)}</span>'
+                f'<div style="flex:1;background:#161b22;border-radius:2px;height:14px">'
+                f'<div style="width:{bar_w}%;background:#238636;border-radius:2px;height:100%"></div>'
+                f"</div>"
+                f'<span style="width:35px;text-align:right;font-size:12px;color:#8b949e">{pct}%</span>'
+                f"</div>"
+            )
+        tools_html = f'<div style="margin-top:8px"><div style="font-size:11px;color:#484f58;margin-bottom:4px">Tool usage</div>{rows}</div>'
+
+    # Compaction rate
+    compact_html = ""
+    if compaction_rate > 0:
+        compact_html = (
+            f'<div style="margin-top:8px;font-size:12px;color:#8b949e">'
+            f"Compaction: {int(compaction_rate * 100)}% of sessions"
+            f"</div>"
+        )
+
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Sessions">'
+        f'<div class="card-header"><span class="card-title">Sessions</span><span class="card-meta">{total} tracked</span></div>'
+        f"{sparkline_html}"
+        f'<div class="card-body">{kpi_html}{tools_html}{compact_html}</div>'
+        f"</div>"
+    )
+
+
 # ---- Panel registry ----
 
 PANELS: dict[str, tuple] = {
@@ -2368,6 +2514,7 @@ PANELS: dict[str, tuple] = {
     "standup": (_get_standup_data, _render_standup_panel),
     "stats-summary": (_get_stats_summary_data, _render_stats_summary_panel),
     "knowledge-tabbed": (_get_knowledge_all_data, _render_knowledge_tabbed_panel),
+    "sessions": (_get_session_data, _render_sessions_panel),
 }
 
 # ---- View definitions ----
@@ -2403,7 +2550,7 @@ VIEWS: dict[str, dict] = {
         "title": "Stats",
         "rows": [
             ["stats", "ps"],
-            ["stats-commands"],
+            ["stats-commands", "sessions"],
         ],
     },
 }

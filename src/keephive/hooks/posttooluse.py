@@ -31,6 +31,15 @@ def hook_posttooluse(_args: list[str]) -> None:
     except Exception:
         pass
 
+    # Track session tool use
+    try:
+        from keephive.storage import track_session_event
+
+        tool_name = input_data.get("tool_name", "")
+        track_session_event(session_id, "tool", tool_name=tool_name)
+    except Exception:
+        pass
+
     try:
         from keephive.nudge import build_nudge_output, get_tool_nudge, should_nudge
 

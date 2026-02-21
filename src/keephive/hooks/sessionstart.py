@@ -78,6 +78,16 @@ def hook_sessionstart(args: list[str]) -> None:
     except Exception:
         pass
 
+    # Track session start
+    try:
+        from keephive.storage import track_session_event
+
+        session_id = input_data.get("session_id", "")
+        if session_id:
+            track_session_event(session_id, "start", project=cwd)
+    except Exception:
+        pass
+
     # Seed missing guides; never overwrite existing (preserve user customizations)
     try:
         from keephive.commands.setup import _seed_bundled_content
@@ -220,7 +230,20 @@ def build_context(cwd: str, project_name: str) -> str:
         if cross_hint:
             parts.append(cross_hint)
 
-    # 8. Next action hint
+    # 8. Session context (brief productivity signal)
+    try:
+        from keephive.storage import session_metrics
+
+        sm = session_metrics(days_back=7)
+        if sm["total_sessions"] > 2:
+            parts.append(
+                f"[session context: {sm['sessions_today']} sessions today, "
+                f"avg {sm['avg_prompts_per_session']:.0f} prompts/session this week]"
+            )
+    except Exception:
+        pass
+
+    # 9. Next action hint
     try:
         from keephive.commands.status import _suggest_next
 

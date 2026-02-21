@@ -630,3 +630,325 @@ class TestHourlySparkline:
         assert "hourly" in out
         assert "0h" in out
         assert "23h" in out
+
+
+# ---- Session tracking ----
+
+
+class TestTrackSessionEvent:
+    def test_creates_session_on_start(self, hive_env):
+        from keephive.storage import read_stats, track_session_event
+
+        track_session_event("sess-001", "start", project="/Users/dev/proj")
+        data = read_stats()
+        today = date.today().isoformat()
+        sessions = data["days"][today]["sessions"]
+        assert "sess-001" in sessions
+        s = sessions["sess-001"]
+        assert s["prompts"] == 0
+        assert s["tools"] == {}
+        assert s["compacted"] is False
+        assert s["started"] != ""
+        assert s["last_seen"] != ""
+
+    def test_increments_prompts(self, hive_env):
+        from keephive.storage import read_stats, track_session_event
+
+        track_session_event("sess-002", "start")
+        track_session_event("sess-002", "prompt")
+        track_session_event("sess-002", "prompt")
+        track_session_event("sess-002", "prompt")
+        data = read_stats()
+        today = date.today().isoformat()
+        assert data["days"][today]["sessions"]["sess-002"]["prompts"] == 3
+
+    def test_tracks_tools(self, hive_env):
+        from keephive.storage import read_stats, track_session_event
+
+        track_session_event("sess-003", "start")
+        track_session_event("sess-003", "tool", tool_name="Edit")
+        track_session_event("sess-003", "tool", tool_name="Edit")
+        track_session_event("sess-003", "tool", tool_name="Write")
+        data = read_stats()
+        today = date.today().isoformat()
+        tools = data["days"][today]["sessions"]["sess-003"]["tools"]
+        assert tools["Edit"] == 2
+        assert tools["Write"] == 1
+
+    def test_marks_compacted(self, hive_env):
+        from keephive.storage import read_stats, track_session_event
+
+        track_session_event("sess-004", "start")
+        track_session_event("sess-004", "compact")
+        data = read_stats()
+        today = date.today().isoformat()
+        assert data["days"][today]["sessions"]["sess-004"]["compacted"] is True
+
+    def test_updates_last_seen(self, hive_env):
+        import time
+
+        from keephive.storage import read_stats, track_session_event
+
+        track_session_event("sess-005", "start")
+        data = read_stats()
+        today = date.today().isoformat()
+        first_seen = data["days"][today]["sessions"]["sess-005"]["last_seen"]
+
+        time.sleep(0.01)
+        track_session_event("sess-005", "prompt")
+        data = read_stats()
+        second_seen = data["days"][today]["sessions"]["sess-005"]["last_seen"]
+        assert second_seen >= first_seen
+
+    def test_empty_session_id_noop(self, hive_env):
+        from keephive.storage import read_stats, track_session_event
+
+        track_session_event("", "start")
+        data = read_stats()
+        today = date.today().isoformat()
+        assert today not in data.get("days", {}) or "sessions" not in data["days"].get(today, {})
+
+    def test_project_path_normalized(self, hive_env):
+        from keephive.storage import read_stats, track_session_event
+
+        home = str(Path.home())
+        track_session_event("sess-006", "start", project=f"{home}/Documents/proj")
+        data = read_stats()
+        today = date.today().isoformat()
+        proj = data["days"][today]["sessions"]["sess-006"]["project"]
+        assert proj.startswith("~")
+        assert "Documents/proj" in proj
+
+    def test_silent_on_error(self, hive_env, monkeypatch):
+        from keephive.storage import track_session_event
+
+        monkeypatch.setenv("HIVE_HOME", "/nonexistent/deep/path")
+        track_session_event("sess-err", "start")  # Should not raise
+
+    def test_tool_without_name_ignored(self, hive_env):
+        from keephive.storage import read_stats, track_session_event
+
+        track_session_event("sess-007", "start")
+        track_session_event("sess-007", "tool", tool_name="")
+        data = read_stats()
+        today = date.today().isoformat()
+        assert data["days"][today]["sessions"]["sess-007"]["tools"] == {}
+
+
+class TestReadSessions:
+    def test_empty_stats(self, hive_env):
+        from keephive.storage import read_sessions
+
+        result = read_sessions()
+        assert result == []
+
+    def test_returns_sessions_sorted(self, hive_env):
+        from keephive.storage import read_sessions, track_session_event
+
+        track_session_event("sess-b", "start")
+        track_session_event("sess-b", "prompt")
+        track_session_event("sess-a", "start")
+        result = read_sessions()
+        assert len(result) == 2
+        # Both have session_id and day keys
+        assert "session_id" in result[0]
+        assert "day" in result[0]
+
+    def test_days_back_filter(self, hive_env):
+        from keephive.storage import read_sessions, stats_file
+
+        old_day = (date.today() - timedelta(days=60)).isoformat()
+        data = {
+            "days": {
+                old_day: {
+                    "sessions": {
+                        "old-sess": {
+                            "project": "",
+                            "started": f"{old_day}T10:00:00",
+                            "last_seen": f"{old_day}T11:00:00",
+                            "prompts": 5,
+                            "tools": {},
+                            "compacted": False,
+                        }
+                    }
+                }
+            }
+        }
+        stats_file().write_text(json.dumps(data))
+        result = read_sessions(days_back=30)
+        assert len(result) == 0
+        result = read_sessions(days_back=90)
+        assert len(result) == 1
+
+
+class TestSessionMetrics:
+    def _seed_sessions(self, hive_env):
+        from keephive.storage import stats_file
+
+        today = date.today().isoformat()
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        data = {
+            "days": {
+                today: {
+                    "sessions": {
+                        "s1": {
+                            "project": "~/proj/a",
+                            "started": f"{today}T09:00:00",
+                            "last_seen": f"{today}T10:00:00",
+                            "prompts": 30,
+                            "tools": {"Edit": 10, "Write": 5},
+                            "compacted": True,
+                        },
+                        "s2": {
+                            "project": "~/proj/a",
+                            "started": f"{today}T14:00:00",
+                            "last_seen": f"{today}T14:30:00",
+                            "prompts": 10,
+                            "tools": {"Edit": 3},
+                            "compacted": False,
+                        },
+                    }
+                },
+                yesterday: {
+                    "sessions": {
+                        "s3": {
+                            "project": "~/proj/b",
+                            "started": f"{yesterday}T11:00:00",
+                            "last_seen": f"{yesterday}T12:30:00",
+                            "prompts": 50,
+                            "tools": {"Edit": 20, "Write": 10, "Bash": 5},
+                            "compacted": True,
+                        }
+                    }
+                },
+            }
+        }
+        stats_file().write_text(json.dumps(data))
+
+    def test_total_counts(self, hive_env):
+        from keephive.storage import session_metrics
+
+        self._seed_sessions(hive_env)
+        sm = session_metrics()
+        assert sm["total_sessions"] == 3
+        assert sm["sessions_today"] == 2
+
+    def test_avg_prompts(self, hive_env):
+        from keephive.storage import session_metrics
+
+        self._seed_sessions(hive_env)
+        sm = session_metrics()
+        assert sm["avg_prompts_per_session"] == 30.0  # (30+10+50)/3
+
+    def test_median_prompts(self, hive_env):
+        from keephive.storage import session_metrics
+
+        self._seed_sessions(hive_env)
+        sm = session_metrics()
+        assert sm["median_prompts_per_session"] == 30.0  # median of [10, 30, 50]
+
+    def test_avg_duration(self, hive_env):
+        from keephive.storage import session_metrics
+
+        self._seed_sessions(hive_env)
+        sm = session_metrics()
+        # s1: 60min, s2: 30min, s3: 90min => avg=60
+        assert sm["avg_duration_minutes"] == 60.0
+
+    def test_tool_totals(self, hive_env):
+        from keephive.storage import session_metrics
+
+        self._seed_sessions(hive_env)
+        sm = session_metrics()
+        assert sm["tool_totals"]["Edit"] == 33  # 10+3+20
+        assert sm["tool_totals"]["Write"] == 15  # 5+10
+        assert sm["tool_totals"]["Bash"] == 5
+
+    def test_tool_pct(self, hive_env):
+        from keephive.storage import session_metrics
+
+        self._seed_sessions(hive_env)
+        sm = session_metrics()
+        # Total tool uses: 33+15+5 = 53
+        assert 0.6 < sm["tool_pct"]["Edit"] < 0.65  # ~62%
+
+    def test_compaction_rate(self, hive_env):
+        from keephive.storage import session_metrics
+
+        self._seed_sessions(hive_env)
+        sm = session_metrics()
+        # 2 of 3 sessions compacted
+        assert abs(sm["compaction_rate"] - 2.0 / 3.0) < 0.01
+
+    def test_sessions_by_project(self, hive_env):
+        from keephive.storage import session_metrics
+
+        self._seed_sessions(hive_env)
+        sm = session_metrics()
+        assert sm["sessions_by_project"]["~/proj/a"] == 2
+        assert sm["sessions_by_project"]["~/proj/b"] == 1
+
+    def test_daily_sessions_sparkline(self, hive_env):
+        from keephive.storage import session_metrics
+
+        self._seed_sessions(hive_env)
+        sm = session_metrics()
+        # daily_sessions is 14 entries
+        assert len(sm["daily_sessions"]) == 14
+        # Today should have count 2
+        today_entry = sm["daily_sessions"][-1]
+        assert today_entry[0] == date.today().isoformat()
+        assert today_entry[1] == 2
+
+    def test_empty_data(self, hive_env):
+        from keephive.storage import session_metrics
+
+        sm = session_metrics()
+        assert sm["total_sessions"] == 0
+        assert sm["avg_prompts_per_session"] == 0.0
+        assert sm["avg_duration_minutes"] == 0.0
+        assert sm["tool_totals"] == {}
+        assert sm["compaction_rate"] == 0.0
+
+
+class TestSessionsInDisplay:
+    def test_display_full_shows_sessions(self, hive_env, capsys):
+        from keephive.commands.stats import _display_full
+        from keephive.storage import track_session_event
+
+        track_session_event("disp-001", "start", project="/Users/dev/proj")
+        track_session_event("disp-001", "prompt")
+        track_session_event("disp-001", "prompt")
+
+        from keephive.storage import read_stats
+
+        data = read_stats()
+        _display_full(data)
+        out = capsys.readouterr().out
+        assert "Sessions" in out
+        assert "prompts/session" in out
+
+    def test_display_day_shows_sessions(self, hive_env, capsys):
+        from keephive.commands.stats import _display_day
+        from keephive.storage import track_session_event
+
+        track_session_event("day-001", "start")
+        track_session_event("day-001", "prompt")
+        track_session_event("day-001", "tool", tool_name="Edit")
+
+        from keephive.storage import read_stats
+
+        data = read_stats()
+        _display_day(data, "today")
+        out = capsys.readouterr().out
+        assert "Sessions" in out
+        assert "prompt" in out.lower()
+
+    def test_stats_text_includes_sessions(self, hive_env):
+        from keephive.commands.stats import stats_text
+        from keephive.storage import track_session_event
+
+        track_session_event("txt-001", "start")
+        track_session_event("txt-001", "prompt")
+        result = stats_text()
+        assert "Sessions" in result or "session" in result.lower()

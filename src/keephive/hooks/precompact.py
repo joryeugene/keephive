@@ -55,6 +55,16 @@ def hook_precompact(args: list[str]) -> None:
     except Exception:
         pass
 
+    # Track session compaction
+    try:
+        from keephive.storage import track_session_event
+
+        session_id = input_data.get("session_id", "")
+        if session_id:
+            track_session_event(session_id, "compact", project=cwd)
+    except Exception:
+        pass
+
     # Find transcript
     transcript = _find_transcript(input_data)
 

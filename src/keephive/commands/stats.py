@@ -14,6 +14,7 @@ from keephive.storage import (
     last_log_entry_with_prefix,
     parse_date_arg,
     read_stats,
+    session_metrics,
 )
 
 
@@ -375,6 +376,32 @@ def _display_full(data: dict) -> None:
                 f"{proj['sessions']} sessions · {proj['days_active']}d active · last: {last}"
             )
 
+    # Sessions section
+    try:
+        sm = session_metrics(days_back=30)
+        if sm["total_sessions"] > 0:
+            console.print()
+            console.print("[dim]Sessions[/dim]")
+            console.print(
+                f"  today [bold]{sm['sessions_today']}[/bold]  ·  "
+                f"week [bold]{sm['sessions_this_week']}[/bold]  ·  "
+                f"all [bold]{sm['total_sessions']}[/bold]  ·  "
+                f"avg [bold]{sm['avg_prompts_per_session']:.0f}[/bold] prompts/session  ·  "
+                f"avg [bold]{sm['avg_duration_minutes']:.0f}m[/bold] duration"
+            )
+            if sm["tool_totals"]:
+                tool_parts = []
+                for tool in [
+                    t for t, _ in sorted(sm["tool_totals"].items(), key=lambda x: -x[1])[:5]
+                ]:
+                    pct = int(sm["tool_pct"].get(tool, 0) * 100)
+                    tool_parts.append(f"{tool} {pct}%")
+                console.print(f"  tools: {'  ·  '.join(tool_parts)}")
+            if sm["compaction_rate"] > 0:
+                console.print(f"  compaction: {int(sm['compaction_rate'] * 100)}% of sessions")
+    except Exception:
+        pass
+
     # Quality section
     meta = _sum_counters(days_data, "meta")
 
@@ -462,6 +489,23 @@ def _display_day(data: dict, date_arg: str) -> None:
         console.print("[bold]Projects:[/bold]")
         for key, proj in sorted(projects_data.items(), key=lambda x: -x[1].get("commands", 0)):
             console.print(f"  {key}  ({proj.get('commands', 0)} commands)")
+
+    # Sessions for this day
+    sessions_data = day_data.get("sessions", {})
+    if sessions_data:
+        console.print()
+        console.print("[bold]Sessions:[/bold]")
+        for sid, sdata in sorted(sessions_data.items(), key=lambda x: x[1].get("started", "")):
+            prompts = sdata.get("prompts", 0)
+            proj = sdata.get("project", "")
+            proj_label = f"  {proj}" if proj else ""
+            tools = sdata.get("tools", {})
+            tool_str = ", ".join(f"{t}:{c}" for t, c in sorted(tools.items(), key=lambda x: -x[1]))
+            tool_label = f"  [{tool_str}]" if tool_str else ""
+            compact_label = "  compacted" if sdata.get("compacted") else ""
+            console.print(
+                f"  {sid[:12]}...  {prompts} prompts{proj_label}{tool_label}{compact_label}"
+            )
 
 
 def _display_project(data: dict, project_filter: str, date_filter: str = "") -> None:
@@ -617,4 +661,21 @@ def stats_text(project: str = "", date_arg: str = "") -> str:
             lines.append(f"  {name:<14} {count:>5}")
 
     lines.append(f"\nCurrent streak: {curr_streak} days | Longest: {longest_streak} days")
+
+    try:
+        sm = session_metrics(days_back=30)
+        if sm["total_sessions"] > 0:
+            lines.append(
+                f"\nSessions: {sm['sessions_today']} today | {sm['sessions_this_week']} this week | "
+                f"{sm['total_sessions']} total"
+            )
+            lines.append(
+                f"Avg {sm['avg_prompts_per_session']:.0f} prompts/session | "
+                f"Avg {sm['avg_duration_minutes']:.0f}m duration"
+            )
+            if sm["compaction_rate"] > 0:
+                lines.append(f"Compaction rate: {int(sm['compaction_rate'] * 100)}%")
+    except Exception:
+        pass
+
     return "\n".join(lines)
