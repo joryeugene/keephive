@@ -1,7 +1,7 @@
 """hive serve: live web dashboard for keephive data.
 
 Serves a local web dashboard at localhost:3847 (default).
-Views: / (all), /daily, /dev, /simple, /stats, /know, /mem, /notes
+Views: / (home), /dev, /know (tabbed: guides/memory/notes), /stats
 
 Usage: hive serve [port] [--hot]
        --hot   Watch source files, restart server on change
@@ -151,11 +151,11 @@ def render_md(text: str) -> str:
 
 _CSS = """
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;font-size:13px;line-height:1.6}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;font-size:13px;line-height:1.6;letter-spacing:-0.006em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 nav{background:#161b22;border-bottom:1px solid #30363d;padding:0 16px;display:flex;align-items:center;gap:2px;position:sticky;top:0;z-index:100}
-.nav-brand{color:#f0f6fc;font-weight:700;font-size:14px;padding:12px 12px 12px 0;margin-right:10px;border-right:1px solid #30363d}
-.nav-tab{color:#8b949e;text-decoration:none;padding:12px 10px;border-bottom:2px solid transparent;font-size:13px;white-space:nowrap}
-.nav-tab:hover{color:#c9d1d9}.nav-tab.active{color:#58a6ff;border-bottom-color:#58a6ff}
+.nav-brand{color:#f0f6fc;font-weight:700;font-size:14px;padding:10px 10px 10px 0;margin-right:10px;border-right:1px solid #30363d}
+.nav-tab{color:#8b949e;text-decoration:none;padding:10px 10px;border-bottom:2px solid transparent;font-size:12px;white-space:nowrap;transition:color .1s}
+.nav-tab:hover{color:#c9d1d9}.nav-tab.active{color:#f0f6fc;border-bottom-color:#58a6ff;font-weight:600}
 .nav-right{margin-left:auto;display:flex;align-items:center;gap:8px;padding-left:12px}
 .refresh-label{color:#8b949e;font-size:12px}
 select.refresh-select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:3px 8px;border-radius:4px;font-size:12px;cursor:pointer}
@@ -164,7 +164,7 @@ select.refresh-select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;
 #search-input:focus{border-color:#58a6ff}
 #search-input::placeholder{color:#6e7681}
 main{max-width:1400px;margin:0 auto;padding:16px}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;align-items:start}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;align-items:start}
 @media(max-width:900px){.grid-2{grid-template-columns:1fr}}
 .split-pane{display:flex;gap:0;margin-bottom:16px;align-items:start}
 .split-left{flex:1;min-width:200px}
@@ -172,11 +172,11 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .split-divider{width:8px;cursor:col-resize;background:transparent;flex-shrink:0;position:relative;margin:0 4px}
 .split-divider::after{content:'';position:absolute;top:20%;bottom:20%;left:3px;width:2px;background:#30363d;border-radius:1px}
 .split-divider:hover::after,.split-divider.dragging::after{background:#58a6ff}
-.card{background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:hidden;margin-bottom:16px}
-.card-header{padding:9px 14px;background:#1e252e;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:hidden;margin-bottom:12px;transition:border-color .1s}
+.card-header{padding:7px 14px;background:#1e252e;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .card-title{font-weight:600;font-size:13px;color:#f0f6fc}
 .card-meta{color:#6e7681;font-size:12px}
-.card-body{padding:12px 14px}
+.card-body{padding:10px 14px}
 .stat-row{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:8px;justify-content:center}
 .stat-item{display:flex;flex-direction:column;gap:2px;align-items:center;text-align:center}
 .stat-value{font-size:22px;font-weight:700;color:#f0f6fc}
@@ -197,7 +197,7 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .date-nav-btn:hover:not([disabled]){color:#c9d1d9;border-color:#58a6ff}
 .date-nav-btn:disabled{opacity:0.3;cursor:default}
 .log-date-label{font-size:12px;color:#6e7681;min-width:82px;text-align:center}
-.log-entry{display:flex;gap:8px;padding:6px 10px;border-bottom:1px solid #21262d;font-size:12px;border-radius:4px;transition:background .15s}
+.log-entry{display:flex;gap:8px;padding:5px 10px;border-bottom:1px solid #21262d;font-size:12px;border-radius:4px;transition:background .1s}
 .log-entry:last-child{border-bottom:none}
 .log-entry:hover{background:#1c2128}
 .log-time{color:#6e7681;font-family:monospace;min-width:52px;flex-shrink:0}
@@ -214,7 +214,7 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .todo-color{color:#e3b341}.correction{color:#ffa657}.done-cat{color:#3fb950}.auto-cat{color:#8b949e}
 .log-see-more{display:block;padding:6px 0;font-size:12px;color:#58a6ff;text-decoration:none;text-align:center}
 .log-see-more:hover{color:#79c0ff}
-.todo-item{padding:7px 10px;border-bottom:1px solid #21262d;display:flex;gap:8px;align-items:baseline;font-size:12px;border-radius:4px;transition:background .15s}
+.todo-item{padding:5px 10px;border-bottom:1px solid #21262d;display:flex;gap:8px;align-items:baseline;font-size:12px;border-radius:4px;transition:background .1s}
 .todo-item:last-child{border-bottom:none}
 .todo-item:hover{background:#1c2128}
 .todo-age{color:#6e7681;font-size:11px;min-width:36px;text-align:right;flex-shrink:0}
@@ -349,16 +349,147 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .slot-btn:hover:not(.active){border-color:#6e7681;color:#c9d1d9}
 a.know-item{text-decoration:none;color:inherit;display:flex}
 mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
+.hive-focus{box-shadow:inset 0 0 0 1px #58a6ff,0 0 0 1px rgba(88,166,255,0.25)}
+.todo-item.hive-focus,.log-entry.hive-focus{background:#1c2230;box-shadow:inset 2px 0 0 #58a6ff}
+.accordion.hive-focus>.acc-header{background:#1a2332}
+.note-tile.hive-focus{border-color:#58a6ff;background:#1a2332}
+.card.hive-focus{border-color:#58a6ff}
+#g-prefix{position:fixed;bottom:16px;right:16px;background:#161b22;border:1px solid #58a6ff;border-radius:6px;padding:4px 10px;font-family:monospace;font-size:14px;color:#58a6ff;z-index:300;display:none;pointer-events:none}
+#help-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:400;background:rgba(0,0,0,0.7);justify-content:center;align-items:center}
+#help-overlay.open{display:flex}
+.help-panel{background:#161b22;border:1px solid #30363d;border-radius:8px;width:640px;max-width:92vw;max-height:80vh;overflow-y:auto;padding:20px 24px}
+.help-panel h2{color:#f0f6fc;font-size:15px;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid #30363d}
+.help-panel h3{color:#c9d1d9;font-size:12px;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em}
+.help-keys{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:12px}
+.help-key{color:#58a6ff;font-family:monospace;font-weight:600;text-align:right;padding:1px 0}
+.help-desc{color:#8b949e;padding:1px 0}
+.search-tier{display:inline-block;padding:0 5px;border-radius:3px;font-size:10px;font-weight:600;margin-right:6px}
+.search-tier-working{background:#1c3552;color:#79c0ff}
+.search-tier-knowledge{background:#0d2e1a;color:#56d364}
+.search-tier-daily{background:#3d2e00;color:#e3b341}
+.search-tier-archive{background:#21262d;color:#8b949e}
+.search-context{font-size:11px;color:#6e7681;padding:2px 0 0 24px}
+.search-actions{display:flex;gap:4px;margin-top:4px;padding-left:24px}
+.search-action-btn{font-size:10px;padding:1px 6px;border:1px solid #30363d;border-radius:3px;background:#21262d;color:#8b949e;cursor:pointer}
+.search-action-btn:hover{border-color:#58a6ff;color:#c9d1d9}
+#edit-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:350;background:rgba(0,0,0,0.8)}
+#edit-overlay.open{display:flex}
+.edit-modal{width:100%;height:100%;display:flex;flex-direction:column;background:#0d1117}
+.edit-toolbar{display:flex;align-items:center;gap:8px;padding:8px 16px;background:#161b22;border-bottom:1px solid #30363d}
+.edit-toolbar-title{color:#f0f6fc;font-weight:600;font-size:13px;flex:1}
+.edit-btn{padding:4px 12px;border-radius:4px;font-size:12px;cursor:pointer;border:1px solid #30363d;background:#21262d;color:#c9d1d9}
+.edit-btn:hover{border-color:#58a6ff;color:#f0f6fc}
+.edit-btn-save{background:#238636;border-color:#238636;color:#fff}
+.edit-btn-save:hover{background:#2ea043}
+.edit-panes{display:flex;flex:1;overflow:hidden}
+.edit-panes textarea{flex:1;background:#0d1117;color:#e6edf3;border:none;border-right:1px solid #30363d;padding:12px 16px;font-family:'SF Mono',Monaco,Consolas,monospace;font-size:13px;line-height:1.6;resize:none;outline:none;tab-size:2}
+.edit-preview{flex:1;padding:12px 16px;overflow-y:auto;font-size:13px}
+.know-cmd{color:#6e7681;font-family:monospace;font-size:11px;margin-left:auto}
+.tab-bar{display:flex;gap:0;border-bottom:1px solid #30363d;background:#161b22}
+.tab-btn{padding:8px 16px;font-size:12px;color:#8b949e;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:color .1s}
+.tab-btn:hover{color:#c9d1d9}
+.tab-btn.active{color:#f0f6fc;border-bottom-color:#58a6ff;font-weight:600}
+.tab-content{display:none}
+.tab-content.active{display:block}
 """
 
 _JS = """
 (function(){
-  var view=document.body.dataset.view||'all';
+  var view=document.body.dataset.view||'home';
   var iv=null;
   var tsIv=null;
   var lastSuccess=Date.now();
   var lastInterval=10;
   var logDate=null;
+  var _focusIdx=-1;
+  var _innerMode=false;
+  var _innerIdx=-1;
+  var _gPending=false;
+  var _gTimer=null;
+  var _searchIdx=-1;
+  var _searchDebounce=null;
+
+  // --- Helpers ---
+  function escHtml(s){
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  // All cards (flat list in DOM order)
+  function _cards(){
+    return Array.from(document.querySelectorAll('#main-content .card[tabindex]'));
+  }
+  // Build row structure: array of arrays of card indices.
+  // Each row = cards sharing the same layout container (split-pane, grid-2, or solo).
+  function _rows(){
+    var mc=document.getElementById('main-content');
+    if(!mc)return [];
+    var cards=_cards();
+    if(!cards.length)return [];
+    var rows=[];var seen=new Set();
+    // Walk top-level children of #main-content
+    var children=mc.children;
+    for(var i=0;i<children.length;i++){
+      var child=children[i];
+      var rowCards=[];
+      if(child.classList.contains('split-pane')||child.classList.contains('grid-2')){
+        // Multi-card row: find all cards inside
+        var inner=child.querySelectorAll('.card[tabindex]');
+        for(var j=0;j<inner.length;j++){
+          var ci=cards.indexOf(inner[j]);
+          if(ci>=0&&!seen.has(ci)){rowCards.push(ci);seen.add(ci);}
+        }
+      }else if(child.matches&&child.matches('.card[tabindex]')){
+        // Solo card row
+        var ci2=cards.indexOf(child);
+        if(ci2>=0&&!seen.has(ci2)){rowCards.push(ci2);seen.add(ci2);}
+      }
+      if(rowCards.length)rows.push(rowCards);
+    }
+    return rows;
+  }
+  // Find which row a card index belongs to: {rowIdx, colIdx}
+  function _findCell(cardIdx){
+    var rs=_rows();
+    for(var r=0;r<rs.length;r++){
+      var c=rs[r].indexOf(cardIdx);
+      if(c>=0)return {rowIdx:r,colIdx:c};
+    }
+    return null;
+  }
+  // Inner items within a specific card
+  function _innerItems(card){
+    return Array.from(card.querySelectorAll('.todo-item[tabindex], .log-entry[tabindex], .accordion[tabindex], .note-tile[tabindex]'));
+  }
+  // All focusables (flat, for search-result nav)
+  function _focusables(){
+    return Array.from(document.querySelectorAll('#main-content .card[tabindex], #main-content .todo-item[tabindex], #main-content .log-entry[tabindex], #main-content .accordion[tabindex], #main-content .note-tile[tabindex]'));
+  }
+  function _clearAllFocus(){
+    _focusables().forEach(function(el){el.classList.remove('hive-focus');});
+  }
+  function _setFocus(idx){
+    var items=_cards();
+    _clearAllFocus();
+    _innerMode=false;_innerIdx=-1;
+    if(idx<0)idx=0;
+    if(idx>=items.length)idx=items.length-1;
+    _focusIdx=idx;
+    if(items[idx]){
+      items[idx].classList.add('hive-focus');
+      items[idx].scrollIntoView({block:'nearest',behavior:'smooth'});
+    }
+  }
+  function _setInnerFocus(card,idx){
+    var items=_innerItems(card);
+    _clearAllFocus();
+    if(idx<0)idx=0;
+    if(idx>=items.length)idx=items.length-1;
+    _innerIdx=idx;
+    card.classList.add('hive-focus');
+    if(items[idx]){
+      items[idx].classList.add('hive-focus');
+      items[idx].scrollIntoView({block:'nearest',behavior:'smooth'});
+    }
+  }
 
   // --- Refresh timestamp ---
   function updateTs(){
@@ -375,6 +506,9 @@ _JS = """
     var mc=document.getElementById('main-content');
     var url='/api/fragment?view='+view;
     if(logDate)url+='&log_date='+logDate;
+    var savedIdx=_focusIdx;
+    var savedInner=_innerMode;
+    var savedInnerIdx=_innerIdx;
     if(mc)mc.classList.add('is-loading');
     fetch(url)
       .then(function(r){return r.text();})
@@ -382,6 +516,21 @@ _JS = """
         if(mc){mc.innerHTML=h;mc.classList.remove('is-loading');}
         lastSuccess=Date.now();
         updateTs();
+        if(savedIdx>=0){
+          if(savedInner){
+            // Restore card focus, then re-enter inner mode
+            var cards=_cards();
+            _clearAllFocus();
+            if(savedIdx>=cards.length)savedIdx=cards.length-1;
+            _focusIdx=savedIdx;
+            _innerMode=true;
+            if(cards[savedIdx]){
+              _setInnerFocus(cards[savedIdx],savedInnerIdx);
+            }
+          }else{
+            _setFocus(savedIdx);
+          }
+        }
       }).catch(function(){
         if(mc)mc.classList.remove('is-loading');
         var el=document.getElementById('refresh-ts');
@@ -428,11 +577,13 @@ _JS = """
   document.addEventListener('click',function(e){
     var h=e.target.closest('.acc-header');
     if(!h)return;
+    var acc=h.closest('.accordion');
     var b=h.nextElementSibling;
     if(b&&b.classList.contains('acc-body')){
       var isOpen=b.classList.contains('open');
       b.classList.toggle('open',!isOpen);
       h.classList.toggle('open',!isOpen);
+      if(acc)acc.setAttribute('aria-expanded',String(!isOpen));
     }
   });
 
@@ -444,66 +595,102 @@ _JS = """
     var wasExpanded=tile.classList.contains('expanded');
     document.querySelectorAll('.note-tile.expanded').forEach(function(t){
       t.classList.remove('expanded');
+      t.setAttribute('aria-expanded','false');
     });
-    if(!wasExpanded) tile.classList.add('expanded');
+    if(!wasExpanded){tile.classList.add('expanded');tile.setAttribute('aria-expanded','true');}
   });
 
-  // --- Auto-expand first accordion on /mem and /notes ---
-  if(view==='mem'||view==='notes'){
-    var firstBody=document.querySelector('.acc-body');
-    var firstHdr=document.querySelector('.acc-header');
+  // --- Auto-expand first accordion on /know (memory/notes tabs) ---
+  if(view==='know'){
+    var firstBody=document.querySelector('.tab-content.active .acc-body');
+    var firstHdr=document.querySelector('.tab-content.active .acc-header');
     if(firstBody){firstBody.classList.add('open');}
     if(firstHdr){firstHdr.classList.add('open');}
   }
 
   // --- Search overlay ---
-  function escHtml(s){
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  function doSearch(rawQ){
+    if(!rawQ)return;
+    var q=encodeURIComponent(rawQ);
+    fetch('/api/search?q='+q)
+      .then(function(r){return r.json();})
+      .then(function(data){
+        var results=data.results||[];
+        var html='';
+        _searchIdx=-1;
+        if(!results.length){
+          html='<div class="empty">No results for \\u201c'+escHtml(rawQ)+'\\u201d</div>';
+        } else {
+          var safeQ=escHtml(rawQ).replace(/[.*+?^${}()|\\[\\]\\\\]/g,'\\\\$&');
+          var hlRe=new RegExp('('+safeQ+')','gi');
+          results.forEach(function(r,i){
+            var safeLine=escHtml(r.line||'');
+            var hlLine=safeLine.replace(hlRe,'<mark>$1</mark>');
+            var tier=r.tier||'daily';
+            var tierBadge='<span class="search-tier search-tier-'+tier+'">'+tier+'</span>';
+            var ctx='';
+            if(r.prev_line||r.next_line){
+              ctx='<div class="search-context">';
+              if(r.prev_line)ctx+=escHtml(r.prev_line)+'<br>';
+              if(r.next_line)ctx+=escHtml(r.next_line);
+              ctx+='</div>';
+            }
+            var actions='<div class="search-actions">';
+            if(tier==='daily')actions+='<button class="search-action-btn" onclick="promoteToMemory(this)" data-line="'+escHtml(r.line||'')+'">Promote</button>';
+            actions+='<button class="search-action-btn" onclick="copyLine(this)" data-line="'+escHtml(r.line||'')+'">Copy</button>';
+            if(tier==='knowledge'&&r.file)actions+='<a class="search-action-btn" href="/know">View Guide</a>';
+            actions+='</div>';
+            html+='<div class="search-result" data-idx="'+i+'" tabindex="0">'
+              +tierBadge
+              +'<span class="search-date">'+escHtml(r.date||'')+'</span>'
+              +'<span class="search-line">'+hlLine+'</span>'
+              +ctx+actions
+              +'</div>';
+          });
+        }
+        var sb=document.getElementById('search-body');
+        if(sb)sb.innerHTML=html;
+        var ov=document.getElementById('search-overlay');
+        if(ov)ov.style.display='flex';
+      });
   }
+  window.promoteToMemory=function(btn){
+    var line=btn.getAttribute('data-line');
+    if(!line)return;
+    btn.disabled=true;btn.textContent='...';
+    fetch('/api/mem/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:line})})
+      .then(function(r){return r.json();})
+      .then(function(d){btn.textContent=d.ok?'Done':'Err';})
+      .catch(function(){btn.textContent='Err';});
+  };
+  window.copyLine=function(btn){
+    var line=btn.getAttribute('data-line');
+    if(line&&navigator.clipboard){navigator.clipboard.writeText(line);btn.textContent='Copied';}
+  };
   function closeSearch(){
     var ov=document.getElementById('search-overlay');
     if(ov)ov.style.display='none';
-    var si=document.getElementById('search-input');
-    if(si)si.value='';
+    _searchIdx=-1;
   }
   var si=document.getElementById('search-input');
   if(si){
+    si.addEventListener('input',function(){
+      var val=this.value.trim();
+      if(_searchDebounce)clearTimeout(_searchDebounce);
+      if(val.length>=2){
+        _searchDebounce=setTimeout(function(){doSearch(val);},300);
+      }
+    });
     si.addEventListener('keydown',function(e){
       if(e.key==='Enter'&&this.value.trim()){
-        var rawQ=this.value.trim();
-        var q=encodeURIComponent(rawQ);
-        fetch('/api/search?q='+q)
-          .then(function(r){return r.json();})
-          .then(function(data){
-            var results=data.results||[];
-            var html='';
-            if(!results.length){
-              html='<div class="empty">No results for \u201c'+escHtml(rawQ)+'\u201d</div>';
-            } else {
-              var safeQ=escHtml(rawQ).replace(/[.*+?^${}()|\\[\\]\\\\]/g,'\\\\$&');
-              var hlRe=new RegExp('('+safeQ+')','gi');
-              results.forEach(function(r){
-                var safeLine=escHtml(r.line||'');
-                var hlLine=safeLine.replace(hlRe,'<mark>$1</mark>');
-                html+='<div class="search-result">'
-                  +'<span class="search-date">'+escHtml(r.date||'')+'</span>'
-                  +'<span class="search-line">'+hlLine+'</span>'
-                  +'</div>';
-              });
-            }
-            var sb=document.getElementById('search-body');
-            if(sb)sb.innerHTML=html;
-            var ov=document.getElementById('search-overlay');
-            if(ov)ov.style.display='flex';
-          });
+        if(_searchDebounce)clearTimeout(_searchDebounce);
+        doSearch(this.value.trim());
       } else if(e.key==='Escape'){
         closeSearch();
+        this.blur();
       }
     });
   }
-  document.addEventListener('keydown',function(e){
-    if(e.key==='Escape')closeSearch();
-  });
   var sc=document.getElementById('search-close');
   if(sc)sc.addEventListener('click',closeSearch);
 
@@ -516,7 +703,7 @@ _JS = """
     var btn=f.querySelector('button');
     var val=inp.value.trim();
     if(!val)return;
-    btn.disabled=true;btn.textContent='\u2026';
+    btn.disabled=true;btn.textContent='\\u2026';
     var action=f.dataset.action;
     var field=f.dataset.field;
     var body={};body[field]=val;
@@ -534,7 +721,7 @@ _JS = """
     if(!btn)return;
     var pattern=btn.dataset.pattern;
     var orig=btn.textContent;
-    btn.disabled=true;btn.textContent='\u2026';
+    btn.disabled=true;btn.textContent='\\u2026';
     fetch('/api/todo/done',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pattern:pattern})})
       .then(function(r){return r.json();})
       .then(function(d){
@@ -551,7 +738,10 @@ _JS = """
     var type=btn.dataset.type;
     var container=btn.closest('.card');
     if(!container)return;
-    container.querySelectorAll('.log-filter-btn').forEach(function(b){b.classList.toggle('active',b===btn);});
+    container.querySelectorAll('.log-filter-btn').forEach(function(b){
+      b.classList.toggle('active',b===btn);
+      b.setAttribute('aria-pressed',String(b===btn));
+    });
     container.querySelectorAll('.log-entry').forEach(function(entry){
       if(!type){entry.classList.remove('filtered');}
       else{entry.classList.toggle('filtered',entry.dataset.type!==type);}
@@ -592,6 +782,311 @@ _JS = """
     }
     document.addEventListener('mousemove',move);
     document.addEventListener('mouseup',up);
+  });
+
+  // --- Edit modal ---
+  var _editType='';var _editName='';var _editSlot=0;
+  var _previewDebounce=null;
+  window.openEdit=function(type,name,slot){
+    _editType=type;_editName=name||'';_editSlot=slot||0;
+    var ov=document.getElementById('edit-overlay');
+    if(!ov)return;
+    var title=document.getElementById('edit-title');
+    if(title)title.textContent='Edit: '+(name||type);
+    var params='type='+encodeURIComponent(type);
+    if(name)params+='&name='+encodeURIComponent(name);
+    if(slot)params+='&slot='+slot;
+    fetch('/api/content?'+params)
+      .then(function(r){return r.json();})
+      .then(function(d){
+        var ta=document.getElementById('edit-textarea');
+        var pv=document.getElementById('edit-preview-body');
+        if(ta)ta.value=d.content||'';
+        if(pv)pv.innerHTML=d.html||'';
+        ov.classList.add('open');
+        if(ta)ta.focus();
+      });
+  };
+  window.closeEdit=function(){
+    var ov=document.getElementById('edit-overlay');
+    if(ov)ov.classList.remove('open');
+    _editType='';_editName='';_editSlot=0;
+  };
+  window.saveEdit=function(){
+    var ta=document.getElementById('edit-textarea');
+    if(!ta)return;
+    var body={type:_editType,content:ta.value};
+    if(_editName)body.name=_editName;
+    if(_editSlot)body.slot=_editSlot;
+    fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+      .then(function(r){return r.json();})
+      .then(function(d){if(d.ok){closeEdit();refresh();}});
+  };
+  document.addEventListener('input',function(e){
+    if(e.target.id!=='edit-textarea')return;
+    if(_previewDebounce)clearTimeout(_previewDebounce);
+    _previewDebounce=setTimeout(function(){
+      fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:e.target.value})})
+        .then(function(r){return r.json();})
+        .then(function(d){
+          var pv=document.getElementById('edit-preview-body');
+          if(pv)pv.innerHTML=d.html||'';
+        });
+    },500);
+  });
+
+  // --- Tab switching (knowledge view) ---
+  document.addEventListener('click',function(e){
+    var btn=e.target.closest('.tab-btn');
+    if(!btn)return;
+    var target=btn.dataset.tab;
+    var container=btn.closest('.card');
+    if(!container)return;
+    container.querySelectorAll('.tab-btn').forEach(function(b){b.classList.toggle('active',b===btn);});
+    container.querySelectorAll('.tab-content').forEach(function(tc){
+      tc.classList.toggle('active',tc.dataset.tab===target);
+    });
+  });
+
+  // --- Keyboard navigation ---
+  var _VIEW_KEYS={h:'/',d:'/dev',k:'/know',s:'/stats'};
+
+  function _clearG(){
+    _gPending=false;
+    if(_gTimer){clearTimeout(_gTimer);_gTimer=null;}
+    var gi=document.getElementById('g-prefix');
+    if(gi)gi.style.display='none';
+  }
+
+  function _isInput(el){
+    if(!el)return false;
+    var tag=el.tagName;
+    return tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||el.isContentEditable;
+  }
+
+  document.addEventListener('keydown',function(e){
+    // Skip when focus is in an input/textarea/select
+    if(_isInput(document.activeElement))return;
+    // Skip when edit overlay is open
+    var editOv=document.getElementById('edit-overlay');
+    if(editOv&&editOv.classList.contains('open')){
+      if(e.key==='Escape'){closeEdit();e.preventDefault();}
+      if(e.ctrlKey&&e.key==='Enter'){saveEdit();e.preventDefault();}
+      return;
+    }
+    // Help overlay
+    var helpOv=document.getElementById('help-overlay');
+    if(helpOv&&helpOv.classList.contains('open')){
+      if(e.key==='Escape'||e.key==='?'){helpOv.classList.remove('open');e.preventDefault();}
+      return;
+    }
+    // Search overlay
+    var searchOv=document.getElementById('search-overlay');
+    if(searchOv&&searchOv.style.display==='flex'){
+      if(e.key==='Escape'){closeSearch();e.preventDefault();return;}
+      if(e.key==='n'||e.key==='N'){
+        var results=searchOv.querySelectorAll('.search-result');
+        if(results.length){
+          _searchIdx=e.key==='n'?(_searchIdx+1)%results.length:(_searchIdx-1+results.length)%results.length;
+          results.forEach(function(r,i){r.classList.toggle('hive-focus',i===_searchIdx);});
+          results[_searchIdx].scrollIntoView({block:'nearest'});
+        }
+        e.preventDefault();return;
+      }
+      return;
+    }
+
+    var k=e.key;
+
+    // g-prefix handler
+    if(_gPending){
+      _clearG();
+      if(_VIEW_KEYS[k]){window.location.href=_VIEW_KEYS[k];e.preventDefault();}
+      else if(k==='g'){_setFocus(0);window.scrollTo(0,0);e.preventDefault();}
+      return;
+    }
+    if(k==='g'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
+      _gPending=true;
+      var gi=document.getElementById('g-prefix');
+      if(gi)gi.style.display='block';
+      _gTimer=setTimeout(_clearG,800);
+      e.preventDefault();return;
+    }
+
+    // j/k: move between rows (card level) or items (inner mode)
+    if(k==='j'){
+      if(_innerMode){
+        var cardJ=_cards()[_focusIdx];
+        if(cardJ){var items=_innerItems(cardJ);if(_innerIdx<items.length-1)_setInnerFocus(cardJ,_innerIdx+1);}
+      }else{
+        var cell=_findCell(_focusIdx);var rs=_rows();
+        if(cell&&cell.rowIdx<rs.length-1){
+          var nextRow=rs[cell.rowIdx+1];
+          var col=Math.min(cell.colIdx,nextRow.length-1);
+          _setFocus(nextRow[col]);
+        }else if(_focusIdx<0){_setFocus(0);}
+      }
+      e.preventDefault();
+    }
+    else if(k==='k'){
+      if(_innerMode){
+        var cardK=_cards()[_focusIdx];
+        if(cardK){if(_innerIdx>0)_setInnerFocus(cardK,_innerIdx-1);}
+      }else{
+        var cell2=_findCell(_focusIdx);var rs2=_rows();
+        if(cell2&&cell2.rowIdx>0){
+          var prevRow=rs2[cell2.rowIdx-1];
+          var col2=Math.min(cell2.colIdx,prevRow.length-1);
+          _setFocus(prevRow[col2]);
+        }
+      }
+      e.preventDefault();
+    }
+    // h/l: move left/right within row, or prev/next row if solo card
+    else if(k==='h'&&!_innerMode){
+      var cellH=_findCell(_focusIdx);var rsH=_rows();
+      if(cellH){
+        var rowH=rsH[cellH.rowIdx];
+        if(cellH.colIdx>0){_setFocus(rowH[cellH.colIdx-1]);}
+        else if(cellH.rowIdx>0){var pr=rsH[cellH.rowIdx-1];_setFocus(pr[pr.length-1]);}
+      }
+      e.preventDefault();
+    }
+    else if(k==='l'&&!_innerMode){
+      var cellL=_findCell(_focusIdx);var rsL=_rows();
+      if(cellL){
+        var rowL=rsL[cellL.rowIdx];
+        if(cellL.colIdx<rowL.length-1){_setFocus(rowL[cellL.colIdx+1]);}
+        else if(cellL.rowIdx<rsL.length-1){_setFocus(rsL[cellL.rowIdx+1][0]);}
+      }
+      e.preventDefault();
+    }
+    else if(k==='J'){window.scrollBy(0,window.innerHeight/2);e.preventDefault();}
+    else if(k==='K'){window.scrollBy(0,-window.innerHeight/2);e.preventDefault();}
+    else if(k==='G'){var rsG=_rows();if(rsG.length){_setFocus(rsG[rsG.length-1][0]);}window.scrollTo(0,document.body.scrollHeight);e.preventDefault();}
+    // Enter/o: dive into card's inner items, or toggle inner item
+    else if(k==='Enter'||k==='o'){
+      if(!_innerMode){
+        var cardE=_cards()[_focusIdx];
+        if(cardE){
+          var inner2=_innerItems(cardE);
+          if(inner2.length>0){_innerMode=true;_setInnerFocus(cardE,0);}
+          else{
+            var acc=cardE.querySelector('.acc-header');
+            if(acc)acc.click();
+          }
+        }
+      }else{
+        // Toggle the focused inner item (accordion/note-tile)
+        var cardI=_cards()[_focusIdx];
+        if(cardI){
+          var innerI=_innerItems(cardI);var curI=innerI[_innerIdx];
+          if(curI){
+            var accI=curI.querySelector('.acc-header');
+            if(accI)accI.click();
+            else if(curI.classList.contains('note-tile'))curI.click();
+            else if(curI.classList.contains('todo-item')){var db=curI.querySelector('.todo-done-btn');if(db)db.click();}
+          }
+        }
+      }
+      e.preventDefault();
+    }
+    // Collapse focused accordion
+    else if(k==='x'){
+      var curX=_innerMode?(_innerItems(_cards()[_focusIdx])||[])[_innerIdx]:_cards()[_focusIdx];
+      if(curX){
+        var bx=curX.querySelector('.acc-body.open');
+        if(bx){bx.classList.remove('open');var hdr=curX.querySelector('.acc-header');if(hdr)hdr.classList.remove('open');}
+        if(curX.classList.contains('note-tile')&&curX.classList.contains('expanded'))curX.classList.remove('expanded');
+      }
+      e.preventDefault();
+    }
+    // Mark focused TODO done
+    else if(k==='d'){
+      var curD=_innerMode?(_innerItems(_cards()[_focusIdx])||[])[_innerIdx]:null;
+      if(curD&&curD.classList.contains('todo-item')){
+        var doneBtn=curD.querySelector('.todo-done-btn');
+        if(doneBtn)doneBtn.click();
+      }
+      e.preventDefault();
+    }
+    // Focus search
+    else if(k==='/'){
+      var sinp=document.getElementById('search-input');
+      if(sinp){sinp.focus();sinp.select();}
+      e.preventDefault();
+    }
+    // Focus first input
+    else if(k==='i'){
+      var fi=document.querySelector('#main-content input[type="text"]');
+      if(fi)fi.focus();
+      e.preventDefault();
+    }
+    // Refresh
+    else if(k==='r'){refresh();e.preventDefault();}
+    // Date navigation
+    else if(k==='['){
+      var prevBtn=document.querySelector('.date-nav-btn:first-child');
+      if(prevBtn&&!prevBtn.disabled)prevBtn.click();
+      e.preventDefault();
+    }
+    else if(k===']'){
+      var nextBtn=document.querySelector('.date-nav-btn:last-child');
+      if(nextBtn&&!nextBtn.disabled)nextBtn.click();
+      e.preventDefault();
+    }
+    // Note slot switching (1-9)
+    else if(k>='1'&&k<='9'){
+      if(view==='know'){window.switchNote(parseInt(k,10));}
+      e.preventDefault();
+    }
+    // Edit focused item
+    else if(k==='e'){
+      var curE=_innerMode?(_innerItems(_cards()[_focusIdx])||[])[_innerIdx]:_cards()[_focusIdx];
+      if(curE){
+        var accName=curE.querySelector('.acc-name');
+        var accType=curE.querySelector('.acc-type');
+        if(accName&&accType){
+          var t=accType.textContent.trim();
+          if(t==='guide')openEdit('guide',accName.textContent.trim());
+          else if(t==='prompt')openEdit('guide',accName.textContent.trim());
+        }
+        if(accName&&accName.textContent.trim()==='Working Memory')openEdit('memory');
+        if(accName&&accName.textContent.trim()==='Rules')openEdit('rules');
+      }
+      e.preventDefault();
+    }
+    // Help overlay
+    else if(k==='?'){
+      var ho=document.getElementById('help-overlay');
+      if(ho)ho.classList.toggle('open');
+      e.preventDefault();
+    }
+    // Escape: exit inner mode first, then clear focus
+    else if(k==='Escape'){
+      closeSearch();
+      if(_innerMode){
+        _innerMode=false;_innerIdx=-1;
+        _clearAllFocus();
+        var cards=_cards();if(cards[_focusIdx])cards[_focusIdx].classList.add('hive-focus');
+      }else{
+        _clearAllFocus();
+        _focusIdx=-1;
+        if(document.activeElement)document.activeElement.blur();
+      }
+    }
+  });
+
+  // Tab key in edit textarea inserts tab
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Tab'&&e.target.id==='edit-textarea'){
+      e.preventDefault();
+      var ta=e.target;
+      var start=ta.selectionStart;
+      var end=ta.selectionEnd;
+      ta.value=ta.value.substring(0,start)+'  '+ta.value.substring(end);
+      ta.selectionStart=ta.selectionEnd=start+2;
+    }
   });
 })();
 """
@@ -983,7 +1478,7 @@ def _render_status_panel(data: dict) -> str:
     elif not hooks_ok or not mcp_ok:
         hints = ["hive setup", "hive s", "hive dr"]
     return (
-        f'<div class="card">'
+        f'<div class="card" tabindex="0" role="region" aria-label="Status">'
         f'<div class="card-header"><span class="card-title">Status</span></div>'
         f"{_cmd_hints(hints)}"
         f'<div class="card-body">{rows}{health}{stale_accordion}{activity_html}</div>'
@@ -1002,7 +1497,7 @@ def _render_status_brief_panel(data: dict) -> str:
         f" &nbsp;|&nbsp; <span>{activity_today}</span> cmds today" if activity_today > 0 else ""
     )
     return (
-        f'<div class="card">'
+        f'<div class="card" tabindex="0" role="region" aria-label="Status">'
         f'<div class="card-body">'
         f'<div class="status-brief">'
         f"<span>{total}</span> verified facts{stale_str} &nbsp;|&nbsp; "
@@ -1083,7 +1578,7 @@ def _render_log_panel(
             if text.upper().startswith(pfx):
                 text = text[len(pfx) :].lstrip()
         rows += (
-            f'<div class="log-entry" data-type="{_e(cat)}">'
+            f'<div class="log-entry" data-type="{_e(cat)}" tabindex="0" role="listitem">'
             f'<span class="log-time">{_e(e["time"])}</span>'
             f'<span class="log-text{cat_cls}">{badge}{_e(text)}</span>'
             f"</div>"
@@ -1097,7 +1592,7 @@ def _render_log_panel(
             f'<a class="log-see-more" href="{_e(see_more_url)}">See all {total} entries \u2192</a>'
         )
     elif truncated:
-        see_more_html = f'<div class="empty" style="text-align:center;padding-top:6px">{total - limit} more entries \u2014 visit /daily</div>'
+        see_more_html = f'<div class="empty" style="text-align:center;padding-top:6px">{total - limit} more entries above</div>'
 
     # Filter bar: only when enough entries with type diversity
     filter_html = ""
@@ -1118,10 +1613,12 @@ def _render_log_panel(
         for cat_key, label in _FILTER_LABELS:
             if cat_key == "" or cat_key in cats_present:
                 active_cls = " active" if cat_key == "" else ""
-                btns += f'<button class="log-filter-btn{active_cls}" data-type="{_e(cat_key)}">{label}</button>'
+                pressed = "true" if cat_key == "" else "false"
+                btns += f'<button class="log-filter-btn{active_cls}" data-type="{_e(cat_key)}" aria-pressed="{pressed}">{label}</button>'
         filter_html = f'<div class="log-filter">{btns}</div>'
 
     data_panel_attr = ' data-panel="log"' if show_nav else ""
+    aria_log = ' tabindex="0" role="region" aria-label="Daily log"'
     title = "Today's Log" if not date_str or date_str == _date.today().isoformat() else "Log"
     log_hints = _cmd_hints(['hive r "FACT: ..."', "hive l", "hive l summarize"])
     log_input = (
@@ -1131,7 +1628,7 @@ def _render_log_panel(
         "</form>"
     )
     return (
-        f'<div class="card"{data_panel_attr}>'
+        f'<div class="card"{data_panel_attr}{aria_log}>'
         f'<div class="card-header">'
         f'<span class="card-title">{title}</span>'
         f"{nav_html}"
@@ -1150,8 +1647,8 @@ def _render_log_brief_panel(data: dict) -> str:
 
 
 def _render_log_home_panel(data: dict) -> str:
-    """Log panel for 'all' view: 10 entries max with 'see all' link."""
-    return _render_log_panel(data, limit=10, show_nav=False, see_more_url="/daily")
+    """Log panel for home view: 25 recent entries with date nav."""
+    return _render_log_panel(data, limit=25, show_nav=True)
 
 
 def _render_todo_panel(data: dict, limit: int = 0) -> str:
@@ -1173,10 +1670,10 @@ def _render_todo_panel(data: dict, limit: int = 0) -> str:
         age_cls = "vold" if age > 7 else ("old" if age > 2 else "")
         age_label = f"{age}d" if age > 0 else "now"
         rows += (
-            f'<div class="todo-item">'
+            f'<div class="todo-item" tabindex="0" role="listitem" aria-label="TODO: {_e(text)}">'
             f'<span class="todo-age {age_cls}">{age_label}</span>'
             f'<span class="todo-text">{_e(text)}</span>'
-            f'<button class="todo-done-btn" data-pattern="{_e(text)}" title="Mark done">&#10003;</button>'
+            f'<button class="todo-done-btn" data-pattern="{_e(text)}" title="Mark done" aria-label="Mark done: {_e(text[:40])}">&#10003;</button>'
             f"</div>"
         )
     if not rows:
@@ -1189,7 +1686,7 @@ def _render_todo_panel(data: dict, limit: int = 0) -> str:
         "</form>"
     )
     return (
-        f'<div class="card">'
+        f'<div class="card" tabindex="0" role="region" aria-label="Open TODOs">'
         f'<div class="card-header"><span class="card-title">Open TODOs</span><span class="card-meta">{meta}</span></div>'
         f"{_cmd_hints(['hive t <text>', 'hive todo done <pat>', 'hive todo'])}"
         f"{todo_input}"
@@ -1219,7 +1716,7 @@ def _render_recurring_panel(data: dict) -> str:
         rows = '<div class="empty">No due recurring tasks</div>'
     meta = f"{len(due)} due" if due else ""
     return (
-        f'<div class="card">'
+        f'<div class="card" tabindex="0" role="region" aria-label="Recurring tasks">'
         f'<div class="card-header"><span class="card-title">Recurring</span><span class="card-meta">{meta}</span></div>'
         f"{_cmd_hints(['hive todo repeat daily <task>', 'hive todo done <pat>'])}"
         f'<div class="card-body">{rows}</div>'
@@ -1233,15 +1730,32 @@ def _render_knowledge_panel(data: dict) -> str:
     skills = data.get("skills", [])
     rows = ""
 
+    # Build command mapping for smart deduplication (Phase 9)
+    from keephive.cli import _CANONICAL
+    _cmd_aliases: dict[str, str] = {}  # guide_stem -> "hive <cmd>"
+    _alias_to_canon = {v: v for v in set(_CANONICAL.values())}
+    for g in guides:
+        stem = g["name"].lower().replace("-", " ").replace("_", " ")
+        content_lower = g["content"].lower()
+        for canon in _alias_to_canon:
+            # Check if guide stem contains command name or content references it 3+ times
+            if canon in stem or content_lower.count(f"hive {canon}") >= 3:
+                _cmd_aliases[g["name"]] = f"hive {canon}"
+                break
+
     if guides:
         rows += '<div class="know-divider">Guides</div>'
     for g in guides:
         body = f'<div class="acc-body md">{render_md(g["content"])}</div>'
+        cmd_badge = ""
+        if g["name"] in _cmd_aliases:
+            cmd_badge = f'<span class="know-cmd">{_e(_cmd_aliases[g["name"]])}</span>'
         rows += (
-            f'<div class="accordion">'
+            f'<div class="accordion" tabindex="0" role="button" aria-expanded="false" aria-label="{_e(g["name"])} guide">'
             f'<div class="acc-header">'
             f'<span class="acc-toggle">&#9654;</span>'
             f'<span class="acc-name">{_e(g["name"])}</span>'
+            f'{cmd_badge}'
             f'<span class="acc-type">guide</span>'
             f"</div>{body}</div>"
         )
@@ -1251,7 +1765,7 @@ def _render_knowledge_panel(data: dict) -> str:
     for p in prompts:
         body = f'<div class="acc-body md">{render_md(p["content"])}</div>'
         rows += (
-            f'<div class="accordion">'
+            f'<div class="accordion" tabindex="0" role="button" aria-expanded="false" aria-label="{_e(p["name"])} prompt">'
             f'<div class="acc-header">'
             f'<span class="acc-toggle">&#9654;</span>'
             f'<span class="acc-name">{_e(p["name"])}</span>'
@@ -1273,7 +1787,7 @@ def _render_knowledge_panel(data: dict) -> str:
             toggle = "&#8212;"
             toggle_style = ' style="color:#30363d"'
         rows += (
-            f'<div class="accordion">'
+            f'<div class="accordion" tabindex="0" role="button" aria-expanded="false" aria-label="{_e(name)} skill">'
             f'<div class="acc-header">'
             f'<span class="acc-toggle"{toggle_style}>{toggle}</span>'
             f'<span class="acc-name">{_e(name)}</span>'
@@ -1285,7 +1799,7 @@ def _render_knowledge_panel(data: dict) -> str:
     total = len(guides) + len(prompts) + len(skills)
     meta = f"{len(guides)}g / {len(prompts)}p / {len(skills)}sk" if total else ""
     return (
-        f'<div class="card">'
+        f'<div class="card" tabindex="0" role="region" aria-label="Knowledge">'
         f'<div class="card-header"><span class="card-title">Knowledge</span><span class="card-meta">{meta}</span></div>'
         f"{_cmd_hints(['hive ke <name>', 'hive pe <name>', 'hive k <name>', 'hive rf draft <topic>'])}"
         f'<div class="card-body">{rows}</div>'
@@ -1316,7 +1830,7 @@ def _render_knowledge_compact_panel(data: dict) -> str:
     meta = f"{total} items" if total else ""
     link = '<a class="summary-link" href="/know">Expand all &rarr;</a>'
     return (
-        f'<div class="card">'
+        f'<div class="card" tabindex="0" role="region" aria-label="Knowledge">'
         f'<div class="card-header"><span class="card-title">Knowledge</span><span class="card-meta">{meta}</span></div>'
         f'<div class="card-body">{rows}</div>'
         f"{link}"
@@ -1343,7 +1857,7 @@ def _render_notes_compact_panel(data: dict) -> str:
             else (preview_lines[0] if preview_lines else "")
         )
         tiles += (
-            f'<div class="note-tile{active_cls}">'
+            f'<div class="note-tile{active_cls}" tabindex="0" role="button" aria-expanded="false" aria-label="Note slot {s["slot"]}">'
             f'<div class="note-tile-header">'
             f'<span class="note-tile-slot">{s["slot"]}</span>'
             f'<span class="note-tile-meta">{s["lines"]}L</span>'
@@ -1355,9 +1869,9 @@ def _render_notes_compact_panel(data: dict) -> str:
     if not tiles:
         tiles = '<div class="empty">No notes \u2014 hive n</div>'
     meta = f"{len(slots)} slots" if slots else ""
-    link = '<a class="summary-link" href="/notes">All notes &rarr;</a>'
+    link = '<a class="summary-link" href="/know">All notes &rarr;</a>'
     return (
-        f'<div class="card">'
+        f'<div class="card" tabindex="0" role="region" aria-label="Notes">'
         f'<div class="card-header"><span class="card-title">Notes</span><span class="card-meta">{meta}</span></div>'
         f'<div class="card-body note-tiles">{tiles}</div>'
         f"{link}"
@@ -1372,21 +1886,21 @@ def _render_memory_panel(data: dict) -> str:
     rules_html = f'<div class="md">{render_md(rules)}</div>' if rules.strip() else ""
     _empty_div = '<div class="empty">Empty</div>'
     mem_section = (
-        f'<div class="accordion">'
+        f'<div class="accordion" tabindex="0" role="button" aria-expanded="false" aria-label="Working Memory">'
         f'<div class="acc-header"><span class="acc-toggle">&#9654;</span>'
         f'<span class="acc-name">Working Memory</span></div>'
         f'<div class="acc-body">{mem_html or _empty_div}</div>'
         f"</div>"
     )
     rules_section = (
-        f'<div class="accordion">'
+        f'<div class="accordion" tabindex="0" role="button" aria-expanded="false" aria-label="Rules">'
         f'<div class="acc-header"><span class="acc-toggle">&#9654;</span>'
         f'<span class="acc-name">Rules</span></div>'
         f'<div class="acc-body">{rules_html or _empty_div}</div>'
         f"</div>"
     )
     return (
-        f'<div class="card">'
+        f'<div class="card" tabindex="0" role="region" aria-label="Memory">'
         f'<div class="card-header"><span class="card-title">Memory</span></div>'
         f"{_cmd_hints(['hive m <fact>', 'hive m rm <pat>', 'hive rule <text>', 'hive e memory'])}"
         f'<div class="card-body">{mem_section}{rules_section}</div>'
@@ -1447,7 +1961,7 @@ def _render_notes_panel(data: dict) -> str:
         "</form>"
     )
     return (
-        f'<div class="card">'
+        f'<div class="card" tabindex="0" role="region" aria-label="Notes">'
         f'<div class="card-header"><span class="card-title">Notes</span><span class="card-meta">{meta}</span></div>'
         f"{_cmd_hints(['hive n', 'hive n show', 'hive nc', 'hive n.3'])}"
         f"{slot_switcher}"
@@ -1573,7 +2087,7 @@ def _render_stats_panel(data: dict) -> str:
 
     meta = f"{total_days} days tracked" if total_days else ""
     return (
-        f'<div class="card">'
+        f'<div class="card" tabindex="0" role="region" aria-label="Usage stats">'
         f'<div class="card-header"><span class="card-title">Usage Stats</span><span class="card-meta">{meta}</span></div>'
         f"{_cmd_hints(['hive st', 'hive st -p <project>', 'hive st yesterday'])}"
         f"{sparkline_html}"
@@ -1605,7 +2119,7 @@ def _render_stats_commands_panel(data: dict) -> str:
     else:
         rows = '<div class="empty">No usage data yet</div>'
     return (
-        f'<div class="card">'
+        f'<div class="card" tabindex="0" role="region" aria-label="Commands">'
         f'<div class="card-header"><span class="card-title">Commands</span></div>'
         f'<div class="card-body">{rows}</div>'
         f"</div>"
@@ -1634,7 +2148,7 @@ def _render_ps_panel(data: dict) -> str:
         rows = '<div class="empty">No recent projects</div>'
     proc_str = f"{active} active session{'s' if active != 1 else ''}"
     return (
-        f'<div class="card">'
+        f'<div class="card" tabindex="0" role="region" aria-label="Projects">'
         f'<div class="card-header"><span class="card-title">Projects</span><span class="card-meta">{_e(proc_str)}</span></div>'
         f"{_cmd_hints(['hive ps', 'hive go', 'hive su'])}"
         f'<div class="card-body">{rows}</div>'
@@ -1657,7 +2171,7 @@ def _render_recent_facts_panel(data: dict) -> str:
         rows = '<div class="empty">No recent insights</div>'
     facts_hints = _cmd_hints(['hive r "FACT: ..."', "hive rc <query>", "hive rf scan"])
     return (
-        f'<div class="card">'
+        f'<div class="card" tabindex="0" role="region" aria-label="Recent insights">'
         f'<div class="card-header"><span class="card-title">Recent Insights</span><span class="card-meta">past 7d</span></div>'
         f"{facts_hints}"
         f'<div class="card-body">{rows}</div>'
@@ -1695,7 +2209,7 @@ def _render_standup_panel(data: dict) -> str:
         rows = '<div class="empty">No standup data yet</div>'
 
     return (
-        f'<div class="card">'
+        f'<div class="card" tabindex="0" role="region" aria-label="Standup">'
         f'<div class="card-header"><span class="card-title">Today\'s Focus</span></div>'
         f"{_cmd_hints(['hive su', 'hive todo', 'hive todo done <pat>'])}"
         f'<div class="card-body">{rows}</div>'
@@ -1757,10 +2271,47 @@ def _render_stats_summary_panel(data: dict) -> str:
     link = '<a class="summary-link" href="/stats">Full stats &rarr;</a>'
 
     return (
-        f'<div class="card">'
+        f'<div class="card" tabindex="0" role="region" aria-label="Activity">'
         f'<div class="card-header"><span class="card-title">Activity</span></div>'
         f'<div class="card-body">{stats_row}{hourly}</div>'
         f"{link}"
+        f"</div>"
+    )
+
+
+def _get_knowledge_all_data() -> dict:
+    """Composite data for the tabbed knowledge view: guides + memory + notes."""
+    return {
+        "knowledge": _get_knowledge_data(),
+        "memory": _get_memory_data(),
+        "notes": _get_notes_data(),
+    }
+
+
+def _render_knowledge_tabbed_panel(data: dict) -> str:
+    """Knowledge view with client-side tabs: Guides / Memory / Notes."""
+    know_data = data.get("knowledge", {})
+    mem_data = data.get("memory", {})
+    notes_data = data.get("notes", {})
+
+    guides_html = _render_knowledge_panel(know_data)
+    memory_html = _render_memory_panel(mem_data)
+    notes_html = _render_notes_panel(notes_data)
+
+    tab_bar = (
+        '<div class="tab-bar">'
+        '<button class="tab-btn active" data-tab="guides">Guides</button>'
+        '<button class="tab-btn" data-tab="memory">Memory</button>'
+        '<button class="tab-btn" data-tab="notes">Notes</button>'
+        "</div>"
+    )
+
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Knowledge">'
+        f"{tab_bar}"
+        f'<div class="tab-content active" data-tab="guides">{guides_html}</div>'
+        f'<div class="tab-content" data-tab="memory">{memory_html}</div>'
+        f'<div class="tab-content" data-tab="notes">{notes_html}</div>'
         f"</div>"
     )
 
@@ -1788,29 +2339,18 @@ PANELS: dict[str, tuple] = {
     "facts": (_get_recent_facts_data, _render_recent_facts_panel),
     "standup": (_get_standup_data, _render_standup_panel),
     "stats-summary": (_get_stats_summary_data, _render_stats_summary_panel),
+    "knowledge-tabbed": (_get_knowledge_all_data, _render_knowledge_tabbed_panel),
 }
 
 # ---- View definitions ----
 
 VIEWS: dict[str, dict] = {
-    "all": {
+    "home": {
         "path": "/",
-        "title": "All",
+        "title": "Home",
         "rows": [
             ["status", "ps"],
             ["log-home"],
-            ["todos"],
-            ["notes-compact"],
-            ["knowledge-limited"],
-            ["memory"],
-        ],
-    },
-    "daily": {
-        "path": "/daily",
-        "title": "Daily",
-        "rows": [
-            ["status", "ps"],
-            ["log"],
             ["todos", "recurring"],
             ["standup"],
         ],
@@ -1825,13 +2365,10 @@ VIEWS: dict[str, dict] = {
             ["knowledge-compact", "memory"],
         ],
     },
-    "simple": {
-        "path": "/simple",
-        "title": "Simple",
-        "rows": [
-            ["status-brief"],
-            ["log-brief", "todos-brief"],
-        ],
+    "know": {
+        "path": "/know",
+        "title": "Knowledge",
+        "rows": [["knowledge-tabbed"]],
     },
     "stats": {
         "path": "/stats",
@@ -1841,21 +2378,14 @@ VIEWS: dict[str, dict] = {
             ["stats-commands"],
         ],
     },
-    "know": {
-        "path": "/know",
-        "title": "Know",
-        "rows": [["status-brief"], ["knowledge"]],
-    },
-    "mem": {
-        "path": "/mem",
-        "title": "Mem",
-        "rows": [["status-brief"], ["memory"]],
-    },
-    "notes": {
-        "path": "/notes",
-        "title": "Notes",
-        "rows": [["status-brief"], ["notes"]],
-    },
+}
+
+# Redirect old paths to new equivalents
+_REDIRECTS: dict[str, str] = {
+    "/daily": "/",
+    "/simple": "/dev",
+    "/mem": "/know",
+    "/notes": "/know",
 }
 
 _PATH_TO_VIEW: dict[str, str] = {v["path"]: k for k, v in VIEWS.items()}
@@ -1931,11 +2461,11 @@ def render_page(view_name: str, port: int) -> str:
 <style>{_CSS}</style>
 </head>
 <body data-view="{_e(view_name)}" data-port="{port}">
-<nav>
+<nav role="navigation" aria-label="Dashboard views">
   <span class="nav-brand">hive</span>
   {nav_tabs}
   <div class="nav-right">
-    <input id="search-input" type="text" placeholder="search memory\u2026" autocomplete="off">
+    <input id="search-input" type="text" placeholder="search memory\u2026" autocomplete="off" role="searchbox" aria-label="Search memory">
     <span class="refresh-label">refresh</span>
     <select class="refresh-select" id="refresh-select">
       <option value="5">5s</option>
@@ -1948,17 +2478,71 @@ def render_page(view_name: str, port: int) -> str:
   </div>
 </nav>
 <main>
-  <div id="main-content">{content}</div>
+  <div id="main-content" aria-live="polite">{content}</div>
 </main>
-<div id="search-overlay">
+<div id="search-overlay" role="dialog" aria-modal="true" aria-label="Search results">
   <div class="search-panel">
     <div class="search-header">
       <span class="search-title">Search Results</span>
-      <button id="search-close" class="search-close">&#10005;</button>
+      <button id="search-close" class="search-close" aria-label="Close search">&#10005;</button>
     </div>
     <div id="search-body" class="search-body"></div>
   </div>
 </div>
+<div id="help-overlay" aria-label="Keyboard shortcuts">
+  <div class="help-panel">
+    <h2>Keyboard Shortcuts</h2>
+    <h3>Navigation</h3>
+    <div class="help-keys">
+      <span class="help-key">j / k</span><span class="help-desc">Next / previous card (or item inside card)</span>
+      <span class="help-key">h / l</span><span class="help-desc">Left / right card in same row</span>
+      <span class="help-key">J / K</span><span class="help-desc">Half-page scroll down / up</span>
+      <span class="help-key">gg</span><span class="help-desc">Focus first card</span>
+      <span class="help-key">G</span><span class="help-desc">Focus last card</span>
+    </div>
+    <h3>Views</h3>
+    <div class="help-keys">
+      <span class="help-key">gh</span><span class="help-desc">Home (/)</span>
+      <span class="help-key">gd</span><span class="help-desc">Dev (/dev)</span>
+      <span class="help-key">gk</span><span class="help-desc">Knowledge (/know)</span>
+      <span class="help-key">gs</span><span class="help-desc">Stats (/stats)</span>
+    </div>
+    <h3>Actions</h3>
+    <div class="help-keys">
+      <span class="help-key">Enter / o</span><span class="help-desc">Dive into card items (or toggle inside)</span>
+      <span class="help-key">x</span><span class="help-desc">Collapse focused accordion</span>
+      <span class="help-key">d</span><span class="help-desc">Mark focused TODO done</span>
+      <span class="help-key">e</span><span class="help-desc">Edit focused guide / memory</span>
+      <span class="help-key">/</span><span class="help-desc">Focus search</span>
+      <span class="help-key">i</span><span class="help-desc">Focus first input</span>
+      <span class="help-key">r</span><span class="help-desc">Refresh now</span>
+      <span class="help-key">[ / ]</span><span class="help-desc">Previous / next log date</span>
+      <span class="help-key">1-9</span><span class="help-desc">Switch note slot</span>
+      <span class="help-key">n / N</span><span class="help-desc">Next / prev search result</span>
+      <span class="help-key">?</span><span class="help-desc">Toggle this help</span>
+      <span class="help-key">Esc</span><span class="help-desc">Exit inner mode / clear focus</span>
+    </div>
+    <h3>Tridactyl</h3>
+    <p style="font-size:12px;color:#8b949e;margin-top:4px">
+      Add to tridactylrc: <code style="background:#21262d;padding:1px 5px;border-radius:3px;color:#ffa657">autocmd DocStart http://localhost:3847 mode ignore</code><br>
+      <span style="color:#6e7681">Shift+Escape re-enters tridactyl normal mode.</span>
+    </p>
+  </div>
+</div>
+<div id="edit-overlay">
+  <div class="edit-modal">
+    <div class="edit-toolbar">
+      <span id="edit-title" class="edit-toolbar-title">Edit</span>
+      <button class="edit-btn" onclick="closeEdit()">Cancel</button>
+      <button class="edit-btn edit-btn-save" onclick="saveEdit()">Save (Ctrl+Enter)</button>
+    </div>
+    <div class="edit-panes">
+      <textarea id="edit-textarea" spellcheck="false"></textarea>
+      <div id="edit-preview-body" class="edit-preview md"></div>
+    </div>
+  </div>
+</div>
+<div id="g-prefix">g...</div>
 <script>{_JS}</script>
 </body>
 </html>"""
@@ -1988,7 +2572,7 @@ class _HiveHandler(BaseHTTPRequestHandler):
 
         if path == "/api/fragment":
             qs = parse_qs(parsed.query)
-            view_name = qs.get("view", ["all"])[0]
+            view_name = qs.get("view", ["home"])[0]
             log_date = qs.get("log_date", [None])[0] or qs.get("date", [None])[0]
 
             # Special case: view=log returns just the log panel (for date navigation)
@@ -1997,7 +2581,7 @@ class _HiveHandler(BaseHTTPRequestHandler):
                 body = _render_log_panel(data).encode()
             else:
                 if view_name not in VIEWS:
-                    view_name = "all"
+                    view_name = "home"
                 extra_params: dict = {}
                 if log_date:
                     extra_params["log_date"] = log_date
@@ -2017,12 +2601,35 @@ class _HiveHandler(BaseHTTPRequestHandler):
             results: list[dict] = []
             if query:
                 try:
-                    from keephive.storage import fts_search
+                    from keephive.commands.remember import (
+                        _daily_path_for_result,
+                        _get_context_lines,
+                        _search_all_tiers,
+                    )
 
-                    results = fts_search(query, limit=20)
+                    results = _search_all_tiers(query)[:30]
+                    # Add context lines for results that have a file path
+                    for r in results:
+                        fp = r.get("file")
+                        if fp:
+                            from pathlib import Path as _P
+
+                            prev, nxt = _get_context_lines(_P(fp), r.get("line", ""))
+                            if prev:
+                                r["prev_line"] = prev
+                            if nxt:
+                                r["next_line"] = nxt
+                        elif r.get("tier") in ("daily", "archive"):
+                            dp = _daily_path_for_result(r)
+                            if dp:
+                                prev, nxt = _get_context_lines(dp, r.get("line", ""))
+                                if prev:
+                                    r["prev_line"] = prev
+                                if nxt:
+                                    r["next_line"] = nxt
                 except Exception:
                     pass
-            # Filter out session/compaction lines — raw and meaningless as memory search
+            # Filter out session/compaction lines
             _session_pat = re.compile(r"\bsession\b|\bcompact", re.I)
             results = [r for r in results if not _session_pat.search(r.get("line", ""))]
             # Strip the raw log timestamp prefix `- [HH:MM:SS] ` from displayed text
@@ -2036,6 +2643,59 @@ class _HiveHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(resp_data)))
             self.end_headers()
             self.wfile.write(resp_data)
+            return
+
+        if path == "/api/content":
+            qs = parse_qs(parsed.query)
+            content_type = (qs.get("type", [""])[0] or "").strip()
+            name = (qs.get("name", [""])[0] or "").strip()
+            slot_str = (qs.get("slot", [""])[0] or "").strip()
+            content = ""
+            title = content_type
+            try:
+                from keephive.storage import (
+                    active_slot,
+                    guides_dir,
+                    memory_file,
+                    rules_file,
+                    slot_file,
+                )
+
+                if content_type == "memory":
+                    mf = memory_file()
+                    content = mf.read_text() if mf.exists() else ""
+                    title = "Working Memory"
+                elif content_type == "guide":
+                    gf = guides_dir() / f"{name}.md"
+                    content = gf.read_text() if gf.exists() else ""
+                    title = name
+                elif content_type == "note":
+                    slot_n = int(slot_str) if slot_str else active_slot()
+                    nf = slot_file(slot_n)
+                    content = nf.read_text() if nf.exists() else ""
+                    title = f"Note {slot_n}"
+                elif content_type == "rules":
+                    rf = rules_file()
+                    content = rf.read_text() if rf.exists() else ""
+                    title = "Rules"
+            except Exception as exc:
+                content = f"Error: {exc}"
+            resp_body = json.dumps(
+                {"content": content, "title": title, "html": render_md(content)}
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._cors()
+            self.send_header("Content-Length", str(len(resp_body)))
+            self.end_headers()
+            self.wfile.write(resp_body)
+            return
+
+        # Redirect old paths to consolidated views
+        if path in _REDIRECTS:
+            self.send_response(302)
+            self.send_header("Location", _REDIRECTS[path])
+            self.end_headers()
             return
 
         view_name = _PATH_TO_VIEW.get(path, "")
@@ -2151,6 +2811,67 @@ class _HiveHandler(BaseHTTPRequestHandler):
                     from keephive.storage import set_active_slot
 
                     set_active_slot(slot)
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/edit":
+            content_type = (data.get("type") or "").strip()
+            content = data.get("content", "")
+            name = (data.get("name") or "").strip()
+            slot_n = data.get("slot")
+            try:
+                from keephive.storage import (
+                    active_slot,
+                    backup_and_write,
+                    guides_dir,
+                    memory_file,
+                    rules_file,
+                    slot_file,
+                )
+
+                if content_type == "memory":
+                    backup_and_write(memory_file(), content)
+                elif content_type == "guide" and name:
+                    backup_and_write(guides_dir() / f"{name}.md", content)
+                elif content_type == "note":
+                    sn = int(slot_n) if slot_n else active_slot()
+                    backup_and_write(slot_file(sn), content)
+                elif content_type == "rules":
+                    backup_and_write(rules_file(), content)
+                else:
+                    ok = False
+                    error = "unknown content type"
+            except Exception as exc:
+                ok = False
+                error = str(exc)
+
+        elif self.path == "/api/preview":
+            text = data.get("text", "")
+            html_out = render_md(text)
+            resp_body = json.dumps({"html": html_out}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._cors()
+            self.send_header("Content-Length", str(len(resp_body)))
+            self.end_headers()
+            self.wfile.write(resp_body)
+            return
+
+        elif self.path == "/api/mem/add":
+            text = (data.get("text") or "").strip()
+            if not text:
+                ok = False
+                error = "text required"
+            else:
+                try:
+                    from keephive.storage import memory_file
+
+                    mf = memory_file()
+                    existing = mf.read_text() if mf.exists() else ""
+                    if not existing.endswith("\n"):
+                        existing += "\n"
+                    mf.write_text(existing + f"- {text}\n")
                 except Exception as exc:
                     ok = False
                     error = str(exc)

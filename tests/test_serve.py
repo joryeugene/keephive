@@ -149,21 +149,13 @@ def test_render_stats_panel(hive_env):
 # ---- Fragment rendering tests ----
 
 
-def test_render_fragment_all(hive_env):
+def test_render_fragment_home(hive_env):
     from keephive.commands.serve import render_fragment
 
-    html = render_fragment("all")
+    html = render_fragment("home")
     assert len(html) > 100
     # Should have multiple cards
     assert html.count('class="card"') >= 2
-
-
-def test_render_fragment_daily(hive_env):
-    from keephive.commands.serve import render_fragment
-
-    html = render_fragment("daily")
-    assert len(html) > 50
-    assert "Log" in html
 
 
 def test_render_fragment_dev(hive_env):
@@ -174,32 +166,11 @@ def test_render_fragment_dev(hive_env):
     assert "Knowledge" in html
 
 
-def test_render_fragment_simple(hive_env):
-    from keephive.commands.serve import render_fragment
-
-    html = render_fragment("simple")
-    assert len(html) > 50
-
-
 def test_render_fragment_know(hive_env):
     from keephive.commands.serve import render_fragment
 
     html = render_fragment("know")
     assert "Knowledge" in html
-
-
-def test_render_fragment_mem(hive_env):
-    from keephive.commands.serve import render_fragment
-
-    html = render_fragment("mem")
-    assert "Memory" in html
-
-
-def test_render_fragment_notes(hive_env):
-    from keephive.commands.serve import render_fragment
-
-    html = render_fragment("notes")
-    assert "Notes" in html
 
 
 def test_render_fragment_stats(hive_env):
@@ -219,29 +190,28 @@ def test_render_fragment_unknown():
 # ---- Full page rendering ----
 
 
-def test_render_page_all(hive_env):
+def test_render_page_home(hive_env):
     from keephive.commands.serve import render_page
 
-    page = render_page("all", 3847)
+    page = render_page("home", 3847)
     assert "<!DOCTYPE html>" in page
     assert "hive" in page
-    assert 'data-view="all"' in page
+    assert 'data-view="home"' in page
     assert "nav" in page
-    assert "/daily" in page
 
 
 def test_render_page_all_views_linked(hive_env):
     from keephive.commands.serve import render_page
 
-    page = render_page("all", 3847)
-    for path in ["/daily", "/dev", "/simple", "/stats", "/know", "/mem", "/notes"]:
+    page = render_page("home", 3847)
+    for path in ["/dev", "/stats", "/know"]:
         assert path in page, f"Missing link to {path}"
 
 
 def test_render_page_contains_refresh_js(hive_env):
     from keephive.commands.serve import render_page
 
-    page = render_page("all", 3847)
+    page = render_page("home", 3847)
     assert "api/fragment" in page
     assert "refresh-select" in page
 
@@ -388,21 +358,21 @@ def test_http_server_cors_headers(hive_env):
 def test_render_page_has_data_port(hive_env):
     from keephive.commands.serve import render_page
 
-    page = render_page("all", 3847)
+    page = render_page("home", 3847)
     assert 'data-port="3847"' in page
 
 
 def test_render_page_has_refresh_ts(hive_env):
     from keephive.commands.serve import render_page
 
-    page = render_page("all", 3847)
+    page = render_page("home", 3847)
     assert 'id="refresh-ts"' in page
 
 
 def test_render_page_has_search_overlay(hive_env):
     from keephive.commands.serve import render_page
 
-    page = render_page("all", 3847)
+    page = render_page("home", 3847)
     assert 'id="search-overlay"' in page
     assert 'id="search-input"' in page
 
@@ -487,24 +457,21 @@ def test_render_log_home_panel_renders(hive_env):
 def test_all_view_uses_log_home(hive_env):
     from keephive.commands.serve import _get_log_data, _render_log_home_panel
 
-    # The log-home panel has no date nav (show_nav=False)
+    # log-home panel has date nav and renders without crashing
     data = _get_log_data()
     html = _render_log_home_panel(data)
-    assert "log-date-nav" not in html
-    # see_more_url="/daily" only appears when entries are truncated (>10)
-    # verify the panel renders a Log card without crashing
+    assert "log-date-nav" in html
     assert "Log" in html
 
 
-def test_all_view_log_home_see_more(hive_env):
-    """When log has >10 entries, log-home panel shows 'See all' link to /daily."""
+def test_all_view_log_home_truncates(hive_env):
+    """When log has >25 entries, log-home panel shows truncation notice."""
     from keephive.commands.serve import _render_log_home_panel
 
-    fake_entries = [{"time": f"10:0{i % 10}", "text": f"Entry {i}", "cat": ""} for i in range(12)]
+    fake_entries = [{"time": f"10:{i:02d}", "text": f"Entry {i}", "cat": ""} for i in range(30)]
     data = {"entries": fake_entries, "date": "2026-01-01"}
     html = _render_log_home_panel(data)
-    assert "/daily" in html
-    assert "log-see-more" in html
+    assert "more entries above" in html
 
 
 # ---- New feature: log date navigation ----
@@ -558,11 +525,11 @@ def test_render_standup_panel(hive_env):
     assert "Focus" in html or "Standup" in html or "Today" in html
 
 
-def test_daily_fragment_includes_standup(hive_env):
+def test_home_fragment_includes_standup(hive_env):
     from keephive.commands.serve import render_fragment
 
-    html = render_fragment("daily")
-    # Standup panel is in the daily view
+    html = render_fragment("home")
+    # Standup panel is in the home view
     assert "Focus" in html or "Today" in html or "Standup" in html
 
 
@@ -773,13 +740,13 @@ def test_js_toggles_open_class_on_header(hive_env):
     assert "isOpen" in _JS
 
 
-# ---- Fix 5: Auto-expand first accordion on /mem and /notes ----
+# ---- Fix 5: Auto-expand first accordion on /know (tabbed view) ----
 
 
-def test_js_auto_expand_mem_notes(hive_env):
+def test_js_auto_expand_know(hive_env):
     from keephive.commands.serve import _JS
 
-    assert "view==='mem'" in _JS or "view==\\'mem\\'" in _JS
+    assert "view==='know'" in _JS or "view==\\'know\\'" in _JS
     assert "firstBody" in _JS
     assert "firstHdr" in _JS
 
@@ -946,13 +913,13 @@ def test_search_filters_session_lines(hive_env):
     import time
     from http.client import HTTPConnection
 
-    # Monkey-patch fts_search to return a mix of real and session results
+    # Monkey-patch _search_all_tiers to return a mix of real and session results
     from keephive.commands.serve import HTTPServer, _HiveHandler
 
-    def fake_search(query, limit=20):
+    def fake_search(query):
         return [
-            {"date": "2026-01-01", "line": "- [10:00:00] FACT: useful memory"},
-            {"date": "2026-01-01", "line": "- [13:31:47] session [proj] /Users/test"},
+            {"tier": "daily", "score": 70, "date": "2026-01-01", "line": "- [10:00:00] FACT: useful memory"},
+            {"tier": "daily", "score": 60, "date": "2026-01-01", "line": "- [13:31:47] session [proj] /Users/test"},
         ]
 
     port = 13860
@@ -964,7 +931,7 @@ def test_search_filters_session_lines(hive_env):
 
     import unittest.mock as mock
 
-    with mock.patch("keephive.storage.fts_search", fake_search):
+    with mock.patch("keephive.commands.remember._search_all_tiers", fake_search):
         conn = HTTPConnection("localhost", port, timeout=10)
         conn.request("GET", "/api/search?q=test")
         resp = conn.getresponse()
@@ -993,8 +960,8 @@ def test_search_strips_log_prefix(hive_env):
 
     from keephive.commands.serve import HTTPServer, _HiveHandler
 
-    def fake_search(query, limit=20):
-        return [{"date": "2026-01-01", "line": "- [10:00:00] FACT: clean result"}]
+    def fake_search(query):
+        return [{"tier": "daily", "score": 70, "date": "2026-01-01", "line": "- [10:00:00] FACT: clean result"}]
 
     port = 13861
     _HiveHandler.server_port = port
@@ -1003,7 +970,7 @@ def test_search_strips_log_prefix(hive_env):
     t.start()
     time.sleep(0.1)
 
-    with mock.patch("keephive.storage.fts_search", fake_search):
+    with mock.patch("keephive.commands.remember._search_all_tiers", fake_search):
         conn = HTTPConnection("localhost", port, timeout=10)
         conn.request("GET", "/api/search?q=fact")
         resp = conn.getresponse()
@@ -1121,15 +1088,13 @@ def test_status_data_has_yesterday_entries(hive_env):
     assert isinstance(data["yesterday_entries"], int)
 
 
-def test_all_view_todos_full_width():
-    """In the All view, 'todos' is a single-item row (full-width, no height imbalance)."""
+def test_home_view_has_todos():
+    """Home view includes a todos panel."""
     from keephive.commands.serve import VIEWS
 
-    all_rows = VIEWS["all"]["rows"]
-    # Find the row containing "todos"
-    todos_row = next((r for r in all_rows if "todos" in r), None)
-    assert todos_row is not None, "No row with 'todos' in All view"
-    assert len(todos_row) == 1, f"'todos' should be full-width in All view, got row: {todos_row}"
+    home_rows = VIEWS["home"]["rows"]
+    flat = [p for row in home_rows for p in row]
+    assert any("todos" in p for p in flat), "Home view should contain todos panel"
 
 
 # ---- Round 3: Fix 1 - accordion animation (no textContent swap) ----
@@ -1333,35 +1298,33 @@ def test_serve_is_registered():
 # ---- Part 1: Layout fix — memory+notes paired, knowledge full-width ----
 
 
-def test_all_view_notes_compact_above_knowledge():
-    """Notes-compact appears before knowledge-limited in All view (dynamic above static)."""
+def test_home_view_log_before_todos():
+    """Log (most dynamic) comes before todos in Home view."""
     from keephive.commands.serve import VIEWS
 
-    all_rows = VIEWS["all"]["rows"]
-    flat = [p for row in all_rows for p in row]
-    notes_idx = flat.index("notes-compact")
-    know_idx = flat.index("knowledge-limited")
-    assert notes_idx < know_idx
+    home_rows = VIEWS["home"]["rows"]
+    flat = [p for row in home_rows for p in row]
+    log_idx = flat.index("log-home")
+    todos_idx = flat.index("todos")
+    assert log_idx < todos_idx
 
 
-def test_all_view_memory_is_last_row():
-    """Memory (most stable) is the last content row in All view."""
+def test_home_view_has_standup():
+    """Home view includes standup panel."""
     from keephive.commands.serve import VIEWS
 
-    all_rows = VIEWS["all"]["rows"]
-    flat = [p for row in all_rows for p in row]
-    mem_idx = flat.index("memory")
-    assert mem_idx == len(flat) - 1
+    home_rows = VIEWS["home"]["rows"]
+    flat = [p for row in home_rows for p in row]
+    assert "standup" in flat, "Home view should include standup panel"
 
 
-def test_all_view_knowledge_full_width():
-    """In the All view, knowledge-limited is alone in its row (full-width)."""
+def test_know_view_has_tabbed_panel():
+    """Knowledge view uses the tabbed knowledge panel."""
     from keephive.commands.serve import VIEWS
 
-    all_rows = VIEWS["all"]["rows"]
-    know_row = next((r for r in all_rows if any("knowledge" in p for p in r)), None)
-    assert know_row is not None, "No knowledge row in All view"
-    assert len(know_row) == 1
+    know_rows = VIEWS["know"]["rows"]
+    flat = [p for row in know_rows for p in row]
+    assert "knowledge-tabbed" in flat, "Know view should use knowledge-tabbed panel"
 
 
 # ---- Part 2: Web CRUD — POST endpoints ----
@@ -1766,28 +1729,13 @@ def test_dev_view_uses_knowledge_compact():
     assert "knowledge-compact" in know_row, "Dev view should use knowledge-compact"
 
 
-def test_know_view_has_status_bar():
-    """Know view includes status-brief row for context."""
+def test_know_view_has_tabbed_content():
+    """Know view uses tabbed panel that contains guides, memory, and notes."""
     from keephive.commands.serve import VIEWS
 
     rows = VIEWS["know"]["rows"]
-    assert any("status-brief" in r for r in rows), "/know should have status-brief row"
-
-
-def test_mem_view_has_status_bar():
-    """Mem view includes status-brief row for context."""
-    from keephive.commands.serve import VIEWS
-
-    rows = VIEWS["mem"]["rows"]
-    assert any("status-brief" in r for r in rows), "/mem should have status-brief row"
-
-
-def test_notes_view_has_status_bar():
-    """Notes view includes status-brief row for context."""
-    from keephive.commands.serve import VIEWS
-
-    rows = VIEWS["notes"]["rows"]
-    assert any("status-brief" in r for r in rows), "/notes should have status-brief row"
+    flat = [p for row in rows for p in row]
+    assert "knowledge-tabbed" in flat, "/know should have knowledge-tabbed panel"
 
 
 def test_notes_panel_preview_in_header(hive_env, tmp_path):
@@ -2264,13 +2212,13 @@ def test_stats_summary_links_to_full_stats(hive_env):
     assert "summary-link" in html
 
 
-def test_all_view_no_separate_stats_summary():
-    """All view no longer has a separate stats-summary row (merged into status panel)."""
+def test_home_view_no_separate_stats_summary():
+    """Home view does not have a separate stats-summary row (merged into status panel)."""
     from keephive.commands.serve import VIEWS
 
-    all_rows = VIEWS["all"]["rows"]
-    assert not any("stats-summary" in r for r in all_rows), (
-        "stats-summary should not be in All view"
+    home_rows = VIEWS["home"]["rows"]
+    assert not any("stats-summary" in r for r in home_rows), (
+        "stats-summary should not be in Home view"
     )
 
 
@@ -2509,13 +2457,13 @@ def test_css_has_know_item_styles():
 # ---- View ordering: dynamic at top, static at bottom ----
 
 
-def test_daily_view_log_before_standup():
-    """Log (dynamic) comes before standup (static once-a-day)."""
+def test_home_view_log_before_standup():
+    """Log (dynamic) comes before standup (static once-a-day) in home view."""
     from keephive.commands.serve import VIEWS
 
-    rows = VIEWS["daily"]["rows"]
+    rows = VIEWS["home"]["rows"]
     flat = [p for row in rows for p in row]
-    log_idx = flat.index("log")
+    log_idx = flat.index("log-home")
     standup_idx = flat.index("standup")
     assert log_idx < standup_idx, f"log ({log_idx}) should come before standup ({standup_idx})"
 
@@ -2536,17 +2484,11 @@ def test_dev_view_todos_log_before_knowledge_memory():
     assert log_idx < mem_idx, f"log-brief ({log_idx}) should come before memory ({mem_idx})"
 
 
-def test_focused_views_status_before_content():
-    """In know/mem/notes, status-brief is first row (real-time), content is second."""
+def test_consolidated_views_exist():
+    """After consolidation, exactly 4 views exist: home, dev, know, stats."""
     from keephive.commands.serve import VIEWS
 
-    for view_name in ("know", "mem", "notes"):
-        rows = VIEWS[view_name]["rows"]
-        assert len(rows) >= 2, f"{view_name} should have at least 2 rows"
-        assert "status-brief" in rows[0], f"{view_name} first row should contain status-brief"
-        assert "status-brief" not in rows[1], (
-            f"{view_name} second row should be content, not status-brief"
-        )
+    assert set(VIEWS.keys()) == {"home", "dev", "know", "stats"}
 
 
 # ---- Notes compact panel ----
@@ -2587,13 +2529,13 @@ def test_render_notes_compact_active_highlight(hive_env):
     assert "note-tile active" in html
 
 
-def test_render_notes_compact_links_to_notes(hive_env):
-    """Notes-compact has summary link to /notes."""
+def test_render_notes_compact_links_to_know(hive_env):
+    """Notes-compact has summary link to /know."""
     from keephive.commands.serve import _render_notes_compact_panel
 
     data = {"slots": [{"slot": 1, "content": "text", "lines": 1, "active": True}]}
     html = _render_notes_compact_panel(data)
-    assert "/notes" in html
+    assert "/know" in html
     assert "summary-link" in html
 
 
@@ -2706,3 +2648,87 @@ def test_js_note_tile_expand_handler():
     # Single-open: collapses all before toggling
     assert "querySelectorAll" in _JS
     assert "wasExpanded" in _JS
+
+
+# ---- Keyboard nav structural tests ----
+
+
+def test_all_panels_have_tabindex():
+    """Every panel renderer must produce a card with tabindex for keyboard nav.
+
+    The JS _cards() queries '#main-content .card[tabindex]'. Any card missing
+    tabindex is invisible to j/k/h/l navigation, breaking the row map.
+    """
+    import re
+
+    from keephive.commands.serve import PANELS
+
+    # Panels that are purely decorative wrappers (error fallbacks) are excluded
+    exclude = set()
+
+    for name, (data_fn, render_fn) in PANELS.items():
+        if name in exclude:
+            continue
+        try:
+            data = data_fn()
+        except Exception:
+            data = {}
+        try:
+            html = render_fn(data)
+        except Exception:
+            continue
+        # Find all top-level card divs
+        cards = re.findall(r'<div class="card"[^>]*>', html)
+        for card_tag in cards:
+            assert "tabindex" in card_tag, (
+                f"Panel '{name}' renders a card without tabindex: {card_tag[:80]}"
+            )
+
+
+def test_home_view_row_structure(hive_env):
+    """Home view fragment has correct split-pane wrapping for row-based nav.
+
+    The JS _rows() walks #main-content children looking for split-pane (2-col)
+    and direct .card (solo). Verify the HTML structure matches expectations.
+    """
+    import re
+
+    from keephive.commands.serve import render_fragment
+
+    html = render_fragment("home")
+    # Row 0: status+ps in a split-pane
+    assert "split-pane" in html
+    # Solo cards (log-home, standup) are NOT wrapped in split-pane
+    # Count split-panes: should be 2 (status+ps, todos+recurring)
+    splits = html.count("split-pane")
+    assert splits == 2, f"Expected 2 split-panes, got {splits}"
+    # Every card in the fragment has tabindex
+    cards = re.findall(r'<div class="card"[^>]*>', html)
+    for tag in cards:
+        assert "tabindex" in tag, f"Card missing tabindex in home fragment: {tag[:80]}"
+
+
+def test_js_has_row_based_navigation():
+    """JS uses _rows() for j/k navigation, not flat card index."""
+    from keephive.commands.serve import _JS
+
+    assert "_rows()" in _JS
+    assert "_findCell(" in _JS
+    assert "rowIdx" in _JS
+    assert "colIdx" in _JS
+
+
+def test_js_gg_scrolls_to_top():
+    """gg sets focus to first card AND scrolls to top."""
+    from keephive.commands.serve import _JS
+
+    # The gg handler (inside g-prefix) calls both _setFocus(0) and scrollTo(0,0)
+    assert "_setFocus(0);window.scrollTo(0,0)" in _JS
+
+
+def test_js_refresh_preserves_inner_mode():
+    """Refresh saves and restores _innerMode and _innerIdx."""
+    from keephive.commands.serve import _JS
+
+    assert "savedInner=_innerMode" in _JS
+    assert "savedInnerIdx=_innerIdx" in _JS

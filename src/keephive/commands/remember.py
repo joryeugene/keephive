@@ -24,6 +24,37 @@ from keephive.storage import (
 )
 
 
+def _auto_classify(text: str) -> str | None:
+    """Auto-detect category from text content. Returns category or None."""
+    lower = text.lower()
+
+    # Order matters: more specific patterns first
+    correction_words = ["was wrong", "actually not", "correction", "incorrect", "mistaken"]
+    if any(w in lower for w in correction_words):
+        return "CORRECTION"
+
+    decision_words = ["chose", "decided", "went with", "picked", "selected"]
+    if any(w in lower for w in decision_words):
+        return "DECISION"
+    # "over" needs context: "X over Y" pattern
+    if " over " in lower and any(w in lower for w in ["use", "prefer", "chose", "pick"]):
+        return "DECISION"
+
+    fact_words = ["learned", "found out", "turns out", "is actually", "discovered", "realized"]
+    if any(w in lower for w in fact_words):
+        return "FACT"
+
+    todo_words = ["need to", "should", "must", "fix", "implement", "add", "todo", "remember to"]
+    if any(w in lower for w in todo_words):
+        return "TODO"
+
+    insight_words = ["pattern", "noticed", "interesting", "observation", "trend"]
+    if any(w in lower for w in insight_words):
+        return "INSIGHT"
+
+    return None
+
+
 def cmd_remember(args: list[str]) -> None:
     """Remember an insight to today's daily log."""
     insight = " ".join(args)
@@ -37,20 +68,32 @@ def cmd_remember(args: list[str]) -> None:
 
     timestamp = datetime.now().strftime("%H:%M:%S")
 
-    append_to_daily(f"- [{timestamp}] {insight}")
-
-    # Detect category
+    # Detect explicit category
     category = ""
+    auto = False
     for cat in ("FACT", "DECISION", "CORRECTION", "TODO", "INSIGHT"):
         if insight.startswith(f"{cat}:") or insight.startswith(f"{cat} "):
             category = cat
             break
 
+    # Auto-classify if no explicit prefix
+    if not category:
+        detected = _auto_classify(insight)
+        if detected:
+            category = detected
+            auto = True
+            # Prepend the category prefix to the saved text
+            insight = f"{category}: {insight}"
+
+    append_to_daily(f"- [{timestamp}] {insight}")
+
     # Count today's entries
     df = daily_file()
     entry_count = sum(1 for line in df.read_text().splitlines() if line.startswith("- ["))
 
-    if category:
+    if category and auto:
+        console.print(f"  [ok]Remembered[/ok]  [bold]\\[auto: {category}][/bold]  {timestamp}")
+    elif category:
         console.print(f"  [ok]Remembered[/ok]  [bold]\\[{category}][/bold]  {timestamp}")
     else:
         console.print(f"  [ok]Remembered[/ok]  {timestamp}")

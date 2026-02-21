@@ -12,6 +12,8 @@ from keephive.storage import (
     active_slot,
     count_daily_entries,
     count_stale_facts,
+    daily_dir,
+    due_recurring,
     ensure_dirs,
     get_meaningful_entries,
     guides_dir,
@@ -21,6 +23,93 @@ from keephive.storage import (
     slot_file,
     yesterday,
 )
+
+
+def _suggest_next() -> tuple[str, str]:
+    """Compute highest-priority next action.
+
+    Returns (command, reason) tuple. command="" means clean state.
+    """
+    import re
+
+    # 1. Critical stale (>60d)
+    mem = memory_file()
+    critical_stale = 0
+    if mem.exists():
+        cutoff_60 = (date.today() - timedelta(days=60)).isoformat()
+        for line in mem.read_text().splitlines():
+            m = re.search(r"\[verified:(\d{4}-\d{2}-\d{2})\]", line)
+            if m and m.group(1) < cutoff_60:
+                critical_stale += 1
+    if critical_stale > 0:
+        s = "s" if critical_stale != 1 else ""
+        return ("hive v", f"{critical_stale} fact{s} unverified 60+ days")
+
+    # 2. Critical TODOs (>3d old)
+    todos = open_todos()
+    old_todos = 0
+    if todos:
+        cutoff_3d = (date.today() - timedelta(days=3)).isoformat()
+        for d, _, _ in todos:
+            if d < cutoff_3d:
+                old_todos += 1
+    if old_todos > 0:
+        s = "s" if old_todos != 1 else ""
+        return ("hive todo", f"{old_todos} TODO{s} older than 3 days")
+
+    # 3. Pending rule suggestions
+    pending_rules = hive_dir() / ".pending-rules.md"
+    if pending_rules.exists() and pending_rules.read_text().strip():
+        n = sum(1 for ln in pending_rules.read_text().splitlines() if ln.strip().startswith("- "))
+        if n > 0:
+            s = "s" if n != 1 else ""
+            return ("hive rule review", f"{n} pending rule suggestion{s}")
+
+    # 4. Memory bloat (>40 facts)
+    fact_count = 0
+    if mem.exists():
+        fact_count = sum(1 for line in mem.read_text().splitlines() if line.startswith("- "))
+    if fact_count > 40:
+        return ("hive rf", f"{fact_count} facts in memory, consolidate")
+
+    # 5. No entries today
+    if count_daily_entries() == 0:
+        return ("hive r", "no entries logged today")
+
+    # 6. Stale facts (>30d)
+    stale = count_stale_facts()
+    if stale > 0:
+        s = "s" if stale != 1 else ""
+        return ("hive v", f"{stale} fact{s} unverified 30+ days")
+
+    # 7. Due recurring tasks
+    due = due_recurring()
+    if due:
+        s = "s" if len(due) != 1 else ""
+        return ("hive todo", f"{len(due)} due recurring task{s}")
+
+    # 8. TODOs piling up (>10)
+    if todos and len(todos) > 10:
+        return ("hive go todo", f"{len(todos)} open TODOs, triage session")
+
+    # 9. No audit in 7+ days
+    try:
+        found_recent_audit = False
+        for days_ago in range(7):
+            day_str = (date.today() - timedelta(days=days_ago)).isoformat()
+            log_path = daily_dir() / f"{day_str}.md"
+            if log_path.exists():
+                content = log_path.read_text()
+                if "audit" in content.lower() or "quality pulse" in content.lower():
+                    found_recent_audit = True
+                    break
+        if not found_recent_audit:
+            return ("hive a", "no audit in 7+ days")
+    except Exception:
+        pass
+
+    # 10. Clean state
+    return ("", "looking good")
 
 
 def cmd_status(args: list[str]) -> None:
@@ -264,8 +353,6 @@ def cmd_status(args: list[str]) -> None:
             console.print()
 
     # Due recurring tasks
-    from keephive.storage import due_recurring
-
     due = due_recurring()
     if due:
         console.print(f"  [bold]{len(due)} due recurring task(s):[/bold]")
@@ -318,6 +405,14 @@ def cmd_status(args: list[str]) -> None:
 
             console.print(f"  {_slot_bar()}")
         console.print()
+
+    # Next action suggestion
+    next_cmd, next_reason = _suggest_next()
+    if next_cmd:
+        console.print(f"  [bold]Next:[/bold] [info]{next_cmd}[/info]  ({next_reason})")
+    else:
+        console.print(f"  [bold]Next:[/bold] [ok]{next_reason}[/ok]")
+    console.print()
 
     # Contextual footer
     todo_count = len(todos) if todos else 0

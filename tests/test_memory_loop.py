@@ -545,7 +545,12 @@ class TestBuildContextIntegration:
         assert date.today().isoformat() in updated_mem
 
     def testbuild_context_no_accumulation_warnings(self, hive_env):
-        """build_context no longer includes accumulation warnings (context diet)."""
+        """build_context no longer includes verbose accumulation warnings (context diet).
+
+        The compact suggest_next hint ("Suggested next action: hive rf ...") IS
+        expected in build_context. The verbose _accumulation_warnings output
+        ("Memory has N facts. Consider consolidating") is NOT.
+        """
         from keephive.hooks.sessionstart import build_context
         from keephive.storage import memory_file
 
@@ -555,9 +560,11 @@ class TestBuildContextIntegration:
         memory_file().write_text("\n".join(lines) + "\n")
 
         context = build_context("/test/project", "project")
-        # Accumulation warnings moved to cmd_status
-        assert "45 facts" not in context
-        assert "hive rf" not in context
+        # Verbose accumulation warnings moved to cmd_status
+        assert "Consider consolidating" not in context
+        assert "auto-captured facts" not in context
+        # Compact suggest_next hint IS expected
+        assert "Suggested next action" in context
 
 
 # ---- Secret redaction ----

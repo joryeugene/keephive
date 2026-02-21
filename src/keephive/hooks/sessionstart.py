@@ -220,6 +220,16 @@ def build_context(cwd: str, project_name: str) -> str:
         if cross_hint:
             parts.append(cross_hint)
 
+    # 8. Next action hint
+    try:
+        from keephive.commands.status import _suggest_next
+
+        next_cmd, next_reason = _suggest_next()
+        if next_cmd:
+            parts.append(f"Suggested next action: {next_cmd} ({next_reason})")
+    except Exception:
+        pass
+
     return "\n\n".join(parts)
 
 
