@@ -10,8 +10,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 from difflib import SequenceMatcher
 
@@ -525,17 +526,45 @@ If no strategy guide exists, note that as a gap.
 def _run_perspectives(
     vault_metrics: dict, cleaner_metrics: dict, strategist_metrics: dict, verbose: bool = False
 ):
-    """Run 3 perspective calls in parallel, return all results."""
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        vault_future = pool.submit(_call_vault, vault_metrics, verbose)
-        cleaner_future = pool.submit(_call_cleaner, cleaner_metrics, verbose)
-        strategist_future = pool.submit(_call_strategist, strategist_metrics, verbose)
+    """Run 3 perspective calls in parallel with live progress display."""
+    from rich.live import Live
+    from rich.text import Text
 
-    return (
-        vault_future.result(),
-        cleaner_future.result(),
-        strategist_future.result(),
-    )
+    names = {"vault": "Vault", "cleaner": "Cleaner", "strategist": "Strategist"}
+    states: dict[str, str] = {k: "analyzing" for k in names}
+    finished_at: dict[str, float] = {}
+    results: dict[str, object] = {}
+    start = time.monotonic()
+
+    def render() -> Text:
+        lines = []
+        for key, label in names.items():
+            elapsed = finished_at.get(key, time.monotonic()) - start
+            if states[key] == "done":
+                lines.append(
+                    f"  [green]{label:<14}[/green] [green]\u2713[/green] complete ({elapsed:.0f}s)"
+                )
+            else:
+                lines.append(
+                    f"  [blue]{label:<14}[/blue] [blue]\u25cf[/blue] analyzing... ({elapsed:.0f}s)"
+                )
+        return Text.from_markup("\n".join(lines))
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = {
+            pool.submit(_call_vault, vault_metrics, verbose): "vault",
+            pool.submit(_call_cleaner, cleaner_metrics, verbose): "cleaner",
+            pool.submit(_call_strategist, strategist_metrics, verbose): "strategist",
+        }
+        with Live(render(), console=console, refresh_per_second=4) as live:
+            for future in as_completed(futures):
+                key = futures[future]
+                states[key] = "done"
+                finished_at[key] = time.monotonic()
+                results[key] = future.result()
+                live.update(render())
+
+    return results["vault"], results["cleaner"], results["strategist"]
 
 
 def _run_cook(
@@ -678,10 +707,15 @@ def _display_metrics(
 
     if previous_play:
         if previous_play["completed"]:
-            console.print(f"  [ok]Previous Play completed:[/ok] {previous_play['action']}")
+            console.print(f"  [ok]Previous action completed:[/ok] {previous_play['action']}")
         else:
             age = previous_play["age_days"]
-            console.print(f"  [warn]Unfinished Play ({age}d old):[/warn] {previous_play['action']}")
+            console.print(
+                f"  [warn]Unfinished action ({age}d old):[/warn] {previous_play['action']}"
+            )
+            console.print(
+                '    \u2192 [bold]hive audit[/bold] (re-assess)  |  [bold]hive todo done "audit"[/bold] (mark done)'
+            )
         console.print()
 
     _display_metrics_body(vault, cleaner, strategist)
@@ -782,13 +816,18 @@ def display_audit(
     console.print(f"  [{color}]Quality Pulse: {score}/100[/{color}]")
     console.print()
 
-    # Previous play status
+    # Previous action status
     if previous_play:
         if previous_play["completed"]:
-            console.print(f"  [ok]Previous Play completed:[/ok] {previous_play['action']}")
+            console.print(f"  [ok]Previous action completed:[/ok] {previous_play['action']}")
         else:
             age = previous_play["age_days"]
-            console.print(f"  [warn]Unfinished Play ({age}d old):[/warn] {previous_play['action']}")
+            console.print(
+                f"  [warn]Unfinished action ({age}d old):[/warn] {previous_play['action']}"
+            )
+            console.print(
+                '    \u2192 [bold]hive audit[/bold] (re-assess)  |  [bold]hive todo done "audit"[/bold] (mark done)'
+            )
         console.print()
 
     # Verbose: metrics + full perspective essays
@@ -803,7 +842,7 @@ def display_audit(
         console.print("  [bold]Do next:[/bold]")
         for i, play in enumerate(synthesis.plays, 1):
             console.print(f"    {i}. {play.issue}")
-            console.print(f"       -> [bold]{play.command}[/bold]")
+            console.print(f"       \u2192 [bold]{play.command}[/bold]")
         console.print()
 
     # Synthesis insights
@@ -935,9 +974,9 @@ def cmd_audit(args: list[str]) -> None:
         _display_metrics(score, vault, cleaner, strategist, previous_play)
         return
 
-    console.print("\n  Running 3 perspectives in parallel...")
+    console.print()
 
-    # 2. Run 3 perspective LLM calls in parallel
+    # 2. Run 3 perspective LLM calls in parallel (with live progress)
     try:
         vault_r, cleaner_r, strategist_r = _run_perspectives(vault, cleaner, strategist, verbose)
     except Exception as e:
@@ -946,21 +985,20 @@ def cmd_audit(args: list[str]) -> None:
         console.print("  [dim]Check: claude -p availability, CLAUDECODE env var[/dim]")
         return
 
-    console.print("  Synthesizing...")
-
     # 3. Run Cook synthesis (sequential, needs all 3 outputs)
     try:
-        synthesis = _run_cook(
-            vault_r,
-            cleaner_r,
-            strategist_r,
-            vault,
-            cleaner,
-            strategist,
-            score,
-            previous_play,
-            verbose,
-        )
+        with console.status("  Synthesizing insights...", spinner="dots"):
+            synthesis = _run_cook(
+                vault_r,
+                cleaner_r,
+                strategist_r,
+                vault,
+                cleaner,
+                strategist,
+                score,
+                previous_play,
+                verbose,
+            )
     except Exception as e:
         notify_sound(False)
         console.print(f"  [err]Synthesis failed: {e}[/err]")

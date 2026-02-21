@@ -125,11 +125,11 @@ class TestStaleFactDetection:
         # Status shows stale warning
         cmd_status([])
         out = capsys.readouterr().out
-        assert "stale" in out.lower()
+        assert "stale" in out.lower() or "unverified" in out.lower()
 
         # SessionStart includes warning
         ctx = build_context("/test/project", "project")
-        assert "stale" in ctx.lower()
+        assert "unverified 30+ days" in ctx.lower()
 
     def test_verify_check_exits_nonzero_when_stale(self, hive_env, monkeypatch):
         monkeypatch.delenv("HIVE_SKIP_LLM", raising=False)
@@ -453,7 +453,7 @@ class TestFullHookChain:
 
         ctx = build_context("/test/project", "project")
         # The fixture has a fact from 2020-01-01
-        assert "stale" in ctx.lower()
+        assert "unverified 30+ days" in ctx.lower()
 
     def test_sessionstart_includes_open_todos(self, hive_env):
         from keephive.commands.remember import cmd_remember

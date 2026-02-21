@@ -8,7 +8,7 @@ from datetime import timedelta
 from importlib import resources
 
 from keephive.clock import get_today
-from keephive.output import console
+from keephive.output import console, show_hint
 from keephive.storage import (
     ensure_dirs,
     guides_dir,
@@ -70,6 +70,7 @@ def cmd_seed(args: list[str]) -> None:
 
     console.print(f"[green]Seeded {days} days of demo data[/green]")
     console.print(f"[dim]Data: {target}[/dim]")
+    show_hint("hive s", "see seeded data")
 
 
 def _seed_daily_logs(entries: dict, days: int, rng: random.Random) -> None:

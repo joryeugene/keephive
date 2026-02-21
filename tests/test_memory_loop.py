@@ -204,76 +204,93 @@ class TestMemoryUpdateModels:
         assert r.memory_updates[0].text == "New fact here"
 
 
-# ---- Phase 2: Auto-promote to ## Auto-Captured ----
+# ---- Phase 2: Queue to .pending-facts.md ----
 
 
-class TestAutoPromote:
-    def test_add_to_auto_captured_creates_section(self, hive_env):
-        """_add_to_auto_captured creates ## Auto-Captured if missing."""
-        from keephive.hooks.precompact import _add_to_auto_captured
+class TestPendingFactsQueue:
+    def test_add_queues_to_pending_facts(self, hive_env):
+        """Memory ADD action queues to .pending-facts.md."""
+        from keephive.hooks.precompact import _apply_memory_updates, _pending_facts_path
+        from keephive.models import MemoryAction, MemoryUpdate
+        from keephive.storage import ensure_daily, safe_read_text
 
-        content = "# Working Memory\n\n- Existing fact [verified:2026-01-01]\n"
-        result = _add_to_auto_captured(content, "New auto fact", "2026-02-17")
-        assert "## Auto-Captured" in result
-        assert "- New auto fact [verified:2026-02-17]" in result
-        assert "- Existing fact" in result
+        ensure_daily()
+        updates = [MemoryUpdate(action=MemoryAction.ADD, text="New auto fact")]
+        _apply_memory_updates(updates)
 
-    def test_add_to_auto_captured_stops_at_next_section(self, hive_env):
-        """Auto-captured insertion stops before next ## section."""
-        from keephive.hooks.precompact import _add_to_auto_captured
+        pf = _pending_facts_path()
+        assert pf.exists()
+        content = safe_read_text(pf)
+        assert "- New auto fact" in content
+        assert "[auto:" in content
 
-        content = (
-            "# Working Memory\n\n"
-            "## Auto-Captured\n"
-            "- Existing [verified:2026-02-17]\n\n"
-            "## Other Section\n"
-            "- Other stuff\n"
-        )
-        result = _add_to_auto_captured(content, "New fact", "2026-02-17")
-        auto_idx = result.index("New fact")
-        other_idx = result.index("## Other Section")
-        assert auto_idx < other_idx
+    def test_correct_queues_with_replaces_metadata(self, hive_env):
+        """Memory CORRECT action queues with [replaces:] metadata."""
+        from keephive.hooks.precompact import _apply_memory_updates, _pending_facts_path
+        from keephive.models import MemoryAction, MemoryUpdate
+        from keephive.storage import ensure_daily, memory_file, safe_read_text
 
-    def test_add_to_auto_captured_appends_to_existing(self, hive_env):
-        """_add_to_auto_captured appends to existing section."""
-        from keephive.hooks.precompact import _add_to_auto_captured
+        ensure_daily()
+        mem = memory_file()
+        mem.parent.mkdir(parents=True, exist_ok=True)
+        mem.write_text("# Memory\n- Python uses pip [verified:2025-01-01]\n")
 
-        content = (
-            "# Working Memory\n\n"
-            "- Existing fact\n\n"
-            "## Auto-Captured\n"
-            "- First auto [verified:2026-02-16]\n"
-        )
-        result = _add_to_auto_captured(content, "Second auto", "2026-02-17")
-        assert "- First auto [verified:2026-02-16]" in result
-        assert "- Second auto [verified:2026-02-17]" in result
-        # Section header should appear only once
-        assert result.count("## Auto-Captured") == 1
+        updates = [
+            MemoryUpdate(
+                action=MemoryAction.CORRECT,
+                text="Python uses uv",
+                replaces="Python uses pip",
+            )
+        ]
+        _apply_memory_updates(updates)
+
+        content = safe_read_text(_pending_facts_path())
+        assert "Python uses uv" in content
+        assert "[replaces:Python uses pip]" in content
+
+    def test_multiple_adds_append_to_pending(self, hive_env):
+        """Multiple ADD updates accumulate in .pending-facts.md."""
+        from keephive.hooks.precompact import _apply_memory_updates, _pending_facts_path
+        from keephive.models import MemoryAction, MemoryUpdate
+        from keephive.storage import ensure_daily, safe_read_text
+
+        ensure_daily()
+        updates = [
+            MemoryUpdate(action=MemoryAction.ADD, text="Fact alpha"),
+            MemoryUpdate(action=MemoryAction.ADD, text="Fact beta"),
+        ]
+        _apply_memory_updates(updates)
+
+        content = safe_read_text(_pending_facts_path())
+        assert "Fact alpha" in content
+        assert "Fact beta" in content
 
     def test_apply_memory_updates_add(self, hive_env):
         """_apply_memory_updates with ADD creates ## Auto-Captured entry."""
         from keephive.hooks.precompact import _apply_memory_updates
         from keephive.models import MemoryAction, MemoryUpdate
-        from keephive.storage import daily_file, ensure_daily, memory_file, safe_read_text
+        from keephive.storage import daily_file, ensure_daily, safe_read_text
 
         ensure_daily()
         updates = [MemoryUpdate(action=MemoryAction.ADD, text="uv is faster than pip")]
         _apply_memory_updates(updates)
 
-        mem_content = safe_read_text(memory_file())
-        assert "## Auto-Captured" in mem_content
-        assert "uv is faster than pip" in mem_content
+        # Fact should be in .pending-facts.md, not memory.md directly
+        from keephive.hooks.precompact import _pending_facts_path
 
-        # Check daily log has AUTO-PROMOTED
+        pf_content = safe_read_text(_pending_facts_path())
+        assert "uv is faster than pip" in pf_content
+
+        # Check daily log has AUTO-CAPTURED
         daily_content = safe_read_text(daily_file())
-        assert "AUTO-PROMOTED" in daily_content
+        assert "AUTO-CAPTURED" in daily_content
         assert "uv is faster than pip" in daily_content
 
     def test_apply_memory_updates_max_3(self, hive_env):
         """_apply_memory_updates caps at 3 updates."""
-        from keephive.hooks.precompact import _apply_memory_updates
+        from keephive.hooks.precompact import _apply_memory_updates, _pending_facts_path
         from keephive.models import MemoryAction, MemoryUpdate
-        from keephive.storage import ensure_daily, memory_file, safe_read_text
+        from keephive.storage import ensure_daily, safe_read_text
 
         ensure_daily()
         distinct_facts = [
@@ -286,12 +303,12 @@ class TestAutoPromote:
         updates = [MemoryUpdate(action=MemoryAction.ADD, text=fact) for fact in distinct_facts]
         _apply_memory_updates(updates)
 
-        mem_content = safe_read_text(memory_file())
-        # Only 3 should be added (hard cap)
-        auto_count = sum(
-            1 for line in mem_content.splitlines() if any(f in line for f in distinct_facts)
+        pf_content = safe_read_text(_pending_facts_path())
+        # Only 3 should be queued (hard cap)
+        queued_count = sum(
+            1 for line in pf_content.splitlines() if any(f in line for f in distinct_facts)
         )
-        assert auto_count == 3
+        assert queued_count == 3
 
     def test_apply_memory_updates_dedup(self, hive_env):
         """Duplicate facts are not auto-promoted."""
@@ -338,10 +355,10 @@ class TestAutoCorrect:
         assert result == content
 
     def test_apply_memory_updates_correct(self, hive_env):
-        """_apply_memory_updates with CORRECT replaces fact in-place."""
-        from keephive.hooks.precompact import _apply_memory_updates
+        """_apply_memory_updates with CORRECT queues to .pending-facts.md."""
+        from keephive.hooks.precompact import _apply_memory_updates, _pending_facts_path
         from keephive.models import MemoryAction, MemoryUpdate
-        from keephive.storage import daily_file, ensure_daily, memory_file, safe_read_text
+        from keephive.storage import daily_file, ensure_daily, safe_read_text
 
         ensure_daily()
         updates = [
@@ -353,13 +370,14 @@ class TestAutoCorrect:
         ]
         _apply_memory_updates(updates)
 
-        mem_content = safe_read_text(memory_file())
-        assert "Python is amazing" in mem_content
-        assert "Python is great" not in mem_content
+        # CORRECT now queues to .pending-facts.md with [replaces:] metadata
+        pf_content = safe_read_text(_pending_facts_path())
+        assert "Python is amazing" in pf_content
+        assert "[replaces:Python is great]" in pf_content
 
-        # Check daily log has AUTO-CORRECTED
+        # Check daily log has AUTO-CAPTURED
         daily_content = safe_read_text(daily_file())
-        assert "AUTO-CORRECTED" in daily_content
+        assert "AUTO-CAPTURED" in daily_content
 
 
 # ---- Phase 2: Auto-reverify ----
@@ -451,16 +469,17 @@ class TestAccumulationWarnings:
         assert any("45 facts" in w for w in warnings)
         assert any("hive rf" in w for w in warnings)
 
-    def test_warn_auto_captured_count(self):
-        """Warns when >5 auto-captured facts."""
+    def test_warn_pending_facts_count(self, hive_env):
+        """Warns when .pending-facts.md has pending facts."""
         from keephive.hooks.sessionstart import _accumulation_warnings
+        from keephive.storage import hive_dir
 
-        content = "# Working Memory\n\n- Normal fact\n\n## Auto-Captured\n" + "\n".join(
-            f"- Auto fact {i} [verified:2026-02-17]" for i in range(7)
-        )
+        # Write pending facts to .pending-facts.md
+        pf = hive_dir() / ".pending-facts.md"
+        pf.write_text("\n".join(f"- Auto fact {i} [auto:2026-02-17]" for i in range(7)) + "\n")
 
-        warnings = _accumulation_warnings(content)
-        assert any("7 auto-captured" in w for w in warnings)
+        warnings = _accumulation_warnings("# Working Memory\n\n- Normal fact\n")
+        assert any("7 fact" in w and "pending review" in w for w in warnings)
 
     def test_warn_critical_stale(self):
         """Warns CRITICAL for facts stale >60 days."""

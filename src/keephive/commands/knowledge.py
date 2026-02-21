@@ -70,12 +70,14 @@ def cmd_knowledge_edit(args: list[str]) -> None:
         safe_name = "".join(c for c in safe_name if c.isalnum() or c == "-")
         fpath = guides_dir() / f"{safe_name}.md"
         fpath.write_text(f"---\ntags: []\nprojects: []\n---\n# {name}\n\n")
-        console.print(f"[ok]Created[/ok] -> {fpath}")
+        console.print(f"[ok]Created[/ok] \u2192 {fpath}")
 
     editor = os.environ.get("EDITOR", "vi")
     subprocess.run([editor, str(fpath)])
-    console.print(f"[ok]Saved[/ok] -> {fpath}")
-    console.print(f"\n  -> [dim]hive k[/dim] to list  |  [dim]hive k {fpath.stem}[/dim] to view")
+    console.print(f"[ok]Saved[/ok] \u2192 {fpath}")
+    console.print(
+        f"\n  \u2192 [dim]hive k[/dim] to list  |  [dim]hive k {fpath.stem}[/dim] to view"
+    )
 
 
 def cmd_prompt(args: list[str]) -> None:
@@ -110,11 +112,11 @@ def cmd_prompt_edit(args: list[str]) -> None:
         safe_name = "".join(c for c in safe_name if c.isalnum() or c == "-")
         fpath = prompts_dir() / f"{safe_name}.md"
         fpath.write_text(f"# {name}\n\n")
-        console.print(f"[ok]Created[/ok] -> {fpath}")
+        console.print(f"[ok]Created[/ok] \u2192 {fpath}")
 
     editor = os.environ.get("EDITOR", "vi")
     subprocess.run([editor, str(fpath)])
-    console.print(f"[ok]Saved[/ok] -> {fpath}")
+    console.print(f"[ok]Saved[/ok] \u2192 {fpath}")
 
 
 def _knowledge_list() -> None:
@@ -145,7 +147,7 @@ def _knowledge_list() -> None:
             guide_count += 1
 
     if guide_count == 0:
-        console.print("  [dim](none yet)[/dim]")
+        console.print("  [dim]No guides yet[/dim]")
 
     console.print()
     console.print("[bold]Prompts[/bold]")
@@ -157,11 +159,11 @@ def _knowledge_list() -> None:
             prompt_count += 1
 
     if prompt_count == 0:
-        console.print("  [dim](none yet)[/dim]")
+        console.print("  [dim]No prompts yet[/dim]")
 
     console.print()
     console.print(
-        "  -> [dim]hive k <name>[/dim] to view  |  [dim]hive k edit <name>[/dim] to create  |  [dim]hive k rm <name>[/dim] to remove"
+        "  \u2192 [dim]hive k <name>[/dim] to view  |  [dim]hive k edit <name>[/dim] to create  |  [dim]hive k rm <name>[/dim] to remove"
     )
 
 
@@ -235,7 +237,7 @@ def _prompt_list() -> None:
             count += 1
 
     if count == 0:
-        console.print("  [dim](none yet)[/dim]")
+        console.print("  [dim]No prompts yet[/dim]")
 
     console.print()
     console.print(

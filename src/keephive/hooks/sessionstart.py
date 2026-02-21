@@ -177,7 +177,7 @@ def build_context(cwd: str, project_name: str) -> str:
     # 3. Stale fact warning (critical, always inject)
     stale = count_stale_facts()
     if stale > 0:
-        parts.append(f"Warning: {stale} stale fact(s) need verification. Run: hive v")
+        parts.append(f"Warning: {stale} fact(s) unverified 30+ days. Run: hive v")
 
     # 4. Open TODOs
     todos = open_todos()
@@ -197,9 +197,7 @@ def build_context(cwd: str, project_name: str) -> str:
                 else:
                     age_s = f"{age}d"
                 time_part = f" {ts}" if ts else ""
-                # Mark old TODOs as critical
-                prefix = "CRITICAL: " if age > 3 else ""
-                todo_lines.append(f"- [{age_s}{time_part}] {prefix}{text}")
+                todo_lines.append(f"- [{age_s}{time_part}] {text}")
             except ValueError:
                 todo_lines.append(f"- [?] {text}")
         parts.append("\n".join(todo_lines))
@@ -240,6 +238,19 @@ def build_context(cwd: str, project_name: str) -> str:
                 if n > 0:
                     s = "s" if n != 1 else ""
                     parts.append(f"{n} pending rule suggestion{s}. Run: hive rule review")
+    except Exception:
+        pass
+
+    # 7c. Pending facts (auto-captured, awaiting review)
+    try:
+        pending_facts_path = hive_dir() / ".pending-facts.md"
+        if pending_facts_path.exists():
+            pf_content = pending_facts_path.read_text().strip()
+            if pf_content:
+                n = sum(1 for ln in pf_content.splitlines() if ln.strip().startswith("- "))
+                if n > 0:
+                    s = "s" if n != 1 else ""
+                    parts.append(f"{n} fact{s} pending review. Run: hive mem review")
     except Exception:
         pass
 
@@ -288,17 +299,21 @@ def _data_quality_warnings() -> list[str]:
             if SequenceMatcher(None, texts[i].lower(), texts[j].lower()).ratio() > 0.7:
                 dupe_count += 1
     if dupe_count:
-        warnings.append(f"{dupe_count} duplicate TODO pair(s) found. Run: hive doctor")
+        warnings.append(
+            f"{dupe_count} likely-duplicate TODO(s). Run: hive doctor (review and merge)"
+        )
 
     # Stale TODOs
     t = get_today()
     stale = [text for d, _, text in ot if d < (t - timedelta(days=7)).isoformat()]
     if stale:
-        warnings.append(f"{len(stale)} TODO(s) older than 7 days")
+        warnings.append(
+            f"{len(stale)} TODO(s) older than 7 days. Run: hive todo (review and close stale items)"
+        )
 
     # Accumulation
     if len(ot) > 10:
-        warnings.append(f"{len(ot)} open TODOs. Consider consolidating.")
+        warnings.append(f"{len(ot)} open TODOs. Triage: hive todo done <pat>  |  hive doctor")
 
     return warnings
 
@@ -526,22 +541,22 @@ def _accumulation_warnings(mem_content: str) -> list[str]:
     # Count total facts (lines starting with "- ")
     fact_count = sum(1 for line in mem_content.splitlines() if line.startswith("- "))
     if fact_count > 40:
-        warnings.append(f"Memory has {fact_count} facts. Consider consolidating: hive rf")
+        warnings.append(f"Memory has {fact_count} facts. Consolidate: hive rf (scan for patterns)")
 
-    # Count auto-captured facts
-    in_auto = False
-    auto_count = 0
-    for line in mem_content.splitlines():
-        if line.strip() == "## Auto-Captured":
-            in_auto = True
-            continue
-        if line.startswith("#") and in_auto:
-            break
-        if in_auto and line.startswith("- "):
-            auto_count += 1
-
-    if auto_count > 5:
-        warnings.append(f"{auto_count} auto-captured facts pending review. Curate: hive rf apply")
+    # Count pending facts from .pending-facts.md
+    try:
+        pending_facts_path = hive_dir() / ".pending-facts.md"
+        if pending_facts_path.exists():
+            pf_content = pending_facts_path.read_text().strip()
+            if pf_content:
+                pf_count = sum(1 for ln in pf_content.splitlines() if ln.strip().startswith("- "))
+                if pf_count > 0:
+                    s = "s" if pf_count != 1 else ""
+                    warnings.append(
+                        f"{pf_count} fact{s} auto-captured, pending review. Run: hive mem review"
+                    )
+    except Exception:
+        pass
 
     # Check for critically stale facts (>60 days)
     cutoff_60 = (get_today() - timedelta(days=60)).isoformat()
@@ -551,6 +566,8 @@ def _accumulation_warnings(mem_content: str) -> list[str]:
         if m and m.group(1) < cutoff_60:
             critical_stale += 1
     if critical_stale > 0:
-        warnings.append(f"CRITICAL: {critical_stale} fact(s) unverified for 60+ days. Run: hive v")
+        warnings.append(
+            f"CRITICAL: {critical_stale} fact(s) unverified 60+ days. Run: hive v (re-check against codebase)"
+        )
 
     return warnings

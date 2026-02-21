@@ -362,4 +362,4 @@ class TestContextInjectionDiet:
 
         # hive_env fixture has a fact from 2020-01-01 which is stale
         ctx = build_context("/tmp/test", "test")
-        assert "stale" in ctx.lower()
+        assert "unverified 30+ days" in ctx.lower()

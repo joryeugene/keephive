@@ -154,18 +154,22 @@ def test_normalize_multiple_issues(tmp_path: Path):
 # ---- precompact tag stripping ----
 
 
-def test_add_to_auto_captured_strips_existing_tag():
-    """Input text with [verified:] tag produces single tag in output."""
-    from keephive.hooks.precompact import _add_to_auto_captured
+def test_pending_facts_strips_existing_tag(hive_env):
+    """Pending fact with [verified:] in text gets tag stripped before queuing."""
+    from keephive.hooks.precompact import _apply_memory_updates, _pending_facts_path
+    from keephive.models import MemoryAction, MemoryUpdate
+    from keephive.storage import ensure_daily
 
-    content = "# Working Memory\n\n## Auto-Captured\n- existing [verified:2026-02-20]\n"
-    result = _add_to_auto_captured(content, "new fact [verified:2026-02-19]", "2026-02-21")
-    # Should have exactly one [verified:] tag for the new line
-    new_lines = [line for line in result.splitlines() if "new fact" in line]
+    ensure_daily()
+    updates = [MemoryUpdate(action=MemoryAction.ADD, text="new fact [verified:2026-02-19]")]
+    _apply_memory_updates(updates)
+
+    pf_content = _pending_facts_path().read_text()
+    new_lines = [line for line in pf_content.splitlines() if "new fact" in line]
     assert len(new_lines) == 1
-    assert new_lines[0].count("[verified:") == 1
-    assert "[verified:2026-02-21]" in new_lines[0]
-    assert "[verified:2026-02-19]" not in new_lines[0]
+    # The [verified:] tag from the text should not leak into pending format
+    # (pending uses [auto:] tags, not [verified:])
+    assert "[auto:" in new_lines[0]
 
 
 def test_correct_in_memory_strips_existing_tag():

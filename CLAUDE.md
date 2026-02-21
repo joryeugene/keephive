@@ -14,6 +14,7 @@ Prefer `just <recipe>` over raw commands. See `just --list` or the `justfile` fo
 | `just test-llm`                            | LLM E2E tests (real claude -p, slow)               |
 | `just test-one tests/test_X.py`            | Single file, stop on first failure, verbose         |
 | `just test-one "-k test_verify"`           | Run by name pattern                                |
+| `just test-integration`                    | Multi-step state machine tests                     |
 | `just lint`                                | ruff check + format check                          |
 | `just fmt`                                 | ruff format in place                               |
 | `just serve`                               | Live dashboard with hot reload                     |
@@ -61,6 +62,27 @@ Every claude -p callsite uses `run_claude_pipe()` with a Pydantic response model
 ## Test Philosophy
 
 Tests must catch real bugs. `test_claude_pipe.py` uses the ACTUAL response format from production (including system init messages in the array). If a test passes but production fails, the test is wrong, not the code.
+
+## Test Quality Standards
+
+Every test must answer: "What bug would this catch?"
+
+### The 3-Question Gate
+Before committing any test, it must pass all three:
+1. **Can this test fail?** If the SUT has a bug, will this test actually catch it? If the test passes regardless of SUT correctness (e.g., asserting a mock returns what you told it), delete it.
+2. **Is this test unique?** Does it exercise a different code path than existing tests? If two tests differ only in input values but hit the same branch, keep only the boundary case.
+3. **Does this test assert correctness?** `assert result` is not a test. `assert result == expected_value` is. `assert "keyword" in output` is acceptable only when exact output is non-deterministic.
+
+### Anti-patterns (auto-reject)
+- Testing that a mock returns what you configured it to return
+- 3+ tests for the same function with trivially different inputs (keep 1 representative + 1 boundary)
+- Tests that only assert "no crash" without checking the actual result
+- Tests where the assertion is weaker than the function's contract (e.g., `assert len(result) > 0` when you know the exact expected length)
+
+### Required patterns
+- Every test class needs at least one negative test (error input, missing data, corrupt state)
+- State-changing functions need a "roundtrip" test (write -> read back -> verify)
+- Functions with thresholds/boundaries need tests AT the boundary, not just well within it
 
 ## LLM Test Rule
 

@@ -939,7 +939,7 @@ class TestSessionStartOutput:
         from keephive.hooks.sessionstart import build_context
 
         ctx = build_context("/tmp/test", "test")
-        assert "stale" in ctx.lower()
+        assert "unverified 30+ days" in ctx.lower()
         assert "hive v" in ctx
 
     def test_todos_injected_with_age(self, hive_env):

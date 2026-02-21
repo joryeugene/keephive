@@ -9,7 +9,7 @@ import subprocess
 from datetime import timedelta
 
 from keephive.clock import get_today
-from keephive.output import console
+from keephive.output import console, show_hint
 from keephive.storage import (
     archive_dir,
     daily_dir,
@@ -145,8 +145,7 @@ def cmd_gc(args: list[str]) -> None:
     if not dry_run:
         _memory_decay_check()
 
-    console.print()
-    console.print("  -> [dim]hive s[/dim] to check status")
+    show_hint("hive s")
 
 
 def _memory_decay_check() -> None:
@@ -171,13 +170,15 @@ def _memory_decay_check() -> None:
         return
 
     console.print()
-    console.print("[bold]Memory Decay Candidates[/bold]  [dim](lowest score = archive first)[/dim]")
+    console.print(
+        "[bold]Memory Decay Candidates[/bold]  [dim](least-referenced facts, candidates for removal)[/dim]"
+    )
     console.print()
     for score, _, fact_text in candidates:
         console.print(f"  [dim][{score:.2f}][/dim] {fact_text[:100]}")
 
     console.print()
-    console.print("  [dim]Run: hive e memory  to archive manually[/dim]")
+    console.print("  \u2192 [bold]hive e memory[/bold] (open editor to remove stale facts)")
 
 
 def _rebuild_index() -> None:

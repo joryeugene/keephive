@@ -5,37 +5,23 @@ from __future__ import annotations
 import os
 import subprocess
 from datetime import date
+from pathlib import Path
 
 from keephive.clock import get_now, get_today
-from keephive.output import console
+from keephive.output import console, show_hint
 from keephive.storage import (
     append_to_daily,
+    daily_dir,
     ensure_daily,
     open_todos,
     recent_dones,
+    recurring_file,
     working_dir,
 )
 
 
-def cmd_todo(args: list[str]) -> None:
-    """List open TODOs, mark one as done, or manage recurring tasks."""
-    if args and args[0] == "done":
-        if len(args) > 1 and args[1] == "undo":
-            _todo_undo(" ".join(args[2:]))
-            return
-        _todo_done(" ".join(args[1:]))
-        return
-
-    if args and args[0] == "undo":
-        _todo_undo(" ".join(args[1:]))
-        return
-
-    if args and args[0] == "repeat":
-        from keephive.commands.recurring import cmd_recurring
-
-        cmd_recurring(args[1:])
-        return
-
+def _render_todo() -> None:
+    """Render the TODO list display (extracted for watch_loop reuse)."""
     todos = open_todos()
 
     # Show all recurring tasks
@@ -46,7 +32,7 @@ def cmd_todo(args: list[str]) -> None:
         console.print("[bold]Recurring:[/bold]")
         for freq, text, overdue in recurring:
             if overdue > 0:
-                status = f"+{overdue}d"
+                status = f"+{overdue}d overdue"
                 line = f"  \\[{freq}] [warn][{status}][/warn] {text}"
             elif overdue == 0:
                 status = "due"
@@ -61,7 +47,7 @@ def cmd_todo(args: list[str]) -> None:
     # Show open TODOs
     if not todos:
         console.print("[bold]Open TODOs:[/bold]")
-        console.print("  No open TODOs")
+        console.print("  [dim]No open TODOs[/dim]")
     else:
         t = get_today()
         console.print("[bold]Open TODOs:[/bold]")
@@ -108,8 +94,45 @@ def cmd_todo(args: list[str]) -> None:
         completion_rate = int(done_this_week / total_activity * 100)
         console.print()
         console.print(
-            f"  [dim]{done_this_week} done this week · {completion_rate}% completion rate (7d)[/dim]"
+            f"  [dim]{done_this_week} done this week \u00b7 {completion_rate}% completion rate (7d)[/dim]"
         )
+
+    show_hint('hive t "task" to add, hive td <pat> to complete')
+
+
+def _watch_paths_todo() -> list[Path]:
+    """Paths to watch for TODO changes."""
+    return [daily_dir(), recurring_file()]
+
+
+def cmd_todo(args: list[str]) -> None:
+    """List open TODOs, mark one as done, or manage recurring tasks."""
+    if args and args[0] == "done":
+        if len(args) > 1 and args[1] == "undo":
+            _todo_undo(" ".join(args[2:]))
+            return
+        _todo_done(" ".join(args[1:]))
+        return
+
+    if args and args[0] == "undo":
+        _todo_undo(" ".join(args[1:]))
+        return
+
+    if args and args[0] == "repeat":
+        from keephive.commands.recurring import cmd_recurring
+
+        cmd_recurring(args[1:])
+        return
+
+    # Check for watch mode (only on the list-display path)
+    from keephive.watch import parse_watch_args, watch_loop
+
+    remaining, watch, interval = parse_watch_args(args)
+    if watch:
+        watch_loop(_render_todo, _watch_paths_todo, interval)
+        return
+
+    _render_todo()
 
 
 def cmd_t(args: list[str]) -> None:

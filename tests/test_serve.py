@@ -696,7 +696,7 @@ def test_hot_flag_worker_env_skips_watcher(hive_env, monkeypatch):
     assert not watcher_called, "Watcher should not be called in worker mode"
 
 
-# ---- Fix 7: DONE/AUTO-PROMOTED log classification ----
+# ---- Fix 7: DONE/AUTO-PROMOTED/AUTO-CAPTURED log classification ----
 
 
 def test_log_data_classifies_done(hive_env):
@@ -706,7 +706,7 @@ def test_log_data_classifies_done(hive_env):
 
     daily_file().write_text(
         "- [10:00:00] DONE: finished the auth module\n"
-        "- [10:01:00] AUTO-PROMOTED: old fact promoted\n"
+        "- [10:01:00] AUTO-CAPTURED: queued fact for review\n"
     )
     data = _get_log_data()
     cats = {e["cat"] for e in data["entries"]}
@@ -832,7 +832,7 @@ def test_log_panel_auto_badge():
     from keephive.commands.serve import _render_log_panel
 
     data = {
-        "entries": [{"time": "10:03", "text": "AUTO-PROMOTED: old fact", "cat": "auto"}],
+        "entries": [{"time": "10:03", "text": "AUTO-CAPTURED: queued fact", "cat": "auto"}],
         "date": "2026-01-01",
     }
     html = _render_log_panel(data, show_nav=False)
@@ -1271,7 +1271,21 @@ def test_log_panel_strips_done_prefix():
     assert "shipped feature" in html
 
 
+def test_log_panel_strips_auto_captured_prefix():
+    from keephive.commands.serve import _render_log_panel
+
+    data = {
+        "entries": [{"time": "10:00", "text": "AUTO-CAPTURED: queued fact text", "cat": "auto"}],
+        "date": "2026-01-01",
+    }
+    html = _render_log_panel(data, show_nav=False)
+    assert "log-tag-auto" in html
+    assert "AUTO-CAPTURED: queued fact text" not in html
+    assert "queued fact text" in html
+
+
 def test_log_panel_strips_auto_promoted_prefix():
+    """reflect.py still writes AUTO-PROMOTED: entries - dashboard strips those too."""
     from keephive.commands.serve import _render_log_panel
 
     data = {

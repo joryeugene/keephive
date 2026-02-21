@@ -23,6 +23,10 @@ test-golden:
 test-llm:
     uv run pytest -m llm -v -o "addopts="
 
+# Run integration (multi-step state machine) tests
+test-integration:
+    uv run pytest -m integration -v -o "addopts="
+
 # Run a single test file or pattern (e.g. just test-one tests/test_smoke.py)
 test-one target:
     uv run pytest {{target}} -xvs
@@ -88,3 +92,17 @@ sync:
 # Live dashboard with hot reload
 serve:
     uv run python -m keephive serve --hot
+
+# ── Watch Mode ─────────────────────────────────────────────────────────────
+
+# Status in live-watch mode (auto-refresh on changes)
+watch:
+    uv run python -m keephive s --watch
+
+# Log in live-watch mode
+watch-log:
+    uv run python -m keephive l --watch
+
+# TODOs in live-watch mode
+watch-todo:
+    uv run python -m keephive todo --watch

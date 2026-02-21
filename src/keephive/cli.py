@@ -9,14 +9,14 @@ from keephive import __version__
 
 # Per-command help strings, keyed by canonical command name.
 HELP: dict[str, str] = {
-    "status": "Usage: hive s\n  Status overview (facts, TODOs, stale warnings)",
+    "status": "Usage: hive s [--watch|-w] [--interval N]\n  Status overview (facts, TODOs, stale warnings)\n  --watch/-w      Live refresh when data changes\n  --interval N    Seconds between checks (default 2)",
     "remember": "Usage: hive r <text>\n  Save insight to daily log\n  Prefix with FACT:/DECISION:/TODO:/INSIGHT:/CORRECTION: for categorization",
     "recall": "Usage: hive rc <query> [--deep] [--json]\n  Search all memory tiers\n  --deep  Expand search with AI when few results found",
     "verify": "Usage: hive v [--check] [--json] [--verbose]\n  Verify facts against codebase using LLM\n  --check  Quick stale count, exit code 1 if stale\n  --verbose  Show raw LLM output",
     "reflect": "Usage: hive rf [scan|analyze|apply|draft <topic>]\n  scan     Quick log scan (no AI)\n  analyze  Pattern detection with AI (~20s)\n  apply    Review and graduate analysis to memory\n  draft    Draft a knowledge guide from logs",
-    "log": "Usage: hive l [date|summarize]\n  View daily log. Date: today, yesterday, N (days ago), YYYY-MM-DD\n  summarize  AI summary of today's entries (3-5 bullets)",
+    "log": "Usage: hive l [date|summarize] [--watch|-w] [--interval N]\n  View daily log. Date: today, yesterday, N (days ago), YYYY-MM-DD\n  summarize  AI summary of today's entries (3-5 bullets)\n  --watch/-w      Live refresh when log changes\n  --interval N    Seconds between checks (default 2)",
     "edit": "Usage: hive e [target]\n  Targets: memory, rules, claude, settings, local, today, note\n  No args: show available targets",
-    "todo": "Usage: hive todo [done <pat>] [repeat [freq] [text]]\n  todo         List open TODOs\n  todo done X  Mark TODO matching X complete\n  todo repeat  List/add recurring tasks",
+    "todo": "Usage: hive todo [done <pat>] [repeat [freq] [text]] [--watch|-w] [--interval N]\n  todo         List open TODOs\n  todo done X  Mark TODO matching X complete\n  todo repeat  List/add recurring tasks\n  --watch/-w      Live refresh when TODOs change\n  --interval N    Seconds between checks (default 2)",
     "note": 'Usage: hive n [show|copy|clear|list|<slot>|<template>]\n  n          Open active slot in $EDITOR\n  n.3        Switch to slot 3, open editor (1-9, 0=10)\n  4          Open slot 4 in $EDITOR (bare-digit shorthand)\n  n show     Print content\n  n copy     Copy to clipboard\n  n clear    Archive and clear\n  n list     Show all slots\n  n <N> todo  Extract TODOs from slot N and add to daily log\n  4 "text"   Append text to slot 4 without opening editor',
     "knowledge": "Usage: hive k [name|edit <name>|rm <name>]\n  k           List all guides and prompts\n  k <name>    View guide (prefix match)\n  k edit X    Create/edit guide\n  k rm X      Remove guide",
     "audit": "Usage: hive a [-v] [--json]\n  Quality Pulse: 3-perspective LLM analysis + synthesis\n  -v      Show full perspective essays\n  --json  Machine-readable output",
@@ -24,7 +24,7 @@ HELP: dict[str, str] = {
     "gc": "Usage: hive gc [--dry-run]\n  Archive daily logs older than 30 days\n  --dry-run  Show what would be archived without doing it",
     "standup": "Usage: hive su\n  Generate standup summary from daily logs + GitHub PRs\n  Uses LLM for formatting. Copies to clipboard.",
     "stats": "Usage: hive st [-p <project>] [date]\n  Usage statistics. Date: today, N (days ago), YYYY-MM-DD",
-    "mem": "Usage: hive m [rm] <text>\n  Add or remove working memory facts\n  hive m <text>      Add fact to memory.md\n  hive m rm <pat>    Remove line matching pattern",
+    "mem": "Usage: hive m [rm|review] <text>\n  Add or remove working memory facts\n  hive m <text>      Add fact to memory.md\n  hive m rm <pat>    Remove line matching pattern\n  hive m review      Review pending auto-captured facts",
     "rule": "Usage: hive rule [rm|review|learn] <text>\n  Add or remove behavioral rules\n  hive rule <text>      Add rule\n  hive rule rm <pat>    Remove matching rule\n  hive rule review      Review pending rule suggestions\n  hive rule learn       Learn rules from /insights friction data\n  hive rule learn --dry-run   Preview without queuing",
     "session": "Usage: hive go [mode|prompt]\n  Modes: todo, verify, learn, reflect\n  Or load a custom prompt from knowledge/prompts/",
     "skill": "Usage: hive sk [publish <name>|unpublish <name>|sync|find <q>]\n  Manage skill plugins",

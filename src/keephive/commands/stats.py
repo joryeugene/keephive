@@ -10,7 +10,7 @@ from datetime import date, timedelta
 from rich.table import Table
 
 from keephive.clock import get_today
-from keephive.output import console
+from keephive.output import console, show_hint
 from keephive.storage import (
     count_log_entries_by_prefix,
     count_log_entries_by_prefix_daily,
@@ -1033,6 +1033,8 @@ def _display_full(data: dict) -> None:
                 status = f"[dim]{last_date}[/dim]"
         ctx_str = f"  [dim]{ctx}[/dim]" if ctx else ""
         console.print(f"  {meta['hint']:<10} {status}{ctx_str}")
+
+    show_hint("hive s", "live status")
 
 
 def _display_day(data: dict, date_arg: str) -> None:

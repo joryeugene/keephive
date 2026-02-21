@@ -93,7 +93,7 @@ def _recurring_list() -> None:
         console.print("  [dim](none)[/dim]")
         console.print()
         console.print(
-            '  -> [dim]hive todo repeat daily "task"[/dim]  or  [dim]hive todo repeat 2d "task"[/dim]'
+            '  → [dim]hive todo repeat daily "task"[/dim]  or  [dim]hive todo repeat 2d "task"[/dim]'
         )
         return
 
@@ -117,7 +117,7 @@ def _recurring_list() -> None:
 
     console.print()
     console.print(
-        '  -> [dim]hive todo repeat daily "task"[/dim] to add  |  [dim]hive todo repeat done "pattern"[/dim] to mark done'
+        '  → [dim]hive todo repeat daily "task"[/dim] to add  |  [dim]hive todo repeat done "pattern"[/dim] to mark done'
     )
 
 

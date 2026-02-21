@@ -18,7 +18,6 @@ from keephive.clock import get_now
 from keephive.storage import (
     _strip_verified_tags,
     append_to_daily,
-    backup_and_write,
     capture_budget,
     daily_file,
     ensure_daily,
@@ -401,50 +400,62 @@ Optionally include rule_suggestions (max 2, empty list if none): short imperativ
             f.write(f"[{get_now().isoformat(timespec='seconds')}] Layer 2 failed: {e}\n")
 
 
+def _pending_facts_path() -> Path:
+    return hive_dir() / ".pending-facts.md"
+
+
 def _apply_memory_updates(updates: list, project_name: str = "") -> None:
-    """Apply memory updates from LLM response to memory.md.
+    """Queue memory updates from LLM response to .pending-facts.md for review.
 
-    - ADD: append to ## Auto-Captured section
-    - CORRECT: find-and-replace the old fact in-place
+    - ADD: queue in .pending-facts.md (was: direct write to memory.md)
+    - CORRECT: queue in .pending-facts.md with replaces metadata
 
-    Logs each change to the daily log. Max 3 per compaction.
+    Nothing enters memory.md without explicit human review via `hive mem review`.
+    Logs each queued item to the daily log. Max 3 per compaction.
     """
     from keephive.models import MemoryAction
 
     mem_path = memory_file()
     content = safe_read_text(mem_path) if mem_path.exists() else ""
     today_str = get_now().strftime("%Y-%m-%d")
-    applied = 0
+    queued = 0
     proj_tag = f" [project:{project_name}]" if project_name else ""
+
+    pending_path = _pending_facts_path()
+    new_lines: list[str] = []
 
     for update in updates[:3]:  # Hard cap: 3 per compaction
         if update.action == MemoryAction.CORRECT and update.replaces:
-            # Find and replace the old fact
-            new_content = _correct_in_memory(content, update.replaces, update.text, today_str)
-            if new_content != content:
-                content = new_content
+            # Check the correction would actually change something
+            test_content = _correct_in_memory(content, update.replaces, update.text, today_str)
+            if test_content != content:
+                new_lines.append(
+                    f"- {update.text} [auto:{today_str}]{proj_tag} [replaces:{update.replaces}]"
+                )
                 ts = get_now().strftime("%H:%M:%S")
                 append_to_daily(
-                    f'- [{ts}] AUTO-CORRECTED: "{update.replaces}" -> "{update.text}"{proj_tag}'
+                    f'- [{ts}] AUTO-CAPTURED: correction "{update.replaces}" -> "{update.text}"{proj_tag}'
                 )
-                applied += 1
+                queued += 1
 
         elif update.action == MemoryAction.ADD:
             # Check for duplicates against memory content
             if not _is_duplicate_in_memory(content, update.text):
-                content = _add_to_auto_captured(content, update.text, today_str)
+                new_lines.append(f"- {update.text} [auto:{today_str}]{proj_tag}")
                 ts = get_now().strftime("%H:%M:%S")
-                append_to_daily(f"- [{ts}] AUTO-PROMOTED: {update.text}{proj_tag}")
-                applied += 1
+                append_to_daily(f"- [{ts}] AUTO-CAPTURED: {update.text}{proj_tag}")
+                queued += 1
 
-    if applied > 0:
-        mem_path.parent.mkdir(parents=True, exist_ok=True)
-        backup_and_write(mem_path, content)
+    if new_lines:
+        pending_path.parent.mkdir(parents=True, exist_ok=True)
+        with pending_path.open("a") as f:
+            for line in new_lines:
+                f.write(line + "\n")
         debug_log = hive_dir() / ".hook-debug.log"
         with open(debug_log, "a") as f:
             f.write(
                 f"[{get_now().isoformat(timespec='seconds')}] "
-                f"Memory auto-updated: {applied} change(s)\n"
+                f"Queued {queued} fact(s) to .pending-facts.md\n"
             )
 
 
@@ -480,34 +491,6 @@ def _correct_in_memory(content: str, old_text: str, new_text: str, today_str: st
             lines[i] = f"- {_strip_verified_tags(new_text)} [verified:{today_str}]"
             return "\n".join(lines)
     return content  # No match found, don't change
-
-
-def _add_to_auto_captured(content: str, text: str, today_str: str) -> str:
-    """Add a fact to the ## Auto-Captured section of memory.md.
-
-    Creates the section if it doesn't exist.
-    """
-    new_line = f"- {_strip_verified_tags(text)} [verified:{today_str}]"
-    marker = "## Auto-Captured"
-
-    if marker in content:
-        # Insert after the marker header
-        lines = content.split("\n")
-        for i, line in enumerate(lines):
-            if line.strip() == marker:
-                # Find the end of existing auto-captured entries
-                insert_at = i + 1
-                while insert_at < len(lines) and (
-                    lines[insert_at].startswith("- ") or lines[insert_at].strip() == ""
-                ):
-                    insert_at += 1
-                # Insert before the next section or at end of auto-captured
-                lines.insert(insert_at, new_line)
-                return "\n".join(lines)
-
-    # Section doesn't exist: append at end
-    stripped = content.rstrip()
-    return f"{stripped}\n\n{marker}\n{new_line}\n"
 
 
 def _is_duplicate_in_memory(content: str, text: str) -> bool:

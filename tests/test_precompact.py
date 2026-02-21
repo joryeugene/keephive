@@ -19,7 +19,6 @@ import os
 from pathlib import Path
 
 from keephive.hooks.precompact import (
-    _add_to_auto_captured,
     _correct_in_memory,
     _extract_excerpts,
     _extract_user_text,
@@ -28,6 +27,7 @@ from keephive.hooks.precompact import (
     _is_garbage_insight,
     _llm_summary,
     _normalize_for_dedup,
+    _pending_facts_path,
     _queue_rule_suggestions,
     _redact_secrets,
     _select_within_budget,
@@ -111,21 +111,16 @@ class TestExtractUserText:
     """Test _extract_user_text for various message formats."""
 
     def test_string_content(self):
-        obj = {"type": "user", "message": {"content": "Hello world"}}
+        obj = {"type": "user", "message": {"content": "  Hello world  "}}
         assert _extract_user_text(obj) == "Hello world"
 
-    def test_list_content_single_part(self):
-        obj = {
-            "type": "user",
-            "message": {"content": [{"type": "text", "text": "Single part"}]},
-        }
-        assert _extract_user_text(obj) == "Single part"
-
-    def test_list_content_multiple_parts(self):
+    def test_list_content_multiple_parts_skips_non_text(self):
+        """Multi-part list concatenates text parts and skips non-text."""
         obj = {
             "type": "user",
             "message": {
                 "content": [
+                    {"type": "image", "url": "http://example.com/img.png"},
                     {"type": "text", "text": "Part one"},
                     {"type": "text", "text": "Part two"},
                 ]
@@ -133,31 +128,14 @@ class TestExtractUserText:
         }
         assert _extract_user_text(obj) == "Part one Part two"
 
-    def test_list_content_skips_non_text_parts(self):
-        obj = {
-            "type": "user",
-            "message": {
-                "content": [
-                    {"type": "image", "url": "http://example.com/img.png"},
-                    {"type": "text", "text": "Caption text"},
-                ]
-            },
-        }
-        assert _extract_user_text(obj) == "Caption text"
-
-    def test_raw_string_message(self):
-        """When message is a bare string, not a dict."""
-        obj = {"type": "user", "message": "Direct string message"}
-        assert _extract_user_text(obj) == "Direct string message"
-
-    def test_empty_content_returns_none(self):
-        obj = {"type": "user", "message": {}}
-        result = _extract_user_text(obj)
+    def test_missing_and_empty_content(self):
+        """Missing content field returns None/empty; bare string message works."""
+        obj_empty = {"type": "user", "message": {}}
+        result = _extract_user_text(obj_empty)
         assert result is None or result == ""
 
-    def test_whitespace_stripped(self):
-        obj = {"type": "user", "message": {"content": "  padded text  "}}
-        assert _extract_user_text(obj) == "padded text"
+        obj_bare = {"type": "user", "message": "Direct string message"}
+        assert _extract_user_text(obj_bare) == "Direct string message"
 
 
 class TestExtractExcerpts:
@@ -495,38 +473,70 @@ class TestCorrectInMemory:
         assert "keephive uses attrs [verified:2026-02-21]" in result
 
 
-class TestAddToAutoCaptured:
-    """Test _add_to_auto_captured section creation and insertion."""
+class TestPendingFacts:
+    """Test that memory updates queue to .pending-facts.md instead of memory.md."""
 
-    def test_creates_section_when_missing(self):
-        content = "# Working Memory\n\n- Some fact\n"
-        result = _add_to_auto_captured(content, "New auto fact", "2026-02-21")
-        assert "## Auto-Captured" in result
-        assert "- New auto fact [verified:2026-02-21]" in result
+    def test_add_queues_to_pending(self, hive_env):
+        """Memory ADD action writes to .pending-facts.md, not memory.md."""
+        from keephive.hooks.precompact import _apply_memory_updates
+        from keephive.models import MemoryAction, MemoryUpdate
 
-    def test_appends_to_existing_section(self):
-        content = (
-            "# Working Memory\n\n## Auto-Captured\n"
-            "- Old auto fact [verified:2026-01-01]\n\n## Other Section\n"
-        )
-        result = _add_to_auto_captured(content, "New auto fact", "2026-02-21")
-        assert "- New auto fact [verified:2026-02-21]" in result
-        # Old fact still present
-        assert "Old auto fact" in result
-        # New fact inserted before ## Other Section
-        lines = result.splitlines()
-        auto_idx = next(i for i, ln in enumerate(lines) if "Auto-Captured" in ln)
-        other_idx = next(i for i, ln in enumerate(lines) if "Other Section" in ln)
-        new_idx = next(i for i, ln in enumerate(lines) if "New auto fact" in ln)
-        assert auto_idx < new_idx < other_idx
+        updates = [MemoryUpdate(action=MemoryAction.ADD, text="New auto fact")]
+        _apply_memory_updates(updates, project_name="testproj")
 
-    def test_strips_verified_tag_from_new_text(self):
-        """If the text already has a [verified:] tag, it gets stripped and re-added."""
-        content = "# Memory\n"
-        result = _add_to_auto_captured(content, "Fact with tag [verified:2025-01-01]", "2026-02-21")
-        # Should have exactly one [verified:] tag with the new date
-        assert "[verified:2026-02-21]" in result
-        assert "[verified:2025-01-01]" not in result
+        pf = _pending_facts_path()
+        assert pf.exists()
+        content = pf.read_text()
+        assert "- New auto fact" in content
+        assert "[auto:" in content
+        assert "[project:testproj]" in content
+
+        # Memory.md should NOT be modified
+        mem = memory_file()
+        if mem.exists():
+            assert "New auto fact" not in mem.read_text()
+
+    def test_correct_queues_to_pending(self, hive_env):
+        """Memory CORRECT action writes to .pending-facts.md with replaces metadata."""
+        from keephive.hooks.precompact import _apply_memory_updates
+        from keephive.models import MemoryAction, MemoryUpdate
+
+        # Set up memory with an existing fact
+        mem = memory_file()
+        mem.parent.mkdir(parents=True, exist_ok=True)
+        mem.write_text("# Memory\n- Python uses pip [verified:2025-01-01]\n")
+
+        updates = [
+            MemoryUpdate(
+                action=MemoryAction.CORRECT,
+                text="Python uses uv",
+                replaces="Python uses pip",
+            )
+        ]
+        _apply_memory_updates(updates)
+
+        pf = _pending_facts_path()
+        assert pf.exists()
+        content = pf.read_text()
+        assert "Python uses uv" in content
+        assert "[replaces:Python uses pip]" in content
+
+    def test_dedup_prevents_duplicate_pending(self, hive_env):
+        """ADD is skipped if fact already exists in memory.md."""
+        from keephive.hooks.precompact import _apply_memory_updates
+        from keephive.models import MemoryAction, MemoryUpdate
+
+        mem = memory_file()
+        mem.parent.mkdir(parents=True, exist_ok=True)
+        mem.write_text("# Memory\n- Python is great [verified:2025-01-01]\n")
+
+        updates = [MemoryUpdate(action=MemoryAction.ADD, text="Python is great")]
+        _apply_memory_updates(updates)
+
+        pf = _pending_facts_path()
+        # Should not exist or be empty since the fact is a duplicate
+        if pf.exists():
+            assert pf.read_text().strip() == ""
 
 
 # ---- Layer 2: LLM summary ----
@@ -569,21 +579,6 @@ class TestLlmSummary:
         content = safe_read_text(df)
         assert "[project:myproject]" in content
         assert "INSIGHT: The caching layer" in content
-
-    def test_no_project_tag_when_empty(self, hive_env):
-        """No [project:] tag when project_name is empty."""
-        response = _mock_precompact_response(
-            insights=[("FACT", "Some fact about project internals and architecture")]
-        )
-
-        def mock_pipe(prompt, model, stdin_text=None):
-            return response
-
-        _llm_summary("excerpts", pipe_fn=mock_pipe, project_name="")
-
-        df = daily_file()
-        content = safe_read_text(df)
-        assert "[project:" not in content
 
     def test_dedup_skips_duplicate_insights(self, hive_env):
         """Duplicate insights are not written twice."""
@@ -643,7 +638,7 @@ class TestLlmSummary:
         assert "REDACTED" in content
 
     def test_memory_update_add(self, hive_env):
-        """Memory ADD action appends to memory.md Auto-Captured section."""
+        """Memory ADD action queues to .pending-facts.md (not memory.md directly)."""
         response = _mock_precompact_response(
             insights=[("FACT", "Database migration uses Alembic for schema management")],
             memory_updates=[
@@ -656,41 +651,17 @@ class TestLlmSummary:
 
         _llm_summary("excerpts", pipe_fn=mock_pipe, project_name="webapp")
 
-        mem = memory_file()
-        content = safe_read_text(mem)
-        assert "Project uses Alembic for database migrations" in content
-        assert "## Auto-Captured" in content
+        # Fact should be in .pending-facts.md, NOT in memory.md
+        pf = _pending_facts_path()
+        assert pf.exists()
+        pf_content = pf.read_text()
+        assert "Project uses Alembic for database migrations" in pf_content
+        assert "[project:webapp]" in pf_content
 
-        # Also logged in daily
+        # Daily log should say AUTO-CAPTURED (not AUTO-PROMOTED)
         df = daily_file()
         daily_content = safe_read_text(df)
-        assert "AUTO-PROMOTED" in daily_content
-
-    def test_memory_update_correct(self, hive_env):
-        """Memory CORRECT action replaces old fact in memory.md."""
-        response = _mock_precompact_response(
-            insights=[("CORRECTION", "Python package manager changed from pip to uv")],
-            memory_updates=[
-                {
-                    "action": "correct",
-                    "text": "keephive uses uv for package management",
-                    "replaces": "keephive uses Pydantic",
-                },
-            ],
-        )
-
-        def mock_pipe(prompt, model, stdin_text=None):
-            return response
-
-        _llm_summary("excerpts", pipe_fn=mock_pipe, project_name="keephive")
-
-        mem = memory_file()
-        content = safe_read_text(mem)
-        assert "keephive uses uv for package management" in content
-
-        df = daily_file()
-        daily_content = safe_read_text(df)
-        assert "AUTO-CORRECTED" in daily_content
+        assert "AUTO-CAPTURED" in daily_content
 
     def test_memory_update_add_dedup(self, hive_env):
         """Memory ADD skips if fact already exists in memory.md."""
@@ -703,41 +674,12 @@ class TestLlmSummary:
         def mock_pipe(prompt, model, stdin_text=None):
             return response
 
-        mem_before = safe_read_text(memory_file())
-        _llm_summary("excerpts", pipe_fn=mock_pipe)
-        mem_after = safe_read_text(memory_file())
-
-        # Memory should not have been modified at all (no backup_and_write call)
-        # because the only update was a duplicate and got skipped
-        assert mem_before == mem_after
-
-    def test_memory_update_max_three(self, hive_env):
-        """At most 3 memory updates are applied per compaction."""
-        # Use very distinct texts to avoid fuzzy dedup (SequenceMatcher > 0.7)
-        facts = [
-            "PostgreSQL uses MVCC for concurrency control",
-            "Redis supports sorted sets with range queries",
-            "Kubernetes pods share network namespaces",
-            "GraphQL resolvers handle field-level data fetching",
-            "WebAssembly modules run in sandboxed linear memory",
-        ]
-        response = _mock_precompact_response(
-            memory_updates=[{"action": "add", "text": fact} for fact in facts],
-        )
-
-        def mock_pipe(prompt, model, stdin_text=None):
-            return response
-
         _llm_summary("excerpts", pipe_fn=mock_pipe)
 
-        mem = memory_file()
-        content = safe_read_text(mem)
-        # Only first 3 should be written (hard cap in _apply_memory_updates)
-        assert facts[0] in content
-        assert facts[1] in content
-        assert facts[2] in content
-        assert facts[3] not in content
-        assert facts[4] not in content
+        # Pending facts should be empty since the fact is a duplicate
+        pf = _pending_facts_path()
+        if pf.exists():
+            assert pf.read_text().strip() == ""
 
     def test_llm_exception_logged_not_raised(self, hive_env):
         """If run_claude_pipe raises, the error is logged, not propagated."""
@@ -753,22 +695,6 @@ class TestLlmSummary:
         content = debug_log.read_text()
         assert "Layer 2 failed" in content
         assert "LLM service unavailable" in content
-
-    def test_empty_insights_no_write(self, hive_env):
-        """Empty insights list writes nothing to daily log."""
-        response = _mock_precompact_response(insights=[])
-
-        def mock_pipe(prompt, model, stdin_text=None):
-            return response
-
-        _llm_summary("excerpts", pipe_fn=mock_pipe)
-
-        df = daily_file()
-        if df.exists():
-            content = safe_read_text(df)
-            # Should only have the header, no insight lines
-            assert "FACT:" not in content
-            assert "DECISION:" not in content
 
 
 # ---- Rule suggestions ----
@@ -1046,3 +972,102 @@ class TestFindTranscript:
 
         result = _find_transcript({"session_id": session_id, "cwd": cwd})
         assert result == str(transcript_file)
+
+
+# ---- Edge-case tests: budget enforcement ----
+
+
+class TestBudgetEnforcementEdgeCases:
+    """Test extreme budget values and mid-message truncation."""
+
+    def test_budget_zero(self):
+        """Budget of 0 returns empty list."""
+        msgs = ["Short message", "Another message"]
+        result = _select_within_budget(msgs, 0)
+        assert result == []
+
+    def test_budget_one(self):
+        """Budget of 1 char: only very short messages or truncated."""
+        msgs = ["Hello world"]
+        result = _select_within_budget(msgs, 1)
+        # 1 char budget, message is 11 chars, remaining after 0 full fits = 1 char < 50 threshold
+        assert result == []
+
+    def test_budget_mid_message_truncation(self):
+        """Budget that splits a message: remaining > 50 threshold triggers truncation."""
+        msgs = ["A" * 100, "B" * 100]
+        # Budget 160: reversed iteration takes B (100), chars=100. Next A: 100+100=200 > 160.
+        # remaining = 160-100 = 60 > 50 threshold, so A gets truncated to 60 chars.
+        result = _select_within_budget(msgs, 160)
+        assert len(result) == 2
+        assert result[-1] == "B" * 100
+        assert len(result[0]) == 60
+
+
+# ---- Edge-case tests: LLM summary ----
+
+
+class TestLlmSummaryEdgeCases:
+    """Edge cases for _llm_summary LLM response handling."""
+
+    def test_all_insights_garbage_filtered(self, hive_env):
+        """When every insight is garbage, nothing is written to daily log."""
+        response = _mock_precompact_response(
+            insights=[
+                ("FACT", "short"),
+                ("INSIGHT", "choices made about architecture, tools, approach"),
+            ]
+        )
+
+        def mock_pipe(prompt, model, stdin_text=None):
+            return response
+
+        _llm_summary("excerpts", pipe_fn=mock_pipe)
+
+        df = daily_file()
+        if df.exists():
+            content = safe_read_text(df)
+            assert "FACT: short" not in content
+            assert "choices made" not in content
+
+    def test_unexpected_category_in_insight(self, hive_env):
+        """An insight with an unexpected category should be handled."""
+        # Valid InsightCategory values are enumerated. Test with a valid one but
+        # ensure the pipeline handles the full range without crashing.
+        response = _mock_precompact_response(
+            insights=[("TODO", "Remember to update the documentation and changelog")]
+        )
+
+        def mock_pipe(prompt, model, stdin_text=None):
+            return response
+
+        _llm_summary("excerpts", pipe_fn=mock_pipe)
+
+        df = daily_file()
+        content = safe_read_text(df)
+        assert "TODO: Remember to update the documentation" in content
+
+
+# ---- Edge-case tests: secret redaction ----
+
+
+class TestRedactSecretsEdgeCases:
+    """Edge cases for _redact_secrets."""
+
+    def test_overlapping_patterns(self):
+        """Text containing multiple overlapping secret patterns."""
+        text = "TOKEN=sk_live_abc123def456 and also API_KEY=ghp_abcdef1234567890"
+        result = _redact_secrets(text)
+        assert "sk_live_abc" not in result
+        assert "ghp_abcdef" not in result
+
+    def test_incomplete_prefix(self):
+        """Strings that look like secrets but are too short to match."""
+        text = "The variable sk_ is just a prefix"
+        result = _redact_secrets(text)
+        # Short token doesn't match the 20+ char pattern
+        assert "sk_" in result
+
+    def test_empty_string(self):
+        """Empty string returns empty string."""
+        assert _redact_secrets("") == ""

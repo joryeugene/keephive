@@ -6,7 +6,7 @@ import re
 import shutil
 import sys
 
-from keephive.output import console
+from keephive.output import console, show_hint
 from keephive.storage import (
     active_profile,
     ensure_dirs,
@@ -78,6 +78,8 @@ def _list_profiles() -> None:
     else:
         console.print(f"\n[dim]Active: default  |  Data: {hive_dir()}[/dim]")
 
+    show_hint("hive profile use <name>")
+
 
 def _use_profile(name: str) -> None:
     """Switch to a profile."""
@@ -132,6 +134,7 @@ def _create_profile(name: str, seed: bool = False) -> None:
 
     console.print(f"[green]Created profile: {name}[/green]")
     console.print(f"[dim]Data: {target}[/dim]")
+    show_hint(f"hive profile use {name}")
 
     if seed:
         try:

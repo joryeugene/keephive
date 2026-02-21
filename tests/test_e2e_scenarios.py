@@ -578,3 +578,66 @@ class TestGoldenExpansion:
         screen.has("Profiles", "default")
         save_terminal_output("golden/profile_list", term)
         assert_golden(screen, "profile_list", update=update_golden)
+
+
+# ============================================================
+#  Category 10: Watch Mode
+# ============================================================
+
+
+@pytest.mark.terminal
+class TestWatchMode:
+    def test_status_watch_starts_and_stops(self, term, save_terminal_output):
+        """hive s --watch shows header, Ctrl+C exits cleanly."""
+        term._send("python -m keephive s --watch --interval 1")
+        screen = term.wait_for("watching")
+        screen.has("watching", "ctrl+c to stop", "keephive")
+        term.send_keys("C-c")
+        final = term.wait_for("Watch stopped")
+        final.lacks("Traceback", "Error")
+        save_terminal_output("watch/status_start_stop", term)
+
+    def test_status_watch_updates_on_new_entry(self, term, save_terminal_output):
+        """Watch refreshes when a new fact is added."""
+        from datetime import date
+
+        # Add initial fact so status has content
+        term.type("python -m keephive r 'FACT: baseline entry for watch test'")
+        # Start watch
+        term._send("python -m keephive s --watch --interval 1")
+        term.wait_for("watching")
+        # Write directly to daily file (simulates hook/other terminal)
+        # Must use HH:MM:SS format (storage.py regex requires 3 groups)
+        time.sleep(0.5)
+        daily = term.hive_home / "daily" / f"{date.today().isoformat()}.md"
+        with open(daily, "a") as f:
+            f.write("- [23:59:59] FACT: watch-trigger-test-unique\n")
+        # Wait for the watch to pick up the change
+        screen = term.wait_for("watch-trigger-test-unique", timeout=5)
+        screen.has("watch-trigger-test-unique")
+        # Stop
+        term.send_keys("C-c")
+        term.wait_for("Watch stopped")
+        save_terminal_output("watch/status_live_update", term)
+
+    def test_log_watch_starts_and_stops(self, term, save_terminal_output):
+        """hive l --watch shows log content, Ctrl+C exits cleanly."""
+        term.type("python -m keephive r 'FACT: log watch test entry'")
+        term._send("python -m keephive l --watch --interval 1")
+        screen = term.wait_for("watching")
+        screen.has("watching", "log watch test entry")
+        term.send_keys("C-c")
+        final = term.wait_for("Watch stopped")
+        final.lacks("Traceback", "Error")
+        save_terminal_output("watch/log_start_stop", term)
+
+    def test_todo_watch_starts_and_stops(self, term, save_terminal_output):
+        """hive todo --watch shows todo list, Ctrl+C exits cleanly."""
+        term.type("python -m keephive t 'implement widget factory for dashboard'")
+        term._send("python -m keephive todo --watch --interval 1")
+        screen = term.wait_for("watching")
+        screen.has("watching", "implement widget factory for dashboard")
+        term.send_keys("C-c")
+        final = term.wait_for("Watch stopped")
+        final.lacks("Traceback", "Error")
+        save_terminal_output("watch/todo_start_stop", term)

@@ -105,8 +105,8 @@ def _reflect_scan(args: list[str]) -> None:
         console.print(f"  [bold]Auto-captured:[/bold] {summary_count} session summaries")
         console.print()
 
-    console.print("  -> [dim]hive rf analyze[/dim]    Find patterns with AI (~20s)")
-    console.print("  -> [dim]hive l[/dim]             View today's entries")
+    console.print("  \u2192 [dim]hive rf analyze[/dim]    Find patterns with AI (~20s)")
+    console.print("  \u2192 [dim]hive l[/dim]             View today's entries")
 
 
 def _reflect_analyze(args: list[str]) -> None:
@@ -174,7 +174,7 @@ Rules:
         notify_sound(False)
         console.print(f"[err]LLM failed: {e}[/err]")
         console.print("[dim]Check: claude -p availability, CLAUDECODE env var[/dim]")
-        console.print("  -> [dim]hive rf[/dim] for instant scan (no AI needed)")
+        console.print("  \u2192 [dim]hive rf[/dim] for instant scan (no AI needed)")
         return
     notify_sound(True)
     console.print()
@@ -216,7 +216,7 @@ Rules:
     if response.actions:
         console.print("[bold]## Suggested Actions[/bold]")
         for action in response.actions:
-            console.print(f"  [info]-> {action}[/info]")
+            console.print(f"  [info]\u2192 {action}[/info]")
         console.print()
 
     if (
@@ -235,10 +235,10 @@ Rules:
     unguided = [p for p in response.patterns if not p.has_guide]
     for p in unguided[:2]:
         safe = p.topic.lower().replace(" ", "-").replace("/", "-")
-        console.print(f"[dim]-> hive rf draft {safe}    Draft {p.topic} guide from logs[/dim]")
+        console.print(f"[dim]\u2192 hive rf draft {safe}    Draft {p.topic} guide from logs[/dim]")
 
     if response.additions or response.contradictions:
-        console.print("[dim]-> hive rf apply    Review and graduate to working memory[/dim]")
+        console.print("[dim]\u2192 hive rf apply    Review and graduate to working memory[/dim]")
 
 
 def _analyze_post_pass(response: ReflectAnalyzeResponse, current_memory: str) -> None:
@@ -259,7 +259,7 @@ def _analyze_post_pass(response: ReflectAnalyzeResponse, current_memory: str) ->
         console.print("[bold]## Not Yet in Working Memory[/bold]")
         for a in not_in_memory:
             console.print(f'  "{a.fact}" (from {a.source})')
-        console.print("  -> [dim]hive rf apply[/dim] to review")
+        console.print("  \u2192 [dim]hive rf apply[/dim] to review")
         console.print()
 
 
@@ -289,7 +289,7 @@ def _reflect_apply(args: list[str]) -> None:
         response = ReflectAnalyzeResponse.model_validate(data)
     except (json.JSONDecodeError, Exception) as e:
         console.print(f"[err]Error reading analysis: {e}[/err]")
-        console.print("  -> [dim]hive rf analyze[/dim] to regenerate")
+        console.print("  \u2192 [dim]hive rf analyze[/dim] to regenerate")
         return
 
     # Deduplicate contradictions targeting the same memory line
@@ -479,7 +479,7 @@ def _reflect_draft(args: list[str]) -> None:
 
     if not entries:
         console.print(f'[warn]No entries found matching "{topic}"[/warn]')
-        console.print(f"  -> [dim]hive rc {topic}[/dim] to search all tiers")
+        console.print(f"  \u2192 [dim]hive rc {topic}[/dim] to search all tiers")
         return
 
     # Deduplicate contexts (same block from same day)

@@ -17,6 +17,8 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries",
+    "Environment :: Console",
+    "Topic :: Software Development :: Utilities",
 ]
 dependencies = [
     "pydantic>=2.12.5",
@@ -43,6 +45,7 @@ build-backend = "uv_build"
 markers = [
     "llm: real claude -p calls (slow, requires claude CLI)",
     "terminal: real tmux terminal tests (requires tmux)",
+    "integration: multi-step state machine tests",
 ]
 addopts = "-m 'not llm and not terminal' --strict-markers"
 

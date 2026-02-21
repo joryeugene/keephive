@@ -187,7 +187,7 @@ class TestBuildContext:
         from keephive.hooks.sessionstart import build_context
 
         ctx = build_context("/tmp/test", "test")
-        assert "stale" in ctx.lower()
+        assert "unverified 30+ days" in ctx.lower()
 
     def test_workflows_not_statically_injected(self, hive_env):
         from keephive.hooks.sessionstart import build_context

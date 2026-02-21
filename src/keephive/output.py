@@ -112,6 +112,14 @@ def notify_sound(success: bool = True) -> None:
     subprocess.Popen(["afplay", sound], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def show_hint(command: str, reason: str = "") -> None:
+    """Show a next-action hint after command output."""
+    if reason:
+        console.print(f"\n  [dim]{command}[/dim]  [dim]({reason})[/dim]")
+    else:
+        console.print(f"\n  [dim]{command}[/dim]")
+
+
 def prompt_yn(prompt: str, default_yes: bool = True) -> bool:
     """Y/n confirmation. Returns True for yes. Enter accepts the default."""
     import sys

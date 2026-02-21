@@ -207,6 +207,35 @@ class Terminal:
             check=True,
         )
 
+    def send_keys(self, keys: str) -> None:
+        """Send tmux key sequences without Enter.
+
+        Unlike send_char (single literal char), this handles tmux key names
+        like C-c (Ctrl+C), C-d, Escape. Used to stop long-running commands.
+        """
+        subprocess.run(
+            ["tmux", "send-keys", "-t", self.session, keys],
+            capture_output=True,
+            check=True,
+        )
+
+    def wait_for(self, text: str, timeout: float = 5.0) -> Screen:
+        """Poll screen until text appears in the plain output.
+
+        Used for long-running commands (like --watch) where marker-based
+        sync via type() would timeout. Raises TimeoutError if not found.
+        """
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            raw = self._capture(ansi=False)
+            if text in raw:
+                ansi = self._capture(ansi=True)
+                return Screen(raw, ansi, f"(wait_for {text!r})")
+            time.sleep(POLL_INTERVAL)
+        raise TimeoutError(
+            f"Text {text!r} not found within {timeout}s\nScreen:\n{self._capture(ansi=False)}"
+        )
+
     def screen(self) -> Screen:
         """Read current screen without typing anything."""
         raw = self._capture(ansi=False)

@@ -23,6 +23,19 @@ DEFAULT_PORT = 3847
 _FAVICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><polygon points="16,2 28,9 28,23 16,30 4,23 4,9" fill="#f59e0b" stroke="#d97706" stroke-width="2"/><polygon points="16,8 22,12 22,20 16,24 10,20 10,12" fill="#fbbf24"/></svg>'
 _FAVICON = "data:image/svg+xml;base64," + base64.b64encode(_FAVICON_SVG.encode()).decode()
 
+
+def _keepbee_data_uri() -> str:
+    """Load keepbee.gif as a base64 data URI for the nav brand logo."""
+    try:
+        from importlib import resources
+
+        ref = resources.files("keephive.data").joinpath("keepbee.gif")
+        data = ref.read_bytes()
+        return "data:image/gif;base64," + base64.b64encode(data).decode()
+    except Exception:
+        return ""
+
+
 # ---- Markdown renderer ----
 
 _INLINE_RE = [
@@ -153,7 +166,8 @@ _CSS = """
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;font-size:13px;line-height:1.6;letter-spacing:-0.006em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 nav{background:#161b22;border-bottom:1px solid #30363d;padding:0 16px;display:flex;align-items:center;gap:2px;position:sticky;top:0;z-index:100}
-.nav-brand{color:#f0f6fc;font-weight:700;font-size:14px;padding:10px 10px 10px 0;margin-right:10px;border-right:1px solid #30363d}
+.nav-brand{color:#f0f6fc;font-weight:700;font-size:14px;padding:10px 10px 10px 0;margin-right:10px;border-right:1px solid #30363d;text-decoration:none;display:flex;align-items:center;gap:6px}
+.nav-logo{width:28px;height:28px;image-rendering:pixelated}
 .nav-tab{color:#8b949e;text-decoration:none;padding:10px 10px;border-bottom:2px solid transparent;font-size:12px;white-space:nowrap;transition:color .1s}
 .nav-tab:hover{color:#c9d1d9}.nav-tab.active{color:#f0f6fc;border-bottom-color:#58a6ff;font-weight:600}
 .nav-right{margin-left:auto;display:flex;align-items:center;gap:8px;padding-left:12px}
@@ -1422,7 +1436,7 @@ def _get_log_data(date_str: str | None = None) -> dict:
             if not cat:
                 if rest.upper().startswith("DONE:"):
                     cat = "done"
-                elif rest.upper().startswith("AUTO-PROMOTED:"):
+                elif rest.upper().startswith(("AUTO-PROMOTED:", "AUTO-CAPTURED:")):
                     cat = "auto"
             entries.append({"time": ts[:5], "text": rest, "cat": cat})
     from keephive.clock import get_today
@@ -1823,7 +1837,7 @@ def _render_log_panel(
         "todo": "TODO:",
         "correction": "CORRECTION:",
         "done": "DONE:",
-        "auto": "AUTO-PROMOTED:",
+        "auto": "AUTO-CAPTURED:",
     }
     rows = ""
     for e in reversed(entries):
@@ -1837,6 +1851,8 @@ def _render_log_panel(
             pfx = _CAT_PREFIX[cat]
             if text.upper().startswith(pfx):
                 text = text[len(pfx) :].lstrip()
+            elif cat == "auto" and text.upper().startswith("AUTO-PROMOTED:"):
+                text = text[len("AUTO-PROMOTED:") :].lstrip()
         rows += (
             f'<div class="log-entry" data-type="{_e(cat)}" tabindex="0" role="listitem">'
             f'<span class="log-time">{_e(e["time"])}</span>'
@@ -3691,6 +3707,12 @@ def render_page(view_name: str, port: int) -> str:
             f'<a class="nav-tab{active_cls}" href="{_e(vdef["path"])}">{_e(vdef["title"])}</a>'
         )
 
+    bee_uri = _keepbee_data_uri()
+    if bee_uri:
+        brand_html = f'<a class="nav-brand" href="/"><img src="{bee_uri}" alt="hive" class="nav-logo">hive</a>'
+    else:
+        brand_html = '<a class="nav-brand" href="/">hive</a>'
+
     content = render_fragment(view_name)
 
     return f"""<!DOCTYPE html>
@@ -3704,7 +3726,7 @@ def render_page(view_name: str, port: int) -> str:
 </head>
 <body data-view="{_e(view_name)}" data-port="{port}">
 <nav role="navigation" aria-label="Dashboard views">
-  <span class="nav-brand">hive</span>
+  {brand_html}
   {nav_tabs}
   <div class="nav-right">
     <input id="search-input" type="text" placeholder="search memory\u2026" autocomplete="off" role="searchbox" aria-label="Search memory">

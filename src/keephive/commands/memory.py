@@ -57,6 +57,10 @@ _FRICTION_ANNOTATION_RE = re.compile(r"^\[\d+ sessions?: [^\]]+\]\s*")
 
 def cmd_mem(args: list[str]) -> None:
     """Show, add, or remove facts from working memory."""
+    if args and args[0] == "review":
+        cmd_mem_review(args[1:])
+        return
+
     if not args:
         mem = memory_file()
         if mem.exists() and mem.read_text().strip():
@@ -65,11 +69,11 @@ def cmd_mem(args: list[str]) -> None:
             console.print(f"[bold]Working Memory[/bold] ({len(facts)} facts)\n")
             console.print(text)
             console.print(
-                '\n  -> hive mem "fact" to add  |  hive mem rm "pattern" to remove  |  hive e to edit'
+                '\n  \u2192 hive mem "fact" to add  |  hive mem rm "pattern" to remove  |  hive e to edit'
             )
         else:
             console.print("[dim]No working memory yet[/dim]")
-            console.print('  -> hive mem "your first fact" to start')
+            console.print('  \u2192 hive mem "your first fact" to start')
         return
 
     if args[0] == "rm":
@@ -97,6 +101,115 @@ def cmd_mem(args: list[str]) -> None:
     console.print("[dim]Backup: memory.md.bak[/dim]")
 
 
+def cmd_mem_review(args: list[str]) -> None:
+    """Review and accept/reject pending facts from .pending-facts.md."""
+    from keephive.storage import hive_dir
+
+    pending_path = hive_dir() / ".pending-facts.md"
+    if not pending_path.exists() or not pending_path.read_text().strip():
+        console.print("[dim]No pending facts to review.[/dim]")
+        return
+
+    lines = [ln for ln in pending_path.read_text().splitlines() if ln.strip().startswith("- ")]
+    if not lines:
+        console.print("[dim]No pending facts to review.[/dim]")
+        pending_path.write_text("")
+        return
+
+    accepted: list[str] = []
+    corrections: list[tuple[str, str]] = []  # (new_text, old_text)
+    remaining: list[str] = []
+
+    for line in lines:
+        fact_text = line.lstrip("- ").strip()
+
+        # Extract metadata
+        # [replaces:...] means this is a correction
+        replaces_match = re.search(r"\[replaces:(.+?)\]", fact_text)
+        auto_match = re.search(r"\[auto:\d{4}-\d{2}-\d{2}\]", fact_text)
+        proj_match = re.search(r"\[project:[^\]]+\]", fact_text)
+
+        # Strip metadata for display and storage
+        clean_fact = fact_text
+        if replaces_match:
+            clean_fact = clean_fact.replace(replaces_match.group(0), "").strip()
+        if auto_match:
+            clean_fact = clean_fact.replace(auto_match.group(0), "").strip()
+        if proj_match:
+            proj_tag = proj_match.group(0)
+            clean_fact = clean_fact.replace(proj_tag, "").strip()
+        else:
+            proj_tag = ""
+
+        if replaces_match:
+            old_text = replaces_match.group(1)
+            console.print("\n  [warn]Correction:[/warn]")
+            console.print(f"    Old: [dim]{old_text}[/dim]")
+            console.print(f"    New: [bold]{clean_fact}[/bold]")
+            if proj_tag:
+                console.print(f"    {proj_tag}")
+        else:
+            console.print("\n  Pending fact:")
+            console.print(f"  [bold]{clean_fact}[/bold]")
+            if proj_tag:
+                console.print(f"    {proj_tag}")
+
+        console.print()
+        response = input("  Add to memory? [y/N/e(dit)]: ").strip().lower()
+        if response == "y":
+            if replaces_match:
+                corrections.append((clean_fact, replaces_match.group(1)))
+            else:
+                accepted.append(clean_fact)
+        elif response.startswith("e"):
+            edited = input("  Edit fact: ").strip()
+            if edited:
+                if replaces_match:
+                    corrections.append((edited, replaces_match.group(1)))
+                else:
+                    accepted.append(edited)
+            else:
+                remaining.append(line)
+        else:
+            remaining.append(line)
+
+    # Apply all changes to memory.md in a single backup-and-write pass
+    if corrections or accepted:
+        mem = memory_file()
+        ensure_dirs()
+        if not mem.exists():
+            mem.write_text("# Working Memory\n\n")
+        content = mem.read_text()
+
+        # Corrections: find-and-replace in content
+        if corrections:
+            from keephive.hooks.precompact import _correct_in_memory
+
+            today_str = today()
+            for new_text, old_text in corrections:
+                content = _correct_in_memory(content, old_text, new_text, today_str)
+            console.print(f"\n[ok]Applied {len(corrections)} correction(s).[/ok]")
+
+        # Additions: append new facts
+        if accepted:
+            if not content.endswith("\n"):
+                content += "\n"
+            for fact in accepted:
+                clean = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", fact)
+                content += f"- {clean} [verified:{today()}]\n"
+            console.print(f"\n[ok]Added {len(accepted)} fact(s) to memory.[/ok]")
+
+        backup_and_write(mem, content)
+
+    # Write back remaining
+    if remaining:
+        pending_path.write_text("\n".join(remaining) + "\n")
+        console.print(f"[dim]{len(remaining)} fact(s) deferred.[/dim]")
+    else:
+        pending_path.write_text("")
+        console.print("[dim]No more pending facts.[/dim]")
+
+
 def cmd_rule(args: list[str]) -> None:
     """Show, add, or remove rules from working rules."""
     if not args:
@@ -111,11 +224,11 @@ def cmd_rule(args: list[str]) -> None:
             console.print(f"[bold]Working Rules[/bold] ({len(rules)} rules)\n")
             console.print(text)
             console.print(
-                '\n  -> hive rule "rule" to add  |  hive rule rm "pattern" to remove  |  hive e rules to edit'
+                '\n  \u2192 hive rule "rule" to add  |  hive rule rm "pattern" to remove  |  hive e rules to edit'
             )
         else:
             console.print("[dim]No working rules yet[/dim]")
-            console.print('  -> hive rule "your first rule" to start')
+            console.print('  \u2192 hive rule "your first rule" to start')
         return
 
     if args[0] == "learn":

@@ -23,7 +23,7 @@ from keephive.health import (
 from keephive.health import (
     get_installed_version as _get_installed_version,
 )
-from keephive.output import console, notify_sound, prompt_yn
+from keephive.output import console, notify_sound, prompt_yn, show_hint
 from keephive.storage import (
     archive_dir,
     collect_todos,
@@ -201,6 +201,7 @@ def cmd_doctor(args: list[str]) -> None:
         console.print("[ok]All checks passed[/ok]")
     else:
         console.print(f"[err]{issues} issue(s) found[/err]")
+        show_hint("hive setup")
 
     console.print()
     console.print("  [dim]hive dr[/dim]  checks setup, hooks, duplicate TODOs")

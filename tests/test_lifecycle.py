@@ -98,7 +98,7 @@ class TestSessionStartLifecycle:
 
         ctx = build_context("/test/project", "project")
         # The test fixture has a fact from 2020-01-01 which is definitely stale
-        assert "stale" in ctx.lower()
+        assert "unverified 30+ days" in ctx.lower()
 
     def test_context_includes_todos(self, hive_env, daily_with_entries):
         from keephive.hooks.sessionstart import build_context
@@ -463,7 +463,7 @@ class TestStatusDisplay:
 
         cmd_status([])
         out = capsys.readouterr().out
-        assert "stale" in out.lower()
+        assert "stale" in out.lower() or "unverified" in out.lower()
 
     def test_status_shows_todos(self, hive_env, capsys):
         """Open TODOs appear in status output."""
@@ -702,8 +702,8 @@ class TestPreCompactProjectAttribution:
         assert "[project:" not in content
         assert "Chose Postgres over SQLite" in content
 
-    def test_auto_promote_includes_project_tag(self, hive_env):
-        """AUTO-PROMOTED entries in the daily log include the project tag."""
+    def test_auto_capture_includes_project_tag(self, hive_env):
+        """AUTO-CAPTURED entries in the daily log include the project tag."""
         from keephive.hooks.precompact import _llm_summary
         from keephive.models import PreCompactResponse
         from keephive.storage import daily_file
@@ -724,5 +724,5 @@ class TestPreCompactProjectAttribution:
         _llm_summary("some excerpts", pipe_fn=fake_pipe, project_name="myapp")
 
         content = daily_file().read_text()
-        assert "AUTO-PROMOTED" in content
+        assert "AUTO-CAPTURED" in content
         assert "[project:myapp]" in content

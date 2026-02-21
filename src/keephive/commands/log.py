@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from keephive.output import console, notify_sound
 from keephive.storage import (
     count_daily_entries,
@@ -67,11 +69,11 @@ def _log_summarize() -> None:
         print(f"[keephive] summarize failed: {e}", file=sys.stderr)
         return
 
-    plain = "\n".join(f"• {b}" for b in resp.bullets)
+    plain = "\n".join(f"\u2022 {b}" for b in resp.bullets)
     if sys.stdout.isatty():
         console.print(f"[bold]Today ({today()}) -- summary:[/bold]")
         for bullet in resp.bullets:
-            console.print(f"  • {bullet}")
+            console.print(f"  \u2022 {bullet}")
         from keephive.output import copy_to_clipboard
 
         if copy_to_clipboard(plain):
@@ -87,26 +89,16 @@ def _log_summarize() -> None:
     notify_sound(True)
 
 
-def cmd_log(args: list[str]) -> None:
-    ensure_daily()
-
-    if args and args[0] == "summarize":
-        _log_summarize()
-        return
-
-    date_arg = args[0] if args else ""
-    target_date = _parse_date_arg(date_arg)
-
+def _render_log(target_date: str) -> None:
+    """Render a single day's log (extracted for watch_loop reuse)."""
     df = daily_file(target_date)
     if df.exists():
-        # Capture mix header: count entries by category in this specific log file
         try:
             import re as _re
 
             content = df.read_text()
             total = sum(1 for line in content.splitlines() if line.startswith("- ["))
             if total > 0:
-                # Count by prefix: FACT, DECISION, INSIGHT, TODO, DONE, etc.
                 prefix_re = _re.compile(
                     r"^- \[[\d:]+\]\s*(?:auto:\s*)?(FACT|DECISION|INSIGHT|TODO|DONE|CORRECTION|VERIFY|SUMMARY):",
                     _re.MULTILINE,
@@ -167,4 +159,35 @@ def cmd_log(args: list[str]) -> None:
                 console.print(f"    {day_str}  ({count} {entry_word})")
             console.print()
 
-        console.print('  -> [dim]hive r "insight"[/dim] to start logging')
+        console.print('  \u2192 [dim]hive r "insight"[/dim] to start logging')
+
+
+def _watch_paths_log(target_date: str) -> list[Path]:
+    """Paths to watch for log changes."""
+    return [daily_file(target_date), daily_dir()]
+
+
+def cmd_log(args: list[str]) -> None:
+    ensure_daily()
+
+    if args and args[0] == "summarize":
+        _log_summarize()
+        return
+
+    # Strip watch flags before parsing date arg
+    from keephive.watch import parse_watch_args, watch_loop
+
+    remaining, watch, interval = parse_watch_args(args)
+
+    date_arg = remaining[0] if remaining else ""
+    target_date = _parse_date_arg(date_arg)
+
+    if watch:
+        watch_loop(
+            lambda: _render_log(target_date),
+            lambda: _watch_paths_log(target_date),
+            interval,
+        )
+        return
+
+    _render_log(target_date)

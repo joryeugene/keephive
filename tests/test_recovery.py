@@ -15,31 +15,24 @@ import pytest
 class TestTruncatedStatsJson:
     """Truncated .stats.json should return empty structure, not crash."""
 
-    def test_truncated_json_returns_empty(self, hive_env: Path):
+    def test_corrupt_data_returns_default(self, hive_env: Path):
+        """Truncated JSON, empty file, and missing file all return empty days."""
         from keephive.storage import read_stats, stats_file
 
         sf = stats_file()
         sf.parent.mkdir(parents=True, exist_ok=True)
-        sf.write_text('{"days": {"2026-02-01": {"commands":')  # truncated
-        result = read_stats()
-        assert result == {"days": {}}
 
-    def test_empty_file_returns_empty(self, hive_env: Path):
-        from keephive.storage import read_stats, stats_file
+        # Truncated JSON
+        sf.write_text('{"days": {"2026-02-01": {"commands":')
+        assert read_stats() == {"days": {}}
 
-        sf = stats_file()
-        sf.parent.mkdir(parents=True, exist_ok=True)
+        # Empty file
         sf.write_text("")
-        result = read_stats()
-        assert result == {"days": {}}
+        assert read_stats() == {"days": {}}
 
-    def test_missing_file_returns_empty(self, hive_env: Path):
-        from keephive.storage import read_stats, stats_file
-
-        sf = stats_file()
-        assert not sf.exists()
-        result = read_stats()
-        assert result == {"days": {}}
+        # Missing file
+        sf.unlink()
+        assert read_stats() == {"days": {}}
 
     def test_valid_json_missing_days_key(self, hive_env: Path):
         from keephive.storage import read_stats, stats_file
@@ -131,21 +124,20 @@ class TestProfileCorruption:
 class TestRecurringCorruption:
     """Invalid recurring.md entries should be skipped."""
 
-    def test_empty_recurring_returns_no_tasks(self, hive_env: Path):
+    def test_absent_or_empty_returns_no_tasks(self, hive_env: Path):
+        """Missing file and empty file both return empty list."""
         from keephive.storage import due_recurring
 
+        # Missing file
+        assert due_recurring() == []
+
+        # Empty file
         rf = hive_env / "working" / "recurring.md"
         rf.write_text("")
-        result = due_recurring()
-        assert result == []
+        assert due_recurring() == []
 
-    def test_missing_recurring_returns_no_tasks(self, hive_env: Path):
-        from keephive.storage import due_recurring
-
-        result = due_recurring()
-        assert result == []
-
-    def test_invalid_freq_line_skipped(self, hive_env: Path, monkeypatch):
+    def test_invalid_data_still_returns_valid_tasks(self, hive_env: Path, monkeypatch):
+        """Invalid freq lines and malformed dates are skipped; valid tasks survive."""
         from keephive.storage import due_recurring
 
         monkeypatch.setenv("HIVE_DATE", "2026-02-20")
@@ -154,54 +146,38 @@ class TestRecurringCorruption:
             "# Recurring Tasks\n\n"
             "- [daily] Valid task\n"
             "- [notafreq] Invalid frequency entry\n"
-            "- [weekly] Another valid task\n"
+            "- [weekly] Another valid task\n\n"
+            "## Completed\n\n"
+            "- Valid task: not-a-date\n"
         )
         result = due_recurring()
-        # Both valid tasks should appear (never completed = overdue),
-        # invalid freq should be skipped
         texts = [t for _, t, _ in result]
         assert "Valid task" in texts
         assert "Another valid task" in texts
         assert "Invalid frequency entry" not in texts
 
-    def test_malformed_completed_date_skipped(self, hive_env: Path, monkeypatch):
-        from keephive.storage import due_recurring
-
-        monkeypatch.setenv("HIVE_DATE", "2026-02-20")
-        rf = hive_env / "working" / "recurring.md"
-        rf.write_text(
-            "# Recurring Tasks\n\n- [daily] My task\n\n## Completed\n\n- My task: not-a-date\n"
-        )
-        result = due_recurring()
-        # Task should still appear even with malformed date
-        texts = [t for _, t, _ in result]
-        assert "My task" in texts
-
 
 class TestEvidenceCorruption:
     """Corrupt evidence.json should recover gracefully."""
 
-    def test_corrupt_recall_stats_returns_zero(self, hive_env: Path):
+    def test_corrupt_or_missing_recall_stats_returns_zero(self, hive_env: Path):
+        """Corrupt and missing recall stats both return zero counts."""
         from keephive.storage import get_recall_count
 
+        # Missing file
+        assert get_recall_count("- some fact line") == 0
+
+        # Corrupt file
         sf = hive_env / ".recall-stats.json"
         sf.write_text("not json at all{{{")
-        result = get_recall_count("- some fact line")
-        assert result == 0
-
-    def test_missing_recall_stats_returns_zero(self, hive_env: Path):
-        from keephive.storage import get_recall_count
-
-        result = get_recall_count("- some fact line")
-        assert result == 0
+        assert get_recall_count("- some fact line") == 0
 
     def test_corrupt_recall_stats_hit_rate(self, hive_env: Path):
         from keephive.storage import get_recall_hit_rate
 
         sf = hive_env / ".recall-stats.json"
         sf.write_text("broken")
-        result = get_recall_hit_rate()
-        assert result == (0, 0)
+        assert get_recall_hit_rate() == (0, 0)
 
 
 class TestSafeReadText:
@@ -289,11 +265,22 @@ class TestDebugLog:
 class TestActiveSlotCorruption:
     """Corrupt note slot marker should fall back to default."""
 
-    def test_non_numeric_slot_returns_default(self, hive_env: Path):
+    def test_corrupt_slot_file_returns_default(self, hive_env: Path):
+        """Non-numeric, empty, and missing slot files all fall back to 1."""
         from keephive.storage import active_slot
 
         marker = hive_env / "working" / ".note-active"
+
+        # Non-numeric content
         marker.write_text("abc")
+        assert active_slot() == 1
+
+        # Empty file
+        marker.write_text("")
+        assert active_slot() == 1
+
+        # Missing file
+        marker.unlink()
         assert active_slot() == 1
 
     def test_out_of_range_slot_returns_default(self, hive_env: Path):
@@ -301,16 +288,4 @@ class TestActiveSlotCorruption:
 
         marker = hive_env / "working" / ".note-active"
         marker.write_text("99")
-        assert active_slot() == 1
-
-    def test_empty_slot_file_returns_default(self, hive_env: Path):
-        from keephive.storage import active_slot
-
-        marker = hive_env / "working" / ".note-active"
-        marker.write_text("")
-        assert active_slot() == 1
-
-    def test_missing_slot_file_returns_default(self, hive_env: Path):
-        from keephive.storage import active_slot
-
         assert active_slot() == 1

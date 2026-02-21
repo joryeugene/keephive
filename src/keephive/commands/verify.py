@@ -83,7 +83,9 @@ def cmd_verify(args: list[str]) -> None:
     if not mem.exists():
         if check_mode:
             sys.exit(0)
-        console.print("[warn]No working memory to verify[/warn]")
+        console.print(
+            '[warn]No working memory to verify. Add facts first: hive mem "FACT: something you learned"[/warn]'
+        )
         return
 
     # --check mode: quick stale count, no LLM
@@ -197,7 +199,9 @@ def cmd_verify(args: list[str]) -> None:
 
     if not all_verdicts:
         notify_sound(False)
-        console.print("[err]Verification failed[/err]")
+        console.print(
+            "[err]Verification failed: no verdicts returned. Retry: hive v  |  Check: hive doctor[/err]"
+        )
         return
 
     notify_sound(True)
@@ -246,7 +250,7 @@ def cmd_verify(args: list[str]) -> None:
 
     console.print()
     console.print(
-        "  -> [dim]hive e[/dim] to review working memory  |  [dim]hive s[/dim] to check status"
+        "  \u2192 [dim]hive e[/dim] to review working memory  |  [dim]hive s[/dim] to check status"
     )
 
 
@@ -297,11 +301,11 @@ def apply_verdicts(
                 if not corr.startswith("- "):
                     corr = f"- {corr}"
                 lines[target] = f"{corr} [verified:{today_str}]\n"
-                console.print(f"    [info]-> Updated to: {corr}[/info]")
+                console.print(f"    [info]\u2192 Updated to: {corr}[/info]")
                 updated += 1
         else:
             console.print(f"    [warn]UNCERTAIN[/warn]: {v.reason}")
-            console.print("    [dim]-> Refreshed (not disproven)[/dim]")
+            console.print("    [dim]\u2192 Refreshed (not disproven)[/dim]")
             clean = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", lines[target]).rstrip("\n")
             lines[target] = f"{clean} [verified:{today_str}]\n"
             refreshed += 1

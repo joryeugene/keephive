@@ -64,8 +64,8 @@ def cmd_setup(args: list[str]) -> None:
     console.print()
     console.print("[ok]Setup complete![/ok]")
     console.print()
-    console.print("  -> [dim]hive s[/dim] to check status")
-    console.print("  -> [dim]hive doctor[/dim] to verify everything")
+    console.print("  \u2192 [dim]hive s[/dim] to check status")
+    console.print("  \u2192 [dim]hive doctor[/dim] to verify everything")
 
 
 def _seed_bundled_content(quiet: bool = False, seed_only: bool = False) -> None:

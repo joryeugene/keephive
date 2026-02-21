@@ -39,6 +39,7 @@ def cmd_edit(args: list[str]) -> None:
 
     shortcuts = {
         "memory": working_dir() / "memory.md",
+        "mem": working_dir() / "memory.md",
         "rules": working_dir() / "rules.md",
         "note": slot_file(active_slot()),
         "draft": slot_file(active_slot()),

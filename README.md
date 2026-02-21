@@ -1,6 +1,7 @@
 # keephive
 
 <p align="center">
+  <a href="https://github.com/joryeugene/keephive/actions/workflows/ci.yml"><img src="https://github.com/joryeugene/keephive/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://pypi.org/project/keephive/"><img src="https://img.shields.io/pypi/v/keephive.svg" alt="PyPI"></a>
   <a href="https://pypi.org/project/keephive/"><img src="https://img.shields.io/pypi/pyversions/keephive.svg" alt="Python"></a>
   <a href="https://github.com/joryeugene/keephive/releases/latest"><img src="https://img.shields.io/github/v/release/joryeugene/keephive.svg" alt="GitHub release"></a>
@@ -10,10 +11,15 @@
 A knowledge sidecar for Claude Code. It captures what you learn, verifies it stays true, and surfaces it when relevant.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/mascot.png" width="320" />
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/mascot.png" width="280" />
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/keepbee.gif" width="120" alt="keepbee dancing" />
 </p>
 
 Claude Code forgets everything between sessions. keephive rides alongside it using hooks, an MCP server, and context injection to give it persistent, verified memory.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-home.png" width="800" alt="keephive dashboard" />
+</p>
 
 ---
 
@@ -64,6 +70,13 @@ hive todo                                          # open TODOs
 
 After a few sessions, `hive` shows what your agent has learned:
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/cli-demo.gif" width="700" alt="keephive CLI demo" />
+</p>
+
+<details>
+<summary>Text output</summary>
+
 ```console
 $ hive
 keephive v0.15.0
@@ -85,6 +98,8 @@ keephive v0.15.0
 
   hive go (session) | hive l (log) | hive rf (reflect) | hive help
 ```
+
+</details>
 
 ---
 
@@ -232,6 +247,13 @@ flowchart TD
 | Notes  | `/notes`  | Multi-slot scratchpad with switcher                 |
 
 Auto-refresh (configurable interval), Cmd+K search, split-pane resizing, CRUD forms (remember, add TODO, mark done, append note), log type filters, and zero external dependencies.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-stats.png" width="700" alt="keephive stats view" />
+</p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-knowledge.png" width="700" alt="keephive knowledge view" />
+</p>
 
 **UI feedback loop**: `hive ui-install` generates a bookmarklet and copies it to your clipboard. Paste it as a bookmark URL, then click it on any page to capture an element selector and a note. The feedback is POSTed to the dashboard server, queued in `.ui-queue`, and automatically injected into your next Claude Code prompt via the UserPromptSubmit hook. No copy-paste required.
 

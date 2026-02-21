@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+## v0.20.0
+
+### Features
+
+- **Watch mode (`--watch`)**: Live-refresh for status, log, and todo. Detects file changes via mtime polling and re-renders automatically. New `just watch`, `just watch-log`, `just watch-todo` recipes.
+- **Pending-facts staging queue**: Auto-captured facts from precompact now route to `.pending-facts.md` instead of directly modifying memory. `hive mem review` provides interactive y/N/edit review before promoting to working memory. Status and sessionstart surface pending fact counts.
+- **Next-action hints**: `show_hint()` helper adds contextual `→` hints after command output. Added to todo, doctor, profile, stats, seed, gc, and transfer commands.
+- **Dashboard keepbee logo**: Animated pixel bee in the nav brand. `_keepbee_data_uri()` loads from package data.
+- **GitHub CI + templates**: CI workflow (lint + test on Python 3.12/3.13), bug/feature issue templates, PR template.
+
+### Fixes
+
+- **Output consistency**: Replaced all `->` with `→` across 13 command files. Standardized empty-state messages to `[dim]No {noun} yet[/dim]` pattern.
+- **Clearer user-facing messages**: 13 cryptic messages rewritten with actionable hints. "Play" to "action", "stale" to "unverified 30+ days", abbreviated commands expanded.
+- **`nudge.py` ZeroDivisionError**: `_nudge_interval()` crashed when `HIVE_NUDGE_INTERVAL=0`. Now floors to `max(1, ...)`.
+- **`cmd_mem_review` backup safety**: Single `backup_and_write` pass for corrections + additions (was calling twice, second overwriting first `.bak`).
+
+### Tests
+
+- 1718 tests total (1597 unit/integration + 11 integration sequences + 108 terminal E2E + 11 LLM).
+- **Test quality lift**: Removed ~46 tautological/redundant tests, added 28 edge-case tests, 11 multi-step integration tests.
+- New: `test_integration_sequences.py` (todo lifecycle, memory normalization, recurring done across days, precompact pipeline).
+- New: `test_watch.py` (watch mode parsing, mtime detection, loop behavior).
+- **Test quality gate**: 3-Question Gate standard added to CLAUDE.md with anti-patterns and required patterns.
+- `integration` pytest marker + `just test-integration` recipe.
+
+### Developer
+
+- **Justfile**: `test-integration`, `watch`, `watch-log`, `watch-todo` recipes.
+- **pyproject.toml**: `integration` marker, `Environment :: Console` classifier.
+
 ## v0.19.0
 
 ### Features

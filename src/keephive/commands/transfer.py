@@ -9,7 +9,7 @@ import tarfile
 
 from keephive import __version__
 from keephive.clock import today_iso
-from keephive.output import console
+from keephive.output import console, show_hint
 from keephive.storage import (
     active_profile,
     ensure_dirs,
@@ -77,6 +77,7 @@ def cmd_export(args: list[str]) -> None:
     size_kb = os.path.getsize(output_path) / 1024
     console.print(f"[green]Exported: {output_path} ({size_kb:.1f} KB)[/green]")
     console.print(f"[dim]Profile: {profile}  |  Source: {source}[/dim]")
+    show_hint(f"hive transfer import {output_path}")
 
 
 def cmd_import(args: list[str]) -> None:
@@ -161,3 +162,4 @@ def cmd_import(args: list[str]) -> None:
     source_profile = manifest.get("profile", "unknown")
     console.print(f"[green]Imported from: {archive_path}[/green]")
     console.print(f"[dim]Source profile: {source_profile}  |  Target: {target}[/dim]")
+    show_hint("hive s", "see imported data")

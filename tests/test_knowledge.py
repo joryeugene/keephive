@@ -165,7 +165,7 @@ class TestKnowledgeList:
 
         main(["k"])
         out = capsys.readouterr().out
-        assert "none yet" in out.lower()
+        assert "no guides yet" in out.lower()
 
     def test_list_shows_prompts_section(self, hive_env, capsys):
         pd = hive_env / "knowledge" / "prompts"
@@ -196,7 +196,7 @@ class TestPromptList:
 
         main(["p"])
         out = capsys.readouterr().out
-        assert "none yet" in out.lower()
+        assert "no prompts yet" in out.lower()
 
 
 # ---- _knowledge_rm ----

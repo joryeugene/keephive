@@ -349,8 +349,13 @@ class TestNudgeContent:
         ctx = parsed["hookSpecificOutput"]["additionalContext"]
         lower = ctx.lower()
         # Nudge is either a tool-mentioning nudge or a status-aware message
-        has_tool_mention = "hive_r" in lower or "hive r" in lower
-        has_status = "stale" in lower or "overdue" in lower or "verification" in lower
+        has_tool_mention = "hive_r" in lower or "hive r" in lower or "hive v" in lower
+        has_status = (
+            "stale" in lower
+            or "overdue" in lower
+            or "verification" in lower
+            or "unverified" in lower
+        )
         assert has_tool_mention or has_status, f"Expected actionable nudge content, got: {ctx!r}"
 
 
@@ -392,3 +397,99 @@ class TestUsageTracking:
         sessions = stats["days"].get(day_key, {}).get("sessions", {})
         assert session_id in sessions
         assert sessions[session_id]["prompts"] >= 2
+
+
+# ---- Edge-case tests: counter behavior ----
+
+
+class TestCounterEdgeCases:
+    """Edge cases for counter file corruption and unusual inputs."""
+
+    def _call_hook(self, input_data):
+        if isinstance(input_data, dict):
+            stdin_text = json.dumps(input_data)
+        else:
+            stdin_text = input_data
+        with patch("sys.stdin", StringIO(stdin_text)):
+            hook_userpromptsubmit([])
+
+    def test_corrupted_counter_file(self, hive_env, capsys):
+        """Corrupted counter file is handled gracefully (reset to 0)."""
+        counter_file = hive_env / ".prompt-counter"
+        counter_file.write_text("not valid json at all{{{")
+
+        with patch.dict("os.environ", {"HIVE_NUDGE_INTERVAL": "999"}):
+            self._call_hook({"session_id": "sess-corrupt-counter", "prompt": "test"})
+
+        # Should not crash, counter resets
+        data = json.loads(counter_file.read_text())
+        assert data["count"] == 1
+
+    def test_nudge_interval_zero_treated_as_default(self, hive_env, capsys):
+        """HIVE_NUDGE_INTERVAL=0 should not cause division by zero."""
+        with patch.dict("os.environ", {"HIVE_NUDGE_INTERVAL": "0"}):
+            # Should not raise ZeroDivisionError
+            self._call_hook({"session_id": "sess-zero-interval", "prompt": "test"})
+
+    def test_empty_session_id_produces_no_output(self, hive_env, capsys):
+        """Empty session_id is handled the same as missing."""
+        with patch.dict("os.environ", {"HIVE_NUDGE_INTERVAL": "1"}):
+            self._call_hook({"session_id": "", "prompt": "test"})
+
+        out = capsys.readouterr().out
+        assert out == ""
+
+
+# ---- Edge-case tests: nudge content validity ----
+
+
+class TestNudgeContentEdgeCases:
+    """Test that nudge output is always valid JSON."""
+
+    def _call_hook(self, input_data):
+        if isinstance(input_data, dict):
+            stdin_text = json.dumps(input_data)
+        else:
+            stdin_text = input_data
+        with patch("sys.stdin", StringIO(stdin_text)):
+            hook_userpromptsubmit([])
+
+    def test_nudge_output_is_valid_json(self, hive_env, capsys):
+        """Every nudge output should parse as valid JSON with expected structure."""
+        session_id = "sess-json-valid"
+        payload = {"session_id": session_id, "prompt": "test"}
+
+        with patch.dict("os.environ", {"HIVE_NUDGE_INTERVAL": "1"}):
+            self._call_hook(payload)
+
+        out = capsys.readouterr().out.strip()
+        if out:
+            parsed = json.loads(out)
+            assert "hookSpecificOutput" in parsed
+            assert "hookEventName" in parsed["hookSpecificOutput"]
+            assert "additionalContext" in parsed["hookSpecificOutput"]
+
+    def test_nudge_with_stale_facts_and_overdue_tasks(self, hive_env, capsys, monkeypatch):
+        """Nudge content adapts when there are stale facts and overdue tasks."""
+        monkeypatch.setenv("HIVE_DATE", "2026-02-21")
+        from keephive.storage import memory_file, recurring_file
+
+        # Create stale fact
+        memory_file().write_text("# Memory\n\n- FACT: ancient fact [verified:2020-01-01]\n")
+        # Create overdue recurring
+        rf = recurring_file()
+        rf.write_text(
+            "# Recurring Tasks\n\n- [daily] Check logs\n\n"
+            "## Last Completed\n- Check logs: 2026-01-01\n"
+        )
+
+        session_id = "sess-status-nudge"
+        payload = {"session_id": session_id, "prompt": "test"}
+
+        with patch.dict("os.environ", {"HIVE_NUDGE_INTERVAL": "1"}):
+            self._call_hook(payload)
+
+        out = capsys.readouterr().out.strip()
+        assert out, "Expected nudge output with stale data"
+        parsed = json.loads(out)
+        assert "hookSpecificOutput" in parsed

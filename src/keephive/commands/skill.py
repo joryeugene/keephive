@@ -95,7 +95,7 @@ def _skill_list() -> None:
 
     console.print()
     console.print(
-        "  -> [dim]hive sk publish <name>[/dim]  |  [dim]hive sk sync[/dim]  |  [dim]hive k edit <name>[/dim]"
+        "  → [dim]hive sk publish <name>[/dim]  |  [dim]hive sk sync[/dim]  |  [dim]hive k edit <name>[/dim]"
     )
 
 

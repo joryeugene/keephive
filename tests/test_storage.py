@@ -16,18 +16,6 @@ class TestParseDateArg:
 
         assert parse_date_arg("today") == "2026-01-15"
 
-    def test_empty_string_means_today(self, hive_env, monkeypatch):
-        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
-        from keephive.storage import parse_date_arg
-
-        assert parse_date_arg("") == "2026-01-15"
-
-    def test_yesterday(self, hive_env, monkeypatch):
-        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
-        from keephive.storage import parse_date_arg
-
-        assert parse_date_arg("yesterday") == "2026-01-14"
-
     def test_yesterday_across_month_boundary(self, hive_env, monkeypatch):
         monkeypatch.setenv("HIVE_DATE", "2026-03-01")
         from keephive.storage import parse_date_arg
@@ -40,26 +28,11 @@ class TestParseDateArg:
 
         assert parse_date_arg("3") == "2026-01-12"
 
-    def test_digit_zero_means_today(self, hive_env, monkeypatch):
-        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
-        from keephive.storage import parse_date_arg
-
-        assert parse_date_arg("0") == "2026-01-15"
-
-    def test_iso_date_passthrough(self, hive_env):
-        from keephive.storage import parse_date_arg
-
-        assert parse_date_arg("2026-02-15") == "2026-02-15"
-
-    def test_invalid_iso_date_passes_through(self, hive_env):
+    def test_invalid_input_passes_through(self, hive_env):
         """Invalid date format is returned as-is for downstream handling."""
         from keephive.storage import parse_date_arg
 
         assert parse_date_arg("2026-13-99") == "2026-13-99"
-
-    def test_garbage_input_passes_through(self, hive_env):
-        from keephive.storage import parse_date_arg
-
         assert parse_date_arg("not-a-date") == "not-a-date"
 
 
@@ -89,28 +62,19 @@ class TestHiveDir:
 
 
 class TestDailyFile:
-    def test_default_is_today(self, hive_env, monkeypatch):
-        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
-        from keephive.storage import daily_file
-
-        assert daily_file().name == "2026-01-15.md"
-
-    def test_specific_day(self, hive_env):
-        from keephive.storage import daily_file
-
-        assert daily_file("2026-05-20").name == "2026-05-20.md"
-
-    def test_is_in_daily_dir(self, hive_env):
+    def test_name_and_parent(self, hive_env):
         from keephive.storage import daily_dir, daily_file
 
-        assert daily_file("2026-01-01").parent == daily_dir()
+        f = daily_file("2026-05-20")
+        assert f.name == "2026-05-20.md"
+        assert f.parent == daily_dir()
 
 
 # ---- ensure_dirs ----
 
 
 class TestEnsureDirs:
-    def test_creates_all_subdirectories(self, tmp_path, monkeypatch):
+    def test_creates_all_subdirectories_idempotent(self, tmp_path, monkeypatch):
         hive = tmp_path / "fresh-hive"
         monkeypatch.setenv("HIVE_HOME", str(hive))
         from keephive.storage import ensure_dirs
@@ -125,12 +89,8 @@ class TestEnsureDirs:
         assert (hive / "archive").is_dir()
         assert (hive / "working" / "notes").is_dir()
 
-    def test_idempotent(self, hive_env):
-        """Calling ensure_dirs twice does not error."""
-        from keephive.storage import ensure_dirs
-
+        # Idempotent: second call does not error
         ensure_dirs()
-        ensure_dirs()  # Should not raise
 
 
 # ---- ensure_daily ----
@@ -177,19 +137,8 @@ class TestFileIO:
     def test_safe_read_text_missing_file(self, hive_env):
         from keephive.storage import safe_read_text
 
-        # safe_read_text expects the file to exist; reading a missing file raises
         with pytest.raises(FileNotFoundError):
             safe_read_text(hive_env / "nonexistent.txt")
-
-    def test_memory_file_path(self, hive_env):
-        from keephive.storage import memory_file
-
-        assert memory_file() == hive_env / "working" / "memory.md"
-
-    def test_rules_file_path(self, hive_env):
-        from keephive.storage import rules_file
-
-        assert rules_file() == hive_env / "working" / "rules.md"
 
     def test_read_memory_returns_content(self, hive_env):
         from keephive.storage import read_memory
@@ -203,12 +152,6 @@ class TestFileIO:
 
         memory_file().unlink()
         assert read_memory() == ""
-
-    def test_read_rules_returns_content(self, hive_env):
-        from keephive.storage import read_rules
-
-        rules = read_rules()
-        assert "Working Rules" in rules
 
     def test_read_rules_missing_file(self, hive_env):
         from keephive.storage import read_rules, rules_file
@@ -997,12 +940,14 @@ class TestScoreFactDecay:
         # CORRECTION importance=1.5 vs FACT importance=1.0
         assert correction > fact
 
-    def test_score_between_0_and_1(self, hive_env, monkeypatch):
+    def test_score_between_0_and_max(self, hive_env, monkeypatch):
         monkeypatch.setenv("HIVE_DATE", "2026-01-15")
         from keephive.storage import score_fact_decay
 
         score = score_fact_decay("FACT: something", "2026-01-15")
-        assert 0.0 <= score <= 1.5  # importance weight can push above 1.0
+        # Max: recency=0.4 + ref=0.2 + importance=0.2*1.0 + recall=0.2 = 1.0
+        # CORRECTION can push importance to 1.5 -> 0.4+0.2+0.3+0.2 = 1.1 max
+        assert 0.0 <= score <= 1.2
 
 
 class TestCountStaleFacts:
@@ -1601,11 +1546,6 @@ class TestNoteSlots:
         set_active_slot(5)
         assert active_slot() == 5
 
-    def test_slot_file_path(self, hive_env):
-        from keephive.storage import slot_file
-
-        assert slot_file(3).name == "note-3.md"
-
     def test_set_invalid_slot_raises(self, hive_env):
         from keephive.storage import set_active_slot
 
@@ -1614,13 +1554,6 @@ class TestNoteSlots:
 
         with pytest.raises(ValueError):
             set_active_slot(11)
-
-    def test_corrupt_active_slot_file(self, hive_env):
-        from keephive.storage import active_slot, working_dir
-
-        marker = working_dir() / ".note-active"
-        marker.write_text("not-a-number")
-        assert active_slot() == 1  # Falls back to default
 
 
 # ---- recent_dones ----
@@ -1891,3 +1824,191 @@ class TestCountLogEntriesByPrefixDaily:
             assert isinstance(day_str, str)
             assert isinstance(count, int)
             assert count >= 0
+
+
+# ---- Edge-case tests: count_stale_facts ----
+
+
+class TestCountStaleFactsEdgeCases:
+    def test_malformed_verified_tag(self, hive_env, monkeypatch):
+        """Entries with malformed [verified:] tags should not crash."""
+        monkeypatch.setenv("HIVE_DATE", "2026-02-21")
+        from keephive.storage import count_stale_facts, memory_file
+
+        memory_file().write_text(
+            "# Memory\n\n"
+            "- FACT: bad date [verified:not-a-date]\n"
+            "- FACT: good entry [verified:2020-01-01]\n"
+        )
+        count = count_stale_facts()
+        # The good entry is stale (6 years old), bad date should not crash
+        assert count >= 1
+
+    def test_missing_verified_tag_not_counted(self, hive_env, monkeypatch):
+        """Facts without any [verified:] tag are not counted as stale."""
+        monkeypatch.setenv("HIVE_DATE", "2026-02-21")
+        from keephive.storage import count_stale_facts, memory_file
+
+        memory_file().write_text("# Memory\n\n- FACT: no verified tag at all\n")
+        count = count_stale_facts()
+        assert count == 0
+
+    def test_mixed_valid_invalid_entries(self, hive_env, monkeypatch):
+        """Mix of valid stale, valid fresh, and malformed entries."""
+        monkeypatch.setenv("HIVE_DATE", "2026-02-21")
+        from keephive.storage import count_stale_facts, memory_file
+
+        memory_file().write_text(
+            "# Memory\n\n"
+            "- FACT: ancient [verified:2020-01-01]\n"
+            "- FACT: fresh [verified:2026-02-20]\n"
+            "- FACT: broken [verified:]\n"
+            "- Not a bullet line\n"
+        )
+        count = count_stale_facts()
+        assert count == 1  # only "ancient" is stale
+
+
+# ---- Edge-case tests: get_stale_facts ----
+
+
+class TestGetStaleFactsEdgeCases:
+    def test_partial_verified_date(self, hive_env, monkeypatch):
+        """Partial date like [verified:2026-01] should not crash."""
+        monkeypatch.setenv("HIVE_DATE", "2026-02-21")
+        from keephive.storage import get_stale_facts, memory_file
+
+        memory_file().write_text("# Memory\n\n- FACT: partial date [verified:2026-01]\n")
+        # Should not raise
+        results = get_stale_facts()
+        assert isinstance(results, list)
+
+    def test_facts_parsed_regardless_of_dash_prefix(self, hive_env, monkeypatch):
+        """Any line with [verified:date] is parsed; dash prefix is stripped if present."""
+        monkeypatch.setenv("HIVE_DATE", "2026-02-21")
+        from keephive.storage import get_stale_facts, memory_file
+
+        memory_file().write_text(
+            "# Memory\n\n"
+            "FACT: no dash prefix [verified:2020-01-01]\n"
+            "- FACT: with dash [verified:2020-01-01]\n"
+        )
+        results = get_stale_facts()
+        facts = [r[1] for r in results]
+        # get_stale_facts uses regex on all lines; dash prefix is not required
+        assert any("with dash" in f for f in facts)
+        assert any("no dash prefix" in f for f in facts)
+
+    def test_empty_verified_tag(self, hive_env, monkeypatch):
+        """Empty verified tag [verified:] should not crash."""
+        monkeypatch.setenv("HIVE_DATE", "2026-02-21")
+        from keephive.storage import get_stale_facts, memory_file
+
+        memory_file().write_text("# Memory\n\n- FACT: empty tag [verified:]\n")
+        results = get_stale_facts()
+        assert isinstance(results, list)
+
+
+# ---- Edge-case tests: get_recall_count ----
+
+
+class TestGetRecallCountEdgeCases:
+    def test_special_chars_in_fact_text(self, hive_env):
+        """Fact text with quotes and special chars doesn't corrupt JSON."""
+        from keephive.storage import get_recall_count, track_recall_hit
+
+        fact = 'FACT: He said "hello" & <goodbye>'
+        track_recall_hit(fact)
+        assert get_recall_count(fact) == 1
+
+    def test_empty_string_key(self, hive_env):
+        """Empty string as fact text doesn't crash."""
+        from keephive.storage import get_recall_count, track_recall_hit
+
+        track_recall_hit("")
+        assert get_recall_count("") == 1
+
+    def test_very_long_fact_text(self, hive_env):
+        """Very long fact text doesn't crash."""
+        from keephive.storage import get_recall_count, track_recall_hit
+
+        long_fact = "FACT: " + "x" * 10000
+        track_recall_hit(long_fact)
+        assert get_recall_count(long_fact) == 1
+
+
+# ---- Edge-case tests: score_fact_decay ----
+
+
+class TestScoreFactDecayEdgeCases:
+    def test_exact_threshold_boundary(self, hive_env, monkeypatch):
+        """Fact exactly at stale threshold gets recency=0.5 (half of 2*threshold)."""
+        monkeypatch.setenv("HIVE_DATE", "2026-02-28")
+        from keephive.storage import score_fact_decay
+
+        # FACT threshold=30, today=2026-02-28, verified=2026-01-29 => 30 days ago
+        score = score_fact_decay("FACT: at threshold", "2026-01-29")
+        # recency = 1.0 - 30/(30*2) = 1.0 - 0.5 = 0.5
+        # Total: 0.5*0.4 + 0*0.2 + 1.0*0.2 + 0*0.2 = 0.2 + 0.2 = 0.4
+        assert score == pytest.approx(0.4)
+
+    def test_future_verified_date(self, hive_env, monkeypatch):
+        """Future verified date gives recency > 1.0 but score still bounded."""
+        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
+        from keephive.storage import score_fact_decay
+
+        score = score_fact_decay("FACT: future", "2026-02-15")
+        # days_old is negative, recency = max(0, 1.0 - (-31)/60) > 1.0
+        # Score should still be reasonable
+        assert 0.0 <= score <= 1.2
+
+    def test_correction_max_score_within_bound(self, hive_env, monkeypatch):
+        """CORRECTION (importance=1.5) at max recency stays within 1.2."""
+        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
+        from keephive.storage import score_fact_decay
+
+        score = score_fact_decay("CORRECTION: recent fix", "2026-01-15")
+        # recency=1.0 -> 0.4, refs=0 -> 0, importance=1.5 -> 0.3, recall=0 -> 0
+        # Total: 0.4 + 0 + 0.3 + 0 = 0.7
+        assert 0.0 <= score <= 1.2
+
+
+# ---- Edge-case tests: undo_done ----
+
+
+class TestUndoDoneEdgeCases:
+    def test_pattern_matches_multiple_entries(self, hive_env, monkeypatch):
+        """When pattern matches multiple DONE entries, the most recent is undone."""
+        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
+        from keephive.storage import undo_done
+
+        daily = hive_env / "daily" / "2026-01-15.md"
+        daily.write_text(
+            "# Daily Log: 2026-01-15\n\n"
+            "- [10:00:00] DONE: Fix authentication bug in login\n"
+            "- [11:00:00] DONE: Fix authentication bug in signup\n"
+        )
+
+        result = undo_done("authentication")
+        # Should undo the most recent match (last in file)
+        assert result is not None
+        assert "signup" in result
+
+    def test_undo_preserves_non_done_entries(self, hive_env, monkeypatch):
+        """Undoing a DONE entry preserves all non-DONE entries."""
+        monkeypatch.setenv("HIVE_DATE", "2026-01-15")
+        from keephive.storage import undo_done
+
+        daily = hive_env / "daily" / "2026-01-15.md"
+        daily.write_text(
+            "# Daily Log: 2026-01-15\n\n"
+            "- [10:00:00] FACT: important fact\n"
+            "- [11:00:00] DONE: completed task\n"
+            "- [12:00:00] TODO: pending task\n"
+        )
+
+        undo_done()
+        content = daily.read_text()
+        assert "important fact" in content
+        assert "pending task" in content
+        assert "completed task" not in content

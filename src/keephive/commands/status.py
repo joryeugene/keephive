@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
+from pathlib import Path
 
 from keephive import __version__
 from keephive.clock import get_today
@@ -23,6 +24,7 @@ from keephive.storage import (
     memory_file,
     open_todos,
     read_stats,
+    recurring_file,
     slot_file,
     yesterday,
 )
@@ -67,6 +69,14 @@ def _suggest_next() -> tuple[str, str]:
         if n > 0:
             s = "s" if n != 1 else ""
             return ("hive rule review", f"{n} pending rule suggestion{s}")
+
+    # 3b. Pending facts (auto-captured, awaiting review)
+    pending_facts = hive_dir() / ".pending-facts.md"
+    if pending_facts.exists() and pending_facts.read_text().strip():
+        n = sum(1 for ln in pending_facts.read_text().splitlines() if ln.strip().startswith("- "))
+        if n > 0:
+            s = "s" if n != 1 else ""
+            return ("hive mem review", f"{n} fact{s} pending review")
 
     # 4. Memory bloat (>40 facts)
     fact_count = 0
@@ -115,29 +125,42 @@ def _suggest_next() -> tuple[str, str]:
     return ("", "looking good")
 
 
-def cmd_status(args: list[str]) -> None:
-    ensure_dirs()
-    json_mode = "--json" in args
+def _watch_paths_status() -> list[Path]:
+    """Paths to watch for status changes."""
+    from keephive.storage import daily_file
 
-    # Gather stats
+    paths: list[Path] = [
+        memory_file(),
+        daily_dir(),
+        daily_file(),
+        daily_file(yesterday()),
+        hive_dir() / ".pending-rules.md",
+        hive_dir() / ".pending-facts.md",
+        hive_dir() / ".stats.json",
+        recurring_file(),
+        guides_dir(),
+    ]
+    for n in range(1, NOTE_SLOT_COUNT + 1):
+        paths.append(slot_file(n))
+    return paths
+
+
+def _render_status() -> None:
+    """Render the status display (extracted for watch_loop reuse)."""
     mem = memory_file()
-    working_lines = 0
-    total_verified = 0
-    stale = 0
+    stale = count_stale_facts()
+    today_entries = count_daily_entries()
+    yesterday_entries = count_daily_entries(yesterday())
 
+    total_verified = 0
     if mem.exists():
         import re
 
         text = mem.read_text()
-        working_lines = sum(1 for line in text.splitlines() if line.strip())
         total_verified = len(re.findall(r"\[verified:", text))
-        stale = count_stale_facts()
 
     guide_count = sum(1 for _ in guides_dir().glob("*.md")) if guides_dir().exists() else 0
-    today_entries = count_daily_entries()
-    yesterday_entries = count_daily_entries(yesterday())
 
-    # Disk usage
     disk_usage = "?"
     try:
         import subprocess
@@ -153,40 +176,16 @@ def cmd_status(args: list[str]) -> None:
     except Exception:
         pass
 
-    # Health indicators
     from keephive.health import check_anthropic_memory, health_summary
 
     hooks_ok, mcp_ok, data_ok = health_summary()
     anthropic_mem = check_anthropic_memory()
-
-    if json_mode:
-        print(
-            json.dumps(
-                {
-                    "version": __version__,
-                    "working_lines": working_lines,
-                    "verified_facts": total_verified,
-                    "stale_facts": stale,
-                    "guides": guide_count,
-                    "today_entries": today_entries,
-                    "yesterday_entries": yesterday_entries,
-                    "disk_usage": disk_usage,
-                    "hive_dir": str(hive_dir()),
-                    "hooks_ok": hooks_ok,
-                    "mcp_ok": mcp_ok,
-                    "data_ok": data_ok,
-                    "anthropic_memory": anthropic_mem,
-                }
-            )
-        )
-        return
 
     console.print()
     prof = active_profile()
     prof_tag = f"  [dim]profile: {prof}[/dim]" if prof else ""
     console.print(f"[bold]keephive[/bold] v{__version__}{prof_tag}")
 
-    # Health indicators
     def _dot(ok: bool, label: str) -> str:
         return f"[ok]\u25cf[/ok] {label}" if ok else f"[dim]\u25cb[/dim] {label}"
 
@@ -199,7 +198,7 @@ def cmd_status(args: list[str]) -> None:
         console.print("  Run: [bold]hive setup[/bold]")
     console.print()
 
-    # Stats line: pipeline health + session productivity
+    # Stats line
     try:
         from keephive.commands.stats import _calculate_streak, _knowledge_health
 
@@ -217,7 +216,6 @@ def cmd_status(args: list[str]) -> None:
             parts.append(f"{today_entries} today")
             parts.append(f"{yesterday_entries} yesterday")
 
-        # Prompts/convo from session metrics
         try:
             from keephive.storage import session_metrics as _sm
 
@@ -227,7 +225,6 @@ def cmd_status(args: list[str]) -> None:
         except Exception:
             pass
 
-        # Streak
         stats = read_stats()
         days_data = stats.get("days", {})
         curr_streak, _ = _calculate_streak(days_data)
@@ -236,7 +233,6 @@ def cmd_status(args: list[str]) -> None:
 
         console.print(f"  {' | '.join(parts)}")
     except Exception:
-        # Fallback to simple stats line if metrics unavailable
         verified_ok = total_verified - stale
         parts = []
         if total_verified > 0:
@@ -247,7 +243,7 @@ def cmd_status(args: list[str]) -> None:
         parts.append(disk_usage)
         console.print(f"  {' | '.join(parts)}")
 
-    # Activity line (commands / streak / hourly sparkline)
+    # Activity line
     try:
         from keephive.commands.stats import _calculate_streak, _hourly_sparkline
 
@@ -272,16 +268,15 @@ def cmd_status(args: list[str]) -> None:
             activity_parts.append(_hourly_sparkline(today_hours))
         console.print(f"  {' \u00b7 '.join(activity_parts)}")
     except Exception:
-        pass  # Stats unavailable, skip gracefully
+        pass
 
     console.print()
 
-    # Stale warning
     if stale > 0:
-        console.print(f"  [warn]{stale} stale fact(s)[/warn]  ->  [bold]hive v[/bold]")
+        console.print(f"  [warn]{stale} stale fact(s)[/warn]  \u2192  [bold]hive v[/bold]")
         console.print()
 
-    # Quality Pulse score (moved from sessionstart injection)
+    # Quality Pulse
     try:
         from keephive.commands.audit import (
             _analyze_cleaner,
@@ -298,20 +293,23 @@ def cmd_status(args: list[str]) -> None:
 
         if pulse_score < 70:
             console.print(
-                f"  [warn]Quality Pulse: {pulse_score}/100[/warn]  ->  [bold]hive audit[/bold]"
+                f"  [warn]Quality Pulse: {pulse_score}/100[/warn]  →  [bold]hive audit[/bold]"
             )
             console.print()
 
         prev_play = _check_previous_play()
         if prev_play and not prev_play["completed"] and prev_play["age_days"] >= 2:
             console.print(
-                f"  [info]Unfinished Play ({prev_play['date']}): {prev_play['action']}[/info]"
+                f"  [info]Unfinished audit action ({prev_play['date']}): {prev_play['action']}[/info]"
+            )
+            console.print(
+                '    \u2192 [bold]hive audit[/bold] (re-assess)  |  [bold]hive todo done "audit"[/bold] (mark done)'
             )
             console.print()
     except Exception:
         pass
 
-    # Guide update notification (moved from sessionstart injection)
+    # Guide update notification
     try:
         from keephive.commands.setup import check_bundled_updates as _cbu
 
@@ -319,13 +317,13 @@ def cmd_status(args: list[str]) -> None:
         if _stale_guides > 0:
             console.print(
                 f"  [info]{_stale_guides} bundled guide(s) have updates[/info]"
-                "  ->  [bold]hive setup[/bold]"
+                "  →  [bold]hive setup[/bold]"
             )
             console.print()
     except Exception:
         pass
 
-    # Memory accumulation warnings (moved from sessionstart injection)
+    # Memory accumulation warnings
     if mem.exists():
         from keephive.hooks.sessionstart import _accumulation_warnings
 
@@ -348,7 +346,7 @@ def cmd_status(args: list[str]) -> None:
         if contra_count:
             parts_nudge.append(f"{contra_count} contradiction{'s' if contra_count != 1 else ''}")
         console.print(f"  [info]\\[reflect] {', '.join(parts_nudge)} ready[/info]")
-        console.print("    -> [bold]hive rf apply[/bold]")
+        console.print("    \u2192 [bold]hive rf apply[/bold]")
         console.print()
 
     # Open TODOs
@@ -373,8 +371,23 @@ def cmd_status(args: list[str]) -> None:
         if len(todos) > 3:
             console.print(f"    [dim]... and {len(todos) - 3} more (hive todo)[/dim]")
         if len(todos) > 10:
-            console.print("    [warn]Consider: hive todo done <pat> | hive dr[/warn]")
+            console.print(
+                "    [warn]Triage: hive todo done <pat>  |  hive doctor (find duplicates)[/warn]"
+            )
         console.print()
+
+    # Pending facts nudge
+    pending_facts_path = hive_dir() / ".pending-facts.md"
+    if pending_facts_path.exists() and pending_facts_path.read_text().strip():
+        n = sum(
+            1 for ln in pending_facts_path.read_text().splitlines() if ln.strip().startswith("- ")
+        )
+        if n > 0:
+            s = "s" if n != 1 else ""
+            console.print(
+                f"  [yellow]\u26a1 {n} fact{s} pending review[/yellow]  \u2192  [bold]hive mem review[/bold]"
+            )
+            console.print()
 
     # Pending rule suggestions nudge
     pending_rules_path = hive_dir() / ".pending-rules.md"
@@ -384,7 +397,7 @@ def cmd_status(args: list[str]) -> None:
         )
         if n > 0:
             console.print(
-                f"  [yellow]⚡ {n} rule suggestion(s) pending[/yellow]  →  hive rule review"
+                f"  [yellow]\u26a1 {n} rule suggestion(s) pending[/yellow]  \u2192  [bold]hive rule review[/bold]"
             )
             console.print()
 
@@ -393,8 +406,11 @@ def cmd_status(args: list[str]) -> None:
     if due:
         console.print(f"  [bold]{len(due)} due recurring task(s):[/bold]")
         for freq, text, overdue in due:
-            over_s = f"+{overdue}d" if overdue > 0 else "due"
+            over_s = f"+{overdue}d overdue" if overdue > 0 else "due today"
             console.print(f"    [warn]\\[{freq}] \\[{over_s}] {text}[/warn]")
+        console.print(
+            "    \u2192 [bold]hive todo[/bold] (view all)  |  [bold]hive todo done <pat>[/bold] (complete)"
+        )
         console.print()
 
     # Today's entries
@@ -418,7 +434,7 @@ def cmd_status(args: list[str]) -> None:
                 console.print(e)
             console.print()
 
-    # Note slot indicator (single location, enhanced format)
+    # Note slot indicator
     current_slot = active_slot()
     slot_path = slot_file(current_slot)
     if slot_path.exists() and slot_path.read_text().strip():
@@ -427,10 +443,9 @@ def cmd_status(args: list[str]) -> None:
         flat = text.replace("\n", " ")
         preview = flat[:40] + ("..." if len(flat) > 40 else "")
         console.print(
-            f'  [info]Active draft: slot {current_slot} · "{preview}" ({words} words)[/info]'
-            f"  ->  [bold]hive nc[/bold]"
+            f'  [info]Active draft: slot {current_slot} \u00b7 "{preview}" ({words} words)[/info]'
+            f"  →  [bold]hive nc[/bold]"
         )
-        # Show slot bar if multiple slots have content
         filled = sum(
             1
             for n in range(1, NOTE_SLOT_COUNT + 1)
@@ -460,3 +475,77 @@ def cmd_status(args: list[str]) -> None:
         console.print(
             "  [dim]hive go (session) | hive l (log) | hive rf (reflect) | hive help[/dim]"
         )
+
+
+def cmd_status(args: list[str]) -> None:
+    ensure_dirs()
+
+    # JSON mode takes priority over watch
+    if "--json" in args:
+        mem = memory_file()
+        working_lines = 0
+        total_verified = 0
+        stale = 0
+
+        if mem.exists():
+            import re
+
+            text = mem.read_text()
+            working_lines = sum(1 for line in text.splitlines() if line.strip())
+            total_verified = len(re.findall(r"\[verified:", text))
+            stale = count_stale_facts()
+
+        guide_count = sum(1 for _ in guides_dir().glob("*.md")) if guides_dir().exists() else 0
+        today_entries = count_daily_entries()
+        yesterday_entries = count_daily_entries(yesterday())
+
+        disk_usage = "?"
+        try:
+            import subprocess
+
+            r = subprocess.run(
+                ["du", "-sh", str(hive_dir())],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if r.returncode == 0:
+                disk_usage = r.stdout.split()[0]
+        except Exception:
+            pass
+
+        from keephive.health import check_anthropic_memory, health_summary
+
+        hooks_ok, mcp_ok, data_ok = health_summary()
+        anthropic_mem = check_anthropic_memory()
+
+        print(
+            json.dumps(
+                {
+                    "version": __version__,
+                    "working_lines": working_lines,
+                    "verified_facts": total_verified,
+                    "stale_facts": stale,
+                    "guides": guide_count,
+                    "today_entries": today_entries,
+                    "yesterday_entries": yesterday_entries,
+                    "disk_usage": disk_usage,
+                    "hive_dir": str(hive_dir()),
+                    "hooks_ok": hooks_ok,
+                    "mcp_ok": mcp_ok,
+                    "data_ok": data_ok,
+                    "anthropic_memory": anthropic_mem,
+                }
+            )
+        )
+        return
+
+    # Check for watch mode
+    from keephive.watch import parse_watch_args, watch_loop
+
+    remaining, watch, interval = parse_watch_args(args)
+    if watch:
+        watch_loop(_render_status, _watch_paths_status, interval)
+        return
+
+    _render_status()

@@ -109,12 +109,12 @@ def cmd_remember(args: list[str]) -> None:
                 cat_parts.append(f"{c} {cat_name.lower()}s")
         if cat_parts:
             console.print(
-                f"    -> daily/{df.name}  ({entry_count} entries: {', '.join(cat_parts)})"
+                f"    \u2192 daily/{df.name}  ({entry_count} entries: {', '.join(cat_parts)})"
             )
         else:
-            console.print(f"    -> daily/{df.name}  ({entry_count} entries today)")
+            console.print(f"    \u2192 daily/{df.name}  ({entry_count} entries today)")
     except Exception:
-        console.print(f"    -> daily/{df.name}  ({entry_count} entries today)")
+        console.print(f"    \u2192 daily/{df.name}  ({entry_count} entries today)")
 
 
 def cmd_recall(args: list[str]) -> None:
@@ -143,7 +143,7 @@ def cmd_recall(args: list[str]) -> None:
         if json_mode:
             print(json.dumps({"query": query, "results": [], "count": 0}))
         else:
-            console.print(f"No results for: {query}")
+            console.print(f"[dim]No results for:[/dim] {query}")
             # Show recall hit rate as telemetry
             try:
                 from keephive.storage import get_recall_hit_rate
@@ -156,7 +156,7 @@ def cmd_recall(args: list[str]) -> None:
                     )
             except Exception:
                 pass
-            console.print(f'\n  -> hive r "{query} ..." to remember something about this')
+            console.print(f'\n  \u2192 hive r "{query} ..." to remember something about this')
         return
 
     # Track hit for hit rate calculation
@@ -285,7 +285,7 @@ def _display_results(query: str, results: list[dict]) -> None:
     if len(results) > 20:
         console.print(f"\n  [dim]Showing 20 of {len(results)} results[/dim]")
 
-    console.print("\n  -> hive e to edit working memory  |  hive k <name> to view a guide")
+    console.print("\n  \u2192 hive e to edit working memory  |  hive k <name> to view a guide")
 
 
 def _expand_and_search(query: str, existing: list[dict]) -> list[dict] | None:

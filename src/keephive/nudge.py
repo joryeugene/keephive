@@ -20,7 +20,7 @@ def _counter_path(name: str) -> Path:
 
 def _nudge_interval() -> int:
     """Interval between nudges. Default 8, configurable via HIVE_NUDGE_INTERVAL."""
-    return int(os.environ.get("HIVE_NUDGE_INTERVAL", "8"))
+    return max(1, int(os.environ.get("HIVE_NUDGE_INTERVAL", "8")))
 
 
 def read_counter(name: str) -> tuple[int, str]:
@@ -69,12 +69,12 @@ def _status_nudge() -> str | None:
 
         stale = count_stale_facts()
         if stale > 0:
-            parts.append(f"{stale} stale fact(s) need verification.")
+            parts.append(f"{stale} fact(s) unverified 30+ days. Run: hive v")
 
         todos = open_todos()
         overdue = [t for d, _, t in todos if d < _today_str()]
         if overdue:
-            parts.append(f"{len(overdue)} overdue TODO(s).")
+            parts.append(f"{len(overdue)} TODO(s) older than 1 day. Run: hive todo")
 
         if parts:
             return " ".join(parts)
