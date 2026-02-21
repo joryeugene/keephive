@@ -29,6 +29,46 @@ from keephive.storage import (
 VERIFY_TOOLS = ["Read", "Grep", "Glob", "WebSearch"]
 
 
+def _build_verify_prompt(
+    facts: list[tuple[int, str, str]], versions: str
+) -> str:
+    """Build the verification prompt for a batch of facts."""
+    facts_lines = []
+    for i, (_, fact, _) in enumerate(facts):
+        line = f"{i + 1}. {fact}"
+        evidence = get_evidence_for_fact(fact)
+        if evidence and evidence.get("last_reason"):
+            line += f"\n   Previous evidence ({evidence.get('last_date', '?')}): {evidence['last_reason'][:150]}"
+            locs = evidence.get("source_locations")
+            if locs:
+                line += f"\n   Known locations: {', '.join(locs[:3])}"
+        facts_lines.append(line)
+    facts_text = "\n".join(facts_lines)
+
+    return f"""You are a fact-checking investigator with access to tools.
+
+FACTS TO VERIFY:
+{facts_text}
+
+SYSTEM INFO:
+{versions}
+Date: {today()}
+System: {platform.system()} {platform.release()}
+
+INVESTIGATION INSTRUCTIONS:
+For each fact, actively investigate using available tools:
+- Read/Grep/Glob: search the local codebase for evidence
+- WebSearch: check external tools, versions, libraries
+- When previous evidence is provided, check those locations first (faster verification)
+
+After investigating, provide your verdict:
+- VALID: found confirming evidence (cite what you found)
+- STALE: found contradicting evidence (provide corrected fact text in correction field)
+- UNCERTAIN: investigated but found no evidence either way
+
+For STALE verdicts, correction must contain the full replacement fact text."""
+
+
 def cmd_verify(args: list[str]) -> None:
     json_mode = "--json" in args
     check_mode = "--check" in args
@@ -92,87 +132,82 @@ def cmd_verify(args: list[str]) -> None:
     # Build the prompt with tool-based investigation
     versions = version_context()
 
-    # Build facts list with previous evidence when available
-    facts_lines = []
-    for i, (_, fact, _) in enumerate(all_facts):
-        line = f"{i + 1}. {fact}"
-        evidence = get_evidence_for_fact(fact)
-        if evidence and evidence.get("last_reason"):
-            line += f"\n   Previous evidence ({evidence.get('last_date', '?')}): {evidence['last_reason'][:150]}"
-            locs = evidence.get("source_locations")
-            if locs:
-                line += f"\n   Known locations: {', '.join(locs[:3])}"
-        facts_lines.append(line)
-    facts_text = "\n".join(facts_lines)
+    BATCH_SIZE = 8
+    batches = [all_facts[i : i + BATCH_SIZE] for i in range(0, len(all_facts), BATCH_SIZE)]
+    all_verdicts: list = []
+    total_updated = 0
+    total_refreshed = 0
 
-    prompt = f"""You are a fact-checking investigator with access to tools.
-
-FACTS TO VERIFY:
-{facts_text}
-
-SYSTEM INFO:
-{versions}
-Date: {today()}
-System: {platform.system()} {platform.release()}
-
-INVESTIGATION INSTRUCTIONS:
-For each fact, actively investigate using available tools:
-- Read/Grep/Glob: search the local codebase for evidence
-- WebSearch: check external tools, versions, libraries
-- When previous evidence is provided, check those locations first (faster verification)
-
-After investigating, provide your verdict:
-- VALID: found confirming evidence (cite what you found)
-- STALE: found contradicting evidence (provide corrected fact text in correction field)
-- UNCERTAIN: investigated but found no evidence either way
-
-For STALE verdicts, correction must contain the full replacement fact text."""
-
-    try:
-        with console.status("  Investigating with claude...", spinner="dots"):
-            response = run_claude_pipe(
-                prompt,
-                VerifyResponse,
-                model="sonnet",
-                tools=VERIFY_TOOLS,
-                max_turns=12,
-                timeout=180,
-                verbose=verbose,
-            )
-    except ClaudePipeError as e:
-        notify_sound(False)
-        console.print(f"[err]Verification failed: {e}[/err]")
-        console.print("[dim]Check: claude -p availability, CLAUDECODE env var[/dim]")
-        console.print("  -> [dim]hive e[/dim] to manually review working memory")
-        return
-    console.print()
-
-    if json_mode:
-        print(response.model_dump_json(indent=2))
-        return
-
-    # Backup before write
+    # Backup before any writes
     backup_and_write(mem, mem.read_text())
 
-    updated, refreshed = apply_verdicts(response, all_facts, mem, today())
-
-    # Persist verdicts to daily log
     from datetime import datetime
 
     ensure_daily()
-    ts = datetime.now().strftime("%H:%M:%S")
-    for v in response.verdicts:
-        idx = v.index - 1
-        if 0 <= idx < len(all_facts):
-            fact_text = all_facts[idx][1][:80]
-            append_to_daily(f"- [{ts}] VERIFY: {v.verdict.value}: {fact_text}")
+
+    for batch_num, batch_facts in enumerate(batches, 1):
+        if len(batches) > 1:
+            console.print(
+                f"  [bold]Batch {batch_num}/{len(batches)}[/bold]"
+                f" ({len(batch_facts)} facts)"
+            )
+
+        prompt = _build_verify_prompt(batch_facts, versions)
+
+        try:
+            with console.status("  Investigating with claude...", spinner="dots"):
+                response = run_claude_pipe(
+                    prompt,
+                    VerifyResponse,
+                    model="sonnet",
+                    tools=VERIFY_TOOLS,
+                    max_turns=12,
+                    timeout=240,
+                    verbose=verbose,
+                )
+        except ClaudePipeError as e:
+            console.print(f"  [err]Batch {batch_num} failed: {e}[/err]")
+            break
+
+        if json_mode:
+            all_verdicts.extend(v.model_dump() for v in response.verdicts)
+        else:
+            console.print()
+            updated, refreshed = apply_verdicts(response, batch_facts, mem, today())
+            total_updated += updated
+            total_refreshed += refreshed
+
+            # Persist verdicts to daily log per batch
+            ts = datetime.now().strftime("%H:%M:%S")
+            for v in response.verdicts:
+                idx = v.index - 1
+                if 0 <= idx < len(batch_facts):
+                    fact_text = batch_facts[idx][1][:80]
+                    append_to_daily(f"- [{ts}] VERIFY: {v.verdict.value}: {fact_text}")
+
+            all_verdicts.extend(response.verdicts)
+
+        # Ask to continue if more batches remain
+        if batch_num < len(batches):
+            console.print()
+            if not prompt_yn(f"  Continue with batch {batch_num + 1}/{len(batches)}?"):
+                break
+
+    if json_mode:
+        print(json.dumps({"verdicts": all_verdicts}, indent=2))
+        return
+
+    if not all_verdicts:
+        notify_sound(False)
+        console.print("[err]Verification failed[/err]")
+        return
 
     notify_sound(True)
 
     # Aggregate summary with before/after freshness delta
-    valid_count = sum(1 for v in response.verdicts if v.verdict.value == "VALID")
-    stale_count = sum(1 for v in response.verdicts if v.verdict.value == "STALE")
-    uncertain_count = sum(1 for v in response.verdicts if v.verdict.value == "UNCERTAIN")
+    valid_count = sum(1 for v in all_verdicts if v.verdict.value == "VALID")
+    stale_count = sum(1 for v in all_verdicts if v.verdict.value == "STALE")
+    uncertain_count = sum(1 for v in all_verdicts if v.verdict.value == "UNCERTAIN")
     console.print(
         f"  [ok]{valid_count} VALID[/ok]  ·  "
         f"[warn]{stale_count} CORRECTED[/warn]  ·  "
@@ -194,7 +229,7 @@ For STALE verdicts, correction must contain the full replacement fact text."""
             console.print(f"  Memory health: {post_fresh_pct:.0f}% fresh")
     except Exception:
         console.print(
-            f"[dim]Updated {updated} fact(s), refreshed {refreshed} in working/memory.md[/dim]"
+            f"[dim]Updated {total_updated} fact(s), refreshed {total_refreshed} in working/memory.md[/dim]"
         )
 
     console.print()

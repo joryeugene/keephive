@@ -27,7 +27,7 @@ Tiers from most stable (top) to most ephemeral (bottom).
 +============================================================+
 | RULES  ~/.claude/hive/rules.md                             |
 | Behavioral nudges for Claude this session                  |
-| hive rule add "text", hive rule rm "text"                  |
+| hive rule "text", rm, learn (from /insights), review       |
 +============================================================+
 | KNOWLEDGE GUIDES  ~/.../knowledge/guides/<name>.md         |
 | Rich structured docs per topic, injected by tag (or opt-in always) |
@@ -55,7 +55,8 @@ Tiers from most stable (top) to most ephemeral (bottom).
 | Identified an action item | Daily log as TODO | `hive t "fix the thing"` |
 | Previous assumption was wrong | Daily log | `hive r "CORRECTION: ..."` |
 | Pattern worth remembering long-term | Working memory | `hive mem` |
-| Claude should behave differently | Rules | `hive rule add "..."` |
+| Claude should behave differently | Rules | `hive rule "..."` |
+| Friction patterns from /insights | Pending rules | `hive rule learn` |
 | Rich structured doc for a topic | Knowledge guide | `hive ke <name>` |
 | Universal style/tool preference | Global CLAUDE.md | Edit manually |
 | Project-specific invariant | Project CLAUDE.md | Edit manually |
@@ -76,6 +77,7 @@ Tiers from most stable (top) to most ephemeral (bottom).
 - `daily log TODO` + `hive td` -> DONE in log -> archived
 - `working memory` + `hive v` -> verified facts -> updated date or auto-corrected
 - `knowledge guide` + `hive v` -> fact check -> stale facts flagged
+- `/insights` friction data + `hive rule learn` -> `.pending-rules.md` -> `hive rule review` -> `rules.md`
 
 ## Anti-patterns
 

@@ -25,7 +25,7 @@ HELP: dict[str, str] = {
     "standup": "Usage: hive su\n  Generate standup summary from daily logs + GitHub PRs\n  Uses LLM for formatting. Copies to clipboard.",
     "stats": "Usage: hive st [-p <project>] [date]\n  Usage statistics. Date: today, N (days ago), YYYY-MM-DD",
     "mem": "Usage: hive m [rm] <text>\n  Add or remove working memory facts\n  hive m <text>      Add fact to memory.md\n  hive m rm <pat>    Remove line matching pattern",
-    "rule": "Usage: hive rule [rm|review] <text>\n  Add or remove behavioral rules\n  hive rule <text>      Add rule\n  hive rule rm <pat>    Remove matching rule\n  hive rule review      Review pending rule suggestions from PreCompact hook",
+    "rule": "Usage: hive rule [rm|review|learn] <text>\n  Add or remove behavioral rules\n  hive rule <text>      Add rule\n  hive rule rm <pat>    Remove matching rule\n  hive rule review      Review pending rule suggestions\n  hive rule learn       Learn rules from /insights friction data\n  hive rule learn --dry-run   Preview without queuing",
     "session": "Usage: hive go [mode|prompt]\n  Modes: todo, verify, learn, reflect\n  Or load a custom prompt from knowledge/prompts/",
     "skill": "Usage: hive sk [publish <name>|unpublish <name>|sync|find <q>]\n  Manage skill plugins",
     "update": "Usage: hive up\n  Upgrade keephive to the latest version in-place",
@@ -93,7 +93,7 @@ _CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
     ("doctor", "Check setup + find duplicates", "dr", {"dr", "doctor"}),
     ("standup", "Generate standup summary", "su", {"su", "standup"}),
     ("gc", "Archive old logs", "g", {"g", "gc"}),
-    ("rule [rm|review]", "Add/remove/review rules", "", {"rule"}),
+    ("rule [learn|review]", "Add/remove/learn rules", "", {"rule"}),
     ("set [key] [val]", "View/change settings", "", {"set"}),
     ("skill", "Manage skill plugins", "sk", {"sk", "skill"}),
     ("update", "Upgrade keephive in-place", "up", {"up", "update"}),
@@ -187,7 +187,7 @@ Usage: hive <command> [args]
     if show_all:
         print("""
   Plumbing
-    rule [rm|review]  Add/remove/review rules
+    rule [learn|review]  Add/remove/learn rules
     todo repeat       Manage recurring tasks
     set [key] [val]   View/change settings
     sound-test        Play notification sound

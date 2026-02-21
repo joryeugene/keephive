@@ -28,6 +28,8 @@ A knowledge sidecar for Claude Code. Commands work as both `keephive <cmd>` and 
 | `hive stats`           |                   | Usage statistics (sessions, commands, projects)                  |
 | `hive doctor`          | `hive dr`         | Health check (hooks, MCP, data integrity)                        |
 | `hive standup`         |                   | Generate standup summary from recent activity                    |
+| `hive rule learn`      |                   | Learn rules from /insights friction data                         |
+| `hive rule review`     |                   | Accept/reject pending rule suggestions                           |
 | `hive gc`              |                   | Archive old logs, rebuild index                                  |
 | `hive serve [port]`    | `hive ws`         | Live web dashboard (localhost:3847)                              |
 | `hive ui`              |                   | Show pending UI feedback queue                                   |
@@ -175,6 +177,8 @@ After finishing work:
 - `hive v` to verify stale facts against codebase
 - `hive rf` to find patterns in daily logs
 - `hive k edit <name>` to create a knowledge guide
+- `hive rule learn` to generate rules from /insights friction data
+- `hive rule review` to accept/reject queued rule suggestions
 
 ## Dashboard
 
@@ -301,7 +305,7 @@ The API path is taken only when INSIDE a Claude Code session (`CLAUDECODE` is se
 
 ### Free commands
 
-`hive r`, `hive rc`, `hive s`, `hive todo`, `hive m`, `hive rule`, `hive e`, `hive n`, `hive k`, `hive p`, `hive st`, `hive l`, `hive gc`, `hive sk`, `hive serve`, `hive ui`
+`hive r`, `hive rc`, `hive s`, `hive todo`, `hive m`, `hive rule`, `hive rule learn`, `hive e`, `hive n`, `hive k`, `hive p`, `hive st`, `hive l`, `hive gc`, `hive sk`, `hive serve`, `hive ui`
 
 ### Agent rule
 

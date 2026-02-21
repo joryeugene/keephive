@@ -47,7 +47,7 @@ def test_help_all_unchanged(capsys):
     _help(show_all=True)
     out = capsys.readouterr().out
     assert "Plumbing" in out
-    assert "rule [rm|review]" in out
+    assert "rule [learn|review]" in out
     assert "setup" in out
     assert "hive help --all" not in out  # no self-reference in --all
 

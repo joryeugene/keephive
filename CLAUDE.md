@@ -23,6 +23,7 @@ A knowledge sidecar for Claude Code.
 - `nudge.py`: Shared nudge infrastructure (counter-based, status-aware, rotating messages).
 - `storage.py`: All file I/O for ~/.claude/hive/ directory. Includes stats tracking.
 - `commands/audit.py`: Three-perspective LLM audit (parallel) + Cook synthesis. Uses `run_claude_pipe()` for all 4 calls.
+- `commands/memory.py`: `hive mem` and `hive rule` (add/remove/learn/review). `rule learn` reads `/insights` friction data from `~/.claude/usage-data/facets/`, maps to behavioral rules, deduplicates via trigram overlap, queues in `.pending-rules.md`.
 - `commands/edit.py`: `hive e` targets (memory, rules, claude, today, todo, etc.). Opens `$EDITOR`.
 - `commands/knowledge.py`: List, view, create/edit knowledge guides and prompt templates.
 - `commands/note.py`: Multi-slot scratchpad. Open, copy, clear, list, restore, template start. `hive n todo` extracts TODOs via edit-buffer (full note, candidates pre-marked `- `, mtime cancel detection). `hive 4 "text"` quick-appends without editor.

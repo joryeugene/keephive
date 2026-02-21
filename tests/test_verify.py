@@ -166,6 +166,56 @@ def test_no_stale_facts_exits_clean(hive_env, capsys):
     assert "current" in out.lower() or "Skipping" in out
 
 
+def test_sequential_batches_both_applied(hive_env):
+    """Two sequential apply_verdicts calls (simulating batches): both applied."""
+    mem_path = hive_env / "working" / "memory.md"
+    mem_path.write_text(
+        "# Working Memory\n\n"
+        "- Fact A about Python [verified:2020-01-01]\n"
+        "- Fact B about keephive [verified:2020-01-02]\n"
+        "- Untouched fact [verified:2026-02-15]\n"
+    )
+    today_str = date.today().isoformat()
+
+    # Batch 1: validates Fact A (updates date)
+    batch1_facts = [
+        (3, "Fact A about Python", "- Fact A about Python [verified:2020-01-01]\n"),
+    ]
+    response1 = VerifyResponse(
+        verdicts=[FactVerdict(index=1, verdict=Verdict.VALID, reason="Still true")]
+    )
+    updated1, refreshed1 = apply_verdicts(response1, batch1_facts, mem_path, today_str)
+    assert updated1 == 1
+    assert refreshed1 == 0
+
+    # Batch 2: corrects Fact B (replaces content)
+    batch2_facts = [
+        (4, "Fact B about keephive", "- Fact B about keephive [verified:2020-01-02]\n"),
+    ]
+    response2 = VerifyResponse(
+        verdicts=[
+            FactVerdict(
+                index=1,
+                verdict=Verdict.STALE,
+                reason="Name changed",
+                correction="- Fact B about keephive v2",
+            )
+        ]
+    )
+    updated2, refreshed2 = apply_verdicts(response2, batch2_facts, mem_path, today_str)
+    assert updated2 == 1
+    assert refreshed2 == 0
+
+    # Both changes present in final file
+    mem = mem_path.read_text()
+    assert f"Fact A about Python [verified:{today_str}]" in mem
+    assert f"Fact B about keephive v2 [verified:{today_str}]" in mem
+    assert "Untouched fact [verified:2026-02-15]" in mem
+    # Old content replaced
+    assert "[verified:2020-01-01]" not in mem
+    assert "[verified:2020-01-02]" not in mem
+
+
 def test_skip_llm_guard(hive_env, capsys):
     """HIVE_SKIP_LLM=1 causes early return without calling claude."""
     # hive_env fixture already sets HIVE_SKIP_LLM=1

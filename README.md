@@ -198,6 +198,8 @@ flowchart TD
 | **Manage**              |                   |                                            |
 | `hive mem [rm] <text>`  | `hive m`          | Add/remove working memory facts            |
 | `hive rule [rm] <text>` |                   | Add/remove behavioral rules                |
+| `hive rule learn`       |                   | Learn rules from /insights friction data   |
+| `hive rule review`      |                   | Accept/reject pending rule suggestions     |
 | `hive edit <target>`    | `hive e`          | Edit memory, rules, todos, etc.            |
 | `hive skill`            | `hive sk`         | Manage skill plugins                       |
 | **Maintain**            |                   |                                            |
