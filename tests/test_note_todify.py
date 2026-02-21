@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import re
+import time
 from datetime import date
 from pathlib import Path
 from unittest.mock import patch
@@ -17,8 +19,15 @@ from keephive.storage import daily_dir, open_todos, slot_file
 
 
 def _accept_all(*args, **kwargs):
-    """Mock editor that touches the file (updates mtime) without changing content."""
-    Path(args[0][1]).touch()
+    """Mock editor that bumps mtime forward to simulate a save.
+
+    On Linux ext4 (1-second mtime granularity), a simple .touch() within
+    the same second as the file write won't change st_mtime. We explicitly
+    set mtime 2 seconds into the future to guarantee detection.
+    """
+    path = Path(args[0][1])
+    future = time.time() + 2
+    os.utime(path, (future, future))
 
 
 def test_todify_structured(hive_env, monkeypatch):
@@ -236,6 +245,8 @@ def test_todify_editor_buffer_review(hive_env, monkeypatch):
                 continue
             result.append(line)
         path.write_text("\n".join(result) + "\n")
+        future = time.time() + 2
+        os.utime(path, (future, future))
 
     monkeypatch.setattr("subprocess.run", delete_first_todo)
 
@@ -258,6 +269,8 @@ def test_todify_editor_all_deleted(hive_env, monkeypatch):
         # Keep non-'- ' lines (instruction, blank lines) but strip all todo markers
         lines = [ln for ln in path.read_text().splitlines() if not ln.startswith("- ")]
         path.write_text("\n".join(lines) + "\n")
+        future = time.time() + 2
+        os.utime(path, (future, future))
 
     monkeypatch.setattr("subprocess.run", clear_todos)
 
