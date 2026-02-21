@@ -71,80 +71,192 @@ _CANONICAL: dict[str, str] = {
     "ws": "serve",
 }
 
+# Command families: (display_label, description, shorthand, tracked_aliases)
+# Order = priority for Discover section (core daily-use first, plumbing last).
+_CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
+    ("status", "Status at a glance", "s", {"s", "status"}),
+    ("remember <text>", "Save to daily log", "r", {"r", "remember"}),
+    ("recall <query>", "Search all memory tiers", "rc", {"rc", "recall"}),
+    ("todo", "Add/complete TODOs", "t", {"t", "td", "to", "todo"}),
+    ("verify", "Check stale facts", "v", {"v", "verify"}),
+    ("log [date]", "View daily log", "l", {"l", "log"}),
+    ("edit [target]", "Edit memory, rules, etc.", "e", {"e", "edit"}),
+    ("note", "Multi-slot scratchpad", "n", {"n", "note", "d", "draft", "nc", "dc"}),
+    ("knowledge [name]", "View/edit knowledge guides", "k", {"k", "ke", "knowledge"}),
+    ("prompt [name]", "Prompt templates", "p", {"p", "prompt", "pe"}),
+    ("reflect", "Find patterns in logs", "rf", {"rf", "reflect"}),
+    ("audit [-v]", "Quality analysis", "a", {"a", "audit"}),
+    ("go [mode]", "Launch session", "go", {"go", "sesh", "session"}),
+    ("stats [-p path]", "Usage + pipeline health", "st", {"st", "stats"}),
+    ("mem [rm] <text>", "Add/remove working memory", "m", {"m", "mem"}),
+    ("serve [port]", "Live web dashboard", "ws", {"ws", "serve"}),
+    ("doctor", "Check setup + find duplicates", "dr", {"dr", "doctor"}),
+    ("standup", "Generate standup summary", "su", {"su", "standup"}),
+    ("gc", "Archive old logs", "g", {"g", "gc"}),
+    ("rule [rm|review]", "Add/remove/review rules", "", {"rule"}),
+    ("set [key] [val]", "View/change settings", "", {"set"}),
+    ("skill", "Manage skill plugins", "sk", {"sk", "skill"}),
+    ("update", "Upgrade keephive in-place", "up", {"up", "update"}),
+    ("ps", "Active sessions + git state", "", {"ps"}),
+    ("setup", "Initial setup", "", {"setup"}),
+    ("sound-test", "Play notification sound", "", {"sound-test"}),
+    ("ui [install|clr]", "UI feedback queue", "", {"ui", "ui-install", "ui-clear"}),
+]
 
-def _help() -> None:
+
+def _command_usage(days: int = 7) -> tuple[dict[int, int], set[int]]:
+    """Aggregate command usage by family index.
+
+    Returns (recent_counts, all_time_indices):
+      recent_counts: {family_idx: total_invocations_in_last_N_days}
+      all_time_indices: set of family indices ever used
+    """
+    try:
+        from datetime import date, timedelta
+
+        from keephive.storage import read_stats
+
+        data = read_stats()
+        if not data.get("days"):
+            return {}, set()
+
+        cutoff = (date.today() - timedelta(days=days)).isoformat()
+        recent: dict[int, int] = {}
+        all_time: set[int] = set()
+
+        for day_str, day_data in data["days"].items():
+            cmds = day_data.get("commands", {})
+            if not cmds:
+                continue
+            is_recent = day_str >= cutoff
+
+            for idx, (_, _, _, aliases) in enumerate(_CMD_FAMILIES):
+                count = 0
+                for alias in aliases:
+                    count += cmds.get(alias, 0)
+                # note.N slots (note.0 through note.9) count toward the note family
+                if aliases & {"n", "note", "d", "draft", "nc", "dc"}:
+                    for k, v in cmds.items():
+                        if k.startswith("note."):
+                            count += v
+                if count > 0:
+                    all_time.add(idx)
+                    if is_recent:
+                        recent[idx] = recent.get(idx, 0) + count
+
+        return recent, all_time
+    except Exception:
+        return {}, set()
+
+
+def _print_cmd_line(label: str, desc: str, shorthand: str) -> None:
+    """Print a single command line with consistent column formatting."""
+    print(f"    {label:<18s}{desc:<34s}{shorthand}")
+
+
+def _help_grouped(show_all: bool = False) -> None:
     """Print help text."""
-    print(f"""keephive v{__version__}  -  a knowledge sidecar for Claude Code
+    print(f"""keephive v{__version__}
+Preserves what your agent discovers. Checks if it's still true.
 
 Usage: hive <command> [args]
 
-Daily
-  s, status            Status overview
-  r, remember <text>   Save insight to daily log
-  rc, recall <query>   Search all memory tiers
-  l, log [date]        View daily log (today, yesterday, N, YYYY-MM-DD)
-  l summarize          AI summary of today's log
-  m, mem [rm] <text>   Add/remove working memory facts
-  rule [rm] <text>     Add/remove behavioral rules
-  rule review          Review queued rule suggestions
+  Capture & Search                                 Shorthand
+    remember <text>   Save to daily log                r
+    recall <query>    Search all memory tiers           rc
+    todo <text>       Add a TODO                        t
+    todo done <pat>   Mark complete                     td
+    verify            Check stale facts                 v
+    prompt [name]     Prompt templates                  p
 
-Todo
-  to, todo             List open TODOs + due recurring
-  t <text>             Quick add TODO
-  td <pat>             Mark TODO done (also: t done <pat>, t d <pat>)
-  todo done <pat>      Complete a TODO or recurring task
-  todo repeat <freq> <text>   Add recurring (daily/weekly/2d/12h)
-  e todo               Bulk-edit TODOs in $EDITOR
+  Workflows
+    status            Status at a glance                s
+    reflect           Find patterns in logs             rf
+    audit [-v]        Quality analysis                  a
+    go [mode]         Launch session                    go
+    stats [-p path]   Usage + pipeline health           st
+    log [date]        View daily log                    l
 
-Knowledge
-  k [name]             List or view guides (prefix match)
-  ke <name>            Edit/create a guide
-  p [name]             List or view prompts
-  pe <name>            Edit/create a prompt
-  sk, skill            Manage skills
+  Manage
+    edit [target]     Edit memory, rules, etc.          e
+    knowledge [name]  View/edit knowledge guides        k
+    note              Multi-slot scratchpad              n
+    mem [rm] <text>   Add/remove working memory         m
+    serve [port]      Live web dashboard""")
 
-Notes
-  n, note              Open scratchpad in $EDITOR
-  draft                (alias for n)
-  4                    Open slot 4 in $EDITOR (bare-digit shorthand for n.4)
-  n.3                  Switch to slot 3, open editor
-  nc / n.3c            Copy to clipboard
-  n list               Show all slots
-  n <N> todo           Extract TODOs from slot N
-  4 "text"             Append text to slot 4 without opening editor
+    if show_all:
+        print("""
+  Plumbing
+    rule [rm|review]  Add/remove/review rules
+    todo repeat       Manage recurring tasks
+    set [key] [val]   View/change settings
+    sound-test        Play notification sound
+    gc                Archive old logs
+    doctor            Check setup + find duplicates     dr
+    standup           Generate standup summary           su
+    ps                Active sessions + git state
+    skill             Manage skill plugins               sk
+    update            Upgrade keephive in-place          up
+    setup             Initial setup
+    ui [install|clr]  UI feedback queue (bookmarklet)""")
 
-Sessions (run 'hive s' first - signals tell you which to use)
-  go, session          General session with full context
-  session todo         Triage open TODOs          (when TODOs pile up)
-  session verify       Fix stale facts            (when status shows stale)
-  session learn        Active recall quiz          (to test retention)
-  session reflect      Find patterns in logs       (after a week of work)
-  session <prompt>     Load custom prompt from knowledge/prompts/
+    print("""
+  Run 'hive help <cmd>' for details.""")
+    if not show_all:
+        print("  Run 'hive help --all' for all commands.")
 
-Analysis
-  v, verify            Verify stale facts (claude -p)
-  rf, reflect          Review daily logs (scan / analyze / apply / draft)
-  a, audit [-v]        Quality pulse (score + actions)
-  su, standup          Generate standup summary
-  st, stats [-p path]  Usage statistics
-  ps                   Active sessions, project activity, git state
 
-Maintenance
-  e, edit [target]     Edit file (memory/rules/claude/settings/local/note/today)
-  set [key] [value]    View/change settings
-  sound-test [error]   Play configured notification sound
-  g, gc                Archive old logs
-  dr, doctor           Check setup + find duplicate TODOs
-  up, update           Upgrade keephive in-place
-  setup                Initial setup
+def _help(show_all: bool = False) -> None:
+    """Adaptive help: Recent + Discover when stats exist, grouped otherwise."""
+    if show_all:
+        _help_grouped(show_all=True)
+        return
 
-Dashboard
-  serve [port]         Live web dashboard (localhost:3847)
-  ui [install|clear]   UI feedback queue (bookmarklet → Claude Code)
+    recent, all_time = _command_usage(7)
 
-  h, help / --help     Show this help
-  --version            Show version
-""")
+    # No usage data at all: fall back to grouped layout (new user)
+    if not all_time:
+        _help_grouped()
+        return
+
+    # Build sections
+    recent_items = sorted(recent.items(), key=lambda kv: -kv[1])
+    discover_indices = [
+        i for i in range(len(_CMD_FAMILIES)) if i not in all_time
+    ]
+    discover_cap = 6
+
+    # Edge case: both sections would be empty (used everything, none recent)
+    if not recent_items and not discover_indices:
+        _help_grouped()
+        return
+
+    print(f"keephive v{__version__}")
+    print("Preserves what your agent discovers. Checks if it's still true.")
+    print()
+    print("Usage: hive <command> [args]")
+
+    if recent_items:
+        print()
+        print(f"  {'Recent':<52s}Shorthand")
+        for idx, _ in recent_items:
+            label, desc, shorthand, _ = _CMD_FAMILIES[idx]
+            _print_cmd_line(label, desc, shorthand)
+
+    if discover_indices:
+        print()
+        print("  Discover")
+        shown = discover_indices[:discover_cap]
+        for idx in shown:
+            label, desc, shorthand, _ = _CMD_FAMILIES[idx]
+            _print_cmd_line(label, desc, shorthand)
+        overflow = len(discover_indices) - discover_cap
+        if overflow > 0:
+            print(f"    ... and {overflow} more (hive help --all)")
+
+    print()
+    print("  Run 'hive help <cmd>' for details.")
+    print("  Run 'hive help --all' for all commands.")
 
 
 # Dispatch table: command -> (handler_module, handler_function)
@@ -227,7 +339,14 @@ def main(args: list[str] | None = None) -> None:
     cmd = args[0]
 
     if cmd in ("h", "-h", "--help", "help"):
-        _help()
+        show_all = "--all" in args[1:] if len(args) > 1 else False
+        # Per-command help: hive help <cmd>
+        if len(args) > 1 and not args[1].startswith("-"):
+            canonical = _CANONICAL.get(args[1], args[1])
+            if canonical in HELP:
+                print(HELP[canonical])
+                return
+        _help(show_all=show_all)
         return
 
     if cmd in ("--version", "-v"):

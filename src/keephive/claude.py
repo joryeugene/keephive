@@ -140,6 +140,19 @@ def parse_claude_response(raw_stdout: str, response_model: Type[T]) -> T:
         elif raw.get("type") == "result":
             raw = _extract_from_result_text(raw, raw_stdout, response_model)
 
+    # Detect error subtypes that survived fallback extraction.
+    # claude -p reports total_cost_usd as informational (API-equivalent pricing),
+    # NOT an actual charge — subscription covers it. Don't surface it in errors.
+    if isinstance(raw, dict) and raw.get("type") == "result":
+        subtype = raw.get("subtype", "")
+        if subtype.startswith("error_"):
+            label = subtype.replace("_", " ")
+            raise ClaudePipeError(
+                f"claude -p ended with {label}. "
+                "The model used all allowed turns without producing structured output. "
+                "Try: fewer facts per run, or increase --max-turns."
+            )
+
     # Validate with Pydantic
     try:
         return response_model.model_validate(raw)

@@ -1014,6 +1014,49 @@ def count_log_entries_with_prefix(prefix: str, days: int = 90) -> int:
     return count
 
 
+def count_log_entries_by_prefix(days_back: int = 7) -> dict[str, int]:
+    """Count daily log entries grouped by category prefix across recent logs.
+
+    Returns dict like {"FACT": 23, "DECISION": 8, "TODO": 12, "INSIGHT": 5, "CORRECTION": 2}.
+    Only counts timestamped entries (- [HH:MM:SS] PREFIX:) and bare prefix entries (- PREFIX:).
+    """
+    cutoff = (date.today() - timedelta(days=days_back)).isoformat()
+    dd = daily_dir()
+    if not dd.exists():
+        return {}
+
+    counts: dict[str, int] = {}
+    ts_re = re.compile(r"^- \[\d{2}:\d{2}:\d{2}\]\s*(FACT|DECISION|TODO|INSIGHT|CORRECTION|DONE):")
+    bare_re = re.compile(r"^- (FACT|DECISION|TODO|INSIGHT|CORRECTION|DONE):")
+
+    for f in sorted(dd.glob("*.md")):
+        if f.stem < cutoff:
+            continue
+        for line in safe_read_text(f).splitlines():
+            m = ts_re.match(line)
+            if not m:
+                m = bare_re.match(line)
+            if m:
+                cat = m.group(1)
+                counts[cat] = counts.get(cat, 0) + 1
+
+    return counts
+
+
+def count_log_entries_by_prefix_daily(days_back: int = 14) -> list[tuple[str, int]]:
+    """Return (date_str, total_entry_count) for each of the last N days.
+
+    Used for capture consistency sparklines. Counts all timestamped entries.
+    """
+    result: list[tuple[str, int]] = []
+    for i in range(days_back - 1, -1, -1):
+        d = date.today() - timedelta(days=i)
+        day_str = d.isoformat()
+        count = count_daily_entries(day_str)
+        result.append((day_str, count))
+    return result
+
+
 def last_log_entry_with_prefix(prefix: str) -> str:
     """Return text after prefix from the most recent matching log entry."""
     dd = daily_dir()
@@ -1073,6 +1116,63 @@ def get_recall_count(fact_line: str) -> int:
         return 0
     key = hashlib.sha256(fact_line.strip().encode()).hexdigest()[:16]
     return data.get(key, {}).get("count", 0)
+
+
+def track_recall_miss() -> None:
+    """Increment recall miss counter. Silent on error."""
+    try:
+        sf = recall_stats_file()
+        data: dict = {}
+        if sf.exists():
+            try:
+                data = json.loads(sf.read_text())
+            except (json.JSONDecodeError, OSError):
+                data = {}
+
+        meta = data.get("_meta", {"hits": 0, "misses": 0})
+        meta["misses"] = meta.get("misses", 0) + 1
+        data["_meta"] = meta
+
+        sf.parent.mkdir(parents=True, exist_ok=True)
+        sf.write_text(json.dumps(data))
+    except Exception:
+        pass  # Never block recall operations
+
+
+def track_recall_hit_meta() -> None:
+    """Increment recall hit counter in meta. Silent on error."""
+    try:
+        sf = recall_stats_file()
+        data: dict = {}
+        if sf.exists():
+            try:
+                data = json.loads(sf.read_text())
+            except (json.JSONDecodeError, OSError):
+                data = {}
+
+        meta = data.get("_meta", {"hits": 0, "misses": 0})
+        meta["hits"] = meta.get("hits", 0) + 1
+        data["_meta"] = meta
+
+        sf.parent.mkdir(parents=True, exist_ok=True)
+        sf.write_text(json.dumps(data))
+    except Exception:
+        pass
+
+
+def get_recall_hit_rate() -> tuple[int, int]:
+    """Return (hits, total_queries) from recall meta stats."""
+    sf = recall_stats_file()
+    if not sf.exists():
+        return 0, 0
+    try:
+        data = json.loads(sf.read_text())
+    except (json.JSONDecodeError, OSError):
+        return 0, 0
+    meta = data.get("_meta", {})
+    hits = meta.get("hits", 0)
+    misses = meta.get("misses", 0)
+    return hits, hits + misses
 
 
 # ---- Verification evidence storage ----

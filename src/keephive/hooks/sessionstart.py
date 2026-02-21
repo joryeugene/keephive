@@ -230,6 +230,21 @@ def build_context(cwd: str, project_name: str) -> str:
         if cross_hint:
             parts.append(cross_hint)
 
+    # 7b. Pending rule suggestions (close data flow gap)
+    try:
+        pending_rules_path = hive_dir() / ".pending-rules.md"
+        if pending_rules_path.exists():
+            pr_content = pending_rules_path.read_text().strip()
+            if pr_content:
+                n = sum(1 for ln in pr_content.splitlines() if ln.strip().startswith("- "))
+                if n > 0:
+                    s = "s" if n != 1 else ""
+                    parts.append(
+                        f"{n} pending rule suggestion{s}. Run: hive rule review"
+                    )
+    except Exception:
+        pass
+
     # 8. Session context (brief productivity signal)
     try:
         from keephive.storage import session_metrics

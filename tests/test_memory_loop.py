@@ -130,11 +130,9 @@ class TestHelpRewrite:
 
         _help()
         out = capsys.readouterr().out
-        assert "Daily" in out
-        assert "Todo" in out
-        assert "Knowledge" in out
-        assert "Analysis" in out
-        assert "Maintenance" in out
+        assert "Capture & Search" in out
+        assert "Workflows" in out
+        assert "Manage" in out
 
     def test_help_no_hook_commands(self, hive_env, capsys):
         """Help output does not expose hook commands."""

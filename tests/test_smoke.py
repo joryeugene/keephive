@@ -592,15 +592,18 @@ def test_recall_deep_flag(hive_env):
 
 
 def test_help_shows_grouped_sections():
-    """Help text has grouped sections and key commands."""
+    """Help text has core structure (adaptive or grouped)."""
     r = _run(["help"])
     assert r.returncode == 0
-    assert "Daily" in r.stdout
-    assert "Todo" in r.stdout
-    assert "Knowledge" in r.stdout
-    assert "Analysis" in r.stdout
-    assert "Maintenance" in r.stdout
-    assert "rf, reflect" in r.stdout
+    assert "keephive v" in r.stdout
+    assert "hive help" in r.stdout
+    # --all always shows grouped layout with all sections
+    r_all = _run(["help", "--all"])
+    assert r_all.returncode == 0
+    assert "Capture & Search" in r_all.stdout
+    assert "Workflows" in r_all.stdout
+    assert "Manage" in r_all.stdout
+    assert "Plumbing" in r_all.stdout
 
 
 def test_hook_ups_nudge(hive_env):

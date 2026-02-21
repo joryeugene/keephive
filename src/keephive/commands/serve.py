@@ -166,9 +166,10 @@ select.refresh-select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;
 main{max-width:1400px;margin:0 auto;padding:16px}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;align-items:start}
 @media(max-width:900px){.grid-2{grid-template-columns:1fr}}
-.split-pane{display:flex;gap:0;margin-bottom:16px;align-items:start}
-.split-left{flex:1;min-width:200px}
-.split-right{flex:1;min-width:200px}
+.split-pane{display:flex;gap:0;margin-bottom:16px;align-items:stretch}
+.split-left{flex:1;min-width:200px;display:flex;flex-direction:column}
+.split-right{flex:1;min-width:200px;display:flex;flex-direction:column}
+.split-left>.card,.split-right>.card{flex:1}
 .split-divider{width:8px;cursor:col-resize;background:transparent;flex-shrink:0;position:relative;margin:0 4px}
 .split-divider::after{content:'';position:absolute;top:20%;bottom:20%;left:3px;width:2px;background:#30363d;border-radius:1px}
 .split-divider:hover::after,.split-divider.dragging::after{background:#58a6ff}
@@ -177,11 +178,15 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .card-title{font-weight:600;font-size:13px;color:#f0f6fc}
 .card-meta{color:#6e7681;font-size:12px}
 .card-body{padding:10px 14px}
-.stat-row{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:8px;justify-content:center}
-.stat-item{display:flex;flex-direction:column;gap:2px;align-items:center;text-align:center}
+.stat-row{display:flex;gap:16px 24px;flex-wrap:wrap;margin-bottom:8px;justify-content:center}
+.stat-item{display:flex;flex-direction:column;gap:2px;align-items:center;text-align:center;min-width:64px}
 .stat-value{font-size:22px;font-weight:700;color:#f0f6fc}
 .stat-value.warn{color:#e3b341}.stat-value.err{color:#f85149}.stat-value.ok{color:#3fb950}
-.stat-label{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.04em}
+.stat-label{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap}
+.pulse-hero .card-body{padding:16px 24px}
+.pulse-kpi{display:flex;flex-direction:column;align-items:center;gap:2px}
+.pulse-kpi-val{font-size:16px;font-weight:700;color:#e6edf3}
+.pulse-kpi-label{font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap}
 .health-row{display:flex;gap:12px;margin-top:6px;justify-content:center}
 .dot-ok{color:#3fb950}.dot-off{color:#6e7681}
 .health-label{font-size:12px;color:#8b949e}
@@ -335,10 +340,10 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .heat-bar.current{box-shadow:0 0 0 1px #58a6ff}
 .heat-labels{display:flex;gap:1px;padding:1px 0 4px}
 .heat-labels span{flex:1;text-align:center;font-size:8px;color:#6e7681}
-.summary-stats{display:flex;gap:12px;padding:6px 12px;justify-content:center}
-.summary-stat{text-align:center}
+.summary-stats{display:flex;gap:12px 20px;padding:6px 12px;justify-content:center;flex-wrap:wrap}
+.summary-stat{text-align:center;min-width:56px}
 .summary-stat .stat-value{font-size:18px;font-weight:700;color:#e6edf3;display:block}
-.summary-stat .stat-label{font-size:10px;color:#8b949e}
+.summary-stat .stat-label{font-size:10px;color:#8b949e;white-space:nowrap}
 .summary-link{display:block;text-align:center;padding:8px 12px;font-size:12px;color:#58a6ff;text-decoration:none;border-top:1px solid #21262d;background:#111820;font-weight:500;letter-spacing:.02em;transition:background .15s,color .15s}
 .summary-link:hover{color:#79c0ff;background:#122131}
 .log-filter{display:flex;gap:4px;padding:5px 12px;border-bottom:1px solid #21262d;flex-wrap:wrap}
@@ -422,7 +427,7 @@ mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 .prompt-hist-bar span{position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:10px;color:#8b949e}
 .prompt-hist-labels{display:flex;gap:3px;padding:2px 12px 6px}
 .prompt-hist-labels span{flex:1;text-align:center;font-size:10px;color:#6e7681;min-width:18px}
-.session-list{max-height:320px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#30363d #161b22}
+.session-list{max-height:180px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#30363d #161b22}
 .session-item{display:flex;gap:8px;align-items:center;padding:4px 10px;border-bottom:1px solid #21262d;font-size:12px}
 .session-item:last-child{border-bottom:none}
 .session-time{color:#6e7681;font-family:monospace;min-width:44px;flex-shrink:0}
@@ -1272,6 +1277,47 @@ def _get_status_data() -> dict:
     except Exception:
         pass
 
+    # Pipeline health for pulse score in home view
+    pulse_score = 0
+    pulse_delta = 0
+    fresh_pct = 0.0
+    capture_recall = 0.0
+    try:
+        from keephive.commands.stats import (
+            _capture_mix,
+            _knowledge_health,
+            _productivity_pulse,
+            _session_productivity,
+        )
+
+        kh = _knowledge_health()
+        fresh_pct = kh.get("fresh_pct", 0)
+        capture_recall = kh.get("capture_recall_ratio", 0)
+        cm = _capture_mix()
+        sp = _session_productivity()
+        from keephive.storage import read_stats as _rs
+
+        pulse = _productivity_pulse(kh, cm, sp, _rs())
+        pulse_score = pulse.get("score", 0)
+        pulse_delta = pulse.get("delta", 0)
+    except Exception:
+        pass
+
+    # Pending rules count
+    pending_rules_count = 0
+    try:
+        from keephive.storage import hive_dir
+
+        pr_path = hive_dir() / ".pending-rules.md"
+        if pr_path.exists():
+            pr_text = pr_path.read_text().strip()
+            if pr_text:
+                pending_rules_count = sum(
+                    1 for ln in pr_text.splitlines() if ln.strip().startswith("- ")
+                )
+    except Exception:
+        pass
+
     return {
         "stale": stale,
         "total_verified": total_verified,
@@ -1287,6 +1333,11 @@ def _get_status_data() -> dict:
         "activity_week": activity_week,
         "activity_streak": activity_streak,
         "activity_hours": activity_hours,
+        "pulse_score": pulse_score,
+        "pulse_delta": pulse_delta,
+        "fresh_pct": fresh_pct,
+        "capture_recall": capture_recall,
+        "pending_rules_count": pending_rules_count,
     }
 
 
@@ -1431,11 +1482,18 @@ def _get_stats_data() -> dict:
     today_hours: dict[str, int] = today_day.get("hours", {})
 
     # Tool breakdown from session metrics (for What You Use panel)
-    from keephive.storage import session_metrics
+    from keephive.storage import count_log_entries_with_prefix, session_metrics
 
     sm = _safe_call(session_metrics, days_back=30) or {}
     tool_totals = sm.get("tool_totals", {}) if isinstance(sm, dict) else {}
     tool_pct = sm.get("tool_pct", {}) if isinstance(sm, dict) else {}
+
+    # Quality KPIs (output metrics for Activity panel)
+    insights = _safe_call(count_log_entries_with_prefix, "INSIGHT:", 90) or 0
+    decisions = _safe_call(count_log_entries_with_prefix, "DECISION:", 90) or 0
+    corrections = _safe_call(count_log_entries_with_prefix, "CORRECTION:", 90) or 0
+    todos_done = _safe_call(count_log_entries_with_prefix, "DONE:", 90) or 0
+    standups = _safe_call(count_log_entries_with_prefix, "STANDUP:", 90) or 0
 
     return {
         "commands": top,
@@ -1449,6 +1507,11 @@ def _get_stats_data() -> dict:
         "today_hours": today_hours,
         "tool_totals": tool_totals,
         "tool_pct": tool_pct,
+        "insights": insights,
+        "decisions": decisions,
+        "corrections": corrections,
+        "todos_done": todos_done,
+        "standups": standups,
     }
 
 
@@ -1550,13 +1613,37 @@ def _render_status_panel(data: dict) -> str:
             for f in stale_facts
         )
         label = f"{stale} stale fact{'s' if stale != 1 else ''} &#9658;"
-        verify_hint = '<div style="margin-top:6px"><span class="cmd-hint">hive v</span></div>'
+        verify_hint = '<div style="margin-top:6px"><span class="cmd-hint">hive verify</span></div>'
         stale_accordion = (
             f'<details class="stale-accordion">'
             f'<summary class="stale-summary">{label}</summary>'
             f'<div style="margin-top:6px">{items_html}</div>'
             f"{verify_hint}"
             f"</details>"
+        )
+
+    # Pipeline health summary (compact for home view)
+    pulse_html = ""
+    fresh_pct = data.get("fresh_pct", 0)
+    capture_recall = data.get("capture_recall", 0)
+    if fresh_pct > 0 or capture_recall > 0:
+        pulse_html = (
+            f'<div style="margin-top:6px;font-size:12px;color:#8b949e">'
+            f'<span style="color:#3fb950">{fresh_pct:.0f}%</span> fresh'
+            f' &middot; <span style="color:#58a6ff">{capture_recall:.0f}%</span> recall'
+            f' &middot; <a href="/stats" style="color:#484f58;text-decoration:none">details &rarr;</a>'
+            f"</div>"
+        )
+
+    # Pending rules hint
+    pending_html = ""
+    pending_rules_count = data.get("pending_rules_count", 0)
+    if pending_rules_count > 0:
+        s = "s" if pending_rules_count != 1 else ""
+        pending_html = (
+            f'<div style="margin-top:6px;padding:4px 8px;border-radius:4px;background:#e3b34122;border:1px solid #e3b34144;font-size:12px;color:#e3b341">'
+            f"{pending_rules_count} pending rule suggestion{s} &rarr; <code>hive rule review</code>"
+            f"</div>"
         )
 
     # Activity section (merged from stats-summary)
@@ -1570,9 +1657,9 @@ def _render_status_panel(data: dict) -> str:
         activity_html = (
             f'<div class="status-divider"></div>'
             f'<div class="stat-row">'
-            f'<div class="stat-item"><span class="stat-value">{activity_today}</span><span class="stat-label">cmds today</span></div>'
-            f'<div class="stat-item"><span class="stat-value">{activity_week}</span><span class="stat-label">this week</span></div>'
-            f'<div class="stat-item"><span class="stat-value">{activity_streak}d</span><span class="stat-label">streak</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{activity_today}</span><span class="stat-label">commands today</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{activity_week}</span><span class="stat-label">commands this week</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{activity_streak}d</span><span class="stat-label">day streak</span></div>'
             f"</div>"
         )
         hourly = _render_hourly_heatmap(activity_hours)
@@ -1580,16 +1667,16 @@ def _render_status_panel(data: dict) -> str:
             activity_html += hourly
         activity_html += '<a class="summary-link" href="/stats">Full stats &rarr;</a>'
 
-    hints = ["hive s", "hive v", "hive dr"]
+    hints = ["hive status", "hive verify", "hive doctor"]
     if stale > 0:
-        hints = ["hive v  \u2190 stale facts!", "hive s", "hive dr"]
+        hints = ["hive verify  \u2190 stale facts!", "hive status", "hive doctor"]
     elif not hooks_ok or not mcp_ok:
-        hints = ["hive setup", "hive s", "hive dr"]
+        hints = ["hive setup", "hive status", "hive doctor"]
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Status">'
         f'<div class="card-header"><span class="card-title">Status</span></div>'
         f"{_cmd_hints(hints)}"
-        f'<div class="card-body">{rows}{health}{stale_accordion}{activity_html}</div>'
+        f'<div class="card-body">{rows}{health}{stale_accordion}{pulse_html}{pending_html}{activity_html}</div>'
         f"</div>"
     )
 
@@ -1600,10 +1687,18 @@ def _render_status_brief_panel(data: dict) -> str:
     today_entries = data.get("today_entries", 0)
     todo_count = data.get("todo_count", 0)
     activity_today = data.get("activity_today", 0)
+    fresh_pct = data.get("fresh_pct", 0)
+    capture_recall = data.get("capture_recall", 0)
     stale_str = f' <span style="color:#e3b341">({stale} stale)</span>' if stale > 0 else ""
     activity_str = (
-        f" &nbsp;|&nbsp; <span>{activity_today}</span> cmds today" if activity_today > 0 else ""
+        f" &nbsp;|&nbsp; <span>{activity_today}</span> commands today" if activity_today > 0 else ""
     )
+    pipeline_str = ""
+    if fresh_pct > 0 or capture_recall > 0:
+        pipeline_str = (
+            f' &nbsp;|&nbsp; <span>{fresh_pct:.0f}%</span> fresh'
+            f" &middot; <span>{capture_recall:.0f}%</span> recall"
+        )
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Status">'
         f'<div class="card-body">'
@@ -1611,7 +1706,7 @@ def _render_status_brief_panel(data: dict) -> str:
         f"<span>{total}</span> verified facts{stale_str} &nbsp;|&nbsp; "
         f"<span>{today_entries}</span> logged today &nbsp;|&nbsp; "
         f"<span>{todo_count}</span> open todos"
-        f"{activity_str}"
+        f"{activity_str}{pipeline_str}"
         f"</div></div></div>"
     )
 
@@ -1735,10 +1830,10 @@ def _render_log_panel(
     data_panel_attr = ' data-panel="log"' if show_nav else ""
     aria_log = ' tabindex="0" role="region" aria-label="Daily log"'
     title = "Today's Log" if not date_str or date_str == _date.today().isoformat() else "Log"
-    log_hints = _cmd_hints(['hive r "FACT: ..."', "hive l", "hive l summarize"])
+    log_hints = _cmd_hints(['hive remember "FACT: ..."', "hive log", "hive log summarize"])
     log_input = (
         '<form class="panel-input" data-action="/api/remember" data-field="text">'
-        '<input type="text" placeholder="hive r \u2014 fact or note..." autocomplete="off">'
+        '<input type="text" placeholder="hive remember \u2014 fact or note..." autocomplete="off">'
         '<button type="submit">+</button>'
         "</form>"
     )
@@ -1803,7 +1898,7 @@ def _render_todo_panel(data: dict, limit: int = 0) -> str:
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Open TODOs">'
         f'<div class="card-header"><span class="card-title">Open TODOs</span><span class="card-meta">{meta}</span></div>'
-        f"{_cmd_hints(['hive t <text>', 'hive todo done <pat>', 'hive todo'])}"
+        f"{_cmd_hints(['hive todo <text>', 'hive todo done <pat>', 'hive todo'])}"
         f"{todo_input}"
         f'<div class="card-body">{rows}</div>'
         f"</div>"
@@ -1911,13 +2006,13 @@ def _render_knowledge_panel(data: dict) -> str:
             f"</div>{body}</div>"
         )
     if not rows:
-        rows = '<div class="empty">No knowledge guides yet — hive ke &lt;name&gt;</div>'
+        rows = '<div class="empty">No knowledge guides yet — hive knowledge edit &lt;name&gt;</div>'
     total = len(guides) + len(prompts) + len(skills)
     meta = f"{len(guides)}g / {len(prompts)}p / {len(skills)}sk" if total else ""
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Knowledge">'
         f'<div class="card-header"><span class="card-title">Knowledge</span><span class="card-meta">{meta}</span></div>'
-        f"{_cmd_hints(['hive ke <name>', 'hive pe <name>', 'hive k <name>', 'hive rf draft <topic>'])}"
+        f"{_cmd_hints(['hive knowledge edit <name>', 'hive prompt edit <name>', 'hive knowledge <name>', 'hive reflect draft <topic>'])}"
         f'<div class="card-body">{rows}</div>'
         f"</div>"
     )
@@ -1983,7 +2078,7 @@ def _render_notes_compact_panel(data: dict) -> str:
             f"</div>"
         )
     if not tiles:
-        tiles = '<div class="empty">No notes \u2014 hive n</div>'
+        tiles = '<div class="empty">No notes \u2014 hive note</div>'
     meta = f"{len(slots)} slots" if slots else ""
     link = '<a class="summary-link" href="/know">All notes &rarr;</a>'
     return (
@@ -2018,7 +2113,7 @@ def _render_memory_panel(data: dict) -> str:
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Memory">'
         f'<div class="card-header"><span class="card-title">Memory</span></div>'
-        f"{_cmd_hints(['hive m <fact>', 'hive m rm <pat>', 'hive rule <text>', 'hive e memory'])}"
+        f"{_cmd_hints(['hive mem <fact>', 'hive mem rm <pat>', 'hive rule <text>', 'hive edit memory'])}"
         f'<div class="card-body">{mem_section}{rules_section}</div>'
         f"</div>"
     )
@@ -2058,7 +2153,7 @@ def _render_notes_panel(data: dict) -> str:
             f"</div>{body}</div>"
         )
     if not rows:
-        rows = '<div class="empty">No notes — hive n</div>'
+        rows = '<div class="empty">No notes — hive note</div>'
     meta = f"{len(slots)} slots" if slots else ""
 
     # Slot switcher buttons
@@ -2079,7 +2174,7 @@ def _render_notes_panel(data: dict) -> str:
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Notes">'
         f'<div class="card-header"><span class="card-title">Notes</span><span class="card-meta">{meta}</span></div>'
-        f"{_cmd_hints(['hive n', 'hive n show', 'hive nc', 'hive n.3'])}"
+        f"{_cmd_hints(['hive note', 'hive note show', 'hive note clear', 'hive note.3'])}"
         f"{slot_switcher}"
         f"{note_input}"
         f'<div class="card-body">{rows}</div>'
@@ -2196,9 +2291,29 @@ def _render_stats_panel(data: dict) -> str:
     if total_days > 0:
         streak_html = (
             f'<div class="stat-row" style="margin-bottom:12px">'
-            f'<div class="stat-item"><span class="stat-value">{curr_streak}</span><span class="stat-label">curr streak</span></div>'
-            f'<div class="stat-item"><span class="stat-value">{longest_streak}</span><span class="stat-label">best streak</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{curr_streak}</span><span class="stat-label">current streak</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{longest_streak}</span><span class="stat-label">longest streak</span></div>'
             f'<div class="stat-item"><span class="stat-value">{total_days}</span><span class="stat-label">days active</span></div>'
+            f"</div>"
+        )
+
+    # Quality KPIs (output metrics: what you produced)
+    insights = data.get("insights", 0)
+    decisions = data.get("decisions", 0)
+    corrections = data.get("corrections", 0)
+    todos_done = data.get("todos_done", 0)
+    standups = data.get("standups", 0)
+    quality_html = ""
+    if insights or decisions or corrections or todos_done or standups:
+        quality_html = (
+            f'<div style="border-top:1px solid #21262d;margin-top:10px;padding-top:8px">'
+            f'<div class="stat-row">'
+            f'<div class="stat-item"><span class="stat-value">{insights}</span><span class="stat-label">insights</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{decisions}</span><span class="stat-label">decisions</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{corrections}</span><span class="stat-label">corrections</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{todos_done}</span><span class="stat-label">completed</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{standups}</span><span class="stat-label">standups</span></div>'
+            f"</div>"
             f"</div>"
         )
 
@@ -2206,10 +2321,10 @@ def _render_stats_panel(data: dict) -> str:
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Activity">'
         f'<div class="card-header"><span class="card-title">Activity</span><span class="card-meta">{meta}</span></div>'
-        f"{_cmd_hints(['hive st', 'hive st -p <project>', 'hive st yesterday'])}"
+        f"{_cmd_hints(['hive stats', 'hive stats -p <project>', 'hive stats yesterday'])}"
         f"{sparkline_html}"
         f"{hourly_html}"
-        f'<div class="card-body">{streak_html}</div>'
+        f'<div class="card-body">{streak_html}{quality_html}</div>'
         f"</div>"
     )
 
@@ -2260,7 +2375,7 @@ def _render_stats_commands_panel(data: dict) -> str:
                 f'<span style="width:35px;text-align:right;font-size:12px;color:#8b949e">{pct}%</span>'
                 f"</div>"
             )
-        tools_html = f'<div style="margin-top:12px"><div style="font-size:11px;color:#484f58;margin-bottom:4px">Tools (sessions)</div>{tool_rows}</div>'
+        tools_html = f'<div style="margin-top:12px"><div style="font-size:11px;color:#484f58;margin-bottom:4px">Tool usage (from sessions)</div>{tool_rows}</div>'
 
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="What You Use">'
@@ -2294,7 +2409,7 @@ def _render_ps_panel(data: dict) -> str:
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Projects">'
         f'<div class="card-header"><span class="card-title">Projects</span><span class="card-meta">{_e(proc_str)}</span></div>'
-        f"{_cmd_hints(['hive ps', 'hive go', 'hive su'])}"
+        f"{_cmd_hints(['hive ps', 'hive go', 'hive standup'])}"
         f'<div class="card-body">{rows}</div>'
         f"</div>"
     )
@@ -2313,7 +2428,7 @@ def _render_recent_facts_panel(data: dict) -> str:
         )
     if not rows:
         rows = '<div class="empty">No recent insights</div>'
-    facts_hints = _cmd_hints(['hive r "FACT: ..."', "hive rc <query>", "hive rf scan"])
+    facts_hints = _cmd_hints(['hive remember "FACT: ..."', "hive recall <query>", "hive reflect scan"])
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Recent insights">'
         f'<div class="card-header"><span class="card-title">Recent Insights</span><span class="card-meta">past 7d</span></div>'
@@ -2355,7 +2470,7 @@ def _render_standup_panel(data: dict) -> str:
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Standup">'
         f'<div class="card-header"><span class="card-title">Today\'s Focus</span></div>'
-        f"{_cmd_hints(['hive su', 'hive todo', 'hive todo done <pat>'])}"
+        f"{_cmd_hints(['hive standup', 'hive todo', 'hive todo done <pat>'])}"
         f'<div class="card-body">{rows}</div>'
         f"</div>"
     )
@@ -2407,7 +2522,7 @@ def _render_stats_summary_panel(data: dict) -> str:
         f'<div class="summary-stats">'
         f'<div class="summary-stat"><span class="stat-value">{today_total}</span><span class="stat-label">today</span></div>'
         f'<div class="summary-stat"><span class="stat-value">{week_total}</span><span class="stat-label">this week</span></div>'
-        f'<div class="summary-stat"><span class="stat-value">{curr_streak}d</span><span class="stat-label">streak</span></div>'
+        f'<div class="summary-stat"><span class="stat-value">{curr_streak}d</span><span class="stat-label">day streak</span></div>'
         f"</div>"
     )
 
@@ -2424,11 +2539,19 @@ def _render_stats_summary_panel(data: dict) -> str:
 
 
 def _get_knowledge_all_data() -> dict:
-    """Composite data for the tabbed knowledge view: guides + memory + notes."""
+    """Composite data for the tabbed knowledge view: guides + memory + notes + health."""
+    health: dict = {}
+    try:
+        from keephive.commands.stats import _knowledge_health
+
+        health = _knowledge_health()
+    except Exception:
+        pass
     return {
         "knowledge": _get_knowledge_data(),
         "memory": _get_memory_data(),
         "notes": _get_notes_data(),
+        "health": health,
     }
 
 
@@ -2437,15 +2560,41 @@ def _render_knowledge_tabbed_panel(data: dict) -> str:
     know_data = data.get("knowledge", {})
     mem_data = data.get("memory", {})
     notes_data = data.get("notes", {})
+    health = data.get("health", {})
 
     guides_html = _render_knowledge_panel(know_data)
     memory_html = _render_memory_panel(mem_data)
     notes_html = _render_notes_panel(notes_data)
 
+    # Memory tab badge: freshness gauge
+    mem_badge = ""
+    total_facts = health.get("total_facts", 0)
+    if total_facts > 0:
+        fp = health.get("fresh_pct", 0)
+        ap = health.get("aging_pct", 0)
+        sp = health.get("stale_pct", 0)
+        fresh_count = health.get("fresh", 0)
+        aging_count = health.get("aging", 0)
+        stale_count = health.get("stale", 0)
+        mem_badge = f" ({total_facts})"
+        # Freshness header for memory tab
+        memory_health_header = (
+            f'<div style="padding:8px 12px;border-bottom:1px solid #21262d">'
+            f'<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:#21262d;margin-bottom:4px">'
+            f'<div style="width:{fp:.0f}%;background:#3fb950"></div>'
+            f'<div style="width:{ap:.0f}%;background:#e3b341"></div>'
+            f'<div style="width:{sp:.0f}%;background:#f85149"></div>'
+            f"</div>"
+            f'<div style="font-size:11px;color:#8b949e">'
+            f"{fresh_count} fresh &middot; {aging_count} aging &middot; {stale_count} stale"
+            f"</div></div>"
+        )
+        memory_html = memory_health_header + memory_html
+
     tab_bar = (
         '<div class="tab-bar">'
         '<button class="tab-btn active" data-tab="guides">Guides</button>'
-        '<button class="tab-btn" data-tab="memory">Memory</button>'
+        f'<button class="tab-btn" data-tab="memory">Memory{mem_badge}</button>'
         '<button class="tab-btn" data-tab="notes">Notes</button>'
         "</div>"
     )
@@ -2461,9 +2610,8 @@ def _render_knowledge_tabbed_panel(data: dict) -> str:
 
 
 def _get_session_data() -> dict:
-    """Session metrics for the sessions panel: histogram + session list + quality KPIs."""
+    """Session metrics for the sessions panel: histogram + session list."""
     from keephive.storage import (
-        count_log_entries_with_prefix,
         read_sessions,
         session_metrics,
     )
@@ -2491,38 +2639,39 @@ def _get_session_data() -> dict:
     # Recent sessions (most recent first, limit 20)
     recent = sorted(sessions, key=lambda x: x.get("started", ""), reverse=True)[:20]
 
-    # Quality KPIs (absorbed from quality panel)
-    insights = _safe_call(count_log_entries_with_prefix, "INSIGHT:", 90) or 0
-    decisions = _safe_call(count_log_entries_with_prefix, "DECISION:", 90) or 0
-    corrections = _safe_call(count_log_entries_with_prefix, "CORRECTION:", 90) or 0
-    todos_done = _safe_call(count_log_entries_with_prefix, "DONE:", 90) or 0
-    standups = _safe_call(count_log_entries_with_prefix, "STANDUP:", 90) or 0
+    # Session depth buckets: shallow / medium / deep
+    shallow = 0
+    medium = 0
+    deep = 0
+    for s in sessions:
+        p = s.get("prompts", 0)
+        unique_tools = len(s.get("tools", {}))
+        compacted = s.get("compacted", False)
+        if p >= 40 and unique_tools >= 4 and compacted:
+            deep += 1
+        elif p < 20 and unique_tools <= 2:
+            shallow += 1
+        else:
+            medium += 1
 
     return {
         **sm,
         "buckets": buckets,
         "recent": recent,
-        "insights": insights,
-        "decisions": decisions,
-        "corrections": corrections,
-        "todos_done": todos_done,
-        "standups": standups,
+        "depth_shallow": shallow,
+        "depth_medium": medium,
+        "depth_deep": deep,
     }
 
 
 def _render_sessions_panel(data: dict) -> str:
-    """Sessions panel: compact header stats, histogram, session list, quality KPIs."""
+    """Sessions panel: compact header stats, histogram, session list."""
     total = data.get("total_sessions", 0)
     avg_prompts = data.get("avg_prompts_per_session", 0)
     avg_dur = data.get("avg_duration_minutes", 0)
     compaction_rate = data.get("compaction_rate", 0)
     buckets = data.get("buckets", {})
     recent = data.get("recent", [])
-    insights = data.get("insights", 0)
-    decisions = data.get("decisions", 0)
-    corrections = data.get("corrections", 0)
-    todos_done = data.get("todos_done", 0)
-    standups = data.get("standups", 0)
 
     if total == 0 and not recent:
         return (
@@ -2532,12 +2681,25 @@ def _render_sessions_panel(data: dict) -> str:
             "</div>"
         )
 
+    # Session depth buckets
+    d_shallow = data.get("depth_shallow", 0)
+    d_medium = data.get("depth_medium", 0)
+    d_deep = data.get("depth_deep", 0)
+
     # Compact header stats
     compact_pct = f" | {int(compaction_rate * 100)}% compacted" if compaction_rate > 0 else ""
+    depth_html = ""
+    if d_shallow + d_medium + d_deep > 0:
+        depth_html = (
+            f'<div class="stat-item"><span class="stat-value">{d_deep}</span><span class="stat-label">deep sessions</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{d_medium}</span><span class="stat-label">medium sessions</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{d_shallow}</span><span class="stat-label">brief sessions</span></div>'
+        )
     header_stats = (
         f'<div class="stat-row" style="margin-bottom:8px">'
-        f'<div class="stat-item"><span class="stat-value">{avg_prompts:.0f}</span><span class="stat-label">avg prompts</span></div>'
-        f'<div class="stat-item"><span class="stat-value">{avg_dur:.0f}m</span><span class="stat-label">avg duration</span></div>'
+        f'<div class="stat-item"><span class="stat-value">{avg_prompts:.0f}</span><span class="stat-label">avg prompts/session</span></div>'
+        f'<div class="stat-item"><span class="stat-value">{avg_dur:.0f}m</span><span class="stat-label">avg session length</span></div>'
+        f"{depth_html}"
         f"</div>"
     )
 
@@ -2584,34 +2746,18 @@ def _render_sessions_panel(data: dict) -> str:
             )
         list_html = f'<div class="session-list">{items}</div>'
 
-    # Quality KPIs footer (absorbed from quality panel)
-    quality_html = ""
-    if insights or decisions or corrections or todos_done or standups:
-        quality_html = (
-            f'<div style="border-top:1px solid #21262d;margin-top:10px;padding-top:8px">'
-            f'<div class="stat-row">'
-            f'<div class="stat-item"><span class="stat-value">{insights}</span><span class="stat-label">insights</span></div>'
-            f'<div class="stat-item"><span class="stat-value">{decisions}</span><span class="stat-label">decisions</span></div>'
-            f'<div class="stat-item"><span class="stat-value">{corrections}</span><span class="stat-label">corrections</span></div>'
-            f'<div class="stat-item"><span class="stat-value">{todos_done}</span><span class="stat-label">done</span></div>'
-            f'<div class="stat-item"><span class="stat-value">{standups}</span><span class="stat-label">standups</span></div>'
-            f"</div>"
-            f"</div>"
-        )
-
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Sessions">'
         f'<div class="card-header"><span class="card-title">Sessions</span><span class="card-meta">{total} tracked{compact_pct}</span></div>'
         f'<div class="card-body">{header_stats}</div>'
         f"{hist_html}"
         f"{list_html}"
-        f'<div class="card-body">{quality_html}</div>'
         f"</div>"
     )
 
 
 def _get_trend_data() -> dict:
-    """Week-over-week comparison for 4 KPIs + event source breakdown."""
+    """Week-over-week comparison for 8 KPIs + event source breakdown."""
     from datetime import date, timedelta
 
     from keephive.storage import read_sessions, read_stats
@@ -2687,6 +2833,34 @@ def _get_trend_data() -> dict:
         for src, count in day_data.get("sources", {}).items():
             source_totals[src] = source_totals.get(src, 0) + count
 
+    # Pipeline health KPIs for extended trends
+    insights_this = 0
+    insights_prev = 0
+    todos_done_this = 0
+    todos_done_prev = 0
+    try:
+        from keephive.storage import count_log_entries_by_prefix
+
+        counts_7d = count_log_entries_by_prefix(days_back=7)
+        counts_14d = count_log_entries_by_prefix(days_back=14)
+        insights_this = counts_7d.get("INSIGHT", 0)
+        insights_prev = max(0, counts_14d.get("INSIGHT", 0) - insights_this)
+        todos_done_this = counts_7d.get("DONE", 0)
+        todos_done_prev = max(0, counts_14d.get("DONE", 0) - todos_done_this)
+    except Exception:
+        pass
+
+    fresh_pct_this = 0.0
+    recall_pct_this = 0.0
+    try:
+        from keephive.commands.stats import _knowledge_health
+
+        kh = _knowledge_health()
+        fresh_pct_this = kh.get("fresh_pct", 0)
+        recall_pct_this = kh.get("capture_recall_ratio", 0)
+    except Exception:
+        pass
+
     return {
         "kpis": [
             {
@@ -2717,6 +2891,36 @@ def _get_trend_data() -> dict:
                 "trend": _trend(dur_this, dur_prev),
                 "fmt": ".0f",
                 "suffix": "m",
+            },
+            {
+                "label": "Insights",
+                "this": insights_this,
+                "prev": insights_prev,
+                "trend": _trend(insights_this, insights_prev),
+                "fmt": "d",
+            },
+            {
+                "label": "TODOs done",
+                "this": todos_done_this,
+                "prev": todos_done_prev,
+                "trend": _trend(todos_done_this, todos_done_prev),
+                "fmt": "d",
+            },
+            {
+                "label": "Freshness",
+                "this": fresh_pct_this,
+                "prev": 0,
+                "trend": "flat",
+                "fmt": ".0f",
+                "suffix": "%",
+            },
+            {
+                "label": "Recall rate",
+                "this": recall_pct_this,
+                "prev": 0,
+                "trend": "flat",
+                "fmt": ".0f",
+                "suffix": "%",
             },
         ],
         "sources": source_totals,
@@ -2840,6 +3044,433 @@ def _render_settings_panel(data: dict) -> str:
     )
 
 
+# ---- Pipeline health panels ----
+
+
+def _get_pulse_data() -> dict:
+    """Pulse hero panel: composite score + mini-KPIs."""
+    from keephive.commands.stats import (
+        _calculate_streak,
+        _capture_mix,
+        _knowledge_health,
+        _productivity_pulse,
+        _session_productivity,
+    )
+    from keephive.storage import read_stats
+
+    health = _knowledge_health()
+    capture = _capture_mix()
+    sess = _session_productivity()
+    stats = read_stats()
+    pulse = _productivity_pulse(health, capture, sess, stats)
+    days_data = stats.get("days", {})
+    curr_streak, _ = _calculate_streak(days_data)
+
+    return {
+        "pulse": pulse,
+        "health": health,
+        "sess": sess,
+        "streak": curr_streak,
+    }
+
+
+def _render_pulse_panel(data: dict) -> str:
+    """Full-width hero: pulse score + 6 mini-KPIs."""
+    pulse = data.get("pulse", {})
+    health = data.get("health", {})
+    sess = data.get("sess", {})
+    streak = data.get("streak", 0)
+    score = pulse.get("score", 0)
+    delta = pulse.get("delta", 0)
+
+    delta_html = ""
+    if delta > 0:
+        delta_html = f' <span style="color:#3fb950">&#9650;{delta}</span>'
+    elif delta < 0:
+        delta_html = f' <span style="color:#f85149">&#9660;{abs(delta)}</span>'
+
+    kpis = [
+        (f"{health.get('fresh_pct', 0):.0f}%", "fresh"),
+        (f"{health.get('capture_recall_ratio', 0):.0f}%", "recall"),
+        (f"{health.get('fact_survival_rate', 0):.0f}%", "survival"),
+        (f"{sess.get('avg_prompts_per_convo', 0):.0f}", "prompts/convo"),
+        (f"{sess.get('convos_week', 0)}", "conversations"),
+        (f"{streak}d", "day streak"),
+    ]
+
+    kpi_html = ""
+    for val, label in kpis:
+        kpi_html += (
+            f'<div class="pulse-kpi">'
+            f'<span class="pulse-kpi-val">{val}</span>'
+            f'<span class="pulse-kpi-label">{label}</span>'
+            f"</div>"
+        )
+
+    return (
+        f'<div class="card pulse-hero" tabindex="0" role="region" aria-label="Pulse">'
+        f'<div class="card-body" style="text-align:center;padding:16px 24px">'
+        f'<div style="font-size:11px;color:#484f58;text-transform:uppercase;letter-spacing:1px">Productivity Pulse</div>'
+        f'<div style="font-size:36px;font-weight:700;color:#e6edf3;margin:4px 0">{score}<span style="font-size:16px;color:#484f58">/100</span>{delta_html}</div>'
+        f'<div style="display:flex;justify-content:center;gap:16px;margin-top:8px">{kpi_html}</div>'
+        f"</div></div>"
+    )
+
+
+def _get_pipeline_data() -> dict:
+    """Pipeline health: freshness gauge, capture-recall, survival, pulse, capture mix, recalled."""
+    from keephive.commands.stats import (
+        _calculate_streak,
+        _capture_mix,
+        _knowledge_health,
+        _most_recalled,
+        _productivity_pulse,
+        _session_productivity,
+    )
+    from keephive.storage import read_stats
+
+    health = _knowledge_health()
+    capture = _capture_mix()
+    sess = _session_productivity()
+    stats = read_stats()
+    pulse = _productivity_pulse(health, capture, sess, stats)
+    days_data = stats.get("days", {})
+    curr_streak, _ = _calculate_streak(days_data)
+    recalled = _most_recalled()
+
+    # Pipeline action statuses: last run dates + context for key commands
+    actions: list[dict] = []
+    days_data = stats.get("days", {})
+    pipeline_cmds = {
+        "verify": {"label": "verify", "hint": "hive verify", "desc": "check facts against codebase"},
+        "reflect": {"label": "reflect", "hint": "hive reflect", "desc": "find patterns in logs"},
+        "audit": {"label": "audit", "hint": "hive audit", "desc": "quality analysis"},
+    }
+    for cmd, meta in pipeline_cmds.items():
+        last_date = None
+        for day in sorted(days_data.keys(), reverse=True):
+            if cmd in days_data[day].get("commands", {}):
+                last_date = day
+                break
+        ctx = ""
+        if cmd == "verify":
+            ctx = f"{health.get('total_facts', 0)} facts to check"
+        elif cmd == "reflect":
+            # Count recent daily logs
+            from keephive.storage import daily_dir
+
+            dd = daily_dir()
+            log_count = len(list(dd.glob("*.md"))) if dd.exists() else 0
+            if log_count > 0:
+                ctx = f"{log_count} daily logs"
+        actions.append(
+            {
+                "cmd": cmd,
+                "label": meta["label"],
+                "hint": meta["hint"],
+                "desc": meta["desc"],
+                "last_date": last_date,
+            }
+            | ({"ctx": ctx} if ctx else {})
+        )
+
+    return {
+        **health,
+        "pulse": pulse,
+        "capture": capture,
+        "streak": curr_streak,
+        "recalled": recalled,
+        "actions": actions,
+    }
+
+
+def _render_pipeline_panel(data: dict) -> str:
+    """Dense pipeline panel: pulse score, freshness gauge, metrics, capture pills."""
+    total = data.get("total_facts", 0)
+    fresh = data.get("fresh", 0)
+    aging = data.get("aging", 0)
+    stale = data.get("stale", 0)
+    fresh_pct = data.get("fresh_pct", 0)
+    corrected_wk = data.get("corrected_this_week", 0)
+    capture_recall = data.get("capture_recall_ratio", 0)
+    survival = data.get("fact_survival_rate", 0)
+    pulse = data.get("pulse", {})
+    capture = data.get("capture", {})
+
+    if total == 0:
+        return (
+            '<div class="card" tabindex="0" role="region" aria-label="Pipeline Health">'
+            '<div class="card-header"><span class="card-title">Pipeline Health</span></div>'
+            '<div class="card-body"><div class="empty">No verified facts yet</div></div>'
+            "</div>"
+        )
+
+    # Header detail
+    detail_parts: list[str] = [f"{fresh} fresh"]
+    if aging > 0:
+        detail_parts.append(f"{aging} aging")
+    if stale > 0:
+        detail_parts.append(f'<span style="color:#f85149">{stale} stale</span>')
+    detail_str = ", ".join(detail_parts)
+
+    # Knowledge health gauges (transparent component bars, not opaque composite)
+    components = pulse.get("components", {})
+
+    def _gauge_bar(label: str, pct: float, color: str) -> str:
+        """Single labeled gauge bar."""
+        clamped = max(0, min(100, pct))
+        return (
+            f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+            f'<span style="font-size:10px;color:#8b949e;width:100px;text-align:right">{label}</span>'
+            f'<div style="flex:1;height:4px;border-radius:2px;background:#21262d">'
+            f'<div style="width:{clamped:.0f}%;height:100%;border-radius:2px;background:{color}"></div></div>'
+            f'<span style="font-size:10px;color:#8b949e;width:32px">{pct:.0f}%</span>'
+            f"</div>"
+        )
+
+    # Build gauges for each transparent metric
+    gauges_html = '<div style="margin-bottom:8px">'
+    gauges_html += _gauge_bar("memory freshness", fresh_pct, "#3fb950")
+    gauges_html += _gauge_bar("recall rate", capture_recall, "#58a6ff")
+    gauges_html += _gauge_bar("fact survival", survival, "#a371f7")
+    # TODO rate and streak from pulse components
+    todo_rate = components.get("todo_rate", 0)
+    streak_score = components.get("streak", 0)
+    if todo_rate > 0:
+        gauges_html += _gauge_bar("todo completion", todo_rate, "#e3b341")
+    if streak_score > 0:
+        gauges_html += _gauge_bar("usage streak", streak_score, "#39d353")
+    if corrected_wk > 0:
+        gauges_html += (
+            f'<div style="font-size:10px;color:#484f58;text-align:right;margin-top:2px">'
+            f"{corrected_wk} corrected this week</div>"
+        )
+    gauges_html += "</div>"
+
+    # Capture mix pills (compact)
+    capture_counts = capture.get("counts", {})
+    cat_colors = {
+        "FACT": "#3fb950",
+        "DECISION": "#a371f7",
+        "INSIGHT": "#58a6ff",
+        "TODO": "#e3b341",
+        "DONE": "#484f58",
+    }
+    pills_html = ""
+    cap_total = capture.get("total", 0)
+    if cap_total > 0:
+        pills = ""
+        for cat_name in ("FACT", "DECISION", "INSIGHT", "TODO", "DONE"):
+            c = capture_counts.get(cat_name, 0)
+            if c > 0:
+                color = cat_colors.get(cat_name, "#484f58")
+                pills += (
+                    f'<span style="display:inline-block;padding:1px 6px;border-radius:8px;'
+                    f"font-size:10px;margin-right:4px;background:{color}22;color:{color};border:1px solid {color}33"
+                    f'">{c} {cat_name.lower()}</span>'
+                )
+        pills_html = f'<div style="margin-top:4px">{pills}</div>'
+
+    # Pipeline action statuses (actionable callouts)
+    actions = data.get("actions", [])
+    actions_html = ""
+    if actions:
+        from datetime import date
+
+        today = date.today().isoformat()
+        rows = ""
+        for act in actions:
+            last = act.get("last_date")
+            hint = _e(act.get("hint", ""))
+            desc = _e(act.get("desc", ""))
+            ctx = act.get("ctx", "")
+            if last is None:
+                # Never run: amber warning
+                status = '<span style="color:#e3b341">not yet run</span>'
+                icon = "&#9888;"  # ⚠
+                icon_color = "#e3b341"
+            else:
+                try:
+                    days_ago = (date.fromisoformat(today) - date.fromisoformat(last)).days
+                    if days_ago == 0:
+                        status = '<span style="color:#3fb950">today</span>'
+                    elif days_ago == 1:
+                        status = '<span style="color:#3fb950">yesterday</span>'
+                    elif days_ago <= 7:
+                        status = f'<span style="color:#8b949e">{days_ago}d ago</span>'
+                    else:
+                        status = f'<span style="color:#e3b341">{days_ago}d ago</span>'
+                except ValueError:
+                    status = f'<span style="color:#484f58">{_e(last)}</span>'
+                icon = "&#10003;"  # ✓
+                icon_color = "#3fb950"
+            ctx_span = f' <span style="color:#484f58">&middot; {_e(ctx)}</span>' if ctx else ""
+            rows += (
+                f'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px">'
+                f'<span style="color:{icon_color};width:14px;text-align:center">{icon}</span>'
+                f'<code style="color:#e6edf3;background:#21262d;padding:1px 4px;border-radius:3px;font-size:10px">{hint}</code>'
+                f" {status}{ctx_span}"
+                f"</div>"
+            )
+        actions_html = (
+            f'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #21262d">'
+            f"{rows}</div>"
+        )
+
+    # Most recalled facts (compact, fills vertical space)
+    recalled = data.get("recalled", [])
+    recalled = [
+        r for r in recalled
+        if r.get("text", "").strip()
+        and "fact removed" not in r.get("text", "").lower()
+    ]
+    recalled_html = ""
+    if recalled:
+        items = ""
+        for r in recalled[:3]:
+            text = _e(r.get("text", ""))
+            if len(text) > 55:
+                text = text[:52] + "..."
+            count = r.get("count", 0)
+            items += (
+                f'<div style="display:flex;justify-content:space-between;align-items:center;'
+                f'padding:2px 0;font-size:10px">'
+                f'<span style="color:#8b949e;flex:1;overflow:hidden;text-overflow:ellipsis;'
+                f'white-space:nowrap">{text}</span>'
+                f'<span style="color:#58a6ff;margin-left:8px;font-weight:600">{count}&times;</span>'
+                f"</div>"
+            )
+        recalled_html = (
+            f'<div style="margin-top:6px;padding-top:6px;border-top:1px solid #21262d">'
+            f'<div style="font-size:9px;color:#484f58;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Recalled</div>'
+            f"{items}</div>"
+        )
+
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Pipeline Health">'
+        f'<div class="card-header"><span class="card-title">Pipeline Health</span>'
+        f'<span class="card-meta">{total} facts ({detail_str})</span></div>'
+        f'<div class="card-body">{gauges_html}{pills_html}{actions_html}{recalled_html}</div>'
+        f"</div>"
+    )
+
+
+def _get_capture_data() -> dict:
+    """Capture mix: category breakdown + sparkline + consistency."""
+    from keephive.commands.stats import _capture_mix
+
+    return _capture_mix()
+
+
+def _render_capture_panel(data: dict) -> str:
+    """7-day capture sparkline + category breakdown."""
+    counts = data.get("counts", {})
+    total = data.get("total", 0)
+    consistency = data.get("consistency", 0)
+    sparkline = data.get("sparkline_str", "")
+
+    if total == 0:
+        return (
+            '<div class="card" tabindex="0" role="region" aria-label="Capture Mix">'
+            '<div class="card-header"><span class="card-title">Capture Mix</span></div>'
+            '<div class="card-body"><div class="empty">No entries in last 7 days</div></div>'
+            "</div>"
+        )
+
+    # Color-coded category pills
+    cat_colors = {
+        "FACT": "#3fb950",
+        "DECISION": "#a371f7",
+        "INSIGHT": "#58a6ff",
+        "TODO": "#e3b341",
+        "DONE": "#484f58",
+        "CORRECTION": "#f85149",
+    }
+
+    pills_html = ""
+    for cat_name in ("FACT", "DECISION", "INSIGHT", "TODO", "DONE"):
+        c = counts.get(cat_name, 0)
+        if c > 0:
+            color = cat_colors.get(cat_name, "#484f58")
+            pills_html += (
+                f'<span style="display:inline-block;padding:2px 8px;border-radius:10px;'
+                f"font-size:11px;margin:2px;background:{color}22;color:{color};border:1px solid {color}44"
+                f'">{c} {cat_name.lower()}</span>'
+            )
+
+    consistency_html = ""
+    if consistency > 0:
+        consistency_html = (
+            f'<div style="font-size:11px;color:#484f58;margin-top:6px">'
+            f"consistency: {consistency}%</div>"
+        )
+
+    sparkline_html = ""
+    if sparkline.strip():
+        sparkline_html = (
+            f'<div style="font-family:monospace;font-size:16px;letter-spacing:2px;margin-bottom:6px">'
+            f"{_e(sparkline)}</div>"
+        )
+
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Capture Mix">'
+        f'<div class="card-header"><span class="card-title">Capture Mix</span>'
+        f'<span class="card-meta">last 7 days</span></div>'
+        f'<div class="card-body">{sparkline_html}<div>{pills_html}</div>{consistency_html}</div>'
+        f"</div>"
+    )
+
+
+def _get_recalled_data() -> dict:
+    """Most-recalled facts."""
+    from keephive.commands.stats import _most_recalled
+
+    return {"recalled": _most_recalled()}
+
+
+def _render_recalled_panel(data: dict) -> str:
+    """Top recalled facts with counts. Compact list."""
+    recalled = data.get("recalled", [])
+
+    # Filter out removed/empty facts
+    recalled = [
+        r for r in recalled
+        if r.get("text", "").strip()
+        and "fact removed" not in r.get("text", "").lower()
+    ]
+
+    if not recalled:
+        return (
+            '<div class="card" tabindex="0" role="region" aria-label="Most Recalled">'
+            '<div class="card-header"><span class="card-title">Most Recalled</span></div>'
+            '<div class="card-body"><div class="empty">No recall data yet</div></div>'
+            "</div>"
+        )
+
+    items_html = ""
+    for r in recalled:
+        text = _e(r.get("text", ""))
+        # Trim long fact text for display
+        if len(text) > 80:
+            text = text[:77] + "..."
+        count = r.get("count", 0)
+        items_html += (
+            f'<div style="display:flex;justify-content:space-between;align-items:center;'
+            f'padding:4px 0;border-bottom:1px solid #21262d;font-size:12px">'
+            f'<span style="color:#c9d1d9;flex:1;overflow:hidden;text-overflow:ellipsis;'
+            f'white-space:nowrap">{text}</span>'
+            f'<span style="color:#58a6ff;margin-left:8px;white-space:nowrap;font-weight:600">{count}&times;</span>'
+            f"</div>"
+        )
+
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Most Recalled">'
+        f'<div class="card-header"><span class="card-title">Most Recalled</span></div>'
+        f'<div class="card-body">{items_html}</div>'
+        f"</div>"
+    )
+
+
 # ---- Panel registry ----
 
 PANELS: dict[str, tuple] = {
@@ -2867,6 +3498,10 @@ PANELS: dict[str, tuple] = {
     "sessions": (_get_session_data, _render_sessions_panel),
     "stats-trends": (_get_trend_data, _render_trends_panel),
     "settings": (_get_settings_data, _render_settings_panel),
+    "stats-pulse": (_get_pulse_data, _render_pulse_panel),
+    "stats-pipeline": (_get_pipeline_data, _render_pipeline_panel),
+    "stats-capture": (_get_capture_data, _render_capture_panel),
+    "stats-recalled": (_get_recalled_data, _render_recalled_panel),
 }
 
 # ---- View definitions ----
@@ -2901,8 +3536,9 @@ VIEWS: dict[str, dict] = {
         "path": "/stats",
         "title": "Stats",
         "rows": [
-            ["stats", "stats-trends"],
-            ["stats-commands", "sessions"],
+            ["stats-pipeline", "stats-trends"],
+            ["stats", "sessions"],
+            ["stats-commands"],
         ],
     },
     "settings": {

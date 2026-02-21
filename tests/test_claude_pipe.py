@@ -334,6 +334,53 @@ class TestParseClaudeResponse:
         assert "[keephive]" in err
         assert "empty output" in err
 
+    def test_error_max_turns_raises_clear_message(self):
+        """error_max_turns subtype produces actionable ClaudePipeError, not validation error."""
+        raw = json.dumps(
+            [
+                {"type": "system", "subtype": "init", "cwd": "/test", "tools": []},
+                {
+                    "type": "assistant",
+                    "content": [
+                        {"type": "text", "text": "I investigated but ran out of turns..."}
+                    ],
+                },
+                {
+                    "type": "result",
+                    "subtype": "error_max_turns",
+                    "total_cost_usd": 0.90,
+                    "duration_ms": 120000,
+                },
+            ]
+        )
+        with pytest.raises(ClaudePipeError, match="error max turns"):
+            parse_claude_response(raw, VerifyResponse)
+
+    def test_error_max_turns_with_valid_fallback_text(self):
+        """error_max_turns but model DID produce valid JSON in text: extraction succeeds."""
+        raw = json.dumps(
+            [
+                {"type": "system", "subtype": "init", "cwd": "/test", "tools": []},
+                {
+                    "type": "assistant",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": '{"verdicts": [{"index": 1, "verdict": "VALID", "reason": "Found in code"}]}',
+                        }
+                    ],
+                },
+                {
+                    "type": "result",
+                    "subtype": "error_max_turns",
+                    "total_cost_usd": 0.50,
+                },
+            ]
+        )
+        resp = parse_claude_response(raw, VerifyResponse)
+        assert len(resp.verdicts) == 1
+        assert resp.verdicts[0].verdict.value == "VALID"
+
     def test_fallback_extracts_verify_model_without_response_model(self):
         """Fallback extraction still works for VerifyResponse (backwards compat)."""
         raw = json.dumps(

@@ -20,6 +20,7 @@ from keephive.storage import (
     hive_dir,
     memory_file,
     open_todos,
+    read_stats,
     slot_file,
     yesterday,
 )
@@ -194,26 +195,57 @@ def cmd_status(args: list[str]) -> None:
         console.print("  Run: [bold]hive setup[/bold]")
     console.print()
 
-    # Stats line
-    verified_ok = total_verified - stale
-    parts = []
-    if total_verified > 0:
-        if stale > 0:
-            parts.append(
-                f"[bold]{total_verified} facts[/bold] ({verified_ok} ok, [warn]{stale} stale[/warn])"
-            )
+    # Stats line: pipeline health + session productivity
+    try:
+        from keephive.commands.stats import _calculate_streak, _knowledge_health
+
+        kh = _knowledge_health()
+        parts = []
+        if kh["total_facts"] > 0:
+            ok = kh["fresh"] + kh["aging"]
+            fact_detail = f"{ok} ok"
+            if kh["aging"] > 0:
+                fact_detail += f", {kh['aging']} aging"
+            if kh["stale"] > 0:
+                fact_detail += f", [warn]{kh['stale']} stale[/warn]"
+            parts.append(f"[bold]{kh['total_facts']} facts[/bold] ({fact_detail})")
         else:
+            parts.append(f"{today_entries} today")
+            parts.append(f"{yesterday_entries} yesterday")
+
+        # Prompts/convo from session metrics
+        try:
+            from keephive.storage import session_metrics as _sm
+
+            sm = _sm(days_back=7)
+            if sm["avg_prompts_per_session"] > 0:
+                parts.append(f"{sm['avg_prompts_per_session']:.0f} prompts/convo")
+        except Exception:
+            pass
+
+        # Streak
+        stats = read_stats()
+        days_data = stats.get("days", {})
+        curr_streak, _ = _calculate_streak(days_data)
+        if curr_streak > 0:
+            parts.append(f"{curr_streak}d streak")
+
+        console.print(f"  {' | '.join(parts)}")
+    except Exception:
+        # Fallback to simple stats line if metrics unavailable
+        verified_ok = total_verified - stale
+        parts = []
+        if total_verified > 0:
             parts.append(f"[bold]{total_verified} facts[/bold] ({verified_ok} ok)")
-    parts.append(f"{today_entries} today")
-    parts.append(f"{yesterday_entries} yesterday")
-    parts.append(f"{guide_count} guides")
-    parts.append(disk_usage)
-    console.print(f"  {' | '.join(parts)}")
+        parts.append(f"{today_entries} today")
+        parts.append(f"{yesterday_entries} yesterday")
+        parts.append(f"{guide_count} guides")
+        parts.append(disk_usage)
+        console.print(f"  {' | '.join(parts)}")
 
     # Activity line (commands / streak / hourly sparkline)
     try:
         from keephive.commands.stats import _calculate_streak, _hourly_sparkline
-        from keephive.storage import read_stats
 
         stats = read_stats()
         days_data = stats.get("days", {})

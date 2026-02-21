@@ -99,6 +99,37 @@ def cmd_log(args: list[str]) -> None:
 
     df = daily_file(target_date)
     if df.exists():
+        # Capture mix header: count entries by category in this specific log file
+        try:
+            import re as _re
+
+            content = df.read_text()
+            total = sum(1 for line in content.splitlines() if line.startswith("- ["))
+            if total > 0:
+                # Count by prefix: FACT, DECISION, INSIGHT, TODO, DONE, etc.
+                prefix_re = _re.compile(
+                    r"^- \[[\d:]+\]\s*(?:auto:\s*)?(FACT|DECISION|INSIGHT|TODO|DONE|CORRECTION|VERIFY|SUMMARY):",
+                    _re.MULTILINE,
+                )
+                counts: dict[str, int] = {}
+                for m in prefix_re.finditer(content):
+                    cat = m.group(1)
+                    counts[cat] = counts.get(cat, 0) + 1
+                cat_parts = []
+                for cat_name in ("FACT", "DECISION", "INSIGHT", "TODO", "DONE"):
+                    c = counts.get(cat_name, 0)
+                    if c > 0:
+                        cat_parts.append(f"{c} {cat_name.lower()}s")
+                if cat_parts:
+                    console.print(
+                        f"[dim]Daily Log: {target_date}  ({total} entries: {', '.join(cat_parts)})[/dim]"
+                    )
+                else:
+                    console.print(f"[dim]Daily Log: {target_date}  ({total} entries)[/dim]")
+                console.print()
+        except Exception:
+            pass
+
         # Show stats header if available
         try:
             from keephive.storage import read_stats

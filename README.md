@@ -332,7 +332,7 @@ All commands are also available as MCP tools for Claude Code to call directly:
 ## LLM features
 
 > [!IMPORTANT]
-> **If you have Claude Code, you pay nothing extra. Ever.** keephive calls `claude -p`, which runs under your existing Claude Code subscription. `ANTHROPIC_API_KEY` is never checked from a terminal or a hook.
+> keephive calls `claude -p` for LLM features. If you're on a Claude Pro or Max subscription, these calls are included at no extra cost (they count against your plan's normal usage limits). If you use Claude Code with API billing, `claude -p` calls consume your API tokens. `ANTHROPIC_API_KEY` is never checked from a terminal or a hook.
 
 The API path exists for one specific case: running LLM commands (`hive a`, `hive v`, etc.) _inside_ a Claude Code session rather than from a separate terminal. That is the only time `ANTHROPIC_API_KEY` is consulted.
 
@@ -343,10 +343,10 @@ The API path exists for one specific case: running LLM commands (`hive a`, `hive
 
 | Tier | When active | Cost |
 |------|-------------|------|
-| `claude -p` subprocess | Terminal or hooks (default, always) | Free — Claude Code subscription |
-| Direct Anthropic API | Inside Claude Code + `ANTHROPIC_API_KEY` set | Paid — per-call billing |
+| `claude -p` subprocess | Terminal or hooks (default, always) | Included with Pro/Max (counts against usage limits); consumes API tokens if on API billing |
+| Direct Anthropic API | Inside Claude Code + `ANTHROPIC_API_KEY` set | Paid — per-token API billing |
 
-Hooks (PreCompact, etc.) run without the `CLAUDECODE` environment variable, so they always take the free subprocess path regardless of whether `ANTHROPIC_API_KEY` is present in your shell.
+Hooks (PreCompact, etc.) run without the `CLAUDECODE` environment variable, so they always take the `claude -p` subprocess path regardless of whether `ANTHROPIC_API_KEY` is present in your shell.
 
 ### LLM-powered commands
 
@@ -358,7 +358,7 @@ Hooks (PreCompact, etc.) run without the `CLAUDECODE` environment variable, so t
 | `hive su` (standup) | haiku | Daily standup generation |
 | `hive l summarize` | haiku | End-of-session summary |
 | `hive dr` (doctor) | haiku, optional | Duplicate TODO detection |
-| PreCompact hook | haiku | Automatic on compaction — always free |
+| PreCompact hook | haiku | Automatic on compaction |
 
 `hive a` and `hive v` are the heavyweight operations. Use them intentionally.
 

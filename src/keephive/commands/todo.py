@@ -85,8 +85,9 @@ def cmd_todo(args: list[str]) -> None:
         '  [dim]td <pat>[/dim] done  |  [dim]td undo[/dim]  |  [dim]t <text>[/dim] add  |  [dim]e todo[/dim]  |  [dim]todo repeat daily "..[/dim]" recurring'
     )
 
-    # Show recent completions
-    dones = recent_dones(days=3)
+    # Show recent completions with completion rate
+    dones = recent_dones(days=7)
+    done_this_week = len(dones)
     if dones:
         console.print()
         console.print("[bold]Recently Done:[/bold]")
@@ -99,6 +100,15 @@ def cmd_todo(args: list[str]) -> None:
             else:
                 age_s = f"{age}d"
             console.print(f"  [dim]\\[{age_s}] {text}[/dim]")
+
+    # Completion rate footer
+    total_activity = len(todos) + done_this_week
+    if total_activity > 0:
+        completion_rate = int(done_this_week / total_activity * 100)
+        console.print()
+        console.print(
+            f"  [dim]{done_this_week} done this week · {completion_rate}% completion rate (7d)[/dim]"
+        )
 
 
 def cmd_t(args: list[str]) -> None:

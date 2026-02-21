@@ -177,7 +177,7 @@ def test_render_fragment_stats(hive_env):
     from keephive.commands.serve import render_fragment
 
     html = render_fragment("stats")
-    assert "Activity" in html
+    assert "Pipeline Health" in html
 
 
 def test_render_fragment_unknown():
@@ -1868,7 +1868,7 @@ def test_what_you_use_panel_has_tools(hive_env):
     assert "cmd-bar" in html
     assert "remember" in html
     # Tool breakdown section
-    assert "Tools (sessions)" in html
+    assert "Tool usage (from sessions)" in html
     assert "Edit" in html
     assert "40%" in html
 
@@ -1922,25 +1922,24 @@ def test_sessions_panel_has_histogram(hive_env):
     assert "10:00" in html
 
 
-def test_sessions_panel_has_quality_kpis(hive_env):
-    """Sessions panel renders quality KPIs (absorbed from Quality panel)."""
-    from keephive.commands.serve import _render_sessions_panel
+def test_activity_panel_has_quality_kpis(hive_env):
+    """Activity panel renders quality KPIs (output metrics)."""
+    from keephive.commands.serve import _render_stats_panel
 
     data = {
-        "total_sessions": 10,
-        "avg_prompts_per_session": 5.0,
-        "avg_duration_minutes": 12.0,
-        "compaction_rate": 0,
-        "buckets": {"0": 0, "1-5": 0, "6-10": 0, "11-20": 0, "21-50": 0, "51+": 0},
-        "recent": [],
+        "total_days": 5,
+        "curr_streak": 3,
+        "longest_streak": 5,
+        "daily_spark": [],
+        "today_hours": {},
         "insights": 5,
         "decisions": 8,
         "corrections": 2,
         "todos_done": 15,
         "standups": 3,
     }
-    html = _render_sessions_panel(data)
-    assert "Sessions" in html
+    html = _render_stats_panel(data)
+    assert "Activity" in html
     assert "insights" in html
     assert "decisions" in html
     assert ">5<" in html  # insights count
@@ -1948,28 +1947,26 @@ def test_sessions_panel_has_quality_kpis(hive_env):
     assert ">15<" in html  # todos done
 
 
-def test_stats_view_has_two_rows():
-    """Stats view definition has 2 rows (consolidated from 3)."""
+def test_stats_view_has_expected_rows():
+    """Stats view definition has pipeline, trends, activity, commands, recalled."""
     from keephive.commands.serve import VIEWS
 
     stats_rows = VIEWS["stats"]["rows"]
-    assert len(stats_rows) == 2
-    # Row 1: activity + trends
-    assert "stats" in stats_rows[0]
-    assert "stats-trends" in stats_rows[0]
-    # Row 2: what you use + sessions
-    assert "stats-commands" in stats_rows[1]
-    assert "sessions" in stats_rows[1]
+    flat = [panel for row in stats_rows for panel in row]
+    assert "stats-pipeline" in flat
+    assert "stats-trends" in flat
+    assert "stats" in flat  # Activity panel
+    assert "stats-commands" in flat
 
 
 def test_render_fragment_stats_all_panels(hive_env):
-    """All 4 panels in the stats view render without error."""
+    """Stats view panels render without error."""
     from keephive.commands.serve import render_fragment
 
     html = render_fragment("stats")
-    assert "Activity" in html
+    assert "Pipeline Health" in html
     assert "Trends" in html
-    assert "What You Use" in html
+    assert "Activity" in html
     assert "Sessions" in html or "session" in html.lower()
 
 
@@ -1979,7 +1976,7 @@ def test_get_trend_data_returns_kpis_and_sources(hive_env):
 
     data = _get_trend_data()
     assert "kpis" in data
-    assert len(data["kpis"]) == 4
+    assert len(data["kpis"]) == 8
     for kpi in data["kpis"]:
         assert "label" in kpi
         assert "this" in kpi
@@ -2538,9 +2535,9 @@ def test_status_panel_has_activity_section(hive_env):
         "activity_hours": {"09": 3, "10": 7},
     }
     html = _render_status_panel(data)
-    assert "cmds today" in html
-    assert "this week" in html
-    assert "streak" in html
+    assert "commands today" in html
+    assert "commands this week" in html
+    assert "day streak" in html
     assert "42" in html
     assert "status-divider" in html
 
@@ -2565,7 +2562,7 @@ def test_status_panel_no_activity_when_zero(hive_env):
         "activity_hours": {},
     }
     html = _render_status_panel(data)
-    assert "cmds today" not in html
+    assert "commands today" not in html
     assert "status-divider" not in html
 
 
@@ -2654,7 +2651,7 @@ def test_stats_view_has_commands_row():
 
 
 def test_status_brief_shows_cmds_today(hive_env):
-    """Status-brief panel shows cmds today when activity_today > 0."""
+    """Status-brief panel shows commands today when activity_today > 0."""
     from keephive.commands.serve import _render_status_brief_panel
 
     data = {
@@ -2666,11 +2663,11 @@ def test_status_brief_shows_cmds_today(hive_env):
     }
     html = _render_status_brief_panel(data)
     assert "25" in html
-    assert "cmds today" in html
+    assert "commands today" in html
 
 
 def test_status_brief_hides_cmds_when_zero(hive_env):
-    """Status-brief panel omits cmds today when activity_today is 0."""
+    """Status-brief panel omits commands today when activity_today is 0."""
     from keephive.commands.serve import _render_status_brief_panel
 
     data = {
@@ -2681,7 +2678,7 @@ def test_status_brief_hides_cmds_when_zero(hive_env):
         "activity_today": 0,
     }
     html = _render_status_brief_panel(data)
-    assert "cmds today" not in html
+    assert "commands today" not in html
 
 
 def test_css_has_status_divider():

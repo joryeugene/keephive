@@ -80,6 +80,15 @@ def cmd_verify(args: list[str]) -> None:
     if not prompt_yn("  Verify with LLM?"):
         return
 
+    # Capture pre-verification freshness for delta
+    try:
+        from keephive.commands.stats import _knowledge_health
+
+        pre_health = _knowledge_health()
+        pre_fresh_pct = pre_health["fresh_pct"]
+    except Exception:
+        pre_fresh_pct = None
+
     # Build the prompt with tool-based investigation
     versions = version_context()
 
@@ -160,9 +169,33 @@ For STALE verdicts, correction must contain the full replacement fact text."""
 
     notify_sound(True)
 
+    # Aggregate summary with before/after freshness delta
+    valid_count = sum(1 for v in response.verdicts if v.verdict.value == "VALID")
+    stale_count = sum(1 for v in response.verdicts if v.verdict.value == "STALE")
+    uncertain_count = sum(1 for v in response.verdicts if v.verdict.value == "UNCERTAIN")
     console.print(
-        f"[dim]Updated {updated} fact(s), refreshed {refreshed} in working/memory.md[/dim]"
+        f"  [ok]{valid_count} VALID[/ok]  ·  "
+        f"[warn]{stale_count} CORRECTED[/warn]  ·  "
+        f"{uncertain_count} UNCERTAIN"
     )
+
+    # Before/after freshness delta
+    try:
+        from keephive.commands.stats import _knowledge_health
+
+        post_health = _knowledge_health()
+        post_fresh_pct = post_health["fresh_pct"]
+        if pre_fresh_pct is not None:
+            console.print(
+                f"  Memory health: {post_fresh_pct:.0f}% fresh"
+                f" (was {pre_fresh_pct:.0f}% before this run)"
+            )
+        else:
+            console.print(f"  Memory health: {post_fresh_pct:.0f}% fresh")
+    except Exception:
+        console.print(
+            f"[dim]Updated {updated} fact(s), refreshed {refreshed} in working/memory.md[/dim]"
+        )
 
     console.print()
     console.print(

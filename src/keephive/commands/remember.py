@@ -87,7 +87,7 @@ def cmd_remember(args: list[str]) -> None:
 
     append_to_daily(f"- [{timestamp}] {insight}")
 
-    # Count today's entries
+    # Count today's entries with category breakdown
     df = daily_file()
     entry_count = sum(1 for line in df.read_text().splitlines() if line.startswith("- ["))
 
@@ -97,7 +97,23 @@ def cmd_remember(args: list[str]) -> None:
         console.print(f"  [ok]Remembered[/ok]  [bold]\\[{category}][/bold]  {timestamp}")
     else:
         console.print(f"  [ok]Remembered[/ok]  {timestamp}")
-    console.print(f"    -> daily/{df.name}  ({entry_count} entries today)")
+
+    # Category breakdown for telemetry
+    try:
+        from keephive.storage import count_log_entries_by_prefix
+
+        counts = count_log_entries_by_prefix(days_back=0)  # today only
+        cat_parts = []
+        for cat_name in ("FACT", "DECISION", "INSIGHT", "TODO"):
+            c = counts.get(cat_name, 0)
+            if c > 0:
+                cat_parts.append(f"{c} {cat_name.lower()}s")
+        if cat_parts:
+            console.print(f"    -> daily/{df.name}  ({entry_count} entries: {', '.join(cat_parts)})")
+        else:
+            console.print(f"    -> daily/{df.name}  ({entry_count} entries today)")
+    except Exception:
+        console.print(f"    -> daily/{df.name}  ({entry_count} entries today)")
 
 
 def cmd_recall(args: list[str]) -> None:
@@ -115,12 +131,40 @@ def cmd_recall(args: list[str]) -> None:
     results = _search_all_tiers(query)
 
     if not results:
+        # Track miss for hit rate calculation
+        try:
+            from keephive.storage import track_recall_miss
+
+            track_recall_miss()
+        except Exception:
+            pass
+
         if json_mode:
             print(json.dumps({"query": query, "results": [], "count": 0}))
         else:
             console.print(f"No results for: {query}")
+            # Show recall hit rate as telemetry
+            try:
+                from keephive.storage import get_recall_hit_rate
+
+                hits, total = get_recall_hit_rate()
+                if total > 2:
+                    rate = int(hits / total * 100)
+                    console.print(
+                        f"  recall hit rate: {rate}% ({hits} of {total} queries found results)"
+                    )
+            except Exception:
+                pass
             console.print(f'\n  -> hive r "{query} ..." to remember something about this')
         return
+
+    # Track hit for hit rate calculation
+    try:
+        from keephive.storage import track_recall_hit_meta
+
+        track_recall_hit_meta()
+    except Exception:
+        pass
 
     if json_mode:
         print(json.dumps({"query": query, "results": results, "count": len(results)}, indent=2))

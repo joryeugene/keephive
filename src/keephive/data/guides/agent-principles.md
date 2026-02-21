@@ -1,5 +1,6 @@
 ---
 tags: [principles, quality, agent, workflow]
+always: true
 ---
 
 # Agent Quality Principles
@@ -57,3 +58,19 @@ Before writing new utility functions:
 1. Search for existing implementations (hive_recall + codebase search).
 2. If similar code exists, extend it.
 3. Three similar lines is better than a premature abstraction.
+
+## Explore Aggressively
+
+Use tools heavily. Read files, grep patterns, curl endpoints. Direct observation beats inference.
+
+- More tool calls correlate with better outcomes. Don't conserve tool use.
+- When unfamiliar with a codebase, 10 reads beats 3. Explore widely before narrowing.
+- When a simple tool (read, grep, curl, screenshot) can give direct access, use it. Don't reason from incomplete information.
+
+## Test Before Fixing
+
+Run existing tests FIRST, before writing any fix.
+
+- Failing tests reveal root cause faster than reading code alone.
+- If no tests exist, write a failing test that reproduces the bug, then fix it.
+- Understanding what passes and what fails gives you the root cause.

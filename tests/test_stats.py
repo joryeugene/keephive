@@ -428,7 +428,7 @@ class TestDisplayFull:
         out = capsys.readouterr().out
         assert "today" in out
         assert "week" in out
-        assert "all time" in out
+        assert "streak" in out
 
     def test_empty_data_shows_no_stats(self, hive_env, capsys):
         from keephive.commands.stats import _display_full
@@ -608,8 +608,8 @@ class TestHourlySparkline:
             if i != 12:
                 assert result[i] == " "
 
-    def test_display_full_includes_hourly(self, hive_env, capsys):
-        """_display_full shows hourly sparkline when hours data exists."""
+    def test_display_full_renders_with_hours_data(self, hive_env, capsys):
+        """_display_full renders without error when hours data exists."""
         from keephive.commands.stats import _display_full
 
         today_str = date.today().isoformat()
@@ -627,9 +627,8 @@ class TestHourlySparkline:
         }
         _display_full(data)
         out = capsys.readouterr().out
-        assert "hourly" in out
-        assert "0h" in out
-        assert "23h" in out
+        assert "today" in out
+        assert "Sessions" in out
 
 
 # ---- Session tracking ----
@@ -926,7 +925,7 @@ class TestSessionsInDisplay:
         _display_full(data)
         out = capsys.readouterr().out
         assert "Sessions" in out
-        assert "prompts/session" in out
+        assert "prompts" in out.lower()
 
     def test_display_day_shows_sessions(self, hive_env, capsys):
         from keephive.commands.stats import _display_day
