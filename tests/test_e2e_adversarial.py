@@ -192,8 +192,6 @@ class TestProfileAdversarial:
         """
         term.type("python -m keephive profile create testprof")
         # Pipe "n" to answer the confirmation prompt without hanging
-        screen = term.type(
-            "echo n | python -m keephive profile delete testprof"
-        )
+        screen = term.type("echo n | python -m keephive profile delete testprof")
         screen.has("Cancelled")
         screen.lacks("Traceback")
