@@ -27,6 +27,21 @@ test-llm:
 test-one target:
     uv run pytest {{target}} -xvs
 
+# Run all non-LLM tests (unit + integration + terminal E2E)
+test-all: test test-e2e
+
+# Coverage report (html in htmlcov/)
+test-cov:
+    uv run pytest --cov=keephive --cov-report=term-missing --cov-report=html -o "addopts=-m 'not llm and not terminal' --strict-markers"
+
+# Run quick smoke tests only
+test-smoke:
+    uv run pytest tests/test_smoke.py tests/test_cli_dispatch.py -xvs
+
+# Profile test timing (find slow tests)
+test-timing:
+    uv run pytest --durations=20 -q
+
 # Lint with ruff
 lint:
     uv run ruff check src/ tests/
@@ -36,9 +51,16 @@ lint:
 fmt:
     uv run ruff format src/ tests/
 
-# Live dashboard with hot reload
-serve:
-    uv run python -m keephive serve --hot
+# ── Quality Gates ────────────────────────────────────────────────────────────
+
+# Fast pre-flight: format + lint + secrets (runs in ~2s, catches most issues)
+pre-flight: fmt lint check-private
+
+# Run all checks (test + lint + privacy scan)
+check: test lint check-private
+
+# Full pre-release check: pre-flight + all tests including terminal E2E
+check-release: pre-flight test test-e2e
 
 # Check for accidentally committed secrets / private data
 check-private:
@@ -48,5 +70,8 @@ check-private:
     @! grep -rn "ANTHROPIC_API_KEY\s*=" src/ tests/ 2>/dev/null || (echo "ERROR: API key assignment found" && exit 1)
     @echo "OK: no secrets found"
 
-# Run all checks (test + lint + privacy scan)
-check: test lint check-private
+# ── Dashboard ────────────────────────────────────────────────────────────────
+
+# Live dashboard with hot reload
+serve:
+    uv run python -m keephive serve --hot
