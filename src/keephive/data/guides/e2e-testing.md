@@ -190,7 +190,15 @@ term.type('python -m keephive r "FACT: something important"')
 Every `term` fixture creates a fresh hive directory in a temp path. Commands never touch `~/.claude/hive/`. But `active_profile()` always returns None in HIVE_HOME mode (bypasses profile system).
 
 ### Prompt Interference
-The terminal driver sets `STARSHIP_CONFIG` to a temp file with `format = "> "`, replacing the user's multi-line starship prompt (which runs `git status`, Python version, battery %, etc.) with a fast single-char prompt. Without this, starship takes 0.5-2s per prompt render, commands pile up in the input buffer, and END markers never appear as clean separate lines. The `>` character avoids starship format parsing errors (`$` would be interpreted as a variable reference). If tests timeout, verify STARSHIP_CONFIG is set in the terminal driver's `_env` dict. Check for `"Traceback"` in assertions rather than `"Error"` since starship emits `[ERROR]` during init.
+The terminal driver uses a three-layer defense against starship prompt interference:
+
+1. **STARSHIP_CONFIG** set via `tmux -e` to a temp file with `format = "> "` (not `"$ "` which starship interprets as a variable reference)
+2. **Nuclear prompt override**: `precmd_functions=(); preexec_functions=(); PROMPT='> '; RPROMPT=''` clears all zsh prompt hooks after shell init (starship registers `precmd` hooks that run the starship binary on every prompt render, 0.5-2s each)
+3. **Scrollback wipe**: `clear` + `tmux clear-history` at end of `_start()` removes any starship parse errors from the initial shell startup
+
+Without all three: starship renders a multi-line prompt with git status, Python version, battery %, etc. Commands pile up in the input buffer, END markers never appear as clean standalone lines, and `wait_for()` captures residual `[ERROR]` messages from scrollback.
+
+If tests timeout, check that the prompt override is executing in `_start()`. Use `"Traceback"` in assertions instead of `"Error"` since starship emits `[ERROR]` during init.
 
 ### Claude Code Data Isolation
 The terminal driver sets `HIVE_CC_META_DIR` to an empty temp directory, isolating stats/status output from real `~/.claude/usage-data/session-meta/` data. Without this, the Sessions section of stats/status reflects the host machine's actual Claude Code activity, making golden file comparison non-deterministic. Both `storage.cc_session_data()` and `insights.read_session_meta()` respect this env var.
@@ -207,10 +215,19 @@ def test_status_golden(self, term_seeded, update_golden):
     assert_golden(screen, "status_seeded", update=update_golden)
 ```
 
-Non-deterministic values are normalized before comparison:
-- `HH:MM:SS` and `HH:MM` for timestamps
+Non-deterministic values are normalized by `_normalize_golden()` in `conftest.py`:
+- `HH:MM:SS` and `HH:MM` for wall-clock timestamps
 - `pytest-NNN` for temp directory numbers
 - `vX.Y.Z` for version strings
+- Sparkline bars (`▁▂▃▄▅▆▇█`) collapsed to `▓`
+- Stats/Status volatile counters: prompts/convo, streak, cmds today/week
+- Session Quality: achieved %, session count, friction text
+- Trends: all values (entirely from real usage data)
+- Activity: day rows, source percentages, hook counts
+- Tool usage percentages and change arrows
+- Project line counts and recency
+
+The normalizer ensures golden files don't break when real `~/.claude/usage-data/` changes between runs. If you add a new volatile field to stats/status output, add a corresponding normalization pattern.
 
 Regenerate baselines: `just test-golden`
 
