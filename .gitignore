@@ -19,6 +19,20 @@ tests/e2e_outputs/
 # Private just recipes (maintainer-only)
 .just/
 
+# Test output artifacts
+.test-results.txt
+.full-test.txt
+.terminal-final.txt
+.terminal-test-results.txt
+.driver-test-results.txt
+.unit-test-results.txt
+.watch-test.txt
+.golden-regen*.txt
+.staged-diff.txt
+golden-out.txt
+lint-out.txt
+pytest-out.txt
+
 # hive serve runtime artifacts
 server.pid
 server_output.log
