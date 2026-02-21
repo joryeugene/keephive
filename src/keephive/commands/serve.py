@@ -21,19 +21,41 @@ from urllib.parse import parse_qs, urlparse
 DEFAULT_PORT = 3847
 
 _FAVICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><polygon points="16,2 28,9 28,23 16,30 4,23 4,9" fill="#f59e0b" stroke="#d97706" stroke-width="2"/><polygon points="16,8 22,12 22,20 16,24 10,20 10,12" fill="#fbbf24"/></svg>'
-_FAVICON = "data:image/svg+xml;base64," + base64.b64encode(_FAVICON_SVG.encode()).decode()
+_FAVICON_SVG_URI = "data:image/svg+xml;base64," + base64.b64encode(_FAVICON_SVG.encode()).decode()
+
+
+def _load_data_uri(filename: str, mime: str) -> str:
+    """Load a file from keephive.data as a base64 data URI."""
+    try:
+        from importlib import resources
+
+        ref = resources.files("keephive.data").joinpath(filename)
+        data = ref.read_bytes()
+        return f"data:{mime};base64," + base64.b64encode(data).decode()
+    except Exception:
+        return ""
 
 
 def _keepbee_data_uri() -> str:
     """Load keepbee.gif as a base64 data URI for the nav brand logo."""
-    try:
-        from importlib import resources
+    return _load_data_uri("keepbee.gif", "image/gif")
 
-        ref = resources.files("keephive.data").joinpath("keepbee.gif")
-        data = ref.read_bytes()
-        return "data:image/gif;base64," + base64.b64encode(data).decode()
-    except Exception:
-        return ""
+
+def _mascot_data_uri() -> str:
+    """Load mascot.png as a base64 data URI for the settings page."""
+    return _load_data_uri("mascot.png", "image/png")
+
+
+_FAVICON: str | None = None
+
+
+def _get_favicon() -> str:
+    """Return keepbee GIF favicon, falling back to SVG hexagon."""
+    global _FAVICON  # noqa: PLW0603
+    if _FAVICON is None:
+        gif_uri = _keepbee_data_uri()
+        _FAVICON = gif_uri if gif_uri else _FAVICON_SVG_URI
+    return _FAVICON
 
 
 # ---- Markdown renderer ----
@@ -3228,7 +3250,17 @@ def _render_settings_panel(data: dict) -> str:
         )
 
     body = "\n".join(rows) if rows else '<div class="empty">No settings</div>'
+    mascot_uri = _mascot_data_uri()
+    mascot_html = (
+        f'<div style="text-align:center;margin-bottom:1rem">'
+        f'<img src="{mascot_uri}" alt="keephive mascot" '
+        f'style="width:180px;image-rendering:auto">'
+        f"</div>"
+        if mascot_uri
+        else ""
+    )
     return (
+        f"{mascot_html}"
         f'<div class="card" tabindex="0" role="region" aria-label="Settings">'
         f'<div class="card-header"><span class="card-title">Settings</span></div>'
         f'<div class="card-body">{body}</div>'
@@ -3911,7 +3943,7 @@ def render_page(view_name: str, port: int) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="icon" href="{_FAVICON}">
+<link rel="icon" href="{_get_favicon()}">
 <title>hive \u2014 {_e(VIEWS.get(view_name, {}).get("title", view_name))}</title>
 <style>{_CSS}</style>
 </head>

@@ -183,11 +183,17 @@ class TestProfileAdversarial:
         screen.lacks("Traceback")
 
     def test_delete_active_profile(self, term):
-        """Deleting the currently active profile is rejected."""
-        # Create and switch to a profile
+        """Deleting a profile prompts for confirmation; 'n' cancels safely.
+
+        Note: The 'cannot delete active profile' guard is bypassed in HIVE_HOME
+        mode (active_profile() returns None when HIVE_HOME is set). The guard
+        is covered in test_profile.py::test_delete_active_profile_refused.
+        Here we test that the interactive prompt handles cancellation gracefully.
+        """
         term.type("python -m keephive profile create testprof")
-        term.type("python -m keephive profile use testprof")
-        # Try to delete the active one
-        screen = term.type("python -m keephive profile delete testprof")
-        screen.has("Cannot delete active")
+        # Pipe "n" to answer the confirmation prompt without hanging
+        screen = term.type(
+            "echo n | python -m keephive profile delete testprof"
+        )
+        screen.has("Cancelled")
         screen.lacks("Traceback")

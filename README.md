@@ -33,6 +33,7 @@ Everything else on this page is optional depth.
 > You never type a full name. Two keystrokes for the command, a few more for the target.
 
 <p align="center">
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/keepbee.gif" width="120" alt="keepbee dancing" />
   <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/mascot.png" width="280" />
   <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/keepbee.gif" width="120" alt="keepbee dancing" />
 </p>

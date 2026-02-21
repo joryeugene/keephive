@@ -102,7 +102,13 @@ def cmd_import(args: list[str]) -> None:
             break
 
     # Validate archive (check for path traversal)
-    with tarfile.open(archive_path, "r:gz") as tar:
+    try:
+        tar_ctx = tarfile.open(archive_path, "r:gz")
+    except (tarfile.ReadError, tarfile.CompressionError, OSError) as exc:
+        console.print(f"[red]Cannot read archive: {exc}[/red]")
+        sys.exit(1)
+
+    with tar_ctx as tar:
         for member in tar.getmembers():
             if member.name.startswith("/") or ".." in member.name:
                 console.print(f"[red]Security: archive contains unsafe path: {member.name}[/red]")
