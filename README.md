@@ -250,9 +250,9 @@ Knowledge guides support optional YAML front matter for controlling injection:
 | `tags: [tag1, tag2]` | Matched against project name for auto-injection |
 | `projects: [proj1]` | Matched against project name for auto-injection |
 | `paths: ["/path/pattern"]` | Matched against working directory for auto-injection |
-| `always: true` | Injected into every session regardless of project |
+| `always: true` | Injected into every session regardless of project (opt-in, no guides ship with this) |
 
-Guides without front matter match only by filename (project name as substring).
+Guides without front matter match only by filename (project name as substring). The `always: true` flag is strictly opt-in and costs one of the three guide slots per session, so use it only for guides that genuinely apply to every project.
 
 #### Notes
 

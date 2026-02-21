@@ -30,7 +30,7 @@ Tiers from most stable (top) to most ephemeral (bottom).
 | hive rule add "text", hive rule rm "text"                  |
 +============================================================+
 | KNOWLEDGE GUIDES  ~/.../knowledge/guides/<name>.md         |
-| Rich structured docs per topic, injected by tag or always  |
+| Rich structured docs per topic, injected by tag (or opt-in always) |
 | hive ke <name> to edit, hive k <name> to view              |
 +============================================================+
 | DAILY LOG  ~/.claude/hive/YYYY-MM-DD.md                    |

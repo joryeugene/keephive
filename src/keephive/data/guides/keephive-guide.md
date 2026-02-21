@@ -84,7 +84,7 @@ When a new session starts, keephive's SessionStart hook injects:
 - Working memory (core verified facts)
 - Behavioral rules
 - Stale fact warnings
-- Matching knowledge guides (by project name/tag, or `always: true` for universal guides)
+- Matching knowledge guides (by project name/tag, or opt-in `always: true` for universal guides)
 - Open TODOs and recent activity
 - Cross-project activity hints (when insights from other projects exist in recent logs)
 
