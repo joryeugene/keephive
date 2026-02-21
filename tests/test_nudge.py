@@ -1,4 +1,4 @@
-"""Tests for the nudge system (counter-based periodic reminders)."""
+"""Tests for the nudge system (counter-based periodic reminders with lifecycle state machine)."""
 
 from __future__ import annotations
 
@@ -56,19 +56,44 @@ class TestShouldNudge:
         assert count == 2
 
     def test_fires_at_interval(self, hive_env, monkeypatch):
-        """Fires every N calls (default 8)."""
+        """Fires every N calls (default 5)."""
         from keephive.nudge import should_nudge
 
-        monkeypatch.setenv("HIVE_NUDGE_INTERVAL", "4")
+        monkeypatch.setenv("HIVE_NUDGE_INTERVAL", "5")
 
         results = []
-        for i in range(12):
+        for i in range(15):
             fire, count = should_nudge("test", "s1")
             results.append((fire, count))
 
-        # Should fire at count 4, 8, 12
+        # Should fire at count 5, 10, 15
         fires = [count for fire, count in results if fire]
-        assert fires == [4, 8, 12]
+        assert fires == [5, 10, 15]
+
+    def test_stop_uses_own_interval(self, hive_env, monkeypatch):
+        """Stop hook uses HIVE_STOP_NUDGE_INTERVAL, not HIVE_NUDGE_INTERVAL."""
+        from keephive.nudge import should_nudge
+
+        monkeypatch.setenv("HIVE_NUDGE_INTERVAL", "3")
+        monkeypatch.setenv("HIVE_STOP_NUDGE_INTERVAL", "4")
+
+        # "stop" counter uses interval 4
+        results = []
+        for _ in range(8):
+            fire, count = should_nudge("stop", "s1")
+            results.append((fire, count))
+
+        fires = [count for fire, count in results if fire]
+        assert fires == [4, 8]
+
+        # "prompt" counter uses interval 3
+        results = []
+        for _ in range(9):
+            fire, count = should_nudge("prompt", "s1")
+            results.append((fire, count))
+
+        fires = [count for fire, count in results if fire]
+        assert fires == [3, 6, 9]
 
     def test_resets_on_session_change(self, hive_env, monkeypatch):
         """Counter resets when session ID changes."""
@@ -112,47 +137,75 @@ class TestShouldNudge:
         assert tool_count == 1
 
 
-class TestNudgeRotation:
-    def test_prompt_nudge_cycles(self, hive_env, monkeypatch):
-        """Prompt nudges rotate through different messages."""
-        from keephive.nudge import get_prompt_nudge
+class TestLifecycleNudge:
+    """Test the priority-based lifecycle nudge state machine."""
 
-        monkeypatch.setenv("HIVE_NUDGE_INTERVAL", "8")
+    def test_todo_nudge_highest_priority(self, hive_env):
+        """Open TODOs produce a specific TODO nudge (priority 1)."""
+        from keephive.storage import append_to_daily, ensure_daily
 
-        # Each multiple of interval gets a different nudge
-        nudge_8 = get_prompt_nudge(8)
-        nudge_16 = get_prompt_nudge(16)
-        nudge_24 = get_prompt_nudge(24)
+        ensure_daily()
+        append_to_daily("- [09:00:00] TODO: Deploy the staging environment")
 
-        # All nudges should be non-empty strings
-        for nudge in [nudge_8, nudge_16, nudge_24]:
-            assert isinstance(nudge, str)
-            assert len(nudge) > 10
+        from keephive.nudge import _lifecycle_nudge
 
-        # Nudges should rotate (not all the same)
-        nudges = {nudge_8, nudge_16, nudge_24}
-        assert len(nudges) >= 2, "Nudges should rotate"
+        result = _lifecycle_nudge("prompt")
+        assert "Deploy the staging environment" in result
+        assert "hive td" in result
 
-    def test_tool_nudge_cycles(self, hive_env, monkeypatch):
-        """Tool nudges rotate through different messages."""
-        from keephive.nudge import get_tool_nudge
+    def test_stale_facts_priority_two(self, hive_env):
+        """Stale facts trigger verification nudge when no TODOs exist."""
+        from keephive.storage import memory_file
 
-        monkeypatch.setenv("HIVE_NUDGE_INTERVAL", "8")
+        # Memory has a fact with very old verified date (stale)
+        mem = memory_file()
+        mem.write_text("# Memory\n- Old fact about Python [verified:2020-01-01]\n")
 
-        nudge_8 = get_tool_nudge(8)
-        nudge_16 = get_tool_nudge(16)
-        nudge_24 = get_tool_nudge(24)
+        from keephive.nudge import _lifecycle_nudge
 
-        for nudge in [nudge_8, nudge_16, nudge_24]:
-            assert isinstance(nudge, str)
-            assert len(nudge) > 10
+        result = _lifecycle_nudge("prompt")
+        assert "unverified" in result
+        assert "hive v" in result
 
-        nudges = {nudge_8, nudge_16, nudge_24}
-        assert len(nudges) >= 2, "Nudges should rotate"
+    def test_pending_facts_priority_three(self, hive_env):
+        """Pending facts trigger review nudge when no stale facts or TODOs."""
+        from keephive.storage import hive_dir, memory_file
 
-    def test_status_aware_nudge_fallback(self, tmp_path, monkeypatch):
-        """Status-aware slot falls back when nothing actionable."""
-        # Use a clean hive dir with no stale facts
+        # Fresh memory (no stale)
+        mem = memory_file()
+        mem.write_text("# Memory\n- Fresh fact [verified:2026-02-20]\n")
+
+        # Pending facts exist
+        pending = hive_dir() / ".pending-facts.md"
+        pending.write_text("- Some pending fact [auto:2026-02-20]\n- Another [auto:2026-02-20]\n")
+
+        from keephive.nudge import _lifecycle_nudge
+
+        result = _lifecycle_nudge("prompt")
+        assert "pending review" in result
+        assert "hive mem review" in result
+
+    def test_unreflected_logs_priority_four(self, hive_env):
+        """7+ daily logs trigger reflect nudge when no higher-priority items."""
+        from keephive.storage import daily_dir, memory_file
+
+        # Fresh memory, no pending, no TODOs
+        mem = memory_file()
+        mem.write_text("# Memory\n- Fresh fact [verified:2026-02-20]\n")
+
+        # Create 8 daily log files
+        dd = daily_dir()
+        for i in range(8):
+            (dd / f"2026-02-{10 + i:02d}.md").write_text(f"# Log {i}\n- entry\n")
+
+        from keephive.nudge import _lifecycle_nudge
+
+        result = _lifecycle_nudge("prompt")
+        assert "daily logs" in result
+        assert "hive rf" in result
+
+    def test_fallback_context_prompt(self, tmp_path, monkeypatch):
+        """With nothing actionable, prompt context gets recall suggestion."""
         hd = tmp_path / "clean_hive"
         hd.mkdir()
         (hd / "working").mkdir()
@@ -161,16 +214,107 @@ class TestNudgeRotation:
         (hd / "knowledge" / "prompts").mkdir(parents=True)
         (hd / "working" / "notes").mkdir()
         (hd / "archive").mkdir()
-        # Memory with no stale facts
         (hd / "working" / "memory.md").write_text(
             "# Working Memory\n\n- All facts current [verified:2026-02-17]\n"
         )
         monkeypatch.setenv("HIVE_HOME", str(hd))
 
-        from keephive.nudge import _status_nudge
+        from keephive.nudge import _lifecycle_nudge
 
-        result = _status_nudge()
-        assert result is None  # Nothing actionable
+        result = _lifecycle_nudge("prompt")
+        assert "hive_recall" in result
+
+    def test_fallback_context_tool(self, tmp_path, monkeypatch):
+        """Tool context gets decision-recording suggestion."""
+        hd = tmp_path / "clean_hive"
+        hd.mkdir()
+        (hd / "working").mkdir()
+        (hd / "daily").mkdir()
+        (hd / "knowledge" / "guides").mkdir(parents=True)
+        (hd / "knowledge" / "prompts").mkdir(parents=True)
+        (hd / "working" / "notes").mkdir()
+        (hd / "archive").mkdir()
+        (hd / "working" / "memory.md").write_text(
+            "# Working Memory\n\n- All facts current [verified:2026-02-17]\n"
+        )
+        monkeypatch.setenv("HIVE_HOME", str(hd))
+
+        from keephive.nudge import _lifecycle_nudge
+
+        result = _lifecycle_nudge("tool")
+        assert "DECISION" in result
+
+    def test_fallback_context_stop(self, tmp_path, monkeypatch):
+        """Stop context gets end-of-turn capture suggestion."""
+        hd = tmp_path / "clean_hive"
+        hd.mkdir()
+        (hd / "working").mkdir()
+        (hd / "daily").mkdir()
+        (hd / "knowledge" / "guides").mkdir(parents=True)
+        (hd / "knowledge" / "prompts").mkdir(parents=True)
+        (hd / "working" / "notes").mkdir()
+        (hd / "archive").mkdir()
+        (hd / "working" / "memory.md").write_text(
+            "# Working Memory\n\n- All facts current [verified:2026-02-17]\n"
+        )
+        monkeypatch.setenv("HIVE_HOME", str(hd))
+
+        from keephive.nudge import _lifecycle_nudge
+
+        result = _lifecycle_nudge("stop")
+        assert "hive_remember" in result
+
+    def test_long_todo_truncated_in_nudge(self, hive_env):
+        """TODOs longer than 60 chars are truncated with ellipsis."""
+        from keephive.storage import append_to_daily, ensure_daily
+
+        ensure_daily()
+        long_todo = "A" * 80
+        append_to_daily(f"- [09:00:00] TODO: {long_todo}")
+
+        from keephive.nudge import _lifecycle_nudge
+
+        result = _lifecycle_nudge("prompt")
+        assert "..." in result
+        assert len(result) < 200
+
+
+class TestUnreflectedLogCount:
+    """Test _unreflected_log_count helper."""
+
+    def test_no_logs(self, hive_env):
+        from keephive.nudge import _unreflected_log_count
+
+        assert _unreflected_log_count() == 0
+
+    def test_counts_all_without_reflect_date(self, hive_env):
+        """Without .last-reflect-date, counts all daily logs."""
+        from keephive.storage import daily_dir
+
+        dd = daily_dir()
+        for i in range(3):
+            (dd / f"2026-02-{10 + i:02d}.md").write_text("# Log\n")
+
+        from keephive.nudge import _unreflected_log_count
+
+        assert _unreflected_log_count() == 3
+
+    def test_respects_reflect_date(self, hive_env):
+        """Only counts logs after the last reflect date."""
+        from keephive.storage import daily_dir, hive_dir
+
+        dd = daily_dir()
+        (dd / "2026-02-10.md").write_text("# Old\n")
+        (dd / "2026-02-15.md").write_text("# Mid\n")
+        (dd / "2026-02-20.md").write_text("# New\n")
+
+        # Set last reflect to 2026-02-14
+        (hive_dir() / ".last-reflect-date").write_text("2026-02-14")
+
+        from keephive.nudge import _unreflected_log_count
+
+        # Only 2026-02-15 and 2026-02-20 are after the cutoff
+        assert _unreflected_log_count() == 2
 
 
 class TestBuildOutput:
@@ -212,8 +356,8 @@ class TestHookIntegration:
         )
 
     def test_userpromptsubmit_full_cycle(self, hive_env):
-        """Run hook 8 times (default interval), 8th produces output."""
-        for i in range(7):
+        """Run hook 5 times (default interval), 5th produces output."""
+        for i in range(4):
             r = self._run_hook(
                 ["hook-userpromptsubmit"],
                 hive_env,
@@ -222,20 +366,20 @@ class TestHookIntegration:
             assert r.returncode == 0
             assert r.stdout.strip() == "", f"Call {i + 1} should be silent"
 
-        # 8th call should produce nudge
+        # 5th call should produce nudge
         r = self._run_hook(
             ["hook-userpromptsubmit"],
             hive_env,
-            json.dumps({"prompt": "prompt 7", "session_id": "cycle-test"}),
+            json.dumps({"prompt": "prompt 4", "session_id": "cycle-test"}),
         )
         assert r.returncode == 0
-        assert r.stdout.strip() != "", "8th call should produce nudge"
+        assert r.stdout.strip() != "", "5th call should produce nudge"
         data = json.loads(r.stdout)
         assert "additionalContext" in data["hookSpecificOutput"]
 
     def test_posttooluse_full_cycle(self, hive_env):
-        """Run PostToolUse hook 8 times, 8th produces output."""
-        for i in range(7):
+        """Run PostToolUse hook 5 times, 5th produces output."""
+        for i in range(4):
             r = self._run_hook(
                 ["hook-posttooluse"],
                 hive_env,
@@ -250,14 +394,14 @@ class TestHookIntegration:
             json.dumps({"session_id": "tool-cycle", "tool_name": "Edit"}),
         )
         assert r.returncode == 0
-        assert r.stdout.strip() != "", "8th call should produce nudge"
+        assert r.stdout.strip() != "", "5th call should produce nudge"
         data = json.loads(r.stdout)
         assert "additionalContext" in data["hookSpecificOutput"]
 
     def test_session_reset_restarts_counter(self, hive_env):
         """New session ID resets counter, so nudge doesn't fire at wrong time."""
-        # Run 6 times with session A
-        for i in range(6):
+        # Run 3 times with session A (not enough for interval 5)
+        for i in range(3):
             self._run_hook(
                 ["hook-userpromptsubmit"],
                 hive_env,

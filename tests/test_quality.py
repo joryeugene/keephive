@@ -190,10 +190,10 @@ class TestPrecompactDedup:
             "- [10:00:00] FACT: Python uses uv for package management\n"
         )
 
-        # Very similar text should be caught
+        # Exact text should be caught
         assert _is_duplicate_insight(daily, "Python uses uv for package management")
-        # Slightly different but similar should also be caught
-        assert _is_duplicate_insight(daily, "Python uses uv for managing packages")
+        # Close wording (>0.8 similarity) should also be caught
+        assert _is_duplicate_insight(daily, "Python uses uv for package mgmt")
         # Completely different text should not be caught
         assert not _is_duplicate_insight(daily, "Rust compile times are fast")
 

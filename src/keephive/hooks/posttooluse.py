@@ -37,7 +37,8 @@ def hook_posttooluse(_args: list[str]) -> None:
         from keephive.storage import track_session_event
 
         tool_name = input_data.get("tool_name", "")
-        track_session_event(session_id, "tool", tool_name=tool_name)
+        cwd = input_data.get("cwd", "")
+        track_session_event(session_id, "tool", project=cwd, tool_name=tool_name)
     except Exception:
         pass
 

@@ -7,7 +7,7 @@ license = "MIT"
 authors = [
     { name = "Jory", email = "jory@pestorious.com" }
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 keywords = ["claude", "memory", "verification", "claude-code", "mcp", "agent"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -34,6 +34,7 @@ Changelog = "https://github.com/joryeugene/keephive/blob/main/CHANGELOG.md"
 [project.scripts]
 keephive = "keephive.cli:main"
 hive = "keephive.cli:main"
+h = "keephive.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.9.5,<0.10.0"]

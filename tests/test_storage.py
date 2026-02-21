@@ -844,6 +844,7 @@ class TestSessionMetrics:
         track_session_event("sess-001", "start")
         track_session_event("sess-001", "compact")
         track_session_event("sess-002", "start")
+        track_session_event("sess-002", "prompt")  # real activity so not a ghost
 
         metrics = session_metrics()
         assert metrics["compaction_rate"] == pytest.approx(0.5)

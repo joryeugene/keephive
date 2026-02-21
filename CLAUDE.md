@@ -6,6 +6,8 @@ A knowledge sidecar for Claude Code.
 
 Prefer `just <recipe>` over raw commands. See `just --list` or the `justfile` for all recipes.
 
+**`hivedev` vs `hive`**: During development, always use `hivedev` (or `uv run python -m keephive`) to run the local dev build. The global `hive`/`keephive` commands point to the last `uv tool install` and may lag behind. The justfile defines `hivedev` as a variable for this reason. Terminal E2E tests use `python -m keephive` because they run inside an activated venv.
+
 | Command                                    | What                                               |
 | ------------------------------------------ | -------------------------------------------------- |
 | `just test`                                | Run all unit/integration tests (<35s)               |
@@ -19,8 +21,8 @@ Prefer `just <recipe>` over raw commands. See `just --list` or the `justfile` fo
 | `just fmt`                                 | ruff format in place                               |
 | `just serve`                               | Live dashboard with hot reload                     |
 | `just check`                               | All checks (test + lint + secrets)                  |
-| `uv run python -m keephive s`             | Status against real data                            |
-| `uv run python -m keephive v`             | Verify stale facts (needs claude -p, 10-20s)        |
+| `hivedev s`                                | Status against real data (local dev build)          |
+| `hivedev v`                                | Verify stale facts (needs claude -p, 10-20s)        |
 
 ## Architecture
 
@@ -29,7 +31,7 @@ Prefer `just <recipe>` over raw commands. See `just --list` or the `justfile` fo
 - `clock.py`: Centralized time functions. `get_today()`/`get_now()` respect `HIVE_DATE` env var for time-travel testing.
 - `models.py`: Pydantic models for every structured response (VerifyResponse, PreCompactResponse, ReflectAnalyzeResponse, VaultPerspective, CleanerPerspective, StrategistPerspective, AuditSynthesis).
 - `output.py`: Console markup, `prompt_yn()`, `prompt_choice()`. Shared output helpers.
-- `nudge.py`: Shared nudge infrastructure (counter-based, status-aware, rotating messages).
+- `nudge.py`: Shared nudge infrastructure. Priority-based lifecycle state machine (TODOs > stale facts > pending facts > unreflected logs > context-specific). Intervals: prompt/tool every 5, stop every 8.
 - `storage.py`: All file I/O for ~/.claude/hive/ directory. Includes stats tracking, profiles, session metrics.
 - `insights.py`: Pure deterministic aggregation of Claude Code `/insights` session data. Reads `~/.claude/usage-data/facets/` + `session-meta/`, joins on session_id, produces outcome/type/satisfaction/goal/friction distributions and cross-field pattern detection. No LLM.
 - `commands/audit.py`: Three-perspective LLM audit (parallel) + Cook synthesis. Uses `run_claude_pipe()` for all 4 calls.
@@ -50,9 +52,12 @@ Prefer `just <recipe>` over raw commands. See `just --list` or the `justfile` fo
 - `commands/doctor.py`: Health check (hooks, MCP, deps, data). Uses LLM for semantic TODO deduplication.
 - `commands/setup.py`: Registers MCP server in ~/.claude.json and hooks in ~/.claude/settings.json. Auto-syncs global install.
 - `hooks/sessionstart.py`: Injects context at session start (memory, rules, TODOs, matched guides, cross-project hints). No LLM call.
-- `hooks/precompact.py`: Layer 1 extraction (deterministic) + Layer 2 auto-write to daily log with project attribution (claude -p).
+- `hooks/precompact.py`: Layer 1 extraction (deterministic) + Layer 2 auto-write to daily log with project attribution (claude -p). TODO discipline: max 2 user-requested TODOs per compaction, speculative TODOs demoted to FACT. Auto-close: passes open TODOs to LLM, writes DONE for resolved items. Dedup threshold 0.8.
 - `hooks/posttooluse.py`: Counter-based periodic nudge after Edit/Write tool use.
-- `hooks/userpromptsubmit.py`: Counter-based periodic nudge + TODO detection from user prompts. Also injects `.ui-queue` content before nudge when present.
+- `hooks/userpromptsubmit.py`: Counter-based periodic nudge. Injects `.ui-queue` content before nudge when present.
+- `hooks/stop.py`: Stop hook. Increments turn counter per session, periodic micro-nudge (interval 8) to capture decisions or mark TODOs done.
+- `hooks/sessionend.py`: SessionEnd hook. Finalizes session stats with accurate end timestamp. No stdout.
+- `hooks/taskcompleted.py`: TaskCompleted hook. Auto-logs DONE entry to daily log when a task is marked complete.
 - `commands/serve.py`: Live web dashboard (HTTP server, 8 views, markdown rendering, auto-refresh, `/ui-feedback` POST endpoint). Zero external deps.
 - `commands/ui.py`: UI feedback queue CLI (`hive ui`/`ui-install`/`ui-clear`) + bookmarklet source as `javascript:` URL.
 

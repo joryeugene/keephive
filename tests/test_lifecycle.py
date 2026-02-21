@@ -122,7 +122,7 @@ class TestPostToolUseLifecycle:
     """PostToolUse hook fires at interval boundaries via counter."""
 
     def test_first_edit_is_silent(self, hive_env):
-        """First call (count=1) is silent at default interval 8."""
+        """First call (count=1) is silent at default interval 5."""
         import io
         import json
         import sys
@@ -143,7 +143,7 @@ class TestPostToolUseLifecycle:
             sys.stdout = old_stdout
 
         output = captured.getvalue()
-        assert output == "", "First call should be silent (count=1, interval=8)"
+        assert output == "", "First call should be silent (count=1, interval=5)"
 
     def test_fires_at_interval(self, hive_env):
         """Fires nudge when counter hits interval boundary."""
@@ -154,10 +154,9 @@ class TestPostToolUseLifecycle:
         from keephive.hooks.posttooluse import hook_posttooluse
 
         session_id = "test-session-def"
-        # Set counter to 23 so next call (count=24) fires.
-        # slot = (24 // 8) % 3 = 0 (tool usage slot with hive_remember)
+        # Set counter to 4 so next call (count=5) fires at default interval 5.
         counter_file = hive_env / ".tool-counter"
-        counter_file.write_text(json.dumps({"count": 23, "session_id": session_id}))
+        counter_file.write_text(json.dumps({"count": 4, "session_id": session_id}))
 
         input_json = json.dumps({"session_id": session_id, "tool_name": "Edit"})
 
@@ -172,11 +171,10 @@ class TestPostToolUseLifecycle:
             sys.stdout = old_stdout
 
         output = captured.getvalue()
-        assert output, "24th call should produce nudge"
+        assert output, "5th call should produce nudge"
         data = json.loads(output)
         assert "hookSpecificOutput" in data
-        ctx = data["hookSpecificOutput"]["additionalContext"]
-        assert "hive_remember" in ctx
+        assert "additionalContext" in data["hookSpecificOutput"]
 
 
 class TestPreCompactExcerpts:

@@ -9,6 +9,8 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
+from rich.markup import escape
+
 from keephive.clock import get_now, get_today
 from keephive.output import console, notify_sound, prompt_yn
 from keephive.storage import (
@@ -241,18 +243,19 @@ def _daily_path_for_result(result: dict) -> Path | None:
 
 def _display_results(query: str, results: list[dict]) -> None:
     """Display recall results to console."""
-    console.print(f"Found {len(results)} result(s) for: {query}\n")
+    console.print(f"Found {len(results)} result(s) for: {escape(query)}\n")
     tier_styles = {
         "working": "tier.working",
         "knowledge": "tier.knowledge",
         "daily": "tier.daily",
         "archive": "tier.archive",
+        "notes": "dim",
     }
     show_context = sys.stdout.isatty()
 
     for r in results[:20]:
-        style = tier_styles.get(r["tier"], "")
-        score_str = f"[{r['score']:>3}]"
+        style = tier_styles.get(r["tier"], "dim")
+        score_str = f"\\[{r['score']:>3}]"
         tier_str = f"({r['tier']})"
         line = r["line"]
         # Strip grep line-number prefix for daily/archive tiers only
@@ -270,7 +273,7 @@ def _display_results(query: str, results: list[dict]) -> None:
         else:
             tier_display = tier_str
 
-        console.print(f"[{style}]{score_str} {tier_display}{date_str}[/{style}] {line}")
+        console.print(f"[{style}]{score_str} {tier_display}{date_str}[/{style}] {escape(line)}")
 
         # Context lines for daily/archive hits, only on TTY
         if show_context and r["tier"] in ("daily", "archive"):
@@ -278,9 +281,9 @@ def _display_results(query: str, results: list[dict]) -> None:
             if file_path:
                 prev_line, next_line = _get_context_lines(file_path, r["line"])
                 if prev_line:
-                    console.print(f"       [dim]· {prev_line}[/dim]")
+                    console.print(f"       [dim]· {escape(prev_line)}[/dim]")
                 if next_line:
-                    console.print(f"       [dim]· {next_line}[/dim]")
+                    console.print(f"       [dim]· {escape(next_line)}[/dim]")
 
     if len(results) > 20:
         console.print(f"\n  [dim]Showing 20 of {len(results)} results[/dim]")

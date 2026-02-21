@@ -1,6 +1,9 @@
 # Import private recipes if present (no error when absent)
 import? '.just/release.just'
 
+# hivedev: always runs the LOCAL dev build (not the global `hive` install)
+hivedev := "uv run python -m keephive"
+
 # List available recipes
 default:
     @just --list
@@ -91,27 +94,27 @@ sync:
 
 # Live dashboard with hot reload
 serve:
-    uv run python -m keephive serve --hot
+    {{hivedev}} serve --hot
 
 # ── Watch Mode ─────────────────────────────────────────────────────────────
 
 # Status in live-watch mode (auto-refresh on changes)
 watch:
-    uv run python -m keephive s --watch
+    {{hivedev}} s --watch
 
 # Log in live-watch mode
 watch-log:
-    uv run python -m keephive l --watch
+    {{hivedev}} l --watch
 
 # TODOs in live-watch mode
 watch-todo:
-    uv run python -m keephive todo --watch
+    {{hivedev}} todo --watch
 
 # ── Demo Assets ────────────────────────────────────────────────────────────
 
 # Reset demo profile with rich seed data (60 days)
 demo-seed:
-    HIVE_HOME="$HOME/.claude/hive-demo" uv run python -m keephive seed --force --days 60
+    HIVE_HOME="$HOME/.claude/hive-demo" {{hivedev}} seed --force --days 60
 
 # Record CLI demo GIF (requires vhs: brew install charmbracelet/tap/vhs)
 demo-gif: demo-seed
@@ -125,7 +128,7 @@ demo-screenshots: demo-seed
     set -euo pipefail
     export HIVE_HOME="$HOME/.claude/hive-demo"
     # Start serve in background
-    uv run python -m keephive serve 13847 &
+    {{hivedev}} serve 13847 &
     SERVER_PID=$!
     # Wait for ready
     for i in $(seq 1 20); do

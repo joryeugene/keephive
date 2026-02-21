@@ -1,7 +1,10 @@
 """Shared nudge infrastructure for mid-session hooks.
 
 Counter-based system that fires periodic reminders to use hive tools.
-Used by both UserPromptSubmit and PostToolUse hooks.
+Uses a priority-based state machine instead of static rotations:
+highest-priority actionable state always wins.
+
+Used by UserPromptSubmit, PostToolUse, and Stop hooks.
 """
 
 from __future__ import annotations
@@ -19,8 +22,8 @@ def _counter_path(name: str) -> Path:
 
 
 def _nudge_interval() -> int:
-    """Interval between nudges. Default 8, configurable via HIVE_NUDGE_INTERVAL."""
-    return max(1, int(os.environ.get("HIVE_NUDGE_INTERVAL", "8")))
+    """Interval between nudges. Default 5, configurable via HIVE_NUDGE_INTERVAL."""
+    return max(1, int(os.environ.get("HIVE_NUDGE_INTERVAL", "5")))
 
 
 def read_counter(name: str) -> tuple[int, str]:
@@ -46,8 +49,9 @@ def should_nudge(name: str, session_id: str) -> tuple[bool, int]:
     """Increment counter, return (should_fire, count).
 
     Resets on session change. Fires every `interval` calls.
+    Stop hook uses its own interval (default 8); others use default 5.
     """
-    interval = _nudge_interval()
+    interval = _stop_nudge_interval() if name == "stop" else _nudge_interval()
     count, stored_session = read_counter(name)
 
     # Reset on new session
@@ -60,68 +64,109 @@ def should_nudge(name: str, session_id: str) -> tuple[bool, int]:
     return (count % interval == 0), count
 
 
-def _status_nudge() -> str | None:
-    """Build a status-aware nudge if there's something actionable."""
+def _pending_facts_count() -> int:
+    """Count pending facts awaiting review in .pending-facts.md."""
+    try:
+        from keephive.storage import hive_dir
+
+        path = hive_dir() / ".pending-facts.md"
+        if path.exists():
+            content = path.read_text().strip()
+            if content:
+                return sum(1 for ln in content.splitlines() if ln.strip().startswith("- "))
+    except Exception:
+        pass
+    return 0
+
+
+def _unreflected_log_count() -> int:
+    """Count daily logs since last reflect run."""
+    import re
+
+    from keephive.storage import daily_dir, hive_dir
+
+    last_reflect = hive_dir() / ".last-reflect-date"
+    cutoff = ""
+    if last_reflect.exists():
+        cutoff = last_reflect.read_text().strip()
+    count = 0
+    dd = daily_dir()
+    if dd.exists():
+        date_re = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+        for f in dd.glob("*.md"):
+            if date_re.match(f.stem) and f.stem > cutoff:
+                count += 1
+    return count
+
+
+# ---- Lifecycle-aware nudge state machine ----
+
+
+def _lifecycle_nudge(context: str = "prompt") -> str:
+    """Return the most actionable nudge based on current hive state.
+
+    Priority order (highest first):
+    1. Specific open TODO not addressed in current session
+    2. Stale facts needing verification
+    3. Pending facts needing review
+    4. Daily logs accumulated (7+) needing reflection
+    5. Context-specific capture/recall reminder
+    """
     try:
         from keephive.storage import count_stale_facts, open_todos
 
-        parts: list[str] = []
+        # Priority 1: Specific TODO nudge
+        todos = open_todos()
+        if todos:
+            _, _, text = todos[0]
+            short = text[:60] + "..." if len(text) > 60 else text
+            return f'Open TODO: "{short}" - resolved? `hive td`'
 
+        # Priority 2: Stale facts
         stale = count_stale_facts()
         if stale > 0:
-            parts.append(f"{stale} fact(s) unverified 30+ days. Run: hive v")
+            return f"{stale} fact(s) unverified 30+ days. Run: hive v"
 
-        todos = open_todos()
-        overdue = [t for d, _, t in todos if d < _today_str()]
-        if overdue:
-            parts.append(f"{len(overdue)} TODO(s) older than 1 day. Run: hive todo")
+        # Priority 3: Pending facts
+        pending = _pending_facts_count()
+        if pending > 0:
+            return f"{pending} fact(s) pending review. Run: hive mem review"
 
-        if parts:
-            return " ".join(parts)
+        # Priority 4: Daily logs need reflection
+        log_count = _unreflected_log_count()
+        if log_count >= 7:
+            return f"{log_count} daily logs since last reflect. Run: hive rf"
+
     except Exception:
         pass
-    return None
 
-
-def _today_str() -> str:
-    from keephive.clock import get_today
-
-    return get_today().isoformat()
-
-
-# ---- Nudge rotations ----
-
-_PROMPT_NUDGES = [
-    "Recording insights? hive_remember() for facts, decisions, corrections. Searching context? hive_recall(topic).",
-    None,  # Placeholder for status-aware nudge (falls back to index 0)
-    "Before writing new code, check hive_recall(topic) for existing patterns.",
-]
-
-_TOOL_NUDGES = [
-    "Made code changes. Record the reasoning: hive_remember('DECISION: chose X because Y')",
-    "Before writing new utilities, check hive_recall(concept). Consolidate, don't duplicate.",
-    None,  # Placeholder for status-aware nudge (falls back to index 0)
-]
+    # Priority 5: Context-specific capture/recall
+    if context == "tool":
+        return "Made changes worth remembering? hive_remember('DECISION: chose X because Y')"
+    elif context == "stop":
+        return "End of turn. Any decision or insight worth capturing? hive_remember()"
+    else:
+        return "Working on something new? hive_recall(topic) for previous context."
 
 
 def get_prompt_nudge(count: int) -> str:
     """Get the nudge text for a UserPromptSubmit nudge."""
-    idx = (count // _nudge_interval()) % len(_PROMPT_NUDGES)
-    nudge = _PROMPT_NUDGES[idx]
-    if nudge is None:
-        # Status-aware, fall back to first nudge
-        nudge = _status_nudge() or _PROMPT_NUDGES[0]
-    return nudge
+    return _lifecycle_nudge("prompt")
 
 
 def get_tool_nudge(count: int) -> str:
     """Get the nudge text for a PostToolUse nudge."""
-    idx = (count // _nudge_interval()) % len(_TOOL_NUDGES)
-    nudge = _TOOL_NUDGES[idx]
-    if nudge is None:
-        # Status-aware, fall back to first nudge
-        nudge = _status_nudge() or _TOOL_NUDGES[0]
-    return nudge
+    return _lifecycle_nudge("tool")
+
+
+def get_stop_nudge(count: int) -> str:
+    """Get the nudge text for a Stop hook nudge."""
+    return _lifecycle_nudge("stop")
+
+
+def _stop_nudge_interval() -> int:
+    """Interval between stop nudges. Default 8, configurable via HIVE_STOP_NUDGE_INTERVAL."""
+    return max(1, int(os.environ.get("HIVE_STOP_NUDGE_INTERVAL", "8")))
 
 
 def build_nudge_output(context: str, event_name: str = "PostToolUse") -> str:

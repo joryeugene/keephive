@@ -10,6 +10,28 @@
 
 A knowledge sidecar for Claude Code. It captures what you learn, verifies it stays true, and surfaces it when relevant.
 
+## TLDR
+
+1. **Install**: `curl -fsSL https://raw.githubusercontent.com/joryeugene/keephive/main/install.sh | bash`
+2. **Use Claude Code normally.** Seven hooks run automatically: they capture what you learn, inject it next session, and flag when facts go stale.
+3. **Look around**: `hive status` (`h s`), `hive log` (`h l`), `hive todo`
+4. **Visual overview**: `hive serve` (`h ws`) opens a browser dashboard at localhost:3847
+5. **Periodic cleanup**: `hive verify` (`h v`), `hive reflect` (`h rf`), `hive audit` (`h a`)
+
+Everything else on this page is optional depth.
+
+> [!TIP]
+> **Shortcuts everywhere.** Three CLI names: `keephive`, `hive`, `h`. Every command
+> has a short alias (`h s`, `h r`, `h rc`, `h v`, `h rf`, `h a`). Guides and
+> prompts resolve by slug, prefix, or substring:
+> ```
+> h p pr-re        →  pr-review-git-staged-diff-analysis.md
+> h k agent        →  agent-principles.md
+> h n code-review  →  starts note from code-review prompt template
+> h go pr-re       →  launches session with pr-review prompt loaded
+> ```
+> You never type a full name. Two keystrokes for the command, a few more for the target.
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/mascot.png" width="280" />
   <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/keepbee.gif" width="120" alt="keepbee dancing" />
@@ -20,53 +42,6 @@ Claude Code forgets everything between sessions. keephive rides alongside it usi
 <p align="center">
   <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-home.png" width="800" alt="keephive dashboard" />
 </p>
-
----
-
-## Install
-
-```bash
-uv tool install keephive
-keephive setup
-```
-
-Requires [uv](https://docs.astral.sh/uv/). This installs from [PyPI](https://pypi.org/project/keephive/), registers the MCP server, and configures Claude Code hooks.
-
-Via pip:
-
-```bash
-pip install keephive
-keephive setup
-```
-
-From source:
-
-```bash
-git clone https://github.com/joryeugene/keephive.git
-cd keephive && uv tool install . && keephive setup
-```
-
-### Stay up to date
-
-```bash
-hive up                    # upgrade in place (recommended)
-uv tool upgrade keephive   # manual alternative; run keephive setup after
-```
-
-> [!TIP]
-> Run `keephive setup` again after upgrading manually to sync hooks and the MCP server registration to the new binary path.
-
----
-
-## Quick start
-
-```bash
-hive                                               # status at a glance
-hive r "FACT: Auth service uses JWT with RS256"   # remember something
-hive v                                             # verify stale facts
-hive go                                            # launch interactive session
-hive todo                                          # open TODOs
-```
 
 After a few sessions, `hive` shows what your agent has learned:
 
@@ -103,6 +78,91 @@ keephive v0.15.0
 
 ---
 
+## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/joryeugene/keephive/main/install.sh | bash
+```
+
+One command. Installs keephive, registers 7 hooks and an MCP server, and verifies everything. Requires [uv](https://docs.astral.sh/uv/). Run once; re-run after upgrades.
+
+Or install manually:
+
+```bash
+uv tool install keephive
+keephive setup
+```
+
+Via pip:
+
+```bash
+pip install keephive
+keephive setup
+```
+
+From source:
+
+```bash
+git clone https://github.com/joryeugene/keephive.git
+cd keephive && uv tool install . && keephive setup
+```
+
+### Stay up to date
+
+```bash
+hive up                    # upgrade in place (recommended)
+uv tool upgrade keephive   # manual alternative; run keephive setup after
+```
+
+> [!TIP]
+> Run `keephive setup` again after upgrading manually to sync hooks and the MCP server registration to the new binary path.
+
+---
+
+## When to use what
+
+### Every day (bread and butter)
+
+| I want to...                       | Command                                    |
+| ---------------------------------- | ------------------------------------------ |
+| See what's going on                | `hive status` *(hive s)*                   |
+| Save something I learned           | `hive remember "FACT: ..."` *(hive r)*     |
+| Find something from before         | `hive recall <query>` *(hive rc)*          |
+| Track a task                       | `hive todo "fix auth"` *(hive t)*          |
+| Mark a task done                   | `hive todo done "auth"` *(hive td)*        |
+| See today's log                    | `hive log` *(hive l)*                      |
+
+### Visual overview
+
+| I want to...                       | Command                                    |
+| ---------------------------------- | ------------------------------------------ |
+| Browse everything in a browser     | `hive serve`                               |
+| Quick terminal glance              | `hive status` *(hive s)*                   |
+| Watch for changes live             | `hive status --watch`                      |
+| See active sessions                | `hive ps`                                  |
+
+### Weekly maintenance (when things accumulate)
+
+| I want to...                       | Command                                    |
+| ---------------------------------- | ------------------------------------------ |
+| Check if old facts are still true  | `hive verify` *(hive v)*                   |
+| Find patterns in daily logs        | `hive reflect` *(hive rf)*                 |
+| Get a quality assessment           | `hive audit` *(hive a)*                    |
+| Archive old logs                   | `hive gc`                                  |
+
+### Power features (when you need them)
+
+| I want to...                       | Command                                    |
+| ---------------------------------- | ------------------------------------------ |
+| Launch a focused session           | `hive session` *(hive go)*                 |
+| Run a session with a custom prompt | `hive go <prompt>` *(prefix match)*        |
+| Edit memory/rules/todos directly   | `hive edit <target>` *(hive e)*            |
+| Use a multi-slot scratchpad        | `hive note` *(hive n)*                     |
+| Create a knowledge guide           | `hive knowledge edit <name>` *(hive ke)*   |
+| Generate a standup                 | `hive standup` *(hive su)*                 |
+
+---
+
 ## How it works
 
 keephive uses the three extension points Claude Code exposes:
@@ -128,12 +188,15 @@ keephive uses the three extension points Claude Code exposes:
 
 ```mermaid
 flowchart TD
-    subgraph CYCLE["Session Cycle (automatic)"]
+    subgraph CYCLE["Session Cycle (7 hooks)"]
         direction LR
         START([New session]) -->|"SessionStart:<br>inject context"| WORK([Working])
         WORK -->|"PostToolUse · UserPromptSubmit:<br>nudge, ui-queue inject"| WORK
-        WORK -->|context full| PC["PreCompact:<br>extract → log<br>(+ project tag)"]
+        WORK -->|"Stop:<br>turn count, micro-nudge"| WORK
+        WORK -->|"TaskCompleted:<br>auto-log DONE"| WORK
+        WORK -->|context full| PC["PreCompact:<br>extract → log<br>+ pending-facts queue"]
         PC -->|next session| START
+        WORK -->|session ends| SEND["SessionEnd:<br>finalize stats"]
     end
 
     subgraph STORE["Knowledge Store"]
@@ -142,23 +205,31 @@ flowchart TD
         RULES[("Rules")]
         LOG[("Daily log")]
         TODOS[("TODOs")]
+        PENDING[(".pending-facts")]
     end
 
     subgraph MANUAL["On-demand (CLI · MCP)"]
         REM["hive r · capture"]
         RCL["hive rc · recall"]
         VRF["hive v · verify"]
+        REV["hive mem review"]
+        RFL["hive rf · reflect"]
         DASH["hive serve · dashboard<br>+ bookmarklet"]
     end
 
     START -->|reads| STORE
     PC --> LOG
+    PC --> PENDING
     LOG -->|"hive rf · promote"| MEM
+    PENDING -->|"hive mem review"| MEM
     MEM -->|"hive v · re-stamp"| MEM
     REM --> LOG
     RCL -.->|searches| STORE
     VRF --> MEM
+    REV --> MEM
+    RFL --> GUIDES
     DASH -.->|reads| STORE
+    SEND -.->|".stats.json"| STORE
 ```
 
 ### Memory tiers
@@ -178,7 +249,10 @@ flowchart TD
 | SessionStart     | New session           | Injects memory, rules, TODOs, stale warnings           |
 | PreCompact       | Conversation compacts | Extracts insights from transcript, writes to daily log with project attribution |
 | PostToolUse      | After Edit/Write      | Periodic nudge to record decisions                     |
-| UserPromptSubmit | User sends prompt     | Periodic nudge to record decisions                     |
+| UserPromptSubmit | User sends prompt     | Periodic nudge, UI queue injection                     |
+| Stop             | Agent turn ends       | Increments turn counter, periodic micro-nudge          |
+| SessionEnd       | Session terminates    | Finalizes session stats with accurate end timestamp    |
+| TaskCompleted    | Task marked done      | Auto-logs DONE entry to daily log                      |
 
 ---
 
@@ -292,7 +366,7 @@ Guides without front matter match only by filename (project name as substring). 
 
 #### Sessions
 
-`hive go` launches an interactive Claude session with your full keephive context pre-loaded.
+`hive go` launches an interactive Claude session with your full keephive context pre-loaded (memory, rules, TODOs, stale warnings, matching guides). The SessionStart hook detects the launch and skips re-injection to avoid duplication.
 
 | Command                 | What                                           |
 | ----------------------- | ---------------------------------------------- |
@@ -302,6 +376,8 @@ Guides without front matter match only by filename (project name as substring). 
 | `hive session learn`    | Active recall quiz on recent decisions         |
 | `hive session reflect`  | Pattern discovery from daily logs              |
 | `hive session <prompt>` | Load a custom prompt from `knowledge/prompts/` |
+
+Custom prompts resolve by prefix, so `hive go pr-re` finds `pr-review-git-staged-diff-analysis.md`. You can also pipe content in: `cat api-spec.yaml | hive go review`. Pass `-c` to continue the last conversation or `-r <id>` to resume a specific session.
 
 #### Reflect
 
@@ -388,7 +464,7 @@ Hooks (PreCompact, etc.) run without the `CLAUDECODE` environment variable, so t
 
 ### Free commands (no LLM)
 
-`hive r`, `hive rc`, `hive s`, `hive todo`, `hive t`, `hive m`, `hive rule`, `hive e`, `hive n`, `hive k`, `hive p`, `hive st`, `hive l` (without `summarize`), `hive gc`, `hive sk`, and all hooks except PreCompact.
+`hive r`, `hive rc`, `hive s`, `hive todo`, `hive t`, `hive m`, `hive rule`, `hive e`, `hive n`, `hive k`, `hive p`, `hive st`, `hive l` (without `summarize`), `hive gc`, `hive sk`, and all hooks except PreCompact (SessionStart, PostToolUse, UserPromptSubmit, Stop, SessionEnd, TaskCompleted).
 
 ### Disable automatic LLM calls
 

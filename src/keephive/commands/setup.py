@@ -309,6 +309,48 @@ def _setup_hooks(settings_path: Path | None = None) -> None:
     else:
         console.print("  [dim]UserPromptSubmit hook already configured[/dim]")
 
+    # Stop hook (turn counter + micro-nudge)
+    stop_hooks = hooks.setdefault("Stop", [])
+    stop_cmd = f"{keephive_bin} hook-stop"
+    if not any("keephive hook-stop" in _extract_cmds(h) for h in stop_hooks):
+        stop_hooks.append(
+            {
+                "matcher": "*",
+                "hooks": [{"type": "command", "command": stop_cmd}],
+            }
+        )
+        console.print("  [ok]OK[/ok] Stop hook added")
+    else:
+        console.print("  [dim]Stop hook already configured[/dim]")
+
+    # SessionEnd hook (finalize session stats)
+    se_hooks = hooks.setdefault("SessionEnd", [])
+    se_cmd = f"{keephive_bin} hook-sessionend"
+    if not any("keephive hook-sessionend" in _extract_cmds(h) for h in se_hooks):
+        se_hooks.append(
+            {
+                "matcher": "*",
+                "hooks": [{"type": "command", "command": se_cmd}],
+            }
+        )
+        console.print("  [ok]OK[/ok] SessionEnd hook added")
+    else:
+        console.print("  [dim]SessionEnd hook already configured[/dim]")
+
+    # TaskCompleted hook (auto-log DONE to daily log)
+    tc_hooks = hooks.setdefault("TaskCompleted", [])
+    tc_cmd = f"{keephive_bin} hook-taskcompleted"
+    if not any("keephive hook-taskcompleted" in _extract_cmds(h) for h in tc_hooks):
+        tc_hooks.append(
+            {
+                "matcher": "*",
+                "hooks": [{"type": "command", "command": tc_cmd}],
+            }
+        )
+        console.print("  [ok]OK[/ok] TaskCompleted hook added")
+    else:
+        console.print("  [dim]TaskCompleted hook already configured[/dim]")
+
     # Write back
     settings_path.write_text(json.dumps(data, indent=2) + "\n")
 
@@ -406,7 +448,15 @@ def _uninstall() -> None:
             data = json.loads(settings_path.read_text())
             hooks = data.get("hooks", {})
 
-            for event in ["SessionStart", "PreCompact", "PostToolUse", "UserPromptSubmit"]:
+            for event in [
+                "SessionStart",
+                "PreCompact",
+                "PostToolUse",
+                "UserPromptSubmit",
+                "Stop",
+                "SessionEnd",
+                "TaskCompleted",
+            ]:
                 if event in hooks:
                     cleaned = []
                     for h in hooks[event]:

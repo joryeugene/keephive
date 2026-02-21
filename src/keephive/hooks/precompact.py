@@ -23,6 +23,7 @@ from keephive.storage import (
     ensure_daily,
     hive_dir,
     memory_file,
+    open_todos,
     read_memory,
     safe_read_text,
 )
@@ -282,7 +283,7 @@ def _is_duplicate_insight(daily_path: Path, text: str) -> bool:
             elif norm_text == norm_existing:
                 return True
             # Fall through to fuzzy match
-            if SequenceMatcher(None, norm_text, norm_existing).ratio() > 0.7:
+            if SequenceMatcher(None, norm_text, norm_existing).ratio() > 0.8:
                 return True
     return False
 
@@ -311,11 +312,46 @@ def _is_garbage_insight(text: str) -> bool:
     return False
 
 
+# Common false-TODO patterns from LLM narration of in-progress work
+_FALSE_TODO_PATTERNS = [
+    r"^(?:continue|keep|still need to|should also|could also|might want to)",
+    r"^(?:remaining work|incomplete|in progress|not yet)",
+    r"(?:was being|is being|are being)\s+(?:implemented|worked on|developed)",
+]
+
+
+def _is_speculative_todo(text: str) -> bool:
+    """Detect TODOs that describe in-progress work, not user-requested action."""
+    lower = text.lower().strip()
+    return any(re.search(p, lower) for p in _FALSE_TODO_PATTERNS)
+
+
+def _match_open_todo(candidate: str, open_texts: list[str]) -> str | None:
+    """Match an LLM-returned completed TODO against the actual open TODO list.
+
+    Returns the exact open TODO text on match, or None if the candidate
+    doesn't correspond to any real TODO. Uses fuzzy matching (0.8 threshold)
+    because LLMs often paraphrase rather than returning exact text.
+    """
+    from difflib import SequenceMatcher
+
+    candidate_lower = candidate.strip().lower()
+    if not candidate_lower:
+        return None
+    for todo_text in open_texts:
+        todo_lower = todo_text.strip().lower()
+        if candidate_lower == todo_lower:
+            return todo_text
+        if SequenceMatcher(None, candidate_lower, todo_lower).ratio() >= 0.8:
+            return todo_text
+    return None
+
+
 def _llm_summary(excerpts: str, pipe_fn=None, project_name: str = "") -> None:
     """Layer 2: LLM summary via claude -p."""
     try:
         from keephive.claude import run_claude_pipe
-        from keephive.models import PreCompactResponse
+        from keephive.models import InsightCategory, PreCompactResponse
 
         fn = pipe_fn or run_claude_pipe
 
@@ -342,6 +378,21 @@ Memory update rules:
 - Max 3 updates per response
 - Be highly selective: only facts useful in future sessions"""
 
+        # Build open TODOs block for auto-close detection
+        todos = open_todos()
+        todo_block = ""
+        if todos:
+            todo_lines = [f"- {text}" for _, _, text in todos[:10]]
+            todo_block = f"""
+
+<open_todos>
+{chr(10).join(todo_lines)}
+</open_todos>
+
+If any of these TODOs were clearly resolved or completed in this conversation,
+include them in the completed_todos array (exact text from the list above).
+Only include a TODO if the conversation shows it was actually done, not just discussed."""
+
         prompt = f"""You are analyzing excerpts from a Claude Code conversation that is about to be compacted.
 Extract the IMPORTANT content, not everything, just what's worth remembering.
 
@@ -352,7 +403,11 @@ Categories:
 - DECISION: choices made about architecture, tools, approach
 - FACT: something learned that was previously unknown
 - CORRECTION: something that was wrong and got fixed
-- TODO: unfinished work or follow-up items
+- TODO: action items the USER explicitly requested or acknowledged as needed.
+  Only classify as TODO when the human said something needs doing.
+  Do NOT classify as TODO: Claude's observations about incomplete work,
+  in-progress tasks being actively worked on, or general "could also do X" suggestions.
+  When in doubt, use FACT instead of TODO.
 - INSIGHT: non-obvious observations or patterns
 
 Prioritize [USER] lines over assistant narration. User decisions, corrections, and complaints always outrank assistant observations.
@@ -362,11 +417,24 @@ IMPORTANT: NEVER include API keys, tokens, secrets, passwords, or credentials in
 
 Extract 2-7 insights. If nothing is worth remembering, return an empty insights array.
 
-Optionally include rule_suggestions (max 2, empty list if none): short imperative behavioral rules like "Always use uv for Python package management" only if a consistent behavioral preference appears 3+ times in this transcript and is NOT a one-off decision. Leave empty if nothing qualifies.{memory_block}"""
+Optionally include rule_suggestions (max 2, empty list if none): short imperative behavioral rules like "Always use uv for Python package management" only if a consistent behavioral preference appears 3+ times in this transcript and is NOT a one-off decision. Leave empty if nothing qualifies.{memory_block}{todo_block}"""
 
         response = fn(prompt, PreCompactResponse, stdin_text=excerpts)
 
         if response.insights:
+            # Cap TODOs at 2 per compaction; demote extras to FACT.
+            # Also demote speculative TODOs that describe in-progress work.
+            todo_count = 0
+            for insight in response.insights:
+                if insight.category == InsightCategory.TODO:
+                    desc = insight.description.strip()
+                    if _is_speculative_todo(desc):
+                        insight.category = InsightCategory.FACT
+                    else:
+                        todo_count += 1
+                        if todo_count > 2:
+                            insight.category = InsightCategory.FACT
+
             df = daily_file()
             written = 0
             for insight in response.insights:
@@ -386,6 +454,16 @@ Optionally include rule_suggestions (max 2, empty list if none): short imperativ
                         f"[{get_now().isoformat(timespec='seconds')}] "
                         f"Layer 2: wrote {written} insight(s) to daily log\n"
                     )
+
+        # Auto-close TODOs that were resolved in this conversation.
+        # Validate each against actual open TODOs (LLMs may hallucinate text).
+        if response.completed_todos:
+            open_todo_texts = [text for _, _, text in open_todos()]
+            for todo_text in response.completed_todos:
+                matched = _match_open_todo(todo_text, open_todo_texts)
+                if matched:
+                    ts = get_now().strftime("%H:%M:%S")
+                    append_to_daily(f"- [{ts}] DONE: {matched}")
 
         # Apply memory updates (auto-promote / auto-correct)
         if response.memory_updates:

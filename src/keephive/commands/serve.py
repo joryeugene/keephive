@@ -1273,6 +1273,32 @@ def _safe_call(fn, *args, **kwargs):
         return None
 
 
+def _compute_tool_trends(sessions: list[dict], week_start: str, prev_week_start: str) -> dict[str, str]:
+    """Compute week-over-week tool usage trend arrows from session data.
+
+    Returns {tool_name: "▲N%" or "▼N%"} for tools with >= 2% change.
+    """
+    tools_this_wk: dict[str, int] = {}
+    tools_prev_wk: dict[str, int] = {}
+    for s in sessions:
+        day = s.get("day", "")
+        for tool, count in s.get("tools", {}).items():
+            if day >= week_start:
+                tools_this_wk[tool] = tools_this_wk.get(tool, 0) + count
+            elif day >= prev_week_start:
+                tools_prev_wk[tool] = tools_prev_wk.get(tool, 0) + count
+    total_this = sum(tools_this_wk.values()) or 1
+    total_prev = sum(tools_prev_wk.values()) or 1
+    trends: dict[str, str] = {}
+    for tool in tools_this_wk:
+        t_pct = int(tools_this_wk[tool] / total_this * 100)
+        p_pct = int(tools_prev_wk.get(tool, 0) / total_prev * 100)
+        delta = t_pct - p_pct
+        if abs(delta) >= 2:
+            trends[tool] = f"\u25b2{delta}%" if delta > 0 else f"\u25bc{abs(delta)}%"
+    return trends
+
+
 def _get_status_data() -> dict:
     import re as re_mod
 
@@ -1551,11 +1577,26 @@ def _get_stats_data() -> dict:
     today_hours: dict[str, int] = today_day.get("hours", {})
 
     # Tool breakdown from session metrics (for What You Use panel)
-    from keephive.storage import count_log_entries_with_prefix, session_metrics
+    from keephive.storage import count_log_entries_with_prefix, read_sessions, session_metrics
 
     sm = _safe_call(session_metrics, days_back=30) or {}
     tool_totals = sm.get("tool_totals", {}) if isinstance(sm, dict) else {}
     tool_pct = sm.get("tool_pct", {}) if isinstance(sm, dict) else {}
+
+    # Tool trend arrows (week-over-week)
+    sessions = _safe_call(read_sessions, days_back=14) or []
+    prev_week_start = (get_today() - timedelta(days=13)).isoformat()
+    tool_trends = _compute_tool_trends(sessions, week_start, prev_week_start)
+
+    # Per-day top commands for sparkline tooltips
+    daily_spark_cmds: dict[str, list[tuple[str, int]]] = {}
+    for spark_item in daily_spark:
+        iso_d = spark_item[2] if len(spark_item) >= 3 else ""
+        if iso_d:
+            day_cmds = days.get(iso_d, {}).get("commands", {})
+            if day_cmds:
+                top_3 = sorted(day_cmds.items(), key=lambda x: -x[1])[:3]
+                daily_spark_cmds[iso_d] = top_3
 
     # Quality KPIs (output metrics for Activity panel)
     insights = _safe_call(count_log_entries_with_prefix, "INSIGHT:", 90) or 0
@@ -1573,9 +1614,11 @@ def _get_stats_data() -> dict:
         "curr_streak": curr_streak,
         "longest_streak": longest_streak,
         "daily_spark": daily_spark,
+        "daily_spark_cmds": daily_spark_cmds,
         "today_hours": today_hours,
         "tool_totals": tool_totals,
         "tool_pct": tool_pct,
+        "tool_trends": tool_trends,
         "insights": insights,
         "decisions": decisions,
         "corrections": corrections,
@@ -2295,6 +2338,7 @@ def _render_stats_panel(data: dict) -> str:
     curr_streak = data.get("curr_streak", 0)
     longest_streak = data.get("longest_streak", 0)
     daily_spark = data.get("daily_spark", [])
+    daily_spark_cmds = data.get("daily_spark_cmds", {})
     today_hours = data.get("today_hours", {})
 
     sparkline_html = ""
@@ -2347,7 +2391,13 @@ def _render_stats_panel(data: dict) -> str:
                 else:
                     extra_bg = ";background:#161b22"
 
-            bars += f'<div class="spark-bar{cls}" style="height:{h}px{extra_bg}" title="{_e(label)}: {count} cmds"></div>'
+            # Enrich tooltip with top commands for that day
+            spark_title = f"{_e(label)}: {count} cmds"
+            if iso_date and iso_date in daily_spark_cmds:
+                top_cmds = daily_spark_cmds[iso_date]
+                cmd_summary = ", ".join(f"{_e(c)}:{n}" for c, n in top_cmds)
+                spark_title += f" ({cmd_summary})"
+            bars += f'<div class="spark-bar{cls}" style="height:{h}px{extra_bg}" title="{spark_title}"></div>'
 
             wk_cls = ' class="weekend"' if is_weekend else ""
             labels += f"<span{wk_cls}>{dow_letter}</span>"
@@ -2411,6 +2461,7 @@ def _render_stats_commands_panel(data: dict) -> str:
     week_map = data.get("week", {})
     tool_totals = data.get("tool_totals", {})
     tool_pct = data.get("tool_pct", {})
+    tool_trends = data.get("tool_trends", {})
 
     rows = ""
     if commands:
@@ -2441,13 +2492,24 @@ def _render_stats_commands_panel(data: dict) -> str:
         for tool, count in sorted_tools:
             pct = int(tool_pct.get(tool, 0) * 100)
             bar_w = max(2, round(count / max_tool * 100))
+            trend_str = tool_trends.get(tool, "")
+            trend_html = ""
+            if trend_str:
+                # Determine trend color: green for up, red for down
+                trend_color = "#3fb950" if "\u25b2" in trend_str else "#f85149"
+                trend_html = (
+                    f' <span style="font-size:10px;color:{trend_color}">{_e(trend_str)}</span>'
+                )
+            tool_title = f"{_e(tool)}: {count} uses ({pct}% of total)"
+            if trend_str:
+                tool_title += f", {_e(trend_str)} vs last week"
             tool_rows += (
-                f'<div style="display:flex;align-items:center;gap:8px;margin:2px 0">'
+                f'<div style="display:flex;align-items:center;gap:8px;margin:2px 0" title="{tool_title}">'
                 f'<span style="width:50px;text-align:right;color:#8b949e;font-size:12px">{_e(tool)}</span>'
                 f'<div style="flex:1;background:#161b22;border-radius:2px;height:14px">'
                 f'<div style="width:{bar_w}%;background:#238636;border-radius:2px;height:100%"></div>'
                 f"</div>"
-                f'<span style="width:35px;text-align:right;font-size:12px;color:#8b949e">{pct}%</span>'
+                f'<span style="width:35px;text-align:right;font-size:12px;color:#8b949e">{pct}%{trend_html}</span>'
                 f"</div>"
             )
         tools_html = f'<div style="margin-top:12px"><div style="font-size:11px;color:#484f58;margin-bottom:4px">Tool usage (from sessions)</div>{tool_rows}</div>'
@@ -2689,6 +2751,9 @@ def _render_knowledge_tabbed_panel(data: dict) -> str:
 
 def _get_session_data() -> dict:
     """Session metrics for the sessions panel: histogram + session list."""
+    from datetime import timedelta
+
+    from keephive.clock import get_today
     from keephive.storage import (
         read_sessions,
         session_metrics,
@@ -2714,6 +2779,12 @@ def _get_session_data() -> dict:
         else:
             buckets["51+"] += 1
 
+    # Prompts today and this week
+    today_str = get_today().isoformat()
+    week_ago = (get_today() - timedelta(days=7)).isoformat()
+    prompts_today = sum(s.get("prompts", 0) for s in sessions if s.get("day") == today_str)
+    prompts_week = sum(s.get("prompts", 0) for s in sessions if s.get("day", "") >= week_ago)
+
     # Recent sessions (most recent first, limit 20)
     recent = sorted(sessions, key=lambda x: x.get("started", ""), reverse=True)[:20]
 
@@ -2732,6 +2803,10 @@ def _get_session_data() -> dict:
         else:
             medium += 1
 
+    # Tool distribution with week-over-week trends
+    prev_week_start = (get_today() - timedelta(days=13)).isoformat()
+    tool_trends = _compute_tool_trends(sessions, week_ago, prev_week_start)
+
     return {
         **sm,
         "buckets": buckets,
@@ -2739,6 +2814,9 @@ def _get_session_data() -> dict:
         "depth_shallow": shallow,
         "depth_medium": medium,
         "depth_deep": deep,
+        "prompts_today": prompts_today,
+        "prompts_week": prompts_week,
+        "tool_trends": tool_trends,
     }
 
 
@@ -2746,8 +2824,11 @@ def _render_sessions_panel(data: dict) -> str:
     """Sessions panel: compact header stats, histogram, session list."""
     total = data.get("total_sessions", 0)
     avg_prompts = data.get("avg_prompts_per_session", 0)
+    median_prompts = data.get("median_prompts_per_session", 0)
     avg_dur = data.get("avg_duration_minutes", 0)
     compaction_rate = data.get("compaction_rate", 0)
+    prompts_today = data.get("prompts_today", 0)
+    prompts_week = data.get("prompts_week", 0)
     buckets = data.get("buckets", {})
     recent = data.get("recent", [])
 
@@ -2769,14 +2850,31 @@ def _render_sessions_panel(data: dict) -> str:
     depth_html = ""
     if d_shallow + d_medium + d_deep > 0:
         depth_html = (
-            f'<div class="stat-item"><span class="stat-value">{d_deep}</span><span class="stat-label">deep sessions</span></div>'
-            f'<div class="stat-item"><span class="stat-value">{d_medium}</span><span class="stat-label">medium sessions</span></div>'
-            f'<div class="stat-item"><span class="stat-value">{d_shallow}</span><span class="stat-label">brief sessions</span></div>'
+            f'<div class="stat-item" title="Sessions with 40+ prompts, 4+ tools, and compacted"><span class="stat-value">{d_deep}</span><span class="stat-label">deep sessions</span></div>'
+            f'<div class="stat-item" title="Sessions with 20+ prompts or 3+ tools"><span class="stat-value">{d_medium}</span><span class="stat-label">medium sessions</span></div>'
+            f'<div class="stat-item" title="Sessions with fewer than 20 prompts and 2 or fewer tools"><span class="stat-value">{d_shallow}</span><span class="stat-label">brief sessions</span></div>'
         )
+
+    # Median prompts display
+    median_html = (
+        f' <span style="color:#484f58;font-size:11px">[{median_prompts:.0f} median]</span>'
+        if median_prompts > 0
+        else ""
+    )
+
+    # Prompts today/week stats
+    prompts_period_html = ""
+    if prompts_today > 0 or prompts_week > 0:
+        prompts_period_html = (
+            f'<div class="stat-item"><span class="stat-value">{prompts_today}</span><span class="stat-label">prompts today</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{prompts_week}</span><span class="stat-label">prompts this week</span></div>'
+        )
+
     header_stats = (
         f'<div class="stat-row" style="margin-bottom:8px">'
-        f'<div class="stat-item"><span class="stat-value">{avg_prompts:.0f}</span><span class="stat-label">avg prompts/session</span></div>'
+        f'<div class="stat-item"><span class="stat-value">{avg_prompts:.0f}{median_html}</span><span class="stat-label">avg prompts/session</span></div>'
         f'<div class="stat-item"><span class="stat-value">{avg_dur:.0f}m</span><span class="stat-label">avg session length</span></div>'
+        f"{prompts_period_html}"
         f"{depth_html}"
         f"</div>"
     )
@@ -2814,8 +2912,20 @@ def _render_sessions_panel(data: dict) -> str:
             tool_str = ", ".join(
                 f"{t}:{c}" for t, c in sorted(tools.items(), key=lambda x: -x[1])[:3]
             )
+            # Depth classification for tooltip
+            unique_tools = len(tools)
+            compacted = s.get("compacted", False)
+            if prompts >= 40 and unique_tools >= 4 and compacted:
+                depth_label = "deep"
+            elif prompts < 20 and unique_tools <= 2:
+                depth_label = "shallow"
+            else:
+                depth_label = "medium"
+            depth_title = f"{depth_label} session: {prompts} prompts, {unique_tools} tools"
+            if compacted:
+                depth_title += ", compacted"
             items += (
-                f'<div class="session-item" tabindex="0">'
+                f'<div class="session-item" tabindex="0" title="{_e(depth_title)}">'
                 f'<span class="session-time">{_e(time_str)}</span>'
                 f'<span class="session-prompts" title="prompts">{prompts}p</span>'
                 f'<span class="session-proj">{_e(proj)}</span>'
@@ -3169,22 +3279,93 @@ def _render_pulse_panel(data: dict) -> str:
         delta_html = f' <span style="color:#f85149">&#9660;{abs(delta)}</span>'
 
     kpis = [
-        (f"{health.get('fresh_pct', 0):.0f}%", "fresh"),
-        (f"{health.get('capture_recall_ratio', 0):.0f}%", "recall"),
-        (f"{health.get('fact_survival_rate', 0):.0f}%", "survival"),
-        (f"{sess.get('avg_prompts_per_convo', 0):.0f}", "prompts/convo"),
-        (f"{sess.get('convos_week', 0)}", "conversations"),
-        (f"{streak}d", "day streak"),
+        (
+            f"{health.get('fresh_pct', 0):.0f}%",
+            "fresh",
+            "Memory freshness: percentage of facts less than 14 days old",
+        ),
+        (
+            f"{health.get('capture_recall_ratio', 0):.0f}%",
+            "recall",
+            "Capture-recall ratio: how often stored facts are retrieved",
+        ),
+        (
+            f"{health.get('fact_survival_rate', 0):.0f}%",
+            "survival",
+            "Fact survival rate: percentage of facts not corrected or removed",
+        ),
+        (
+            f"{sess.get('avg_prompts_per_convo', 0):.0f}",
+            "prompts/convo",
+            "Average number of prompts per conversation (30-day window)",
+        ),
+        (f"{sess.get('convos_week', 0)}", "conversations", "Total conversations this week"),
+        (f"{streak}d", "day streak", "Consecutive days with at least one hive command"),
     ]
 
     kpi_html = ""
-    for val, label in kpis:
+    for val, label, tooltip in kpis:
         kpi_html += (
-            f'<div class="pulse-kpi">'
+            f'<div class="pulse-kpi" title="{_e(tooltip)}">'
             f'<span class="pulse-kpi-val">{val}</span>'
             f'<span class="pulse-kpi-label">{label}</span>'
             f"</div>"
         )
+
+    # Component breakdown (expandable details)
+    components = pulse.get("components", {})
+    comp_defs = [
+        (
+            "freshness",
+            "Freshness",
+            "#3fb950",
+            "Memory freshness: % of facts under 14 days old (25% weight)",
+        ),
+        ("recall", "Recall", "#58a6ff", "Capture-recall ratio: recalls vs. captures (20% weight)"),
+        (
+            "depth",
+            "Depth",
+            "#a371f7",
+            "Session depth: weighted quality of session engagement (20% weight)",
+        ),
+        (
+            "todo_rate",
+            "TODO",
+            "#e3b341",
+            "TODO completion rate: done / (open + done) in last 7 days (15% weight)",
+        ),
+        (
+            "verify",
+            "Verify",
+            "#d2a8ff",
+            "Verification cadence: recency of last verify run (10% weight)",
+        ),
+        (
+            "streak",
+            "Streak",
+            "#39d353",
+            "Usage streak: consecutive active days, capped at 7 (10% weight)",
+        ),
+    ]
+    comp_bars = ""
+    for key, label, color, tooltip in comp_defs:
+        pct = components.get(key, 0)
+        clamped = max(0, min(100, pct))
+        comp_bars += (
+            f'<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px" title="{_e(tooltip)}">'
+            f'<span style="font-size:10px;color:#8b949e;width:65px;text-align:right">{label}</span>'
+            f'<div style="flex:1;height:4px;border-radius:2px;background:#21262d">'
+            f'<div style="width:{clamped}%;height:100%;border-radius:2px;background:{color}"></div></div>'
+            f'<span style="font-size:10px;color:#8b949e;width:32px">{pct}%</span>'
+            f"</div>"
+        )
+    comp_details = (
+        f'<details style="margin-top:10px;text-align:left">'
+        f'<summary style="font-size:11px;color:#484f58;cursor:pointer;text-align:center;list-style:none">'
+        f'<span style="border-bottom:1px dotted #484f58">Component Breakdown</span></summary>'
+        f'<div style="margin-top:8px;padding:0 16px">{comp_bars}</div>'
+        f"</details>"
+    )
 
     return (
         f'<div class="card pulse-hero" tabindex="0" role="region" aria-label="Pulse">'
@@ -3192,6 +3373,7 @@ def _render_pulse_panel(data: dict) -> str:
         f'<div style="font-size:11px;color:#484f58;text-transform:uppercase;letter-spacing:1px">Productivity Pulse</div>'
         f'<div style="font-size:36px;font-weight:700;color:#e6edf3;margin:4px 0">{score}<span style="font-size:16px;color:#484f58">/100</span>{delta_html}</div>'
         f'<div style="display:flex;justify-content:center;gap:16px;margin-top:8px">{kpi_html}</div>'
+        f"{comp_details}"
         f"</div></div>"
     )
 

@@ -419,7 +419,7 @@ class TestFullHookChain:
 
         session_id = "e2e-hook-chain-test"
 
-        # First call (count=1): should be silent (default interval 8)
+        # First call (count=1): should be silent (default interval 5)
         input_json = json.dumps({"session_id": session_id, "tool_name": "Edit"})
         old_stdin, old_stdout = sys.stdin, sys.stdout
         sys.stdin = io.StringIO(input_json)
@@ -431,10 +431,9 @@ class TestFullHookChain:
 
         assert captured.getvalue() == "", "First call should be silent"
 
-        # Set counter to 7 so next call (count=8) fires at default interval 8.
-        # Use slot 0 (count=24 -> slot=(24//8)%3=0) to avoid status-aware slot.
+        # Set counter to 4 so next call (count=5) fires at default interval 5.
         counter_file = hive_env / ".tool-counter"
-        counter_file.write_text(json.dumps({"count": 23, "session_id": session_id}))
+        counter_file.write_text(json.dumps({"count": 4, "session_id": session_id}))
 
         sys.stdin = io.StringIO(json.dumps({"session_id": session_id, "tool_name": "Write"}))
         sys.stdout = captured2 = io.StringIO()
@@ -444,9 +443,9 @@ class TestFullHookChain:
             sys.stdin, sys.stdout = old_stdin, old_stdout
 
         output = captured2.getvalue()
-        assert output, "24th call should produce nudge"
+        assert output, "5th call should produce nudge"
         data = json.loads(output)
-        assert "hive_remember" in data["hookSpecificOutput"]["additionalContext"]
+        assert "additionalContext" in data["hookSpecificOutput"]
 
     def test_sessionstart_includes_stale_warnings(self, hive_env):
         from keephive.hooks.sessionstart import build_context

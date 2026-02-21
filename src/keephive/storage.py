@@ -1486,6 +1486,7 @@ def track_session_event(
     event: str,
     project: str = "",
     tool_name: str = "",
+    reason: str = "",
 ) -> None:
     """Track a session lifecycle event in daily stats.
 
@@ -1493,9 +1494,10 @@ def track_session_event(
 
     Args:
         session_id: Claude Code session identifier.
-        event: One of "start", "prompt", "tool", "compact".
+        event: One of "start", "prompt", "tool", "compact", "stop", "end".
         project: Full cwd path (normalized to ~ prefix).
         tool_name: Tool name for "tool" events (Edit, Write, etc.).
+        reason: End reason for "end" events (e.g. "user_exit", "timeout").
     """
     if not session_id:
         return
@@ -1534,6 +1536,12 @@ def track_session_event(
             session["tools"][tool_name] = session["tools"].get(tool_name, 0) + 1
         elif event == "compact":
             session["compacted"] = True
+        elif event == "stop":
+            session["turns"] = session.get("turns", 0) + 1
+        elif event == "end":
+            session["ended"] = now
+            if reason:
+                session["end_reason"] = reason
 
         _write_stats(data)
     except Exception as exc:
@@ -1559,16 +1567,43 @@ def read_sessions(days_back: int = 30) -> list[dict]:
     return result
 
 
+def is_ghost_session(s: dict) -> bool:
+    """Detect ghost sessions: IDE restart artifacts with no real activity.
+
+    Ghost sessions have 0 prompts, 0 tools, were not compacted,
+    have no turns, and lasted under 5 seconds.
+    """
+    if s.get("prompts", 0) > 0 or len(s.get("tools", {})) > 0:
+        return False
+    if s.get("compacted") or s.get("turns", 0) > 0:
+        return False
+    started = s.get("started", "")
+    end_ts = s.get("ended", s.get("last_seen", ""))
+    if started and end_ts:
+        try:
+            t0 = datetime.fromisoformat(started)
+            t1 = datetime.fromisoformat(end_ts)
+            return (t1 - t0).total_seconds() < 5
+        except ValueError:
+            pass
+    return False
+
+
 def session_metrics(days_back: int = 30) -> dict:
     """Compute derived session metrics from the last N days.
 
     Returns dict with total_sessions, sessions_today, sessions_this_week,
     avg/median prompts per session, avg duration, tool breakdown,
-    compaction rate, per-project counts, and daily session counts.
+    compaction rate, per-project counts, daily session counts,
+    and turn-based metrics.
+
+    Ghost sessions (0 prompts, 0 tools, <5s) are excluded from averages.
     """
     from statistics import median
 
-    sessions = read_sessions(days_back=days_back)
+    all_sessions = read_sessions(days_back=days_back)
+    # Filter ghost sessions from averages
+    sessions = [s for s in all_sessions if not is_ghost_session(s)]
     today_str = get_today().isoformat()
     week_ago = (get_today() - timedelta(days=7)).isoformat()
 
@@ -1581,15 +1616,23 @@ def session_metrics(days_back: int = 30) -> dict:
     avg_prompts = sum(prompt_counts) / total if total else 0.0
     med_prompts = float(median(prompt_counts)) if prompt_counts else 0.0
 
-    # Duration (minutes)
+    # Turns
+    turn_counts = [s.get("turns", 0) for s in sessions if s.get("turns", 0) > 0]
+    avg_turns = sum(turn_counts) / len(turn_counts) if turn_counts else 0.0
+    med_turns = float(median(turn_counts)) if turn_counts else 0.0
+    prompts_per_turn = (
+        sum(prompt_counts) / sum(turn_counts) if turn_counts and sum(turn_counts) > 0 else 0.0
+    )
+
+    # Duration (minutes) - prefer ended timestamp over last_seen
     durations: list[float] = []
     for s in sessions:
         started = s.get("started", "")
-        last_seen = s.get("last_seen", "")
-        if started and last_seen:
+        end_ts = s.get("ended", s.get("last_seen", ""))
+        if started and end_ts:
             try:
                 t0 = datetime.fromisoformat(started)
-                t1 = datetime.fromisoformat(last_seen)
+                t1 = datetime.fromisoformat(end_ts)
                 mins = (t1 - t0).total_seconds() / 60.0
                 if mins >= 0:
                     durations.append(mins)
@@ -1630,6 +1673,9 @@ def session_metrics(days_back: int = 30) -> dict:
         "sessions_this_week": week_count,
         "avg_prompts_per_session": avg_prompts,
         "median_prompts_per_session": med_prompts,
+        "avg_turns_per_session": avg_turns,
+        "median_turns_per_session": med_turns,
+        "prompts_per_turn": prompts_per_turn,
         "avg_duration_minutes": avg_duration,
         "tool_totals": tool_totals,
         "tool_pct": tool_pct,

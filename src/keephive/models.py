@@ -61,6 +61,7 @@ class PreCompactResponse(BaseModel):
     insights: list[Insight]
     memory_updates: list[MemoryUpdate] = []
     rule_suggestions: list[str] = []  # short imperative rules, max 2
+    completed_todos: list[str] = []  # TODOs resolved in this conversation
 
 
 # ---- Reflect Analyze ----
@@ -95,17 +96,17 @@ class ReflectAnalyzeResponse(BaseModel):
 
 class VaultPerspective(BaseModel):
     analysis: str
-    issues: list[str]
+    issues: list[str] = []
 
 
 class CleanerPerspective(BaseModel):
     analysis: str
-    issues: list[str]
+    issues: list[str] = []
 
 
 class StrategistPerspective(BaseModel):
     analysis: str
-    issues: list[str]
+    issues: list[str] = []
 
 
 class AuditPlay(BaseModel):

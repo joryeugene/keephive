@@ -47,6 +47,25 @@ A knowledge sidecar for Claude Code. Commands work as both `keephive <cmd>` and 
 | `hive prompt <name>`         | `hive p <name>`  | Output prompt to stdout (prefix matching) |
 | `hive prompt edit <name>`    | `hive pe <name>` | Create/edit a prompt                      |
 
+### Sessions
+
+Launch a Claude session with full keephive context pre-loaded.
+
+| Command                        | Short             | What                                      |
+|--------------------------------|-------------------|-------------------------------------------|
+| `hive session`                 | `hive go`         | General session (all context, open prompt) |
+| `hive session todo`            | `hive go todo`    | Triage open TODOs                         |
+| `hive session verify`          | `hive go verify`  | Check stale facts against codebase        |
+| `hive session learn`           | `hive go learn`   | Active recall quiz on recent decisions    |
+| `hive session reflect`         | `hive go reflect` | Pattern discovery from daily logs         |
+| `hive session <prompt>`        | `hive go <prompt>`| Load a custom prompt by name or prefix    |
+
+Prompt names resolve by prefix: `hive go pr-re` finds `pr-review-git-staged-diff-analysis.md` from `knowledge/prompts/`.
+
+Pipe content into a session: `cat spec.yaml | hive go review`
+
+Continue or resume: `hive go -c` (last conversation), `hive go -r <id>` (specific session).
+
 ### Note (Multi-Slot Scratchpad)
 
 | Command                | Shorthand           | What it does                            |

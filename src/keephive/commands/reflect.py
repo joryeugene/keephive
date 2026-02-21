@@ -379,6 +379,9 @@ Rules:
     hd = hive_dir()
     (hd / ".last-analyze.json").write_text(response.model_dump_json(indent=2))
 
+    # Record reflect date for nudge system
+    (hd / ".last-reflect-date").write_text(get_today().isoformat())
+
     # Persist summary to daily log
     ensure_daily()
     ts = get_now().strftime("%H:%M:%S")

@@ -20,7 +20,7 @@ from keephive.storage import (
 )
 
 
-def _render_todo() -> None:
+def _render_todo(*, watch: bool = False) -> None:
     """Render the TODO list display (extracted for watch_loop reuse)."""
     todos = open_todos()
 

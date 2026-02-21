@@ -25,6 +25,7 @@ from keephive.hooks.precompact import (
     _is_duplicate_in_memory,
     _is_duplicate_insight,
     _is_garbage_insight,
+    _is_speculative_todo,
     _llm_summary,
     _normalize_for_dedup,
     _pending_facts_path,
@@ -89,6 +90,7 @@ def _mock_precompact_response(
     insights: list[tuple[str, str]] | None = None,
     memory_updates: list[dict] | None = None,
     rule_suggestions: list[str] | None = None,
+    completed_todos: list[str] | None = None,
 ) -> PreCompactResponse:
     """Build a PreCompactResponse for mocking run_claude_pipe."""
     insight_objs = []
@@ -101,6 +103,7 @@ def _mock_precompact_response(
         insights=insight_objs,
         memory_updates=mem_objs,
         rule_suggestions=rule_suggestions or [],
+        completed_todos=completed_todos or [],
     )
 
 
@@ -1071,3 +1074,208 @@ class TestRedactSecretsEdgeCases:
     def test_empty_string(self):
         """Empty string returns empty string."""
         assert _redact_secrets("") == ""
+
+
+# ---- Speculative TODO filtering (Part 4) ----
+
+
+class TestIsSpeculativeTodo:
+    """Test _is_speculative_todo pattern-based rejection for false TODOs."""
+
+    def test_continue_prefix(self):
+        assert _is_speculative_todo("continue implementing the auth module")
+
+    def test_still_need_to_prefix(self):
+        assert _is_speculative_todo("still need to fix the remaining test failures")
+
+    def test_should_also_prefix(self):
+        assert _is_speculative_todo("should also update the documentation")
+
+    def test_was_being_worked_on(self):
+        assert _is_speculative_todo("The migration was being implemented when the session ended")
+
+    def test_is_being_developed(self):
+        assert _is_speculative_todo("Feature X is being developed in a separate branch")
+
+    def test_remaining_work(self):
+        assert _is_speculative_todo("remaining work on the API endpoints")
+
+    def test_in_progress(self):
+        assert _is_speculative_todo("in progress: refactoring the storage layer")
+
+    def test_real_user_todo_passes(self):
+        """Real user-requested TODOs should NOT be flagged as speculative."""
+        assert not _is_speculative_todo("Add rate limiting to the API endpoints")
+
+    def test_specific_action_passes(self):
+        assert not _is_speculative_todo("Fix the broken import in cli.py")
+
+    def test_user_decision_passes(self):
+        assert not _is_speculative_todo("Switch from REST to GraphQL for internal API")
+
+
+# ---- TODO capping (Part 1) ----
+
+
+class TestTodoCapping:
+    """Test that _llm_summary caps TODOs at 2 per compaction."""
+
+    def test_caps_at_two_todos(self, hive_env):
+        """Third+ TODO insights are demoted to FACT."""
+        response = _mock_precompact_response(
+            insights=[
+                ("TODO", "User asked to fix the login page validation errors"),
+                ("TODO", "User requested adding rate limiting to public endpoints"),
+                ("TODO", "User mentioned needing to update the deployment scripts"),
+                ("FACT", "The database uses PostgreSQL 16 with JSONB column types"),
+            ]
+        )
+
+        def mock_pipe(prompt, model, stdin_text=None):
+            return response
+
+        _llm_summary("some excerpts", pipe_fn=mock_pipe)
+
+        df = daily_file()
+        content = safe_read_text(df)
+        # First two TODOs stay as TODO
+        assert "TODO: User asked to fix the login page" in content
+        assert "TODO: User requested adding rate limiting" in content
+        # Third TODO demoted to FACT
+        assert "FACT: User mentioned needing to update" in content
+        # Regular FACT unaffected
+        assert "FACT: The database uses PostgreSQL 16" in content
+
+    def test_speculative_todos_demoted(self, hive_env):
+        """Speculative TODOs are demoted to FACT before counting."""
+        response = _mock_precompact_response(
+            insights=[
+                ("TODO", "still need to finish the migration script"),
+                ("TODO", "User asked to add input validation to the form"),
+            ]
+        )
+
+        def mock_pipe(prompt, model, stdin_text=None):
+            return response
+
+        _llm_summary("some excerpts", pipe_fn=mock_pipe)
+
+        df = daily_file()
+        content = safe_read_text(df)
+        # Speculative TODO demoted
+        assert "FACT: still need to finish the migration" in content
+        # Real TODO preserved
+        assert "TODO: User asked to add input validation" in content
+
+
+# ---- Auto-close TODOs (Part 2) ----
+
+
+class TestAutoCloseTodos:
+    """Test LLM-powered auto-close of open TODOs via completed_todos field."""
+
+    def test_completed_todos_write_done_entries(self, hive_env):
+        """completed_todos from LLM response write DONE entries to daily log."""
+        from keephive.storage import append_to_daily, ensure_daily
+
+        # Seed a matching open TODO so validation passes
+        ensure_daily()
+        append_to_daily("- [09:00:00] TODO: Fix the broken import in cli.py")
+
+        response = _mock_precompact_response(
+            insights=[("FACT", "Migration completed successfully for all tables")],
+            completed_todos=["Fix the broken import in cli.py"],
+        )
+
+        def mock_pipe(prompt, model, stdin_text=None):
+            return response
+
+        _llm_summary("some excerpts", pipe_fn=mock_pipe)
+
+        df = daily_file()
+        content = safe_read_text(df)
+        assert "DONE: Fix the broken import in cli.py" in content
+
+    def test_empty_completed_todos_no_done(self, hive_env):
+        """Empty completed_todos writes no DONE entries."""
+        response = _mock_precompact_response(
+            insights=[("FACT", "All tests passing after the refactor")],
+            completed_todos=[],
+        )
+
+        def mock_pipe(prompt, model, stdin_text=None):
+            return response
+
+        _llm_summary("some excerpts", pipe_fn=mock_pipe)
+
+        df = daily_file()
+        content = safe_read_text(df)
+        assert "DONE:" not in content
+
+    def test_multiple_completed_todos(self, hive_env):
+        """Multiple completed TODOs each get their own DONE entry."""
+        from keephive.storage import append_to_daily, ensure_daily
+
+        # Seed matching open TODOs so validation passes
+        ensure_daily()
+        append_to_daily("- [09:00:00] TODO: Add rate limiting to the API")
+        append_to_daily("- [09:00:00] TODO: Fix broken tests in test_auth.py")
+
+        response = _mock_precompact_response(
+            insights=[],
+            completed_todos=[
+                "Add rate limiting to the API",
+                "Fix broken tests in test_auth.py",
+            ],
+        )
+
+        def mock_pipe(prompt, model, stdin_text=None):
+            return response
+
+        _llm_summary("some excerpts", pipe_fn=mock_pipe)
+
+        df = daily_file()
+        content = safe_read_text(df)
+        assert "DONE: Add rate limiting to the API" in content
+        assert "DONE: Fix broken tests in test_auth.py" in content
+
+    def test_hallucinated_completed_todo_rejected(self, hive_env):
+        """completed_todos that don't match any open TODO are silently rejected."""
+        from keephive.storage import append_to_daily, ensure_daily
+
+        # Seed an open TODO that does NOT match the completed_todo
+        ensure_daily()
+        append_to_daily("- [09:00:00] TODO: Deploy the staging environment")
+
+        response = _mock_precompact_response(
+            insights=[],
+            completed_todos=["Refactor the entire authentication system"],
+        )
+
+        def mock_pipe(prompt, model, stdin_text=None):
+            return response
+
+        _llm_summary("some excerpts", pipe_fn=mock_pipe)
+
+        df = daily_file()
+        content = safe_read_text(df)
+        assert "DONE:" not in content
+
+    def test_open_todos_passed_to_prompt(self, hive_env):
+        """When open TODOs exist, they are included in the LLM prompt."""
+        from keephive.storage import append_to_daily, ensure_daily
+
+        # Create an open TODO in the daily log
+        ensure_daily()
+        append_to_daily("- [09:00:00] TODO: Deploy the staging environment")
+
+        captured_prompt = {}
+
+        def mock_pipe(prompt, model, stdin_text=None):
+            captured_prompt["text"] = prompt
+            return _mock_precompact_response(insights=[])
+
+        _llm_summary("some excerpts", pipe_fn=mock_pipe)
+
+        assert "open_todos" in captured_prompt["text"]
+        assert "Deploy the staging environment" in captured_prompt["text"]

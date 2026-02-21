@@ -53,6 +53,12 @@ def cmd_stats(args: list[str]) -> None:
             result = _day_data(data, date_filter)
         else:
             result = data
+            # Merge session metrics into top-level JSON output
+            try:
+                sm = session_metrics(days_back=30)
+                result["sessions"] = sm
+            except Exception:
+                pass
         print(json.dumps(result, indent=2))
         return
 
@@ -421,12 +427,15 @@ def _session_productivity(days_back: int = 30) -> dict:
       avg_prompts_per_convo, median_prompts, prompts_trend_sparkline,
       depth_shallow, depth_medium, depth_deep,
       tool_distribution: [(tool, pct, trend_str), ...],
-      compaction_rate
+      compaction_rate, avg_turns_per_session, median_turns_per_session,
+      prompts_per_turn
+
+    Ghost sessions (0 prompts, 0 tools, <5s) are excluded.
     """
-    from keephive.storage import read_sessions
+    from keephive.storage import is_ghost_session, read_sessions
 
     sm = session_metrics(days_back=days_back)
-    sessions = read_sessions(days_back=days_back)
+    sessions = [s for s in read_sessions(days_back=days_back) if not is_ghost_session(s)]
 
     today_str = get_today().isoformat()
     week_ago = (get_today() - timedelta(days=7)).isoformat()
@@ -500,6 +509,9 @@ def _session_productivity(days_back: int = 30) -> dict:
         "convos_week": sm["sessions_this_week"],
         "avg_prompts_per_convo": sm["avg_prompts_per_session"],
         "median_prompts": sm["median_prompts_per_session"],
+        "avg_turns_per_session": sm.get("avg_turns_per_session", 0),
+        "median_turns_per_session": sm.get("median_turns_per_session", 0),
+        "prompts_per_turn": sm.get("prompts_per_turn", 0),
         "prompts_trend_sparkline": trend_sparkline,
         "depth_shallow": shallow,
         "depth_medium": medium,
@@ -920,8 +932,10 @@ def _display_full(data: dict) -> None:
             console.print("[dim]Session Quality[/dim]" + f" ({i_total} sessions)")
             console.print(f"  {achieved_pct}% achieved{top_friction}")
             console.print("  \u2192 [dim]hive rf insights[/dim] for full breakdown")
-    except Exception:
-        pass
+    except Exception as exc:
+        import sys
+
+        print(f"[keephive] Session quality error: {exc}", file=sys.stderr)
 
     # Trends section
     if trends["metrics"]:
@@ -1305,7 +1319,9 @@ def stats_text(project: str = "", date_arg: str = "") -> str:
             )
             if sm["compaction_rate"] > 0:
                 lines.append(f"Compaction rate: {int(sm['compaction_rate'] * 100)}%")
-    except Exception:
-        pass
+    except Exception as exc:
+        import sys
+
+        print(f"[keephive] Session metrics error: {exc}", file=sys.stderr)
 
     return "\n".join(lines)

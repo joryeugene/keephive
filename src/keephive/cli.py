@@ -340,6 +340,9 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "hook-sessionstart": ("keephive.hooks.sessionstart", "hook_sessionstart"),
     "hook-posttooluse": ("keephive.hooks.posttooluse", "hook_posttooluse"),
     "hook-userpromptsubmit": ("keephive.hooks.userpromptsubmit", "hook_userpromptsubmit"),
+    "hook-stop": ("keephive.hooks.stop", "hook_stop"),
+    "hook-sessionend": ("keephive.hooks.sessionend", "hook_sessionend"),
+    "hook-taskcompleted": ("keephive.hooks.taskcompleted", "hook_taskcompleted"),
 }
 
 

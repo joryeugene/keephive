@@ -73,9 +73,14 @@ Tiers from most stable (top) to most ephemeral (bottom).
   stale warnings, open TODOs, and cross-project activity hints.
 - **PreCompact**: Layer 1 deterministic scan + Layer 2 claude -p haiku.
   Writes classified entries (FACT/DECISION/etc.) to daily log with project attribution.
+  TODO discipline: max 2 TODOs per compaction (user-requested only), speculative TODOs demoted to FACT.
+  Auto-close: passes open TODOs to LLM, writes DONE entries for resolved items.
 - **PostToolUse**: Counter-based nudge after Edit/Write to remind
   `hive_remember` of key changes.
-- **UserPromptSubmit**: TODO detection, UI queue injection, counter nudge.
+- **UserPromptSubmit**: Counter-based nudge, UI queue injection.
+- **Stop**: Increments turn counter. Periodic micro-nudge to capture wrap-up items.
+- **SessionEnd**: Finalizes session stats (accurate end timestamp, reason). Pure stats, no output.
+- **TaskCompleted**: Auto-logs DONE to daily log. Tracks task completion count in meta stats.
 
 ## Promotion Path (ephemeral to durable)
 
