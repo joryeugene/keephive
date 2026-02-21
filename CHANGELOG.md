@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+## v0.16.0
+
+### Dashboard
+
+- **View consolidation (8 to 4)**: Reduced from 8 views to 4: Home (`/`), Dev (`/dev`), Knowledge (`/know`), Stats (`/stats`). Old paths (`/daily`, `/simple`, `/mem`, `/notes`) redirect to their replacements.
+- **Keyboard navigation**: Vim-style keybindings for the dashboard. `j`/`k` between card rows, `h`/`l` between cards in a row, `Enter`/`o` to dive into items, `Escape` to return. `gg`/`G` for top/bottom. `g` prefix with 800ms timeout for view shortcuts (`ga`, `gd`, `gk`, `gs`). `/` to focus search. `?` toggles shortcut overlay.
+- **ARIA and tabindex**: Every interactive element has proper `role`, `tabindex`, `aria-label`, and `aria-expanded` attributes. Cards, accordions, todos, log entries, notes, search overlay, nav, and filter buttons all accessible.
+- **Superhuman aesthetic**: Tighter spacing, faster transitions (150ms to 100ms), Inter font stack, custom focus ring (blue inset border replacing browser default), active tab enhancement.
+- **Search upgrade**: Dashboard search now uses `_search_all_tiers()` (same as CLI `hive rc`), returning scored multi-tier results with context lines, tier badges, and action buttons (Promote to Memory, Copy).
+- **Edit-in-dashboard**: `GET /api/content`, `POST /api/edit`, `POST /api/preview` endpoints. Full-screen modal with live markdown preview, `Ctrl+Enter` to save, `Escape` to cancel. Edit memory, guides, notes, and rules from the browser.
+- **Smart deduplication**: Knowledge panel detects when a guide maps to a CLI command and shows a unified entry with both the guide name and the command alias.
+- **Knowledge tabbed panel**: Guides, Memory, and Notes consolidated into a single tabbed panel on the `/know` view. Client-side tab switching.
+- **Log show-more pagination**: Truncated log panels show "show next 25" and "show all" buttons instead of static text. `loadLogMore(limit)` fetches incrementally via `/api/fragment?view=log&limit=N`.
+
+### CLI
+
+- **Auto-classify remember**: `hive r` auto-detects category (FACT, DECISION, TODO, INSIGHT, CORRECTION) from text content when no explicit prefix is given. Shows `[auto: CATEGORY]` in output.
+- **Contextual "Next:" in status**: `hive s` now shows a priority-cascaded next action suggestion (stale facts, old TODOs, pending rules, memory bloat, due recurring tasks, etc.).
+- **SessionStart next-action hint**: The suggested next action is injected into session context so the agent is aware of maintenance needs.
+- **Removed `hive friction` command**: Cut entirely. Friction matrix guide remains as a knowledge artifact.
+
+### Fixes
+
+- **cmd-hint cursor**: Changed from `cursor:copy` (shows as plus icon on macOS) to `cursor:default`.
+
+### Tests
+
+- 1135 tests passing.
+
 ## v0.15.1
 
 ### Fixes
