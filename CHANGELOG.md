@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+## v0.19.0
+
+### Features
+
+- **Centralized time (`clock.py`)**: All date/time calls route through `get_today()`/`get_now()`. `HIVE_DATE=YYYY-MM-DD` env var overrides both, enabling deterministic time-travel across subprocess boundaries.
+- **Profiles (`hive profile`)**: Create, list, use, and delete isolated data profiles. Each lives in `~/.claude/hive-{name}/`. `hive profile create demo --seed` bootstraps with demo data.
+- **Demo seeder (`hive seed`)**: `--days N --force` generates realistic history with deterministic RNG. Populates all data files from `data/demo/entries.json`.
+- **Export/import**: `hive export` creates tar.gz with manifest.json. `hive import archive.tar.gz --profile staging` restores to a new or existing profile. Path traversal protection.
+- **Terminal E2E framework**: tmux-backed driver with Screen assertion API, golden file baselines, and output artifact tracking. `just test-e2e` runs 64 tests in ~65s.
+- **Dashboard improvements**: Pipeline alias tracking, accordion state persistence via localStorage, CSS grid layout.
+
+### Fixes
+
+- **Sonnet model ID**: `claude-sonnet-4-5-20250514` (404) -> `claude-sonnet-4-6`.
+- **Command stats canonicalization**: Aliases (v, rf, a) now resolve to canonical names in stats tracking.
+
+### Tests
+
+- 1449 tests total (1374 unit/integration + 64 terminal E2E + 11 LLM).
+- New: `tests/terminal.py` (tmux driver), `test_e2e_scenarios.py` (45 scenarios), `test_terminal_driver.py` (19 driver tests)
+- New: `test_clock.py` (9), `test_profile.py` (21), `test_seed.py` (11), `test_transfer.py` (8)
+- Golden baselines: help, status (empty/seeded), stats (empty/seeded)
+- Three-tier test strategy documented in CLAUDE.md
+
+### Developer
+
+- **Justfile**: `test-e2e`, `test-golden`, `test-one`, `serve` recipes added.
+- **pytest markers**: `terminal` added alongside `llm`, both excluded from default run.
+
 ## v0.18.1
 
 ### Features
