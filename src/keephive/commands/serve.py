@@ -9,6 +9,7 @@ Usage: hive serve [port] [--hot]
 
 from __future__ import annotations
 
+import base64
 import html as _html
 import json
 import re
@@ -18,6 +19,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
 DEFAULT_PORT = 3847
+
+_FAVICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><polygon points="16,2 28,9 28,23 16,30 4,23 4,9" fill="#f59e0b" stroke="#d97706" stroke-width="2"/><polygon points="16,8 22,12 22,20 16,24 10,20 10,12" fill="#fbbf24"/></svg>'
+_FAVICON = "data:image/svg+xml;base64," + base64.b64encode(_FAVICON_SVG.encode()).decode()
 
 # ---- Markdown renderer ----
 
@@ -1922,6 +1926,7 @@ def render_page(view_name: str, port: int) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="{_FAVICON}">
 <title>hive \u2014 {_e(VIEWS.get(view_name, {}).get("title", view_name))}</title>
 <style>{_CSS}</style>
 </head>
@@ -1974,6 +1979,12 @@ class _HiveHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path
+
+        if path == "/favicon.ico":
+            # Browsers request this even with the inline SVG data URI
+            self.send_response(204)
+            self.end_headers()
+            return
 
         if path == "/api/fragment":
             qs = parse_qs(parsed.query)
