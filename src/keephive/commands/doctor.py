@@ -6,12 +6,11 @@ import json
 import os
 import re
 import shutil
-from datetime import date, timedelta
+from datetime import timedelta
 from difflib import SequenceMatcher
-
-from keephive.clock import get_today
 from pathlib import Path
 
+from keephive.clock import get_today
 from keephive.health import (
     check_anthropic_memory,
 )

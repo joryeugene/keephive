@@ -10,7 +10,6 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from keephive.clock import get_now, get_today
-
 from keephive.output import console, notify_sound, prompt_yn
 from keephive.storage import (
     append_to_daily,

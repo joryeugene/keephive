@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime
 
 from keephive.clock import get_now
 

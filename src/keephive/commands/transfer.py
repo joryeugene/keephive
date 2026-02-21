@@ -6,7 +6,6 @@ import json
 import os
 import sys
 import tarfile
-from pathlib import Path
 
 from keephive import __version__
 from keephive.clock import today_iso

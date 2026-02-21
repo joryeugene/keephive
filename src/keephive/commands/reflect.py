@@ -6,10 +6,10 @@ import json
 import os
 import re
 import time
-from datetime import date, datetime
+from datetime import datetime
 
-from keephive.clock import get_now, get_today
 from keephive.claude import ClaudePipeError, run_claude_pipe
+from keephive.clock import get_now, get_today
 from keephive.models import GuideDraftResponse, ReflectAnalyzeResponse
 from keephive.output import console, notify_sound, prompt_choice, prompt_yn
 from keephive.storage import (

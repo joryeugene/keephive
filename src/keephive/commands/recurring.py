@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
 
 from keephive.clock import get_now
 from keephive.output import console

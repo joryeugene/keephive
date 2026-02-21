@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from datetime import date, datetime
+from datetime import date
 
 from keephive.clock import get_now, get_today
 from keephive.output import console

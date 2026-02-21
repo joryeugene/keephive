@@ -7,8 +7,6 @@ and workflow text. Used by setup.py (initial creation) and sessionstart.py
 
 from __future__ import annotations
 
-from datetime import date
-
 from keephive.clock import get_today
 
 # --- Effectiveness facts (seeded into default memory.md) ---

@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import json
 import random
-import sys
 from datetime import timedelta
 from importlib import resources
-from pathlib import Path
 
 from keephive.clock import get_today
 from keephive.output import console
@@ -15,8 +13,6 @@ from keephive.storage import (
     ensure_dirs,
     guides_dir,
     hive_dir,
-    notes_dir,
-    prompts_dir,
     slot_file,
     stats_file,
     working_dir,

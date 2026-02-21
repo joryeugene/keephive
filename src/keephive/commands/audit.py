@@ -12,7 +12,7 @@ import os
 import re
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from difflib import SequenceMatcher
 
 from keephive.clock import get_now, get_today

@@ -17,7 +17,6 @@ import json
 import time
 
 import pytest
-
 from terminal import Screen
 
 

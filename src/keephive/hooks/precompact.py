@@ -12,11 +12,9 @@ import json
 import os
 import re
 import sys
-from datetime import datetime
 from pathlib import Path
 
 from keephive.clock import get_now
-
 from keephive.storage import (
     _strip_verified_tags,
     append_to_daily,

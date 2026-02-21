@@ -1482,7 +1482,7 @@ def _get_notes_data() -> dict:
 
 
 def _get_stats_data() -> dict:
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from keephive.clock import get_today
     from keephive.storage import read_stats
@@ -2539,7 +2539,7 @@ def _render_standup_panel(data: dict) -> str:
 
 def _get_stats_summary_data() -> dict:
     """Compact stats for the home view: today, week, streak, hourly."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from keephive.clock import get_today
     from keephive.storage import read_stats
@@ -2820,7 +2820,7 @@ def _render_sessions_panel(data: dict) -> str:
 
 def _get_trend_data() -> dict:
     """Week-over-week comparison for 8 KPIs + event source breakdown."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from keephive.clock import get_today
     from keephive.storage import read_sessions, read_stats

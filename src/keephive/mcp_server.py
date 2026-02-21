@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime
+from datetime import date
 
-from keephive.clock import get_now, get_today
 from mcp.server.fastmcp import FastMCP
 
+from keephive.clock import get_now, get_today
 from keephive.storage import (
     append_to_daily,
     count_stale_facts,

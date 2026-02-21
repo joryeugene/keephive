@@ -6,7 +6,7 @@ import json
 import re
 import shutil
 import subprocess
-from datetime import date, timedelta
+from datetime import timedelta
 
 from keephive.clock import get_today
 from keephive.output import console
@@ -182,7 +182,6 @@ def _memory_decay_check() -> None:
 
 def _rebuild_index() -> None:
     """Rebuild the .index.json file."""
-    from datetime import datetime
 
     from keephive.clock import get_now
 

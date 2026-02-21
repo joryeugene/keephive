@@ -12,9 +12,7 @@ from __future__ import annotations
 import time
 
 import pytest
-
 from conftest import assert_golden
-
 
 # ============================================================
 #  Category 1: Knowledge Lifecycle
@@ -62,7 +60,7 @@ class TestKnowledgeLifecycle:
 
     def test_recall_miss(self, term, save_terminal_output):
         """Recall with no matching facts."""
-        screen = term.type("python -m keephive rc nonexistent_xyz_query")
+        term.type("python -m keephive rc nonexistent_xyz_query")
         save_terminal_output("knowledge/recall_miss", term)
 
     def test_recall_partial_match(self, term):

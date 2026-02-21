@@ -248,7 +248,7 @@ def test_delete_profile(profile_env, monkeypatch, capsys):
 def test_full_lifecycle(profile_env, monkeypatch, capsys):
     """Create -> use -> write data -> switch back -> data isolated."""
     from keephive.commands.profile import cmd_profile
-    from keephive.storage import hive_dir, memory_file
+    from keephive.storage import memory_file
 
     # Create and switch to demo
     cmd_profile(["create", "demo"])

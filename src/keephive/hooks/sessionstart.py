@@ -9,11 +9,9 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime
 from pathlib import Path
 
 from keephive.clock import get_now, get_today
-
 from keephive.storage import (
     active_slot,
     backup_and_write,
@@ -273,7 +271,7 @@ def build_context(cwd: str, project_name: str) -> str:
 
 def _data_quality_warnings() -> list[str]:
     """Generate lightweight data quality warnings."""
-    from datetime import date, timedelta
+    from datetime import timedelta
     from difflib import SequenceMatcher
 
     from keephive.storage import collect_todos
