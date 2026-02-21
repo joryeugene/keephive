@@ -166,6 +166,7 @@ Rules:
                 stdin_text=all_entries,
                 tools=["Read"],
                 max_turns=3,
+                timeout=240,
             )
     except ClaudePipeError as e:
         notify_sound(False)
@@ -519,6 +520,7 @@ Do not invent or extrapolate beyond what the entries say."""
                 prompt,
                 GuideDraftResponse,
                 stdin_text=entry_text,
+                timeout=240,
             )
     except ClaudePipeError as e:
         notify_sound(False)

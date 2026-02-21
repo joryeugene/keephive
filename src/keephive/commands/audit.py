@@ -436,7 +436,7 @@ Be specific. Cite actual entries you find concerning or noteworthy.
 === METRICS ===
 {metrics_json}"""
 
-    return run_claude_pipe(prompt, VaultPerspective, model="haiku", verbose=verbose)
+    return run_claude_pipe(prompt, VaultPerspective, model="haiku", verbose=verbose, timeout=240)
 
 
 def _call_cleaner(cleaner_metrics: dict, verbose: bool = False):
@@ -481,7 +481,7 @@ Be specific. Quote actual rules and corrections that conflict.
 === METRICS ===
 {metrics_json}"""
 
-    return run_claude_pipe(prompt, CleanerPerspective, model="haiku", verbose=verbose)
+    return run_claude_pipe(prompt, CleanerPerspective, model="haiku", verbose=verbose, timeout=240)
 
 
 def _call_strategist(strategist_metrics: dict, verbose: bool = False):
@@ -516,7 +516,7 @@ If no strategy guide exists, note that as a gap.
 === METRICS ===
 {metrics_json}"""
 
-    return run_claude_pipe(prompt, StrategistPerspective, model="haiku", verbose=verbose)
+    return run_claude_pipe(prompt, StrategistPerspective, model="haiku", verbose=verbose, timeout=240)
 
 
 def _run_perspectives(
@@ -607,7 +607,7 @@ Score: {score}/100
 === PREVIOUS PLAY ===
 {prev_play_text}"""
 
-    return run_claude_pipe(prompt, AuditSynthesis, model="sonnet", verbose=verbose)
+    return run_claude_pipe(prompt, AuditSynthesis, model="sonnet", verbose=verbose, timeout=240)
 
 
 # ---------------------------------------------------------------------------
