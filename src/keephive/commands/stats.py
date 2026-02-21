@@ -13,10 +13,6 @@ from keephive.output import console
 from keephive.storage import (
     count_log_entries_by_prefix,
     count_log_entries_by_prefix_daily,
-    count_log_entries_with_prefix,
-    get_recall_count,
-    get_recall_hit_rate,
-    last_log_entry_with_prefix,
     memory_file,
     parse_date_arg,
     read_evidence,

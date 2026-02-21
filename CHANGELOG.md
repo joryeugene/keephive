@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+## v0.18.1
+
+### Features
+
+- **`hive rule learn`**: Friction-to-rules pipeline. Reads `/insights` friction data from `~/.claude/usage-data/facets/`, maps repeated friction patterns to behavioral rules, deduplicates via trigram overlap, queues candidates in `.pending-rules.md` for human review.
+- **Verify batch processing**: `hive v` processes all facts in batches of 8 with continue/stop prompts between batches. Increased `max_turns` from 12 to 25 to prevent failures on complex fact batches.
+- **Cognitive restructure**: Stats pipeline consolidated. Adaptive help shows recently-used commands first with a Discover section for unused commands. Dashboard polish pass.
+
+### Fixes
+
+- **Double `[verified:]` tags**: All memory write paths (precompact auto-correct, precompact auto-add, reflect apply, reflect edit, reflect contradiction update) now strip existing `[verified:]` tags before appending a new one. Prevents `[verified:X] [verified:X]` accumulation.
+- **`normalize_memory()` cleanup pass**: Runs automatically after `hive v`. Fixes double tags, removes resolved TODOs, corrects `- - ` malformed prefixes, and deduplicates identical lines. Reports a cleanup summary.
+
+### Tests
+
+- 1335 tests passing.
+- New: `tests/test_normalize.py` (16 tests for tag stripping, normalization, and write-path fixes)
+- New: `tests/test_rule_learn.py` (23 tests for friction-to-rules pipeline)
+
+## v0.18.0
+
+### Features
+
+- **Settings system**: `hive set <key> <value>` persists user preferences to `~/.claude/hive/.settings.json`. First setting: `sound` on/off for completion notifications on slow LLM commands.
+- **Sound notifications**: `notify_sound()` plays a system sound after verify, audit, reflect, standup, doctor, and log summarize. Controlled via `hive set sound off`.
+- **Stats dashboard consolidation**: Reduced from 6+ stat panels to 4: Activity, What You Use (with tool breakdown), Trends, Quality. Eliminated duplicate sparklines and KPI overlap.
+
+### Fixes
+
+- **LLM timeout**: Bumped from 120s to 240s for commands with large input (audit, reflect analyze, verify).
+
+## v0.17.0
+
+### Features
+
+- **Session-level productivity metrics**: `session_id` persisted to `~/.claude/hive/sessions.json`. PostToolUse tracks tool name counts, UserPromptSubmit tracks prompt count per session. Stats CLI and serve dashboard show Sessions section with avg prompts/session, duration, tool breakdown, compaction rate, and per-project counts.
+
 ## v0.16.0
 
 ### Dashboard

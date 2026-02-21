@@ -6,7 +6,6 @@ from pathlib import Path
 
 from keephive.storage import _strip_verified_tags, normalize_memory
 
-
 # ---- _strip_verified_tags ----
 
 
@@ -162,7 +161,7 @@ def test_add_to_auto_captured_strips_existing_tag():
     content = "# Working Memory\n\n## Auto-Captured\n- existing [verified:2026-02-20]\n"
     result = _add_to_auto_captured(content, "new fact [verified:2026-02-19]", "2026-02-21")
     # Should have exactly one [verified:] tag for the new line
-    new_lines = [l for l in result.splitlines() if "new fact" in l]
+    new_lines = [line for line in result.splitlines() if "new fact" in line]
     assert len(new_lines) == 1
     assert new_lines[0].count("[verified:") == 1
     assert "[verified:2026-02-21]" in new_lines[0]

@@ -5,9 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 
-import pytest
-
-from keephive.cli import _CMD_FAMILIES, _command_usage, _help, _help_grouped
+from keephive.cli import _CMD_FAMILIES, _command_usage, _help
 
 
 def _make_stats(days_commands: dict[str, dict[str, int]]) -> dict:
@@ -106,7 +104,7 @@ def test_help_adaptive_recent(monkeypatch, capsys):
             recent_lines.append(line.strip())
 
     # status (12 total) should come before verify (5) which comes before remember (3)
-    labels = [l.split()[0] for l in recent_lines if l]
+    labels = [entry.split()[0] for entry in recent_lines if entry]
     assert labels.index("status") < labels.index("verify")
     assert labels.index("verify") < labels.index("remember")
 
@@ -162,8 +160,8 @@ def test_help_discover_cap(monkeypatch, capsys):
             discover_entries.append(stripped)
 
     # Should have exactly 6 command lines + overflow message
-    cmd_lines = [l for l in discover_entries if not l.startswith("...")]
-    overflow_lines = [l for l in discover_entries if l.startswith("...")]
+    cmd_lines = [entry for entry in discover_entries if not entry.startswith("...")]
+    overflow_lines = [entry for entry in discover_entries if entry.startswith("...")]
     assert len(cmd_lines) == 6
     assert len(overflow_lines) == 1
     assert "more" in overflow_lines[0]

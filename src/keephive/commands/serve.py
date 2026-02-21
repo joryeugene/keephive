@@ -3288,7 +3288,7 @@ def _render_pipeline_panel(data: dict) -> str:
         for act in actions:
             last = act.get("last_date")
             hint = _e(act.get("hint", ""))
-            desc = _e(act.get("desc", ""))
+            _ = act.get("desc", "")
             ctx = act.get("ctx", "")
             if last is None:
                 # Never run: amber warning
