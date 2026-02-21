@@ -8,7 +8,15 @@
   <a href="https://github.com/joryeugene/keephive/blob/main/LICENSE"><img src="https://img.shields.io/github/license/joryeugene/keephive.svg" alt="License"></a>
 </p>
 
-A knowledge sidecar for Claude Code. It captures what you learn, verifies it stays true, and surfaces it when relevant.
+<table><tr>
+<td align="center">
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/mascot.png" width="240" alt="keephive mascot" />
+</td>
+<td>
+  <h3>A knowledge sidecar for Claude Code</h3>
+  <p>It captures what you learn, verifies it stays true, and surfaces it when relevant.</p>
+</td>
+</tr></table>
 
 ## TLDR
 
@@ -33,15 +41,11 @@ Everything else on this page is optional depth.
 > You never type a full name. Two keystrokes for the command, a few more for the target.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/keepbee.gif" width="120" alt="keepbee dancing" />
-  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/mascot.png" width="280" />
-  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/keepbee.gif" width="120" alt="keepbee dancing" />
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-home.png" width="800" alt="keephive dashboard" />
 </p>
 
-Claude Code forgets everything between sessions. keephive rides alongside it using hooks, an MCP server, and context injection to give it persistent, verified memory.
-
 <p align="center">
-  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-home.png" width="800" alt="keephive dashboard" />
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/keepbee.gif" width="100" alt="keepbee" />
 </p>
 
 After a few sessions, `hive` shows what your agent has learned:

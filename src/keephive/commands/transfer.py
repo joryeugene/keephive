@@ -12,6 +12,7 @@ from keephive.clock import today_iso
 from keephive.output import console, show_hint
 from keephive.storage import (
     active_profile,
+    active_profile_label,
     ensure_dirs,
     hive_dir,
     profile_dir,
@@ -146,7 +147,7 @@ def cmd_import(args: list[str]) -> None:
         target = hive_dir()
         from keephive.output import prompt_yn
 
-        if not prompt_yn(f"Import into current profile at {target}?"):
+        if not prompt_yn(f"Import into {active_profile_label()} at {target}?"):
             console.print("[dim]Cancelled[/dim]")
             return
 

@@ -149,3 +149,42 @@ def test_load_entries():
     assert "memory_facts" in entries
     assert len(entries["facts"]) >= 15
     assert len(entries["memory_facts"]) >= 10
+
+
+# ---- Profile safety guardrails ----
+
+
+def test_seed_shows_profile_target(seed_env, capsys):
+    """Seed prints active profile target before writing data."""
+    from keephive.commands.seed import cmd_seed
+
+    cmd_seed(["--force", "--days", "5"])
+    # Strip Rich line-wrapping newlines for path matching
+    out = capsys.readouterr().out.replace("\n", " ")
+    # HIVE_HOME is set by seed_env, so label shows that
+    assert "Target:" in out
+    assert "HIVE_HOME=" in out
+
+
+def test_seed_force_shows_target(seed_env, capsys):
+    """Even with --force, the profile target line is printed."""
+    from keephive.commands.seed import cmd_seed
+
+    # First seed to create data
+    cmd_seed(["--force", "--days", "5"])
+    capsys.readouterr()  # clear
+
+    # Second seed with --force should still show target
+    cmd_seed(["--force", "--days", "5"])
+    out = capsys.readouterr().out.replace("\n", " ")
+    assert "Target:" in out
+    assert "HIVE_HOME=" in out
+
+
+def test_seed_default_profile_label(seed_env, capsys):
+    """Seed on default profile shows 'HIVE_HOME' label (since tests use HIVE_HOME)."""
+    from keephive.commands.seed import cmd_seed
+
+    cmd_seed(["--force", "--days", "5"])
+    out = capsys.readouterr().out
+    assert "HIVE_HOME=" in out

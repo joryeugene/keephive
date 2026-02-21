@@ -128,14 +128,36 @@ def active_profile() -> str | None:
     """Return the active profile name, or None for default.
 
     HIVE_HOME env var bypasses profiles entirely (for tests and backward compat).
+    Auto-heals stale profile files that reference deleted directories.
     """
     if os.environ.get("HIVE_HOME"):
         return None
     pf = _claude_dir() / _PROFILE_FILE
     if pf.exists():
         name = pf.read_text().strip()
-        return name or None
+        if not name:
+            return None
+        # Validate the profile directory still exists on disk
+        if not (_claude_dir() / f"hive-{name}").is_dir():
+            pf.unlink(missing_ok=True)
+            return None
+        return name
     return None
+
+
+def active_profile_label() -> str:
+    """Human-readable label for the active data target.
+
+    Used by destructive operations (seed, import) to show which profile
+    will be modified before the user commits to the action.
+    """
+    env = os.environ.get("HIVE_HOME")
+    if env:
+        return f"HIVE_HOME={env}"
+    prof = active_profile()
+    if prof:
+        return f"profile '{prof}'"
+    return "default profile"
 
 
 def set_active_profile(name: str | None) -> None:

@@ -10,6 +10,7 @@ from importlib import resources
 from keephive.clock import get_today
 from keephive.output import console, show_hint
 from keephive.storage import (
+    active_profile_label,
     ensure_dirs,
     guides_dir,
     hive_dir,
@@ -44,6 +45,7 @@ def cmd_seed(args: list[str]) -> None:
                     days = int(args[idx + 1])
 
     target = hive_dir()
+    label = active_profile_label()
     has_data = any(
         f.exists() and f.stat().st_size > 0
         for f in [
@@ -52,10 +54,12 @@ def cmd_seed(args: list[str]) -> None:
         ]
     )
 
+    console.print(f"[bold]Target: {label}[/bold]  ({target})")
+
     if has_data and not force:
         from keephive.output import prompt_yn
 
-        if not prompt_yn(f"Overwrite existing data in {target}?"):
+        if not prompt_yn(f"Overwrite existing data in {label}?"):
             console.print("[dim]Cancelled[/dim]")
             return
 

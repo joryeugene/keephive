@@ -58,6 +58,7 @@ def test_set_and_get_profile(profile_env):
     """set_active_profile persists across calls."""
     from keephive.storage import active_profile, set_active_profile
 
+    (profile_env / "hive-demo").mkdir()
     set_active_profile("demo")
     assert active_profile() == "demo"
 
@@ -66,6 +67,7 @@ def test_hive_dir_with_profile(profile_env):
     """hive_dir() resolves to hive-<name> when profile is active."""
     from keephive.storage import hive_dir, set_active_profile
 
+    (profile_env / "hive-demo").mkdir()
     set_active_profile("demo")
     assert hive_dir() == profile_env / "hive-demo"
 
@@ -74,6 +76,7 @@ def test_clear_profile(profile_env):
     """set_active_profile(None) removes profile file."""
     from keephive.storage import active_profile, set_active_profile
 
+    (profile_env / "hive-work").mkdir()
     set_active_profile("work")
     assert active_profile() == "work"
     set_active_profile(None)
@@ -267,3 +270,66 @@ def test_full_lifecycle(profile_env, monkeypatch, capsys):
     default_mem = memory_file()
     if default_mem.exists():
         assert "demo data" not in default_mem.read_text()
+
+
+# ---- Profile safety guardrails ----
+
+
+class TestStaleProfileAutoHeal:
+    """active_profile() auto-heals when .hive-profile references a deleted directory."""
+
+    def test_stale_profile_file_auto_heals(self, profile_env):
+        """Profile file pointing to non-existent directory is cleaned up."""
+        from keephive.storage import active_profile
+
+        # Write a profile file pointing to a directory that doesn't exist
+        (profile_env / ".hive-profile").write_text("deleted-prof")
+        # No hive-deleted-prof directory exists
+
+        result = active_profile()
+        assert result is None, "Should return None for stale profile"
+        assert not (profile_env / ".hive-profile").exists(), "Should remove stale profile file"
+
+    def test_valid_profile_not_healed(self, profile_env):
+        """Profile file pointing to existing directory is kept."""
+        from keephive.storage import active_profile
+
+        (profile_env / "hive-myprof").mkdir()
+        (profile_env / ".hive-profile").write_text("myprof")
+
+        result = active_profile()
+        assert result == "myprof"
+        assert (profile_env / ".hive-profile").exists()
+
+    def test_empty_profile_file_returns_none(self, profile_env):
+        """Empty .hive-profile returns None without error."""
+        from keephive.storage import active_profile
+
+        (profile_env / ".hive-profile").write_text("")
+        assert active_profile() is None
+
+
+class TestActiveProfileLabel:
+    """active_profile_label() returns human-readable context strings."""
+
+    def test_label_with_hive_home(self, profile_env, monkeypatch):
+        """HIVE_HOME env var is shown in label."""
+        from keephive.storage import active_profile_label
+
+        monkeypatch.setenv("HIVE_HOME", "/custom/test-hive")
+        assert active_profile_label() == "HIVE_HOME=/custom/test-hive"
+
+    def test_label_with_named_profile(self, profile_env):
+        """Named profile shows profile name in label."""
+        from keephive.storage import active_profile_label
+
+        (profile_env / "hive-demo").mkdir()
+        (profile_env / ".hive-profile").write_text("demo")
+
+        assert active_profile_label() == "profile 'demo'"
+
+    def test_label_default_profile(self, profile_env):
+        """No profile file returns 'default profile'."""
+        from keephive.storage import active_profile_label
+
+        assert active_profile_label() == "default profile"
