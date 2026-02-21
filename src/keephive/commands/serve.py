@@ -394,6 +394,46 @@ mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 .tab-btn.active{color:#f0f6fc;border-bottom-color:#58a6ff;font-weight:600}
 .tab-content{display:none}
 .tab-content.active{display:block}
+.setting-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #21262d}
+.setting-row:last-child{border-bottom:none}
+.setting-label{font-weight:500;min-width:80px}
+.setting-desc{color:#8b949e;font-size:12px;flex:1}
+.setting-toggle{position:relative;width:36px;height:20px;display:inline-block}
+.setting-toggle input{opacity:0;width:0;height:0}
+.setting-toggle .slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#30363d;border-radius:10px;transition:.2s}
+.setting-toggle .slider:before{content:'';position:absolute;height:14px;width:14px;left:3px;bottom:3px;background:#c9d1d9;border-radius:50%;transition:.2s}
+.setting-toggle input:checked+.slider{background:#238636}
+.setting-toggle input:checked+.slider:before{transform:translateX(16px)}
+.setting-select{background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
+.setting-select:focus{border-color:#58a6ff;outline:none}
+.sound-test-btn{background:none;border:1px solid #30363d;border-radius:6px;color:#8b949e;cursor:pointer;padding:2px 8px;font-size:14px;line-height:1;transition:.2s}
+.sound-test-btn:hover{border-color:#58a6ff;color:#58a6ff}
+.sound-test-btn.playing{color:#3fb950;border-color:#3fb950}
+.trend-up{color:#3fb950}.trend-down{color:#f85149}.trend-flat{color:#6e7681}
+.trend-row{display:flex;align-items:center;gap:12px;padding:4px 0;border-bottom:1px solid #21262d;font-size:12px}
+.trend-row:last-child{border-bottom:none}
+.trend-label{flex:1;color:#8b949e}
+.trend-val{min-width:40px;text-align:right;color:#c9d1d9;font-weight:600}
+.trend-arrow{min-width:16px;text-align:center;font-size:14px}
+.trend-prev{min-width:40px;text-align:right;color:#6e7681;font-size:11px}
+.cmd-bar{display:inline-block;height:12px;border-radius:2px;background:#1a3a5c;vertical-align:middle}
+.prompt-hist{display:flex;align-items:flex-end;gap:3px;height:80px;padding:8px 12px 0}
+.prompt-hist-bar{flex:1;border-radius:2px 2px 0 0;background:#238636;min-width:18px;position:relative;cursor:default}
+.prompt-hist-bar span{position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:10px;color:#8b949e}
+.prompt-hist-labels{display:flex;gap:3px;padding:2px 12px 6px}
+.prompt-hist-labels span{flex:1;text-align:center;font-size:10px;color:#6e7681;min-width:18px}
+.session-list{max-height:320px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#30363d #161b22}
+.session-item{display:flex;gap:8px;align-items:center;padding:4px 10px;border-bottom:1px solid #21262d;font-size:12px}
+.session-item:last-child{border-bottom:none}
+.session-time{color:#6e7681;font-family:monospace;min-width:44px;flex-shrink:0}
+.session-prompts{color:#58a6ff;font-weight:600;min-width:20px;text-align:right}
+.session-proj{color:#8b949e;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.session-tools{color:#6e7681;font-size:11px;flex-shrink:0}
+.source-row{display:flex;align-items:center;gap:8px;padding:3px 0}
+.source-label{min-width:100px;text-align:right;color:#8b949e;font-size:12px}
+.source-bar-track{flex:1;background:#161b22;border-radius:2px;height:14px;overflow:hidden}
+.source-bar-fill{height:100%;border-radius:2px;background:#1a3a5c}
+.source-pct{min-width:35px;text-align:right;font-size:12px;color:#8b949e}
 """
 
 _JS = """
@@ -1108,6 +1148,45 @@ _JS = """
       ta.selectionStart=ta.selectionEnd=start+2;
     }
   });
+
+  // --- Settings toggle ---
+  document.addEventListener('change',function(e){
+    var cb=e.target.closest('.setting-cb');
+    if(cb){
+      var key=cb.dataset.key;
+      var val=cb.checked;
+      fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:key,value:val})})
+        .then(function(r){return r.json();})
+        .then(function(d){if(!d.ok){cb.checked=!val;}})
+        .catch(function(){cb.checked=!val;});
+      return;
+    }
+    var sel=e.target.closest('.setting-select');
+    if(sel){
+      var key=sel.dataset.key;
+      var val=sel.value;
+      fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:key,value:val})})
+        .then(function(r){return r.json();})
+        .catch(function(){});
+    }
+  });
+
+  // --- Sound test button ---
+  document.addEventListener('click',function(e){
+    var btn=e.target.closest('.sound-test-btn');
+    if(!btn)return;
+    var type=btn.dataset.soundType||'';
+    btn.classList.add('playing');
+    fetch('/api/sound-test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:type})})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(!d.ok){btn.title=d.error||'Error';}
+        setTimeout(function(){btn.classList.remove('playing');},1500);
+      })
+      .catch(function(){
+        setTimeout(function(){btn.classList.remove('playing');},1500);
+      });
+  });
 })();
 """
 
@@ -1351,6 +1430,13 @@ def _get_stats_data() -> dict:
     today_day = days.get(today_str, {})
     today_hours: dict[str, int] = today_day.get("hours", {})
 
+    # Tool breakdown from session metrics (for What You Use panel)
+    from keephive.storage import session_metrics
+
+    sm = _safe_call(session_metrics, days_back=30) or {}
+    tool_totals = sm.get("tool_totals", {}) if isinstance(sm, dict) else {}
+    tool_pct = sm.get("tool_pct", {}) if isinstance(sm, dict) else {}
+
     return {
         "commands": top,
         "today": cmd_today,
@@ -1361,6 +1447,8 @@ def _get_stats_data() -> dict:
         "longest_streak": longest_streak,
         "daily_spark": daily_spark,
         "today_hours": today_hours,
+        "tool_totals": tool_totals,
+        "tool_pct": tool_pct,
     }
 
 
@@ -2032,6 +2120,7 @@ def _render_hourly_heatmap(hours: dict[str, int]) -> str:
 
 
 def _render_stats_panel(data: dict) -> str:
+    """Activity panel: sparkline, hourly heatmap, streaks."""
     total_days = data.get("total_days", 0)
     curr_streak = data.get("curr_streak", 0)
     longest_streak = data.get("longest_streak", 0)
@@ -2115,8 +2204,8 @@ def _render_stats_panel(data: dict) -> str:
 
     meta = f"{total_days} days tracked" if total_days else ""
     return (
-        f'<div class="card" tabindex="0" role="region" aria-label="Usage stats">'
-        f'<div class="card-header"><span class="card-title">Usage Stats</span><span class="card-meta">{meta}</span></div>'
+        f'<div class="card" tabindex="0" role="region" aria-label="Activity">'
+        f'<div class="card-header"><span class="card-title">Activity</span><span class="card-meta">{meta}</span></div>'
         f"{_cmd_hints(['hive st', 'hive st -p <project>', 'hive st yesterday'])}"
         f"{sparkline_html}"
         f"{hourly_html}"
@@ -2126,30 +2215,57 @@ def _render_stats_panel(data: dict) -> str:
 
 
 def _render_stats_commands_panel(data: dict) -> str:
-    """Command breakdown table as a standalone card."""
+    """Command + tool breakdown as a standalone card."""
     commands = data.get("commands", [])
     today_map = data.get("today", {})
     week_map = data.get("week", {})
+    tool_totals = data.get("tool_totals", {})
+    tool_pct = data.get("tool_pct", {})
 
     rows = ""
     if commands:
+        max_count = commands[0][1] if commands else 1
+        max_count = max_count or 1
         rows = (
             '<table class="stats-table">'
-            "<thead><tr><th>Command</th><th>Today</th><th>Week</th><th>All-time</th></tr></thead><tbody>"
+            "<thead><tr><th>Command</th><th>Today</th><th>Week</th><th>All-time</th><th></th></tr></thead><tbody>"
         )
         for name, total in commands:
             t = today_map.get(name, 0)
             w = week_map.get(name, 0)
+            bar_w = max(4, round(total / max_count * 80))
             rows += (
-                f"<tr><td>{_e(name)}</td><td>{t or ''}</td><td>{w or ''}</td><td>{total}</td></tr>"
+                f"<tr><td>{_e(name)}</td><td>{t or ''}</td><td>{w or ''}</td><td>{total}</td>"
+                f'<td><span class="cmd-bar" style="width:{bar_w}px"></span></td></tr>'
             )
         rows += "</tbody></table>"
     else:
         rows = '<div class="empty">No usage data yet</div>'
+
+    # Tool breakdown (moved from Sessions panel)
+    tools_html = ""
+    if tool_totals:
+        sorted_tools = sorted(tool_totals.items(), key=lambda x: -x[1])[:6]
+        max_tool = sorted_tools[0][1] if sorted_tools else 1
+        tool_rows = ""
+        for tool, count in sorted_tools:
+            pct = int(tool_pct.get(tool, 0) * 100)
+            bar_w = max(2, round(count / max_tool * 100))
+            tool_rows += (
+                f'<div style="display:flex;align-items:center;gap:8px;margin:2px 0">'
+                f'<span style="width:50px;text-align:right;color:#8b949e;font-size:12px">{_e(tool)}</span>'
+                f'<div style="flex:1;background:#161b22;border-radius:2px;height:14px">'
+                f'<div style="width:{bar_w}%;background:#238636;border-radius:2px;height:100%"></div>'
+                f"</div>"
+                f'<span style="width:35px;text-align:right;font-size:12px;color:#8b949e">{pct}%</span>'
+                f"</div>"
+            )
+        tools_html = f'<div style="margin-top:12px"><div style="font-size:11px;color:#484f58;margin-bottom:4px">Tools (sessions)</div>{tool_rows}</div>'
+
     return (
-        f'<div class="card" tabindex="0" role="region" aria-label="Commands">'
-        f'<div class="card-header"><span class="card-title">Commands</span></div>'
-        f'<div class="card-body">{rows}</div>'
+        f'<div class="card" tabindex="0" role="region" aria-label="What You Use">'
+        f'<div class="card-header"><span class="card-title">What You Use</span></div>'
+        f'<div class="card-body">{rows}{tools_html}</div>'
         f"</div>"
     )
 
@@ -2345,42 +2461,70 @@ def _render_knowledge_tabbed_panel(data: dict) -> str:
 
 
 def _get_session_data() -> dict:
-    """Session metrics for the sessions panel."""
-    from keephive.storage import session_metrics
+    """Session metrics for the sessions panel: histogram + session list + quality KPIs."""
+    from keephive.storage import (
+        count_log_entries_with_prefix,
+        read_sessions,
+        session_metrics,
+    )
 
     sm = session_metrics(days_back=30)
 
-    # Build 14-day sparkline with iso dates
-    from datetime import date as _date
-    from datetime import timedelta as _td
+    # Prompt histogram buckets (absorbed from sessions-detail)
+    sessions = read_sessions(7)
+    buckets = {"0": 0, "1-5": 0, "6-10": 0, "11-20": 0, "21-50": 0, "51+": 0}
+    for s in sessions:
+        p = s.get("prompts", 0)
+        if p == 0:
+            buckets["0"] += 1
+        elif p <= 5:
+            buckets["1-5"] += 1
+        elif p <= 10:
+            buckets["6-10"] += 1
+        elif p <= 20:
+            buckets["11-20"] += 1
+        elif p <= 50:
+            buckets["21-50"] += 1
+        else:
+            buckets["51+"] += 1
 
-    daily_spark: list[tuple[str, int, str]] = []
-    for i in range(13, -1, -1):
-        d = _date.today() - _td(days=i)
-        day_s = d.isoformat()
-        count = 0
-        for ds, c in sm.get("daily_sessions", []):
-            if ds == day_s:
-                count = c
-                break
-        daily_spark.append((d.strftime("%b %d"), count, day_s))
+    # Recent sessions (most recent first, limit 20)
+    recent = sorted(sessions, key=lambda x: x.get("started", ""), reverse=True)[:20]
 
-    return {**sm, "daily_spark": daily_spark}
+    # Quality KPIs (absorbed from quality panel)
+    insights = _safe_call(count_log_entries_with_prefix, "INSIGHT:", 90) or 0
+    decisions = _safe_call(count_log_entries_with_prefix, "DECISION:", 90) or 0
+    corrections = _safe_call(count_log_entries_with_prefix, "CORRECTION:", 90) or 0
+    todos_done = _safe_call(count_log_entries_with_prefix, "DONE:", 90) or 0
+    standups = _safe_call(count_log_entries_with_prefix, "STANDUP:", 90) or 0
+
+    return {
+        **sm,
+        "buckets": buckets,
+        "recent": recent,
+        "insights": insights,
+        "decisions": decisions,
+        "corrections": corrections,
+        "todos_done": todos_done,
+        "standups": standups,
+    }
 
 
 def _render_sessions_panel(data: dict) -> str:
-    """Session metrics panel with sparkline, KPIs, and tool breakdown."""
+    """Sessions panel: compact header stats, histogram, session list, quality KPIs."""
     total = data.get("total_sessions", 0)
-    today_count = data.get("sessions_today", 0)
-    week_count = data.get("sessions_this_week", 0)
     avg_prompts = data.get("avg_prompts_per_session", 0)
     avg_dur = data.get("avg_duration_minutes", 0)
-    tool_totals = data.get("tool_totals", {})
-    tool_pct = data.get("tool_pct", {})
     compaction_rate = data.get("compaction_rate", 0)
-    daily_spark = data.get("daily_spark", [])
+    buckets = data.get("buckets", {})
+    recent = data.get("recent", [])
+    insights = data.get("insights", 0)
+    decisions = data.get("decisions", 0)
+    corrections = data.get("corrections", 0)
+    todos_done = data.get("todos_done", 0)
+    standups = data.get("standups", 0)
 
-    if total == 0:
+    if total == 0 and not recent:
         return (
             '<div class="card" tabindex="0" role="region" aria-label="Sessions">'
             '<div class="card-header"><span class="card-title">Sessions</span></div>'
@@ -2388,104 +2532,310 @@ def _render_sessions_panel(data: dict) -> str:
             "</div>"
         )
 
-    # Sparkline (reuse same pattern as stats panel)
-    sparkline_html = ""
-    has_data = any(item[1] > 0 for item in daily_spark)
-    if daily_spark and has_data:
-        max_c = max(item[1] for item in daily_spark) or 1
-        bars = ""
-        labels = ""
-        for i, item in enumerate(daily_spark):
-            label = item[0]
-            count = item[1]
-            iso_date = item[2] if len(item) >= 3 else ""
-            is_today = i == len(daily_spark) - 1
-
-            h = max(2, round(count / max_c * 48)) if count > 0 else 2
-            is_weekend = False
-            dow_letter = ""
-            if iso_date:
-                try:
-                    from datetime import date as _date
-
-                    d = _date.fromisoformat(iso_date)
-                    dow_letter = "MTWTFSS"[d.weekday()]
-                    is_weekend = d.weekday() >= 5
-                except (ValueError, IndexError):
-                    pass
-
-            if is_today:
-                cls = " today"
-                extra_bg = ""
-            elif is_weekend:
-                cls = " weekend"
-                extra_bg = ""
-            else:
-                cls = ""
-                if count > 0:
-                    ratio = count / max_c
-                    sat = 50 + round(ratio * 30)
-                    lum = 25 + round(ratio * 20)
-                    extra_bg = f";background:hsl(160,{sat}%,{lum}%)"
-                else:
-                    extra_bg = ";background:#161b22"
-
-            bars += f'<div class="spark-bar{cls}" style="height:{h}px{extra_bg}" title="{_e(label)}: {count} sessions"></div>'
-            wk_cls = ' class="weekend"' if is_weekend else ""
-            labels += f"<span{wk_cls}>{dow_letter}</span>"
-
-        sparkline_html = (
-            f'<div class="sparkline-wrap">'
-            f'<div class="sparkline">{bars}</div>'
-            f'<div class="spark-labels">{labels}</div>'
-            f"</div>"
-        )
-
-    # KPI row
-    kpi_html = (
-        f'<div class="stat-row" style="margin-bottom:12px">'
-        f'<div class="stat-item"><span class="stat-value">{today_count}</span><span class="stat-label">today</span></div>'
-        f'<div class="stat-item"><span class="stat-value">{week_count}</span><span class="stat-label">this week</span></div>'
-        f'<div class="stat-item"><span class="stat-value">{total}</span><span class="stat-label">total</span></div>'
+    # Compact header stats
+    compact_pct = f" | {int(compaction_rate * 100)}% compacted" if compaction_rate > 0 else ""
+    header_stats = (
+        f'<div class="stat-row" style="margin-bottom:8px">'
         f'<div class="stat-item"><span class="stat-value">{avg_prompts:.0f}</span><span class="stat-label">avg prompts</span></div>'
         f'<div class="stat-item"><span class="stat-value">{avg_dur:.0f}m</span><span class="stat-label">avg duration</span></div>'
         f"</div>"
     )
 
-    # Tool breakdown
-    tools_html = ""
-    if tool_totals:
-        sorted_tools = sorted(tool_totals.items(), key=lambda x: -x[1])[:6]
-        max_tool = sorted_tools[0][1] if sorted_tools else 1
-        rows = ""
-        for tool, count in sorted_tools:
-            pct = int(tool_pct.get(tool, 0) * 100)
-            bar_w = max(2, round(count / max_tool * 100))
-            rows += (
-                f'<div style="display:flex;align-items:center;gap:8px;margin:2px 0">'
-                f'<span style="width:50px;text-align:right;color:#8b949e;font-size:12px">{_e(tool)}</span>'
-                f'<div style="flex:1;background:#161b22;border-radius:2px;height:14px">'
-                f'<div style="width:{bar_w}%;background:#238636;border-radius:2px;height:100%"></div>'
-                f"</div>"
-                f'<span style="width:35px;text-align:right;font-size:12px;color:#8b949e">{pct}%</span>'
+    # Prompt histogram (absorbed from sessions-detail)
+    hist_html = ""
+    bucket_values = list(buckets.values())
+    max_b = max(bucket_values) if bucket_values else 1
+    max_b = max_b or 1
+    if any(v > 0 for v in bucket_values):
+        bars = ""
+        labels = ""
+        for label, count in buckets.items():
+            h = max(2, round(count / max_b * 70)) if count > 0 else 2
+            bars += f'<div class="prompt-hist-bar" style="height:{h}px"><span>{count}</span></div>'
+            labels += f"<span>{_e(label)}</span>"
+        hist_html = (
+            f'<div style="font-size:11px;color:#484f58;padding:6px 12px 0">Prompts per session</div>'
+            f'<div class="prompt-hist">{bars}</div>'
+            f'<div class="prompt-hist-labels">{labels}</div>'
+        )
+
+    # Session list (absorbed from sessions-detail)
+    list_html = ""
+    if recent:
+        items = ""
+        for s in recent:
+            started = s.get("started", "")
+            time_str = started[11:16] if len(started) > 16 else started[:5]
+            prompts = s.get("prompts", 0)
+            proj = s.get("project", "")
+            if "/" in proj:
+                proj = proj.rsplit("/", 1)[-1]
+            tools = s.get("tools", {})
+            tool_str = ", ".join(
+                f"{t}:{c}" for t, c in sorted(tools.items(), key=lambda x: -x[1])[:3]
+            )
+            items += (
+                f'<div class="session-item">'
+                f'<span class="session-time">{_e(time_str)}</span>'
+                f'<span class="session-prompts">{prompts}</span>'
+                f'<span class="session-proj">{_e(proj)}</span>'
+                f'<span class="session-tools">{_e(tool_str)}</span>'
                 f"</div>"
             )
-        tools_html = f'<div style="margin-top:8px"><div style="font-size:11px;color:#484f58;margin-bottom:4px">Tool usage</div>{rows}</div>'
+        list_html = f'<div class="session-list">{items}</div>'
 
-    # Compaction rate
-    compact_html = ""
-    if compaction_rate > 0:
-        compact_html = (
-            f'<div style="margin-top:8px;font-size:12px;color:#8b949e">'
-            f"Compaction: {int(compaction_rate * 100)}% of sessions"
+    # Quality KPIs footer (absorbed from quality panel)
+    quality_html = ""
+    if insights or decisions or corrections or todos_done or standups:
+        quality_html = (
+            f'<div style="border-top:1px solid #21262d;margin-top:10px;padding-top:8px">'
+            f'<div class="stat-row">'
+            f'<div class="stat-item"><span class="stat-value">{insights}</span><span class="stat-label">insights</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{decisions}</span><span class="stat-label">decisions</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{corrections}</span><span class="stat-label">corrections</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{todos_done}</span><span class="stat-label">done</span></div>'
+            f'<div class="stat-item"><span class="stat-value">{standups}</span><span class="stat-label">standups</span></div>'
+            f"</div>"
             f"</div>"
         )
 
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Sessions">'
-        f'<div class="card-header"><span class="card-title">Sessions</span><span class="card-meta">{total} tracked</span></div>'
-        f"{sparkline_html}"
-        f'<div class="card-body">{kpi_html}{tools_html}{compact_html}</div>'
+        f'<div class="card-header"><span class="card-title">Sessions</span><span class="card-meta">{total} tracked{compact_pct}</span></div>'
+        f'<div class="card-body">{header_stats}</div>'
+        f"{hist_html}"
+        f"{list_html}"
+        f'<div class="card-body">{quality_html}</div>'
+        f"</div>"
+    )
+
+
+def _get_trend_data() -> dict:
+    """Week-over-week comparison for 4 KPIs + event source breakdown."""
+    from datetime import date, timedelta
+
+    from keephive.storage import read_sessions, read_stats
+
+    stats = read_stats()
+    days = stats.get("days", {})
+    today = date.today()
+
+    # Week boundaries
+    this_week_start = (today - timedelta(days=6)).isoformat()
+    prev_week_start = (today - timedelta(days=13)).isoformat()
+    prev_week_end = (today - timedelta(days=7)).isoformat()
+
+    # Commands this/prev week
+    cmds_this = 0
+    cmds_prev = 0
+    for day_str, day_data in days.items():
+        total = sum(day_data.get("commands", {}).values())
+        if day_str >= this_week_start:
+            cmds_this += total
+        elif day_str >= prev_week_start and day_str < prev_week_end:
+            cmds_prev += total
+
+    # Session metrics this/prev week
+    sessions = read_sessions(14)
+    sess_this = [s for s in sessions if s["day"] >= this_week_start]
+    sess_prev = [s for s in sessions if prev_week_start <= s["day"] < prev_week_end]
+
+    sess_count_this = len(sess_this)
+    sess_count_prev = len(sess_prev)
+
+    def _avg_prompts(slist: list) -> float:
+        if not slist:
+            return 0.0
+        return sum(s.get("prompts", 0) for s in slist) / len(slist)
+
+    def _avg_duration(slist: list) -> float:
+        durs: list[float] = []
+        for s in slist:
+            started = s.get("started", "")
+            last_seen = s.get("last_seen", "")
+            if started and last_seen:
+                try:
+                    from datetime import datetime
+
+                    t0 = datetime.fromisoformat(started)
+                    t1 = datetime.fromisoformat(last_seen)
+                    mins = (t1 - t0).total_seconds() / 60.0
+                    if mins >= 0:
+                        durs.append(mins)
+                except ValueError:
+                    pass
+        return sum(durs) / len(durs) if durs else 0.0
+
+    prompts_this = _avg_prompts(sess_this)
+    prompts_prev = _avg_prompts(sess_prev)
+    dur_this = _avg_duration(sess_this)
+    dur_prev = _avg_duration(sess_prev)
+
+    def _trend(curr: float, prev: float) -> str:
+        if prev == 0:
+            return "up" if curr > 0 else "flat"
+        ratio = curr / prev
+        if ratio > 1.1:
+            return "up"
+        elif ratio < 0.9:
+            return "down"
+        return "flat"
+
+    # Aggregate event sources across all days (absorbed from Quality panel)
+    source_totals: dict[str, int] = {}
+    for day_data in days.values():
+        for src, count in day_data.get("sources", {}).items():
+            source_totals[src] = source_totals.get(src, 0) + count
+
+    return {
+        "kpis": [
+            {
+                "label": "Commands",
+                "this": cmds_this,
+                "prev": cmds_prev,
+                "trend": _trend(cmds_this, cmds_prev),
+                "fmt": "d",
+            },
+            {
+                "label": "Sessions",
+                "this": sess_count_this,
+                "prev": sess_count_prev,
+                "trend": _trend(sess_count_this, sess_count_prev),
+                "fmt": "d",
+            },
+            {
+                "label": "Prompts/session",
+                "this": prompts_this,
+                "prev": prompts_prev,
+                "trend": _trend(prompts_this, prompts_prev),
+                "fmt": ".1f",
+            },
+            {
+                "label": "Avg duration",
+                "this": dur_this,
+                "prev": dur_prev,
+                "trend": _trend(dur_this, dur_prev),
+                "fmt": ".0f",
+                "suffix": "m",
+            },
+        ],
+        "sources": source_totals,
+    }
+
+
+def _render_trends_panel(data: dict) -> str:
+    """Render week-over-week trend arrows for KPIs + event source bars."""
+    kpis = data.get("kpis", [])
+    sources = data.get("sources", {})
+    arrows = {"up": "\u25b2", "down": "\u25bc", "flat": "\u2014"}
+    rows = ""
+    for kpi in kpis:
+        arrow = arrows.get(kpi["trend"], "\u2014")
+        cls = f"trend-{kpi['trend']}"
+        fmt = kpi.get("fmt", "d")
+        suffix = kpi.get("suffix", "")
+        if fmt == "d":
+            this_str = str(int(kpi["this"]))
+            prev_str = str(int(kpi["prev"]))
+        else:
+            this_str = f"{kpi['this']:{fmt}}"
+            prev_str = f"{kpi['prev']:{fmt}}"
+        rows += (
+            f'<div class="trend-row">'
+            f'<span class="trend-label">{_e(kpi["label"])}</span>'
+            f'<span class="trend-val">{this_str}{suffix}</span>'
+            f'<span class="trend-arrow {cls}">{arrow}</span>'
+            f'<span class="trend-prev">{prev_str}{suffix}</span>'
+            f"</div>"
+        )
+    if not rows:
+        rows = '<div class="empty">Not enough data for trends</div>'
+
+    # Source breakdown bars (absorbed from Quality panel)
+    sources_html = ""
+    if sources:
+        total = sum(sources.values()) or 1
+        sorted_sources = sorted(sources.items(), key=lambda x: -x[1])
+        src_rows = ""
+        for src, count in sorted_sources:
+            pct = round(count / total * 100)
+            bar_w = max(2, pct)
+            src_rows += (
+                f'<div class="source-row">'
+                f'<span class="source-label">{_e(src)}</span>'
+                f'<div class="source-bar-track"><div class="source-bar-fill" style="width:{bar_w}%"></div></div>'
+                f'<span class="source-pct">{pct}%</span>'
+                f"</div>"
+            )
+        sources_html = f'<div style="margin-top:10px"><div style="font-size:11px;color:#484f58;margin-bottom:4px">Sources</div>{src_rows}</div>'
+
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Trends">'
+        f'<div class="card-header"><span class="card-title">Trends</span><span class="card-meta">week over week</span></div>'
+        f'<div class="card-body">{rows}{sources_html}</div>'
+        f"</div>"
+    )
+
+
+def _get_settings_data() -> dict:
+    """Read all settings for dashboard display."""
+    from keephive.settings import BUILTIN_SOUNDS, DEFAULTS, DESCRIPTIONS, read_settings
+
+    return {
+        "settings": read_settings(),
+        "defaults": DEFAULTS,
+        "descriptions": DESCRIPTIONS,
+        "builtin_sounds": BUILTIN_SOUNDS,
+    }
+
+
+def _render_settings_panel(data: dict) -> str:
+    """Render settings with toggle switches for booleans, dropdowns for sounds."""
+    settings = data["settings"]
+    defaults = data["defaults"]
+    descriptions = data["descriptions"]
+    builtin_sounds = data.get("builtin_sounds", [])
+
+    rows: list[str] = []
+    for key in sorted(defaults):
+        val = settings.get(key, defaults[key])
+        desc = _e(descriptions.get(key, ""))
+        if isinstance(val, bool):
+            checked = " checked" if val else ""
+            control = (
+                f'<label class="setting-toggle">'
+                f'<input type="checkbox" class="setting-cb" data-key="{_e(key)}"{checked}>'
+                f'<span class="slider"></span>'
+                f"</label>"
+            )
+        elif key in ("sound_success", "sound_error"):
+            options = []
+            for s in builtin_sounds:
+                sel = " selected" if s == val else ""
+                options.append(f'<option value="{_e(s)}"{sel}>{_e(s)}</option>')
+            opts_html = "\n".join(options)
+            test_type = "error" if key == "sound_error" else ""
+            control = (
+                f'<select class="setting-select" data-key="{_e(key)}">'
+                f"{opts_html}"
+                f"</select>"
+                f'<button class="sound-test-btn" data-sound-type="{test_type}" title="Test sound">&#9654;</button>'
+            )
+        else:
+            control = f"<span>{_e(str(val))}</span>"
+        rows.append(
+            f'<div class="setting-row">'
+            f'<span class="setting-label">{_e(key)}</span>'
+            f"{control}"
+            f'<span class="setting-desc">{desc}</span>'
+            f"</div>"
+        )
+
+    body = "\n".join(rows) if rows else '<div class="empty">No settings</div>'
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Settings">'
+        f'<div class="card-header"><span class="card-title">Settings</span></div>'
+        f'<div class="card-body">{body}</div>'
         f"</div>"
     )
 
@@ -2515,6 +2865,8 @@ PANELS: dict[str, tuple] = {
     "stats-summary": (_get_stats_summary_data, _render_stats_summary_panel),
     "knowledge-tabbed": (_get_knowledge_all_data, _render_knowledge_tabbed_panel),
     "sessions": (_get_session_data, _render_sessions_panel),
+    "stats-trends": (_get_trend_data, _render_trends_panel),
+    "settings": (_get_settings_data, _render_settings_panel),
 }
 
 # ---- View definitions ----
@@ -2549,9 +2901,14 @@ VIEWS: dict[str, dict] = {
         "path": "/stats",
         "title": "Stats",
         "rows": [
-            ["stats", "ps"],
+            ["stats", "stats-trends"],
             ["stats-commands", "sessions"],
         ],
+    },
+    "settings": {
+        "path": "/settings",
+        "title": "Settings",
+        "rows": [["settings"]],
     },
 }
 
@@ -3037,6 +3394,60 @@ class _HiveHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(resp_body)
             return
+
+        elif self.path == "/api/settings":
+            key = (data.get("key") or "").strip()
+            value = data.get("value")
+            if not key:
+                ok = False
+                error = "key required"
+            else:
+                try:
+                    from keephive.settings import DEFAULTS, set_setting
+
+                    if key not in DEFAULTS:
+                        ok = False
+                        error = f"unknown setting: {key}"
+                    else:
+                        set_setting(key, value)
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/sound-test":
+            try:
+                import platform
+                import shutil
+                import subprocess
+                from pathlib import Path
+
+                if platform.system() != "Darwin":
+                    ok = False
+                    error = "Sound only supported on macOS"
+                elif not shutil.which("afplay"):
+                    ok = False
+                    error = "afplay not found"
+                else:
+                    from keephive.settings import BUILTIN_SOUNDS, get_setting
+
+                    is_error = data.get("type") == "error"
+                    name = get_setting("sound_error") if is_error else get_setting("sound_success")
+                    if name in BUILTIN_SOUNDS:
+                        sound = f"/System/Library/Sounds/{name}.aiff"
+                    else:
+                        sound = str(name)
+                    if not Path(sound).exists():
+                        ok = False
+                        error = f"Sound file not found: {sound}"
+                    else:
+                        subprocess.Popen(
+                            ["afplay", sound],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+            except Exception as exc:
+                ok = False
+                error = str(exc)
 
         elif self.path == "/api/mem/add":
             text = (data.get("text") or "").strip()

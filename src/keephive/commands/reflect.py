@@ -10,10 +10,12 @@ from datetime import date, datetime
 
 from keephive.claude import ClaudePipeError, run_claude_pipe
 from keephive.models import GuideDraftResponse, ReflectAnalyzeResponse
-from keephive.output import console, prompt_choice, prompt_yn
+from keephive.output import console, notify_sound, prompt_choice, prompt_yn
 from keephive.storage import (
+    append_to_daily,
     backup_and_write,
     daily_dir,
+    ensure_daily,
     guides_dir,
     hive_dir,
     memory_file,
@@ -166,15 +168,24 @@ Rules:
                 max_turns=3,
             )
     except ClaudePipeError as e:
+        notify_sound(False)
         console.print(f"[err]LLM failed: {e}[/err]")
         console.print("[dim]Check: claude -p availability, CLAUDECODE env var[/dim]")
         console.print("  -> [dim]hive rf[/dim] for instant scan (no AI needed)")
         return
+    notify_sound(True)
     console.print()
 
     # Save for reflect apply
     hd = hive_dir()
     (hd / ".last-analyze.json").write_text(response.model_dump_json(indent=2))
+
+    # Persist summary to daily log
+    ensure_daily()
+    ts = datetime.now().strftime("%H:%M:%S")
+    pattern_count = len(response.patterns)
+    addition_count = len(response.additions)
+    append_to_daily(f"- [{ts}] REFLECT: {pattern_count} pattern(s), {addition_count} addition(s)")
 
     # Display results
     if response.patterns:
@@ -318,9 +329,6 @@ def _reflect_apply(args: list[str]) -> None:
     updated = 0
     skipped = 0
 
-    # Log auto-promotions to daily log
-    from keephive.storage import append_to_daily, ensure_daily
-
     # Walk additions
     total_items = add_count + contra_count
     item_num = 0
@@ -338,13 +346,14 @@ def _reflect_apply(args: list[str]) -> None:
             if choice == "y":
                 line = f"- {a.fact} [verified:{today_str}]"
                 mem_content = _append_to_memory(mem_content, line)
+                ensure_daily()
+                ts = datetime.now().strftime("%H:%M:%S")
                 if auto:
                     console.print("         [ok]Added to memory.md[/ok]")
-                    ensure_daily()
-                    ts = datetime.now().strftime("%H:%M:%S")
                     append_to_daily(f"- [{ts}] AUTO-PROMOTED: [reflect] {a.fact}")
                 else:
                     console.print("         [ok]Added to memory.md[/ok]")
+                    append_to_daily(f"- [{ts}] PROMOTED: {a.fact}")
                 added += 1
             elif choice == "e":
                 edited = input("         Edit text: ").strip()
@@ -375,15 +384,16 @@ def _reflect_apply(args: list[str]) -> None:
                 choice = prompt_choice("         (u)pdate  (s)kip ? ", ["u", "s"])
             if choice == "u":
                 mem_content = _update_contradiction(mem_content, c.memory, c.log, today_str)
+                ensure_daily()
+                ts = datetime.now().strftime("%H:%M:%S")
                 if auto:
                     console.print("         [ok]Updated in memory.md[/ok]")
-                    ensure_daily()
-                    ts = datetime.now().strftime("%H:%M:%S")
                     append_to_daily(
                         f"- [{ts}] AUTO-PROMOTED: [reflect] Corrected: {c.memory} -> {c.log}"
                     )
                 else:
                     console.print("         [ok]Updated in memory.md[/ok]")
+                    append_to_daily(f"- [{ts}] CORRECTED: {c.memory} -> {c.log}")
                 updated += 1
             else:
                 console.print("         [dim]Skipped[/dim]")
@@ -511,9 +521,11 @@ Do not invent or extrapolate beyond what the entries say."""
                 stdin_text=entry_text,
             )
     except ClaudePipeError as e:
+        notify_sound(False)
         console.print(f"[err]LLM failed: {e}[/err]")
         console.print("[dim]Check: claude -p availability, CLAUDECODE env var[/dim]")
         return
+    notify_sound(True)
     console.print()
 
     # Preview
@@ -538,6 +550,9 @@ Do not invent or extrapolate beyond what the entries say."""
         guides_dir().mkdir(parents=True, exist_ok=True)
         guide_path.write_text(response.content)
         console.print(f"  [ok]Saved.[/ok] View with: hive k {safe_name}")
+        ensure_daily()
+        ts = datetime.now().strftime("%H:%M:%S")
+        append_to_daily(f"- [{ts}] REFLECT: Drafted guide: {safe_name}")
     else:
         console.print("  [dim]Discarded.[/dim]")
 

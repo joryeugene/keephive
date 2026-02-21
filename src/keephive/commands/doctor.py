@@ -22,7 +22,7 @@ from keephive.health import (
 from keephive.health import (
     get_installed_version as _get_installed_version,
 )
-from keephive.output import console, prompt_yn
+from keephive.output import console, notify_sound, prompt_yn
 from keephive.storage import (
     archive_dir,
     collect_todos,
@@ -191,7 +191,8 @@ def cmd_doctor(args: list[str]) -> None:
     # 6. Data quality
     console.print()
     console.print("[bold]Data Quality[/bold]")
-    issues += _data_quality_checks()
+    issues_dq, findings = _data_quality_checks()
+    issues += issues_dq
 
     # Summary
     console.print()
@@ -209,15 +210,19 @@ def cmd_doctor(args: list[str]) -> None:
 
     ensure_daily()
     append_to_daily(f"HEALTH: {issues} issue(s)")
+    for finding in findings[:5]:
+        append_to_daily(f"HEALTH: {finding}")
     console.print("  [dim]Logged. ✓[/dim]")
+    notify_sound(True)
 
 
-def _data_quality_checks() -> int:
-    """Run data quality checks on TODOs. Returns count of issues found."""
+def _data_quality_checks() -> tuple[int, list[str]]:
+    """Run data quality checks on TODOs. Returns (issue_count, findings)."""
     t = date.today()
     todos_all, dones_set = collect_todos()
     ot = [(d, ts, text) for d, ts, text in todos_all if text.lower() not in dones_set]
     extra_issues = 0
+    findings: list[str] = []
 
     # Duplicate detection: LLM or deterministic
     if os.environ.get("HIVE_SKIP_LLM"):
@@ -225,20 +230,26 @@ def _data_quality_checks() -> int:
     elif not prompt_yn("  Check for semantic duplicates with LLM?"):
         _detect_duplicates_deterministic(ot)
     else:
-        extra_issues += _detect_duplicates_llm(ot)
+        dupes = _detect_duplicates_llm(ot)
+        extra_issues += dupes
+        if dupes:
+            findings.append(f"{dupes} duplicate group(s)")
 
     # Stale TODOs
     stale = [(d, text) for d, _, text in ot if d < (t - timedelta(days=7)).isoformat()]
     if stale:
         console.print(f"  [warn]WARN[/warn] {len(stale)} TODO(s) older than 7 days")
+        findings.append(f"{len(stale)} stale TODO(s) >7d")
     else:
         console.print("  [ok]OK[/ok] No stale TODOs (>7d)")
 
     # Accumulation
     if len(ot) > 10:
         console.print(f"  [warn]WARN[/warn] {len(ot)} open TODOs. Consider consolidating.")
+        findings.append(f"{len(ot)} open TODOs (high)")
     else:
         console.print(f"  [ok]OK[/ok] {len(ot)} open, {len(dones_set)} done")
+        findings.append(f"{len(ot)} open, {len(dones_set)} done")
 
     # Hygiene: surface recent correction entries about dead code/duplicates
     df = daily_file()
@@ -254,8 +265,9 @@ def _data_quality_checks() -> int:
         ]
         if corrections:
             console.print(f"  [info]{len(corrections)} hygiene correction(s) logged today[/info]")
+            findings.append(f"{len(corrections)} hygiene correction(s)")
 
-    return extra_issues
+    return extra_issues, findings
 
 
 def _detect_duplicates_deterministic(ot: list[tuple[str, str, str]]) -> None:
@@ -311,6 +323,7 @@ Rules:
     try:
         response = run_claude_pipe(prompt, DoctorDuplicatesResponse, model="haiku")
     except ClaudePipeError as e:
+        notify_sound(False)
         console.print(f"  [warn]LLM duplicate check failed ({e}), using fallback[/warn]")
         console.print("  [dim]Check: claude -p availability, CLAUDECODE env var[/dim]")
         _detect_duplicates_deterministic(ot)

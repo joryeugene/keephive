@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from keephive.output import console
+from keephive.output import console, notify_sound
 from keephive.storage import (
     count_daily_entries,
     daily_dir,
@@ -63,12 +63,13 @@ def _log_summarize() -> None:
         with console.status("  Summarizing...", spinner="dots"):
             resp = run_claude_pipe(prompt, DailySummaryResponse, model="haiku")
     except ClaudePipeError as e:
+        notify_sound(False)
         print(f"[keephive] summarize failed: {e}", file=sys.stderr)
         return
 
     plain = "\n".join(f"• {b}" for b in resp.bullets)
     if sys.stdout.isatty():
-        console.print(f"[bold]Today ({today()}) — summary:[/bold]")
+        console.print(f"[bold]Today ({today()}) -- summary:[/bold]")
         for bullet in resp.bullets:
             console.print(f"  • {bullet}")
         from keephive.output import copy_to_clipboard
@@ -77,6 +78,13 @@ def _log_summarize() -> None:
             console.print("[dim]Copied to clipboard[/dim]")
     else:
         print(plain)
+
+    # Persist summary to daily log
+    from keephive.storage import append_to_daily
+
+    summary_text = " | ".join(resp.bullets)
+    append_to_daily(f"SUMMARY: {summary_text}")
+    notify_sound(True)
 
 
 def cmd_log(args: list[str]) -> None:

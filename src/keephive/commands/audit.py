@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
 
-from keephive.output import console, prompt_yn
+from keephive.output import console, notify_sound, prompt_yn
 from keephive.storage import (
     append_to_daily,
     collect_todos,
@@ -938,6 +938,7 @@ def cmd_audit(args: list[str]) -> None:
     try:
         vault_r, cleaner_r, strategist_r = _run_perspectives(vault, cleaner, strategist, verbose)
     except Exception as e:
+        notify_sound(False)
         console.print(f"  [err]Perspective analysis failed: {e}[/err]")
         console.print("  [dim]Check: claude -p availability, CLAUDECODE env var[/dim]")
         return
@@ -958,6 +959,7 @@ def cmd_audit(args: list[str]) -> None:
             verbose,
         )
     except Exception as e:
+        notify_sound(False)
         console.print(f"  [err]Synthesis failed: {e}[/err]")
         console.print("  [dim]Check: claude -p availability, CLAUDECODE env var[/dim]")
         display_perspectives_only(vault_r, cleaner_r, strategist_r, score)
@@ -979,6 +981,7 @@ def cmd_audit(args: list[str]) -> None:
 
     # 5. Save insights to daily log
     count = save_audit_insights(synthesis, score)
+    notify_sound(True)
 
     # 6. Footer (after save so we have the count)
     if not verbose:

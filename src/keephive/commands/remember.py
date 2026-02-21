@@ -9,7 +9,7 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
-from keephive.output import console, prompt_yn
+from keephive.output import console, notify_sound, prompt_yn
 from keephive.storage import (
     append_to_daily,
     archive_dir,
@@ -259,6 +259,7 @@ def _expand_and_search(query: str, existing: list[dict]) -> list[dict] | None:
         with console.status("  Expanding search with AI...", spinner="dots"):
             response = run_claude_pipe(prompt, RecallExpandResponse, timeout=20)
     except (ClaudePipeError, Exception) as e:
+        notify_sound(False)
         print(f"[keephive] LLM recall expansion failed: {e}", file=sys.stderr)
         return None
 
@@ -278,6 +279,11 @@ def _expand_and_search(query: str, existing: list[dict]) -> list[dict] | None:
         return None
     merged = list(existing) + expanded
     merged.sort(key=lambda x: x["score"], reverse=True)
+    notify_sound(True)
+
+    # Persist expansion to daily log
+    ensure_daily()
+    append_to_daily(f"RECALL: '{query}' expanded to {len(expanded)} new result(s)")
     return merged
 
 

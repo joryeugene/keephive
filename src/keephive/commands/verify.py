@@ -11,9 +11,11 @@ from pathlib import Path
 
 from keephive.claude import ClaudePipeError, run_claude_pipe
 from keephive.models import VerifyResponse
-from keephive.output import console, prompt_yn
+from keephive.output import console, notify_sound, prompt_yn
 from keephive.storage import (
+    append_to_daily,
     backup_and_write,
+    ensure_daily,
     get_all_verified_facts,
     get_evidence_for_fact,
     get_stale_facts,
@@ -129,6 +131,7 @@ For STALE verdicts, correction must contain the full replacement fact text."""
                 verbose=verbose,
             )
     except ClaudePipeError as e:
+        notify_sound(False)
         console.print(f"[err]Verification failed: {e}[/err]")
         console.print("[dim]Check: claude -p availability, CLAUDECODE env var[/dim]")
         console.print("  -> [dim]hive e[/dim] to manually review working memory")
@@ -143,6 +146,19 @@ For STALE verdicts, correction must contain the full replacement fact text."""
     backup_and_write(mem, mem.read_text())
 
     updated, refreshed = apply_verdicts(response, all_facts, mem, today())
+
+    # Persist verdicts to daily log
+    from datetime import datetime
+
+    ensure_daily()
+    ts = datetime.now().strftime("%H:%M:%S")
+    for v in response.verdicts:
+        idx = v.index - 1
+        if 0 <= idx < len(all_facts):
+            fact_text = all_facts[idx][1][:80]
+            append_to_daily(f"- [{ts}] VERIFY: {v.verdict.value}: {fact_text}")
+
+    notify_sound(True)
 
     console.print(
         f"[dim]Updated {updated} fact(s), refreshed {refreshed} in working/memory.md[/dim]"

@@ -8,9 +8,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from keephive.claude import run_claude_pipe
+from keephive.claude import ClaudePipeError, run_claude_pipe
 from keephive.models import NoteExtractResponse
-from keephive.output import console, copy_to_clipboard, prompt_yn
+from keephive.output import console, copy_to_clipboard, notify_sound, prompt_yn
 from keephive.storage import (
     NOTE_SLOT_COUNT,
     active_slot,
@@ -274,7 +274,8 @@ def _note_extract_todos(slot: int) -> None:
         try:
             response = run_claude_pipe(prompt, NoteExtractResponse)
             items = response.items
-        except Exception:
+        except ClaudePipeError:
+            notify_sound(False)
             items = []
 
     if not items:
@@ -316,6 +317,7 @@ def _note_extract_todos(slot: int) -> None:
     for item in selected:
         append_to_daily(f"- [{ts}] TODO: {item}")
     console.print(f"\n  Added {len(selected)} TODO(s).")
+    notify_sound(True)
 
 
 def _note_edit(slot: int | None = None) -> None:

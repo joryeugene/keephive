@@ -9,7 +9,7 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
-from keephive.output import console, copy_to_clipboard, prompt_yn
+from keephive.output import console, copy_to_clipboard, notify_sound, prompt_yn
 from keephive.storage import collect_todos, daily_dir, get_meaningful_entries, safe_read_text, today
 
 
@@ -364,6 +364,7 @@ CRITICAL: Every item you output must trace to a specific entry in the data. Do N
         with console.status("  Generating standup...", spinner="dots"):
             response = run_claude_pipe(prompt, StandupResponse, model="haiku")
     except ClaudePipeError as e:
+        notify_sound(False)
         console.print(f"[err]LLM failed: {e}[/err]")
         console.print(
             "[dim]Falling back to raw data. Check: claude -p availability, CLAUDECODE env var[/dim]"
@@ -443,3 +444,5 @@ def cmd_standup(args: list[str]) -> None:
         ensure_daily()
         append_to_daily(f"STANDUP: {first_line}")
         console.print("[dim]  Logged. ✓[/dim]")
+
+    notify_sound(True)

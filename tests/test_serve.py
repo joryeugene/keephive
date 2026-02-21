@@ -143,7 +143,7 @@ def test_render_stats_panel(hive_env):
 
     data = _get_stats_data()
     html = _render_stats_panel(data)
-    assert "Stats" in html
+    assert "Activity" in html
 
 
 # ---- Fragment rendering tests ----
@@ -177,7 +177,7 @@ def test_render_fragment_stats(hive_env):
     from keephive.commands.serve import render_fragment
 
     html = render_fragment("stats")
-    assert "Stats" in html
+    assert "Activity" in html
 
 
 def test_render_fragment_unknown():
@@ -1786,6 +1786,231 @@ def test_notes_panel_preview_in_header(hive_env, tmp_path):
     assert "Another note here" in html
 
 
+# ---- Stats dashboard enhancement: trends, session detail, quality ----
+
+
+def test_render_trends_panel(hive_env):
+    """Trends panel renders with seed data and shows arrow indicators."""
+    from keephive.commands.serve import _render_trends_panel
+
+    data = {
+        "kpis": [
+            {"label": "Commands", "this": 50, "prev": 30, "trend": "up", "fmt": "d"},
+            {"label": "Sessions", "this": 10, "prev": 10, "trend": "flat", "fmt": "d"},
+            {"label": "Prompts/session", "this": 3.5, "prev": 5.0, "trend": "down", "fmt": ".1f"},
+            {
+                "label": "Avg duration",
+                "this": 12.0,
+                "prev": 10.0,
+                "trend": "up",
+                "fmt": ".0f",
+                "suffix": "m",
+            },
+        ],
+    }
+    html = _render_trends_panel(data)
+    assert "Trends" in html
+    assert "Commands" in html
+    assert "trend-up" in html
+    assert "trend-flat" in html
+    assert "trend-down" in html
+    # Values present
+    assert "50" in html
+    assert "30" in html
+    assert "3.5" in html
+
+
+def test_render_trends_panel_empty(hive_env):
+    """Trends panel renders gracefully with no KPI data."""
+    from keephive.commands.serve import _render_trends_panel
+
+    html = _render_trends_panel({"kpis": []})
+    assert "Trends" in html
+    assert "Not enough data" in html
+
+
+def test_activity_panel_title(hive_env):
+    """Stats panel renders with 'Activity' title (renamed from 'Usage Stats')."""
+    from keephive.commands.serve import _render_stats_panel
+
+    data = {
+        "commands": [],
+        "today": {},
+        "week": {},
+        "total_days": 5,
+        "projects": [],
+        "curr_streak": 3,
+        "longest_streak": 7,
+        "daily_spark": [],
+        "today_hours": {},
+        "tool_totals": {},
+        "tool_pct": {},
+    }
+    html = _render_stats_panel(data)
+    assert "Activity" in html
+    assert "Usage Stats" not in html
+
+
+def test_what_you_use_panel_has_tools(hive_env):
+    """What You Use panel renders command table + tool breakdown."""
+    from keephive.commands.serve import _render_stats_commands_panel
+
+    data = {
+        "commands": [("remember", 100), ("todo", 50)],
+        "today": {"remember": 5},
+        "week": {"remember": 20, "todo": 10},
+        "tool_totals": {"Edit": 40, "Write": 20, "Read": 15},
+        "tool_pct": {"Edit": 0.40, "Write": 0.20, "Read": 0.15},
+    }
+    html = _render_stats_commands_panel(data)
+    assert "What You Use" in html
+    assert "Commands" not in html or "What You Use" in html
+    assert "cmd-bar" in html
+    assert "remember" in html
+    # Tool breakdown section
+    assert "Tools (sessions)" in html
+    assert "Edit" in html
+    assert "40%" in html
+
+
+def test_trends_panel_has_sources(hive_env):
+    """Trends panel renders source breakdown bars (absorbed from Quality)."""
+    from keephive.commands.serve import _render_trends_panel
+
+    data = {
+        "kpis": [
+            {"label": "Commands", "this": 50, "prev": 30, "trend": "up", "fmt": "d"},
+        ],
+        "sources": {"claude_code": 100, "terminal": 30, "mcp": 10},
+    }
+    html = _render_trends_panel(data)
+    assert "Trends" in html
+    assert "Sources" in html
+    assert "source-bar-fill" in html
+    assert "claude_code" in html
+
+
+def test_sessions_panel_has_histogram(hive_env):
+    """Sessions panel renders prompt histogram (absorbed from Session Detail)."""
+    from keephive.commands.serve import _render_sessions_panel
+
+    data = {
+        "total_sessions": 10,
+        "avg_prompts_per_session": 5.0,
+        "avg_duration_minutes": 12.0,
+        "compaction_rate": 0.3,
+        "buckets": {"0": 2, "1-5": 5, "6-10": 3, "11-20": 0, "21-50": 0, "51+": 0},
+        "recent": [
+            {
+                "started": "2026-02-20T10:00:00",
+                "prompts": 5,
+                "project": "~/projects/keephive",
+                "tools": {"Edit": 3, "Write": 1},
+            },
+        ],
+        "insights": 0,
+        "decisions": 0,
+        "corrections": 0,
+        "todos_done": 0,
+        "standups": 0,
+    }
+    html = _render_sessions_panel(data)
+    assert "Sessions" in html
+    assert "prompt-hist" in html
+    assert "session-item" in html
+    assert "keephive" in html
+    assert "10:00" in html
+
+
+def test_sessions_panel_has_quality_kpis(hive_env):
+    """Sessions panel renders quality KPIs (absorbed from Quality panel)."""
+    from keephive.commands.serve import _render_sessions_panel
+
+    data = {
+        "total_sessions": 10,
+        "avg_prompts_per_session": 5.0,
+        "avg_duration_minutes": 12.0,
+        "compaction_rate": 0,
+        "buckets": {"0": 0, "1-5": 0, "6-10": 0, "11-20": 0, "21-50": 0, "51+": 0},
+        "recent": [],
+        "insights": 5,
+        "decisions": 8,
+        "corrections": 2,
+        "todos_done": 15,
+        "standups": 3,
+    }
+    html = _render_sessions_panel(data)
+    assert "Sessions" in html
+    assert "insights" in html
+    assert "decisions" in html
+    assert ">5<" in html  # insights count
+    assert ">8<" in html  # decisions count
+    assert ">15<" in html  # todos done
+
+
+def test_stats_view_has_two_rows():
+    """Stats view definition has 2 rows (consolidated from 3)."""
+    from keephive.commands.serve import VIEWS
+
+    stats_rows = VIEWS["stats"]["rows"]
+    assert len(stats_rows) == 2
+    # Row 1: activity + trends
+    assert "stats" in stats_rows[0]
+    assert "stats-trends" in stats_rows[0]
+    # Row 2: what you use + sessions
+    assert "stats-commands" in stats_rows[1]
+    assert "sessions" in stats_rows[1]
+
+
+def test_render_fragment_stats_all_panels(hive_env):
+    """All 4 panels in the stats view render without error."""
+    from keephive.commands.serve import render_fragment
+
+    html = render_fragment("stats")
+    assert "Activity" in html
+    assert "Trends" in html
+    assert "What You Use" in html
+    assert "Sessions" in html or "session" in html.lower()
+
+
+def test_get_trend_data_returns_kpis_and_sources(hive_env):
+    """_get_trend_data returns dict with 'kpis' list and 'sources' dict."""
+    from keephive.commands.serve import _get_trend_data
+
+    data = _get_trend_data()
+    assert "kpis" in data
+    assert len(data["kpis"]) == 4
+    for kpi in data["kpis"]:
+        assert "label" in kpi
+        assert "this" in kpi
+        assert "prev" in kpi
+        assert kpi["trend"] in ("up", "down", "flat")
+    assert "sources" in data
+    assert isinstance(data["sources"], dict)
+
+
+def test_panels_registry_consolidated():
+    """PANELS dict has stats-trends but not deleted panels."""
+    from keephive.commands.serve import PANELS
+
+    assert "stats-trends" in PANELS
+    assert "stats-sessions-detail" not in PANELS
+    assert "stats-quality" not in PANELS
+
+
+def test_css_has_new_panel_styles():
+    """CSS includes styles for trends, histogram, session items, and source bars."""
+    from keephive.commands.serve import _CSS
+
+    assert ".trend-up{" in _CSS
+    assert ".trend-down{" in _CSS
+    assert ".trend-flat{" in _CSS
+    assert ".cmd-bar{" in _CSS
+    assert ".prompt-hist{" in _CSS
+    assert ".session-item{" in _CSS
+    assert ".source-bar-fill{" in _CSS
+
+
 def test_notes_panel_strips_slot_header_from_body(hive_env):
     """Note body strips 'Slot N ★' metadata line; badge still shows it."""
     from keephive.commands.serve import _render_notes_panel
@@ -2413,7 +2638,7 @@ def test_stats_commands_panel_renders(hive_env):
         "week": {"status": 20, "remember": 15},
     }
     html = _render_stats_commands_panel(data)
-    assert "Commands" in html
+    assert "What You Use" in html
     assert "stats-table" in html
     assert "status" in html
     assert "remember" in html
@@ -2505,10 +2730,10 @@ def test_dev_view_todos_log_before_knowledge_memory():
 
 
 def test_consolidated_views_exist():
-    """After consolidation, exactly 4 views exist: home, dev, know, stats."""
+    """After consolidation, exactly 5 views exist: home, dev, know, stats, settings."""
     from keephive.commands.serve import VIEWS
 
-    assert set(VIEWS.keys()) == {"home", "dev", "know", "stats"}
+    assert set(VIEWS.keys()) == {"home", "dev", "know", "stats", "settings"}
 
 
 # ---- Notes compact panel ----

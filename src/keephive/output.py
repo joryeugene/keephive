@@ -87,6 +87,33 @@ def copy_to_clipboard(text: str) -> bool:
     return False
 
 
+def notify_sound(success: bool = True) -> None:
+    """Play a short audio notification. Silent on non-macOS, missing binary, or sound=off."""
+    import platform
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    if platform.system() != "Darwin":
+        return
+    if not shutil.which("afplay"):
+        return
+    from keephive.settings import BUILTIN_SOUNDS, get_setting  # lazy to avoid circular
+
+    if not get_setting("sound"):
+        return
+    name = get_setting("sound_success") if success else get_setting("sound_error")
+    if name in BUILTIN_SOUNDS:
+        sound = f"/System/Library/Sounds/{name}.aiff"
+    else:
+        sound = str(name)  # custom file path
+    if not Path(sound).exists():
+        return
+    subprocess.Popen(
+        ["afplay", sound], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+
+
 def prompt_yn(prompt: str, default_yes: bool = True) -> bool:
     """Y/n confirmation. Returns True for yes. Enter accepts the default."""
     import sys

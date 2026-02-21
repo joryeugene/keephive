@@ -31,6 +31,8 @@ HELP: dict[str, str] = {
     "update": "Usage: hive up\n  Upgrade keephive to the latest version in-place",
     "setup": "Usage: hive setup\n  Initial setup: register MCP server + hooks in ~/.claude/",
     "ps": "Usage: hive ps\n  Local hive map: active claude sessions, recent project activity, git state",
+    "set": "Usage: hive set [key] [value]\n  View/change settings\n  No args: show all settings\n  hive set sound on/off   Toggle audio notifications",
+    "sound-test": "Usage: hive sound-test [error]\n  Play configured notification sound\n  No args: play success sound\n  error: play error sound",
     "serve": "Usage: hive serve [port] [--hot]\n  Live web dashboard at localhost:3847 (default)\n  Views: / (home) /dev /know (guides+memory+notes) /stats\n  --hot  Watch source files, auto-restart on change",
     "ui": "Usage: hive ui [install|clear]\n  ui           Show pending UI feedback queue\n  ui-install   Print bookmarklet URL (drag to bookmarks bar)\n  ui-clear     Clear pending feedback",
 }
@@ -81,6 +83,7 @@ Daily
   r, remember <text>   Save insight to daily log
   rc, recall <query>   Search all memory tiers
   l, log [date]        View daily log (today, yesterday, N, YYYY-MM-DD)
+  l summarize          AI summary of today's log
   m, mem [rm] <text>   Add/remove working memory facts
   rule [rm] <text>     Add/remove behavioral rules
   rule review          Review queued rule suggestions
@@ -128,6 +131,8 @@ Analysis
 
 Maintenance
   e, edit [target]     Edit file (memory/rules/claude/settings/local/note/today)
+  set [key] [value]    View/change settings
+  sound-test [error]   Play configured notification sound
   g, gc                Archive old logs
   dr, doctor           Check setup + find duplicate TODOs
   up, update           Upgrade keephive in-place
@@ -197,6 +202,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "update": ("keephive.commands.update", "cmd_update"),
     "up": ("keephive.commands.update", "cmd_update"),
     "ps": ("keephive.commands.ps", "cmd_ps"),
+    "set": ("keephive.commands.settings", "cmd_set"),
+    "sound-test": ("keephive.commands.settings", "cmd_sound_test"),
     "serve": ("keephive.commands.serve", "cmd_serve"),
     "ws": ("keephive.commands.serve", "cmd_serve"),
     "ui": ("keephive.commands.ui", "cmd_ui"),
