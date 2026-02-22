@@ -14,7 +14,6 @@ import json
 
 import pytest
 
-
 # ============================================================
 #  Priority 3a: TaskCompleted Hook
 # ============================================================
@@ -69,10 +68,7 @@ class TestTaskCompletedHook:
     def test_empty_subject_no_done_entry(self, term):
         """Empty task_subject does not write a DONE entry (stats still tracked)."""
         term.set_date("2026-03-10")
-        term.type(
-            'echo \'{"task_subject":""}\' '
-            "| python -m keephive hook-taskcompleted"
-        )
+        term.type('echo \'{"task_subject":""}\' | python -m keephive hook-taskcompleted')
 
         # Daily log may not exist at all, or should have no DONE entry
         if term.file_exists("daily/2026-03-10.md"):
@@ -83,9 +79,7 @@ class TestTaskCompletedHook:
         """Invalid JSON input does not crash the hook."""
         term.set_date("2026-03-10")
         # This should exit silently without error
-        screen = term.type(
-            "echo 'not valid json' | python -m keephive hook-taskcompleted"
-        )
+        screen = term.type("echo 'not valid json' | python -m keephive hook-taskcompleted")
         screen.lacks("Traceback", "Error")
 
     def test_multiple_completions_accumulate(self, term):
@@ -168,14 +162,11 @@ class TestSessionEndHook:
         """Empty session_id is a no-op (no crash, no entry)."""
         term.set_date("2026-03-10")
         screen = term.type(
-            'echo \'{"session_id":"","reason":"user_exit"}\' '
-            "| python -m keephive hook-sessionend"
+            'echo \'{"session_id":"","reason":"user_exit"}\' | python -m keephive hook-sessionend'
         )
         screen.lacks("Traceback", "Error")
 
     def test_invalid_json_graceful(self, term):
         """Invalid JSON input does not crash the hook."""
-        screen = term.type(
-            "echo 'garbage input' | python -m keephive hook-sessionend"
-        )
+        screen = term.type("echo 'garbage input' | python -m keephive hook-sessionend")
         screen.lacks("Traceback", "Error")

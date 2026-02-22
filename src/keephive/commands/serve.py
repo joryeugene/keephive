@@ -1946,7 +1946,7 @@ def _render_status_panel(data: dict) -> str:
         return f'<span class="health-dot {cls}" title="{label}"></span>'
 
     health_dots = (
-        f'<div class="health-dots">'
+        '<div class="health-dots">'
         + _header_dot(hooks_ok, "hooks")
         + _header_dot(mcp_ok, "mcp")
         + _header_dot(data_ok, "data")
@@ -2975,9 +2975,7 @@ def _render_stats_summary_panel(data: dict) -> str:
     if daily_sparkline:
         spark_blocks = " \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588"
         mx = max(daily_sparkline) or 1
-        chars = "".join(
-            spark_blocks[min(8, round(v / mx * 8))] for v in daily_sparkline
-        )
+        chars = "".join(spark_blocks[min(8, round(v / mx * 8))] for v in daily_sparkline)
         labels = data.get("daily_sparkline_labels", [])
         first_label = labels[0] if labels else ""
         last_label = labels[-1] if labels else ""
@@ -3541,7 +3539,9 @@ def _get_trend_data() -> dict:
                 "label": "Freshness",
                 "this": fresh_pct_this,
                 "prev": 0,
-                "trend": "up" if fresh_pct_this >= 80 else ("flat" if fresh_pct_this >= 50 else "down"),
+                "trend": "up"
+                if fresh_pct_this >= 80
+                else ("flat" if fresh_pct_this >= 50 else "down"),
                 "fmt": ".0f",
                 "suffix": "%",
             },
@@ -3549,7 +3549,9 @@ def _get_trend_data() -> dict:
                 "label": "Recall rate",
                 "this": recall_pct_this,
                 "prev": 0,
-                "trend": "up" if recall_pct_this >= 80 else ("flat" if recall_pct_this >= 50 else "down"),
+                "trend": "up"
+                if recall_pct_this >= 80
+                else ("flat" if recall_pct_this >= 50 else "down"),
                 "fmt": ".0f",
                 "suffix": "%",
             },
@@ -3599,7 +3601,9 @@ def _render_trends_panel(data: dict) -> str:
         has_prev = kpi.get("prev", 0) > 0
         if has_prev:
             arrow = arrows.get(kpi["trend"], "\u2014")
-            delta_html = f'<span class="trend-delta trend-{kpi["trend"]}">{arrow} {prev_str}{suffix}</span>'
+            delta_html = (
+                f'<span class="trend-delta trend-{kpi["trend"]}">{arrow} {prev_str}{suffix}</span>'
+            )
         else:
             delta_html = ""
         rows += (
@@ -3761,10 +3765,26 @@ def _render_pulse_panel(data: dict) -> str:
 
     # Tier 2: KPI row
     kpis = [
-        (f"{health.get('fresh_pct', 0):.0f}%", "fresh", "Memory freshness: % of facts under 14 days old"),
-        (f"{health.get('capture_recall_ratio', 0):.0f}%", "recall", "Capture-recall ratio: recalls vs. captures"),
-        (f"{health.get('fact_survival_rate', 0):.0f}%", "survival", "Fact survival rate: % not corrected or removed"),
-        (f"{sess.get('avg_prompts_per_convo', 0):.0f}", "prompts/convo", "Average prompts per conversation (30d)"),
+        (
+            f"{health.get('fresh_pct', 0):.0f}%",
+            "fresh",
+            "Memory freshness: % of facts under 14 days old",
+        ),
+        (
+            f"{health.get('capture_recall_ratio', 0):.0f}%",
+            "recall",
+            "Capture-recall ratio: recalls vs. captures",
+        ),
+        (
+            f"{health.get('fact_survival_rate', 0):.0f}%",
+            "survival",
+            "Fact survival rate: % not corrected or removed",
+        ),
+        (
+            f"{sess.get('avg_prompts_per_convo', 0):.0f}",
+            "prompts/convo",
+            "Average prompts per conversation (30d)",
+        ),
         (f"{sess.get('convos_week', 0)}", "conversations", "Total conversations this week"),
         (f"{streak}d", "day streak", "Consecutive days with at least one hive command"),
     ]
@@ -4239,7 +4259,6 @@ def _get_profiles_data() -> dict:
 def _render_profiles_panel(data: dict) -> str:
     """Render profile management card."""
     profiles = data.get("profiles", [])
-    active = data.get("active", "default")
 
     rows = ""
     for p in profiles:
@@ -4303,7 +4322,7 @@ def _render_transfer_panel(data: dict) -> str:
         f'<div style="font-size:11px;color:#8b949e;margin-bottom:6px">Export current profile as archive</div>'
         f'<button class="todo-done-btn" onclick="transferExport()">Export &ldquo;{profile}&rdquo; &#8595;</button>'
         f"</div>"
-        f'<div>'
+        f"<div>"
         f'<div style="font-size:11px;color:#8b949e;margin-bottom:6px">Import from archive file</div>'
         f'<input type="file" id="import-file" accept=".tar.gz,.tgz" '
         f'style="font-size:11px;color:#8b949e;background:none;border:none">'
@@ -4715,7 +4734,6 @@ class _HiveHandler(BaseHTTPRequestHandler):
             self.wfile.write(resp_body)
             return
 
-
         if path == "/api/profiles":
             try:
                 from keephive.storage import active_profile, list_profiles
@@ -4770,9 +4788,7 @@ class _HiveHandler(BaseHTTPRequestHandler):
                 filename = f"hive-{profile}.tar.gz"
                 self.send_response(200)
                 self.send_header("Content-Type", "application/gzip")
-                self.send_header(
-                    "Content-Disposition", f'attachment; filename="{filename}"'
-                )
+                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
                 self._cors()
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
