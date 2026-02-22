@@ -3243,7 +3243,7 @@ def _render_sessions_panel(data: dict) -> str:
     msg_key = "user_messages" if use_cc else "prompts"
     tool_key = "tool_counts" if use_cc else "tools"
     msg_label = "msgs" if use_cc else "prompts"
-    msg_unit = "" if use_cc else "p"
+    msg_unit = "\u21b5" if use_cc else "p"
 
     if total == 0 and not recent:
         return (
