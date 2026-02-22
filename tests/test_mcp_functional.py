@@ -3,11 +3,8 @@
 Complements test_mcp_tools.py (which covers schemas/basic behavior).
 This file focuses on: file persistence, stats tracking, and error resilience.
 """
+
 from __future__ import annotations
-
-from pathlib import Path
-
-import pytest
 
 
 class TestHiveRememberFunctional:
@@ -266,6 +263,6 @@ class TestMcpCrossToolWorkflow:
         assert "open TODO" in status1
 
         hive_todo_done("cross tool status check 88")
-        status2 = hive_status()
+        hive_status()
         # After completing the only TODO, either no TODO section or 0 open
         # (depends on whether other TODOs exist from fixture)

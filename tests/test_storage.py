@@ -2372,12 +2372,7 @@ class TestConcurrentWriteStats:
         data = read_stats()
         assert isinstance(data, dict), "Stats file is not valid JSON dict"
         assert "days" in data, "Stats missing 'days' key"
-        count = (
-            data.get("days", {})
-            .get(day, {})
-            .get("commands", {})
-            .get("concurrent_test", 0)
-        )
+        count = data.get("days", {}).get(day, {}).get("commands", {}).get("concurrent_test", 0)
         assert count > 0, "No increments recorded at all"
 
     def test_no_exceptions_concurrent(self, hive_env):

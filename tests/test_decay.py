@@ -3,6 +3,7 @@
 All external dependencies (get_today, _count_fact_references, get_recall_count) are
 mocked so tests are fast and deterministic.
 """
+
 from __future__ import annotations
 
 from datetime import date, timedelta
@@ -102,9 +103,7 @@ class TestScoreFactDecay:
         """
         future_date = (FIXED_TODAY + timedelta(days=365)).isoformat()
         score = make_score("FACT: future fact", future_date)
-        assert score <= 1.0, (
-            f"Score {score} > 1.0 for future-dated fact — BUG-3 not fixed"
-        )
+        assert score <= 1.0, f"Score {score} > 1.0 for future-dated fact — BUG-3 not fixed"
         assert score >= 0.0
 
     def test_importance_ordering(self, hive_env):
@@ -135,9 +134,7 @@ class TestScoreFactDecay:
         """Score is always in [0.0, 1.0] regardless of input."""
         vdate = (FIXED_TODAY - timedelta(days=days_old)).isoformat()
         score = make_score(f"{prefix}: test content here", vdate)
-        assert 0.0 <= score <= 1.0, (
-            f"Score {score} out of [0,1] for {prefix} at {days_old}d"
-        )
+        assert 0.0 <= score <= 1.0, f"Score {score} out of [0,1] for {prefix} at {days_old}d"
 
     def test_stale_days_env_override(self, hive_env, monkeypatch):
         """HIVE_STALE_DAYS env var overrides per-category threshold for all facts."""

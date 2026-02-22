@@ -1,13 +1,11 @@
 """Tests for storage.read_live_sessions() and storage.is_ghost_session()."""
+
 from __future__ import annotations
 
 import json
 import os
 import time
 from pathlib import Path
-
-import pytest
-
 
 # ---- Helpers ----
 
@@ -21,36 +19,42 @@ def make_jsonl_content(n_user_messages: int, target_size_bytes: int = 0) -> byte
     base_ts = "2026-02-22T10:00:00Z"
 
     for i in range(n_user_messages):
-        user_line = json.dumps({
-            "type": "user",
-            "message": {"role": "user", "content": f"user message {i}"},
-            "timestamp": base_ts,
-            "uuid": f"user-{i:04d}-aaaa-bbbb-cccc-dddddddddddd",
-        })
+        user_line = json.dumps(
+            {
+                "type": "user",
+                "message": {"role": "user", "content": f"user message {i}"},
+                "timestamp": base_ts,
+                "uuid": f"user-{i:04d}-aaaa-bbbb-cccc-dddddddddddd",
+            }
+        )
         lines.append(user_line)
-        asst_line = json.dumps({
-            "type": "assistant",
-            "message": {
-                "role": "assistant",
-                "content": [{"type": "text", "text": f"response {i}"}],
-            },
-            "timestamp": base_ts,
-            "uuid": f"asst-{i:04d}-aaaa-bbbb-cccc-dddddddddddd",
-        })
+        asst_line = json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": f"response {i}"}],
+                },
+                "timestamp": base_ts,
+                "uuid": f"asst-{i:04d}-aaaa-bbbb-cccc-dddddddddddd",
+            }
+        )
         lines.append(asst_line)
 
     content = ("\n".join(lines) + "\n").encode()
 
     if target_size_bytes > len(content):
         padding_needed = target_size_bytes - len(content)
-        pad_line = json.dumps({
-            "type": "assistant",
-            "message": {
-                "role": "assistant",
-                "content": [{"type": "text", "text": "x" * padding_needed}],
-            },
-            "timestamp": base_ts,
-        })
+        pad_line = json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "x" * padding_needed}],
+                },
+                "timestamp": base_ts,
+            }
+        )
         content = content + (pad_line + "\n").encode()
 
     return content
@@ -222,8 +226,11 @@ class TestReadLiveSessions:
 
         cwd = "/Users/test/badproject"
         write_session(
-            cc_projects_dir(hive_env), cwd, "bad-sess",
-            b"{{{not json}}}\n{also bad}\n", mtime=time.time()
+            cc_projects_dir(hive_env),
+            cwd,
+            "bad-sess",
+            b"{{{not json}}}\n{also bad}\n",
+            mtime=time.time(),
         )
 
         result = read_live_sessions(active_dirs=[cwd], recency_minutes=30)
@@ -234,11 +241,16 @@ class TestReadLiveSessions:
 
         cwd = "/Users/test/assistantonly"
         lines = [
-            json.dumps({
-                "type": "assistant",
-                "message": {"role": "assistant", "content": [{"type": "text", "text": f"r{i}"}]},
-                "timestamp": "2026-02-22T10:00:00Z",
-            })
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": f"r{i}"}],
+                    },
+                    "timestamp": "2026-02-22T10:00:00Z",
+                }
+            )
             for i in range(5)
         ]
         content = ("\n".join(lines) + "\n").encode()

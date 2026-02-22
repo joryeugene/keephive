@@ -1,11 +1,10 @@
 """Tests for the SessionEnd hook handler."""
+
 from __future__ import annotations
 
 import io
 import json
 from pathlib import Path
-
-import pytest
 
 
 def run_hook(input_data: dict | str, monkeypatch, hive_env: Path) -> None:

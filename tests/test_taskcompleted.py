@@ -1,11 +1,10 @@
 """Tests for the TaskCompleted hook handler."""
+
 from __future__ import annotations
 
 import io
 import json
 from pathlib import Path
-
-import pytest
 
 
 def run_hook(input_data: dict | str, monkeypatch, hive_env: Path) -> None:
@@ -97,9 +96,7 @@ class TestHookTaskCompleted:
 
         # "Second line" must NOT appear as an orphaned line
         for line in content.splitlines():
-            assert not line.startswith("Second"), (
-                f"Orphaned line found: {line!r} — BUG-5 not fixed"
-            )
+            assert not line.startswith("Second"), f"Orphaned line found: {line!r} — BUG-5 not fixed"
 
         # collect_todos() must be able to parse DONEs correctly
         from keephive.storage import collect_todos
