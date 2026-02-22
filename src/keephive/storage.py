@@ -1839,7 +1839,8 @@ def read_live_sessions(
     # Build a session-id → UTC start time lookup from .stats.json so we can restore
     # the pre-compaction start time for sessions where Claude rewrote the JSONL head.
     # Include today AND yesterday so sessions that started before midnight are also covered.
-    from datetime import datetime as _dt_stats, timedelta as _td
+    from datetime import datetime as _dt_stats
+    from datetime import timedelta as _td
     from datetime import timezone as _tz
 
     stats_starts: dict[str, str] = {}
