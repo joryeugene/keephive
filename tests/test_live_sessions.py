@@ -331,9 +331,7 @@ def make_jsonl_with_tools(tool_sequences: list[list[str]], user_turns: bool = Tr
         if user_turns:
             lines.append(json.dumps({"type": "user", "timestamp": ts}))
         content = [{"type": "tool_use", "name": t} for t in tools]
-        lines.append(
-            json.dumps({"type": "assistant", "message": {"content": content}})
-        )
+        lines.append(json.dumps({"type": "assistant", "message": {"content": content}}))
     return ("\n".join(lines) + "\n").encode()
 
 
@@ -414,17 +412,21 @@ class TestToolCountsParsing:
         while len("\n".join(padding_lines).encode()) < 36_000:
             idx = len(padding_lines)
             padding_lines.append(
-                json.dumps({
-                    "type": "user",
-                    "timestamp": ts,
-                    "message": {"role": "user", "content": f"padding message {idx:06d}"},
-                })
+                json.dumps(
+                    {
+                        "type": "user",
+                        "timestamp": ts,
+                        "message": {"role": "user", "content": f"padding message {idx:06d}"},
+                    }
+                )
             )
             padding_lines.append(
-                json.dumps({
-                    "type": "assistant",
-                    "message": {"content": [{"type": "text", "text": f"ack {idx:06d}"}]},
-                })
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {"content": [{"type": "text", "text": f"ack {idx:06d}"}]},
+                    }
+                )
             )
 
         # Now add assistant turns with tool_use AFTER the padding
@@ -432,10 +434,12 @@ class TestToolCountsParsing:
         for t in ["Bash", "Grep", "Glob"]:
             tool_lines.append(json.dumps({"type": "user", "timestamp": ts}))
             tool_lines.append(
-                json.dumps({
-                    "type": "assistant",
-                    "message": {"content": [{"type": "tool_use", "name": t}]},
-                })
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {"content": [{"type": "tool_use", "name": t}]},
+                    }
+                )
             )
 
         # Add enough extra padding at the end to push total > 53KB
@@ -445,11 +449,13 @@ class TestToolCountsParsing:
         while len(combined_so_far) + len("\n".join(extra_pad).encode()) < 55_000:
             idx = len(extra_pad)
             extra_pad.append(
-                json.dumps({
-                    "type": "user",
-                    "timestamp": ts,
-                    "message": {"role": "user", "content": f"tail-pad {idx:06d}"},
-                })
+                json.dumps(
+                    {
+                        "type": "user",
+                        "timestamp": ts,
+                        "message": {"role": "user", "content": f"tail-pad {idx:06d}"},
+                    }
+                )
             )
 
         all_lines = padding_lines + tool_lines + extra_pad

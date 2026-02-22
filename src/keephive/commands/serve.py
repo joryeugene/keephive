@@ -2791,7 +2791,9 @@ def _render_stats_commands_panel(data: dict) -> str:
             trend_str = tool_trends.get(tool, "")
             if trend_str:
                 trend_color = "#3fb950" if "\u25b2" in trend_str else "#f85149"
-                trend_inner = f'<span style="font-size:11px;color:{trend_color}">{_e(trend_str)}</span>'
+                trend_inner = (
+                    f'<span style="font-size:11px;color:{trend_color}">{_e(trend_str)}</span>'
+                )
             else:
                 trend_inner = '<span style="font-size:11px;color:#484f58">\u25ac</span>'
             trend_html = f'<span style="min-width:42px;display:inline-block;text-align:right">{trend_inner}</span>'

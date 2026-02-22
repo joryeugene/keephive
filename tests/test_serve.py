@@ -3450,7 +3450,6 @@ def test_js_has_transfer_handlers():
 
 def _session_panel_data(recent, *, source="claude_code"):
     """Build minimal _render_sessions_panel data dict with given recent sessions."""
-    msg_key = "user_messages" if source == "claude_code" else "prompts"
     return {
         "total_sessions": len(recent),
         "avg_prompts_per_session": 0,
@@ -3621,30 +3620,22 @@ class TestAvgDurationCap:
 
     def test_avg_duration_includes_900min(self, hive_env, monkeypatch):
         """900 min (15h) session is included after cap raise from 720 to 1440."""
-        result = self._get_avg_duration_kpi(
-            [{"duration_minutes": 900}], monkeypatch, hive_env
-        )
+        result = self._get_avg_duration_kpi([{"duration_minutes": 900}], monkeypatch, hive_env)
         assert result == 900.0
 
     def test_avg_duration_includes_1440min_boundary(self, hive_env, monkeypatch):
         """1440 min (exactly 24h) is included as the boundary."""
-        result = self._get_avg_duration_kpi(
-            [{"duration_minutes": 1440}], monkeypatch, hive_env
-        )
+        result = self._get_avg_duration_kpi([{"duration_minutes": 1440}], monkeypatch, hive_env)
         assert result == 1440.0
 
     def test_avg_duration_excludes_1441min(self, hive_env, monkeypatch):
         """1441 min (just over 24h) is excluded."""
-        result = self._get_avg_duration_kpi(
-            [{"duration_minutes": 1441}], monkeypatch, hive_env
-        )
+        result = self._get_avg_duration_kpi([{"duration_minutes": 1441}], monkeypatch, hive_env)
         assert result == 0.0
 
     def test_avg_duration_excludes_corrupted_22921min(self, hive_env, monkeypatch):
         """22921 min (corrupted/unclosed session) is excluded."""
-        result = self._get_avg_duration_kpi(
-            [{"duration_minutes": 22921}], monkeypatch, hive_env
-        )
+        result = self._get_avg_duration_kpi([{"duration_minutes": 22921}], monkeypatch, hive_env)
         assert result == 0.0
 
     def test_avg_duration_mixed_with_corrupted(self, hive_env, monkeypatch):
