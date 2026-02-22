@@ -193,18 +193,14 @@ class TestStopHookUIQueue:
     def test_ui_queue_consumed_after_drain(self, hive_env, monkeypatch, capsys):
         """UI queue file is deleted after stop hook processes it."""
         queue_file = hive_env / ".ui-queue"
-        queue_file.write_text(
-            json.dumps({"page": "/", "selector": "body", "html": "", "note": ""})
-        )
+        queue_file.write_text(json.dumps({"page": "/", "selector": "body", "html": "", "note": ""}))
 
         run_hook({"session_id": "sess-stop-consume", "cwd": ""}, monkeypatch, hive_env)
         capsys.readouterr()
 
         assert not queue_file.exists(), ".ui-queue should be deleted after stop hook consumes it"
 
-    def test_no_output_when_queue_absent_and_nudge_suppressed(
-        self, hive_env, monkeypatch, capsys
-    ):
+    def test_no_output_when_queue_absent_and_nudge_suppressed(self, hive_env, monkeypatch, capsys):
         """No output when queue missing and nudge interval is high."""
         with patch.dict("os.environ", {"HIVE_STOP_NUDGE_INTERVAL": "999"}):
             run_hook({"session_id": "sess-stop-quiet", "cwd": ""}, monkeypatch, hive_env)
