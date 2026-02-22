@@ -75,8 +75,10 @@ def cmd_note(args: list[str]) -> None:
         _note_show()
     elif sub == "clear":
         _note_clear()
-    elif sub in ("list", "l"):
+    elif sub == "list":
         _note_list()
+    elif sub in ("last", "l"):
+        _note_open_last()
     elif sub == "todo":
         _note_extract_todos(active_slot())
         return
@@ -116,8 +118,10 @@ def cmd_note_slot(slot: int, args: list[str]) -> None:
         _note_show()
     elif sub == "clear":
         _note_clear()
-    elif sub in ("list", "l"):
+    elif sub == "list":
         _note_list()
+    elif sub in ("last", "l"):
+        _note_open_last()
     elif sub == "todo":
         _note_extract_todos(slot)
         return
@@ -317,6 +321,21 @@ def _note_extract_todos(slot: int) -> None:
         append_to_daily(f"- [{ts}] TODO: {item}")
     console.print(f"\n  Added {len(selected)} TODO(s).")
     notify_sound(True)
+
+
+def _note_open_last() -> None:
+    """Switch to and open the most recently edited non-empty slot."""
+    candidates = [
+        (slot_file(n), n)
+        for n in range(1, NOTE_SLOT_COUNT + 1)
+        if slot_file(n).exists() and slot_file(n).read_text().strip()
+    ]
+    if not candidates:
+        console.print("[dim]No notes. Run: hive n[/dim]")
+        return
+    _, slot = max(candidates, key=lambda t: t[0].stat().st_mtime)
+    set_active_slot(slot)
+    _note_edit(slot)
 
 
 def _note_edit(slot: int | None = None) -> None:

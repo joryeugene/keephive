@@ -110,11 +110,65 @@ def test_note_digit_0_switches_slot_10(hive_env):
     assert active == "10"
 
 
-def test_note_l_shortcut_lists(hive_env):
-    """hive n l lists slots (not a template lookup)."""
+def test_note_l_shortcut_opens_last(hive_env, monkeypatch):
+    """hive n l opens the most recently edited slot, not list."""
+    import time
+
+    from unittest.mock import MagicMock
+
+    from keephive.commands.note import cmd_note
+    from keephive.storage import active_slot
+
+    # Write to slots 1 and 3; ensure slot 3 has a later mtime
+    (hive_env / "working" / "note-1.md").write_text("Slot one content\n")
+    time.sleep(0.01)
+    (hive_env / "working" / "note-3.md").write_text("Slot three content\n")
+
+    mock_run = MagicMock()
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    cmd_note(["l"])
+
+    # Editor should have been opened
+    mock_run.assert_called_once()
+    # Active slot should be 3 (most recently modified)
+    assert active_slot() == 3
+
+
+def test_note_last_opens_most_recent(hive_env, monkeypatch):
+    """hive n last switches to and opens the slot with the latest mtime."""
+    import time
+
+    from unittest.mock import MagicMock
+
+    from keephive.commands.note import cmd_note
+    from keephive.storage import active_slot
+
+    (hive_env / "working" / "note-1.md").write_text("Slot one\n")
+    time.sleep(0.01)
+    (hive_env / "working" / "note-3.md").write_text("Slot three\n")
+
+    mock_run = MagicMock()
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    cmd_note(["last"])
+
+    mock_run.assert_called_once()
+    assert active_slot() == 3
+
+
+def test_note_last_no_notes(hive_env):
+    """hive n last with no notes prints helpful message and does not open editor."""
+    r = _run(["n", "last"], str(hive_env))
+    assert r.returncode == 0
+    assert "No notes" in r.stdout
+
+
+def test_note_list_still_works(hive_env):
+    """hive n list still shows slot bar (regression: 'l' repurposed, 'list' must still work)."""
     (hive_env / "working" / "note-1.md").write_text("Some content\n")
 
-    r = _run(["n", "l"], str(hive_env))
+    r = _run(["n", "list"], str(hive_env))
     assert r.returncode == 0
     assert "Note Slots" in r.stdout
     assert "Some content" in r.stdout
