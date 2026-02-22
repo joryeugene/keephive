@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import time
+from unittest.mock import MagicMock
+
+from keephive.commands.note import cmd_note
+from keephive.storage import active_slot
 
 
 def _run(args, hive_home):
@@ -112,13 +117,6 @@ def test_note_digit_0_switches_slot_10(hive_env):
 
 def test_note_l_shortcut_opens_last(hive_env, monkeypatch):
     """hive n l opens the most recently edited slot, not list."""
-    import time
-
-    from unittest.mock import MagicMock
-
-    from keephive.commands.note import cmd_note
-    from keephive.storage import active_slot
-
     # Write to slots 1 and 3; ensure slot 3 has a later mtime
     (hive_env / "working" / "note-1.md").write_text("Slot one content\n")
     time.sleep(0.01)
@@ -137,13 +135,6 @@ def test_note_l_shortcut_opens_last(hive_env, monkeypatch):
 
 def test_note_last_opens_most_recent(hive_env, monkeypatch):
     """hive n last switches to and opens the slot with the latest mtime."""
-    import time
-
-    from unittest.mock import MagicMock
-
-    from keephive.commands.note import cmd_note
-    from keephive.storage import active_slot
-
     (hive_env / "working" / "note-1.md").write_text("Slot one\n")
     time.sleep(0.01)
     (hive_env / "working" / "note-3.md").write_text("Slot three\n")
