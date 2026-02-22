@@ -1899,6 +1899,8 @@ def read_live_sessions(
                 last_ts = ""
                 user_count = 0
                 tool_counts: dict[str, int] = {}
+                permission_mode = ""
+                slug = ""
 
                 with open(jsonl_path) as fh:
                     # Read first 32KB for start info
@@ -1918,6 +1920,10 @@ def read_live_sessions(
                             if not first_ts and ts:
                                 first_ts = ts
                             last_ts = ts
+                            if not permission_mode and rec.get("permissionMode"):
+                                permission_mode = rec.get("permissionMode", "")
+                            if not slug and rec.get("slug"):
+                                slug = rec.get("slug", "")
                         elif rec_type == "assistant":
                             content = rec.get("message", {}).get("content", [])
                             if isinstance(content, list):
@@ -2009,6 +2015,8 @@ def read_live_sessions(
                         "tool_error_categories": {},
                         "duration_minutes": duration_minutes,
                         "project": project,
+                        "slug": slug,
+                        "permission_mode": permission_mode,
                         "started": first_ts,
                         "day": day_str,
                         "lines_added": 0,

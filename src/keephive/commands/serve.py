@@ -503,6 +503,10 @@ mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 .session-live-item{border-left:2px solid #3fb950}
 .session-duration{color:#3fb950;font-size:11px;font-family:monospace;flex-shrink:0}
 .session-item.session-filtered{display:none}
+.session-mode{display:inline-block;font-size:9px;font-weight:700;padding:1px 4px;border-radius:2px;margin-right:3px;letter-spacing:.4px;flex-shrink:0}
+.session-mode-plan{color:#f0a500;background:#2d1f00}
+.session-mode-auto{color:#20b2aa;background:#0d2e2e}
+.session-mode-bypass{color:#f85149;background:#2d0f0f}
 .source-row{display:flex;align-items:center;gap:8px;padding:3px 0}
 .source-label{min-width:100px;text-align:right;color:#8b949e;font-size:12px}
 .source-bar-track{flex:1;background:#161b22;border-radius:2px;height:14px;overflow:hidden}
@@ -3367,9 +3371,11 @@ def _render_sessions_panel(data: dict) -> str:
                 except (ValueError, OSError):
                     time_str = started[11:16] if len(started) > 16 else started[:5]
             msgs = s.get(msg_key, 0)
-            proj = s.get("project", "")
-            if "/" in proj:
-                proj = proj.rsplit("/", 1)[-1]
+            full_proj = s.get("project", "")
+            slug = s.get("slug", "")
+            # Use slug (human-readable) if available, else last path component
+            proj = slug or (full_proj.rsplit("/", 1)[-1] if "/" in full_proj else full_proj)
+            proj_title = full_proj  # full path shown on hover
             tools = s.get(tool_key, s.get("tools", {}))
             tool_str = ", ".join(
                 f"{t}:{c}" for t, c in sorted(tools.items(), key=lambda x: -x[1])[:5]
@@ -3397,12 +3403,23 @@ def _render_sessions_panel(data: dict) -> str:
             elif is_live:
                 duration_str = "<1m"  # only show <1m for live; 0 on completed = unknown
 
+            # Permission mode badge (only for non-default modes, only on live sessions)
+            mode_badge = ""
+            pm = s.get("permission_mode", "")
+            if pm == "plan":
+                mode_badge = '<span class="session-mode session-mode-plan">PLAN</span>'
+            elif pm in ("acceptEdits", "auto-edit"):
+                mode_badge = '<span class="session-mode session-mode-auto">AUTO</span>'
+            elif pm == "bypassPermissions":
+                mode_badge = '<span class="session-mode session-mode-bypass">BYPASS</span>'
+
             depth_title = f"{depth_label} session: {msgs} {msg_label}, {unique_tools} tools"
             live_cls = " session-live-item" if is_live else ""
             items += (
                 f'<div class="session-item{live_cls}" tabindex="0" title="{_e(depth_title)}" '
                 f'data-live="{str(is_live).lower()}" data-depth="{depth_label}">'
                 f"{live_badge}"
+                f"{mode_badge}"
                 f'<span class="session-time">{_e(time_str)}</span>'
                 f'<span class="session-prompts" title="{msg_label}">{msgs}{msg_unit}</span>'
             )
@@ -3411,7 +3428,7 @@ def _render_sessions_panel(data: dict) -> str:
                     f'<span class="session-duration" title="{dur_title}">{_e(duration_str)}</span>'
                 )
             items += (
-                f'<span class="session-proj">{_e(proj)}</span>'
+                f'<span class="session-proj" title="{_e(proj_title)}">{_e(proj)}</span>'
                 f'<span class="session-tools">{_e(tool_str)}</span>'
                 f"</div>"
             )

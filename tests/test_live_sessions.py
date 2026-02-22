@@ -485,3 +485,40 @@ class TestToolCountsParsing:
 
         result = read_live_sessions(active_dirs=[cwd, cwd], recency_minutes=30)
         assert len(result) == 2
+
+    def test_slug_and_permission_mode_extracted(self, hive_env):
+        """slug and permission_mode are extracted from user records in JSONL."""
+        from keephive.storage import read_live_sessions
+
+        cwd = "/Users/test/myproject"
+        base_ts = "2026-02-22T10:00:00Z"
+        lines = [
+            json.dumps(
+                {
+                    "type": "user",
+                    "message": {"role": "user", "content": "first message"},
+                    "timestamp": base_ts,
+                    "slug": "myproject",
+                    "permissionMode": "plan",
+                    "uuid": "user-0001-aaaa-bbbb-cccc-dddddddddddd",
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {"role": "assistant", "content": [{"type": "text", "text": "ok"}]},
+                    "timestamp": base_ts,
+                    "uuid": "asst-0001-aaaa-bbbb-cccc-dddddddddddd",
+                }
+            ),
+        ]
+        content = ("\n".join(lines) + "\n").encode()
+        write_session(cc_projects_dir(hive_env), cwd, "slug-perm-sess", content, mtime=time.time())
+
+        result = read_live_sessions(active_dirs=[cwd], recency_minutes=30)
+        assert len(result) == 1
+        s = result[0]
+        assert s["slug"] == "myproject", f"Expected slug='myproject', got {s['slug']!r}"
+        assert s["permission_mode"] == "plan", (
+            f"Expected permission_mode='plan', got {s['permission_mode']!r}"
+        )
