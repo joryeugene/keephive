@@ -395,11 +395,15 @@ def test_drain_ui_queue_returns_none_when_empty(hive_env):
 
 def test_drain_ui_queue_multi_item_context_blocks(hive_env):
     """drain_ui_queue with two queued items produces two context blocks separated by blank line."""
-    from keephive.storage import daily_file, drain_ui_queue, ui_queue_path
+    from keephive.storage import drain_ui_queue, ui_queue_path
 
     queue = ui_queue_path()
-    item1 = json.dumps({"page": "http://localhost:3847/stats", "selector": ".chart", "note": "chart too small"})
-    item2 = json.dumps({"page": "http://localhost:3847/daily", "selector": ".entry", "note": "text too dim"})
+    item1 = json.dumps(
+        {"page": "http://localhost:3847/stats", "selector": ".chart", "note": "chart too small"}
+    )
+    item2 = json.dumps(
+        {"page": "http://localhost:3847/daily", "selector": ".entry", "note": "text too dim"}
+    )
     queue.write_text(item1 + "\n" + item2 + "\n")
 
     result = drain_ui_queue("")
@@ -447,8 +451,12 @@ def test_cmd_ui_shows_multiple_items(hive_env, capsys):
     from keephive.storage import ui_queue_path
 
     queue = ui_queue_path()
-    item1 = json.dumps({"page": "http://localhost/x", "selector": ".alpha", "note": "first feedback"})
-    item2 = json.dumps({"page": "http://localhost/y", "selector": ".beta", "note": "second feedback"})
+    item1 = json.dumps(
+        {"page": "http://localhost/x", "selector": ".alpha", "note": "first feedback"}
+    )
+    item2 = json.dumps(
+        {"page": "http://localhost/y", "selector": ".beta", "note": "second feedback"}
+    )
     queue.write_text(item1 + "\n" + item2 + "\n")
 
     cmd_ui([])

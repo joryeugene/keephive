@@ -3374,7 +3374,9 @@ def _render_sessions_panel(data: dict) -> str:
                 f'<span class="session-prompts" title="{msg_label}">{msgs}{msg_unit}</span>'
             )
             if duration_str:
-                items += f'<span class="session-duration" title="{dur_title}">{_e(duration_str)}</span>'
+                items += (
+                    f'<span class="session-duration" title="{dur_title}">{_e(duration_str)}</span>'
+                )
             items += (
                 f'<span class="session-proj">{_e(proj)}</span>'
                 f'<span class="session-tools">{_e(tool_str)}</span>'

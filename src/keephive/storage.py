@@ -1885,7 +1885,10 @@ def read_live_sessions(
                                 content = rec.get("message", {}).get("content", [])
                                 if isinstance(content, list):
                                     for item in content:
-                                        if isinstance(item, dict) and item.get("type") == "tool_use":
+                                        if (
+                                            isinstance(item, dict)
+                                            and item.get("type") == "tool_use"
+                                        ):
                                             name = item.get("name", "")
                                             if name:
                                                 tool_counts[name] = tool_counts.get(name, 0) + 1
