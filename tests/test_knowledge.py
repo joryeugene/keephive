@@ -101,6 +101,103 @@ class TestResolveFile:
         assert result is None
 
 
+# ---- _resolve_candidates ----
+
+
+class TestResolveCandidates:
+    def test_component_prefix_match_single(self, hive_env):
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "commit-release.md").write_text("# Commit Release\n")
+
+        from keephive.commands.knowledge import _resolve_candidates
+
+        result = _resolve_candidates("com-rel", gd)
+        assert len(result) == 1
+        assert result[0].stem == "commit-release"
+
+    def test_component_prefix_common_real_slugs(self, hive_env):
+        """Realistic slugs from the actual guide library."""
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "agent-principles.md").write_text("# Agent Principles\n")
+        (gd / "keephive-lifecycle.md").write_text("# Lifecycle\n")
+        (gd / "e2e-testing.md").write_text("# E2E Testing\n")
+
+        from keephive.commands.knowledge import _resolve_candidates
+
+        assert _resolve_candidates("a-p", gd)[0].stem == "agent-principles"
+        assert _resolve_candidates("k-life", gd)[0].stem == "keephive-lifecycle"
+        assert _resolve_candidates("e2e", gd)[0].stem == "e2e-testing"  # tier-2 prefix
+
+    def test_component_prefix_match_ambiguous(self, hive_env):
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "agent-principles.md").write_text("# Agent Principles\n")
+        (gd / "agent-protocols.md").write_text("# Agent Protocols\n")
+
+        from keephive.commands.knowledge import _resolve_candidates
+
+        result = _resolve_candidates("a-p", gd)
+        assert len(result) == 2
+        stems = {r.stem for r in result}
+        assert stems == {"agent-principles", "agent-protocols"}
+
+    def test_component_prefix_query_longer_than_file(self, hive_env):
+        """Query has more components than filename — should not match."""
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "commit-release.md").write_text("# Commit Release\n")
+
+        from keephive.commands.knowledge import _resolve_candidates
+
+        result = _resolve_candidates("com-rel-notes", gd)
+        assert result == []
+
+    def test_tier2_wins_over_tier3(self, hive_env):
+        """Prefix tier (tier 2) returns before component prefix tier (tier 3)."""
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "com-rel.md").write_text("# Com Rel\n")
+        (gd / "commit-release.md").write_text("# Commit Release\n")
+
+        from keephive.commands.knowledge import _resolve_candidates
+
+        # "com-rel" is an exact filename match (tier 1), not tier 2 or 3
+        result = _resolve_candidates("com-rel", gd)
+        assert len(result) == 1
+        assert result[0].stem == "com-rel"
+
+    def test_single_component_falls_to_tier3_when_no_prefix(self, hive_env):
+        """Single component query that has no direct prefix match uses tier 3."""
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "commit-release.md").write_text("# Commit Release\n")
+
+        from keephive.commands.knowledge import _resolve_candidates
+
+        # "com" -> tier2 glob "com*.md" does NOT match "commit-release.md"
+        # (the filename starts with "commit", not "com-")
+        # tier3 matches because "commit".startswith("com")
+        result = _resolve_candidates("com", gd)
+        assert len(result) == 1
+        assert result[0].stem == "commit-release"
+
+    def test_returns_empty_when_no_match(self, hive_env):
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "agent-principles.md").write_text("# Agent Principles\n")
+
+        from keephive.commands.knowledge import _resolve_candidates
+
+        result = _resolve_candidates("xyz-zzz", gd)
+        assert result == []
+
+    def test_multi_directory_component_prefix(self, hive_env):
+        gd = hive_env / "knowledge" / "guides"
+        pd = hive_env / "knowledge" / "prompts"
+        (pd / "commit-draft.md").write_text("# Commit Draft\n")
+
+        from keephive.commands.knowledge import _resolve_candidates
+
+        result = _resolve_candidates("com-d", gd, pd)
+        assert len(result) == 1
+        assert result[0].stem == "commit-draft"
+
+
 # ---- _knowledge_view ----
 
 
@@ -129,6 +226,25 @@ class TestKnowledgeView:
         main(["k", "test"])
         out = capsys.readouterr().out
         assert "Ambiguous" in out or "test-a" in out
+
+    def test_view_component_prefix_match(self, hive_env, capsys):
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "commit-release.md").write_text("# Commit Release\n\nRelease notes.\n")
+
+        main(["k", "com-rel"])
+        out = capsys.readouterr().out
+        assert "Commit Release" in out
+
+    def test_view_ambiguous_component_prefix_shows_candidates(self, hive_env, capsys):
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "agent-principles.md").write_text("# Agent Principles\n")
+        (gd / "agent-protocols.md").write_text("# Agent Protocols\n")
+
+        main(["k", "a-p"])
+        out = capsys.readouterr().out
+        assert "Ambiguous" in out
+        assert "agent-principles" in out
+        assert "agent-protocols" in out
 
     def test_view_not_found_shows_available(self, hive_env, capsys):
         main(["k", "nonexistent-xyz"])

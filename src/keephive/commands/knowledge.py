@@ -10,32 +10,70 @@ from keephive.output import console, prompt_yn
 from keephive.storage import ensure_dirs, guides_dir, prompts_dir
 
 
-def _resolve_file(name: str, *directories: Path) -> Path | None:
-    """Resolve name to file: exact -> prefix -> substring across directories."""
-    # Exact match
+def _resolve_candidates(name: str, *directories: Path) -> list[Path]:
+    """Return all matching candidates at the best match tier.
+
+    Tiers (highest to lowest priority):
+    1. Exact: filename == name (or name.md)
+    2. Prefix: filename starts with name  (glob: name*.md)
+    3. Component prefix: each hyphen-delimited query component is a prefix of
+       the corresponding component in the filename.
+       e.g. "com-rel" -> ["com","rel"] matches "commit-release" -> ["commit","release"]
+    4. Substring: name appears as a substring of filename  (glob: *name*.md)
+
+    Returns candidates at the HIGHEST tier that yields any match.
+    Ambiguous matches (>1) are returned as-is; the caller decides.
+    """
+
+    def _gather(pattern: str) -> list[Path]:
+        found: list[Path] = []
+        for d in directories:
+            if d.exists():
+                found.extend(f for f in d.glob(pattern) if f.is_file())
+        return found
+
+    # Tier 1: Exact
     for d in directories:
         for ext in ["", ".md"]:
             candidate = d / f"{name}{ext}"
             if candidate.exists():
-                return candidate
+                return [candidate]
 
-    # Prefix match
-    candidates = []
+    # Tier 2: Prefix
+    candidates = _gather(f"{name}*.md")
+    if candidates:
+        return sorted(candidates)
+
+    # Tier 3: Component prefix
+    # Split query on "-"; each part must be a prefix of the corresponding
+    # hyphen-delimited component in the filename.
+    query_parts = name.split("-")
+    component_matches: list[Path] = []
     for d in directories:
         if d.exists():
-            candidates.extend(f for f in d.glob(f"{name}*.md") if f.is_file())
-    if len(candidates) == 1:
-        return candidates[0]
+            for f in sorted(d.glob("*.md")):
+                if not f.is_file():
+                    continue
+                file_parts = f.stem.split("-")
+                if len(query_parts) <= len(file_parts) and all(
+                    fp.startswith(qp) for qp, fp in zip(query_parts, file_parts)
+                ):
+                    component_matches.append(f)
+    if component_matches:
+        return component_matches
 
-    # Substring match
-    if not candidates:
-        for d in directories:
-            if d.exists():
-                candidates.extend(f for f in d.glob(f"*{name}*.md") if f.is_file())
-    if len(candidates) == 1:
-        return candidates[0]
+    # Tier 4: Substring
+    candidates = _gather(f"*{name}*.md")
+    if candidates:
+        return sorted(candidates)
 
-    return None
+    return []
+
+
+def _resolve_file(name: str, *directories: Path) -> Path | None:
+    """Resolve name to exactly one file, or None if zero or ambiguous."""
+    candidates = _resolve_candidates(name, *directories)
+    return candidates[0] if len(candidates) == 1 else None
 
 
 def cmd_knowledge(args: list[str]) -> None:
@@ -174,9 +212,10 @@ def _knowledge_view(name: str) -> None:
     gd = guides_dir()
     pd = prompts_dir()
 
-    match = _resolve_file(name, gd, pd)
-    if match:
-        text = match.read_text()
+    candidates = _resolve_candidates(name, gd, pd)
+
+    if len(candidates) == 1:
+        text = candidates[0].read_text()
         print(text)
         if sys.stdout.isatty():
             from keephive.output import copy_to_clipboard
@@ -185,28 +224,23 @@ def _knowledge_view(name: str) -> None:
                 console.print("[dim]Copied to clipboard[/dim]")
         return
 
-    # Check for ambiguous matches
-    candidates = []
-    for d in [gd, pd]:
-        if d.exists():
-            candidates.extend(f for f in d.glob(f"*{name}*.md") if f.is_file())
-
     if len(candidates) > 1:
-        console.print(f"[warn]Ambiguous:[/warn] {name} matches {len(candidates)} files:")
+        console.print(f"[warn]Ambiguous:[/warn] '{name}' matches {len(candidates)}:")
         for c in candidates:
             console.print(f"  {c.stem}")
-    else:
-        console.print(f"[err]Guide not found:[/err] {name}")
-        console.print()
-        all_items: list[tuple[str, str]] = []
-        if gd.exists():
-            all_items.extend((f.stem, "guide") for f in gd.glob("*.md"))
-        if pd.exists():
-            all_items.extend((f.stem, "prompt") for f in pd.glob("*.md"))
-        if all_items:
-            console.print("Available:")
-            for n, kind in sorted(all_items):
-                console.print(f"  {n} [dim]({kind})[/dim]")
+        return
+
+    console.print(f"[err]Guide not found:[/err] {name}")
+    console.print()
+    all_items: list[tuple[str, str]] = []
+    if gd.exists():
+        all_items.extend((f.stem, "guide") for f in gd.glob("*.md"))
+    if pd.exists():
+        all_items.extend((f.stem, "prompt") for f in pd.glob("*.md"))
+    if all_items:
+        console.print("Available:")
+        for n, kind in sorted(all_items):
+            console.print(f"  {n} [dim]({kind})[/dim]")
 
 
 def _knowledge_rm(args: list[str], directory: Path) -> None:

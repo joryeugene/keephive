@@ -1487,46 +1487,60 @@ def drain_ui_queue(cwd: str) -> "str | None":
     if not queue.exists():
         return None
 
-    try:
-        data = json.loads(queue.read_text())
-    except Exception:
+    # Parse JSONL: one compact JSON object per line
+    items = []
+    for line in queue.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            items.append(json.loads(line))
+        except Exception:
+            pass
+
+    if not items:
         queue.unlink(missing_ok=True)
         return None
 
-    # Extract fields
-    page = data.get("page", "?")
-    selector = data.get("selector", "?")
-    html_snippet = data.get("html", "")[:400]
-    styles = data.get("styles", "")
-    note = data.get("note", "")
-    if "\n\nNote: " in note:
-        note = note.split("\n\nNote: ")[-1].strip()
+    context_blocks = []
+    for data in items:
+        page = data.get("page", "?")
+        selector = data.get("selector", "?")
+        html_snippet = data.get("html", "")[:400]
+        styles = data.get("styles", "")
+        note = data.get("note", "")
+        if "\n\nNote: " in note:
+            note = note.split("\n\nNote: ")[-1].strip()
 
-    # Persist to daily log so it survives context compaction
-    try:
-        log_parts = [f"[UI Feedback] {page} · {selector}"]
-        if note:
-            log_parts.append(f"  Note: {note}")
+        # Persist to daily log so it survives context compaction
+        try:
+            log_parts = [f"[UI Feedback] {page} · {selector}"]
+            if note:
+                log_parts.append(f"  Note: {note}")
+            if html_snippet:
+                log_parts.append(f"  HTML: {html_snippet[:120]}")
+            append_to_daily("TODO: " + " | ".join(log_parts))
+        except Exception:
+            pass  # Never block on log write failure
+
+        # Build additionalContext block for this item
+        lines = [f"[UI Feedback — {page}]"]
+        lines.append(f"Element: {selector}")
         if html_snippet:
-            log_parts.append(f"  HTML: {html_snippet[:120]}")
-        append_to_daily("TODO: " + " | ".join(log_parts))
-    except Exception:
-        pass  # Never block on log write failure
-
-    # Build additionalContext for hook injection
-    lines = [f"[UI Feedback — {page}]"]
-    lines.append(f"Element: {selector}")
-    if html_snippet:
-        lines.append(f"HTML: {html_snippet}")
-    if styles:
-        lines.append(f"Styles:\n{styles}")
-    if note:
-        lines.append(f"Note: {note}")
-    lines.append("[/UI Feedback]")
+            lines.append(f"HTML: {html_snippet}")
+        if styles:
+            lines.append(f"Styles:\n{styles}")
+        if note:
+            lines.append(f"Note: {note}")
+        lines.append("[/UI Feedback]")
+        context_blocks.append("\n".join(lines))
 
     queue.unlink(missing_ok=True)
 
-    return json.dumps({"hookSpecificOutput": {"additionalContext": "\n".join(lines)}}) + "\n"
+    return (
+        json.dumps({"hookSpecificOutput": {"additionalContext": "\n\n".join(context_blocks)}})
+        + "\n"
+    )
 
 
 def score_fact_decay(fact_text: str, verified_date_str: str) -> float:
@@ -1795,7 +1809,7 @@ def read_live_sessions(
     cutoff_time = time.time() - (recency_minutes * 60)
     result: list[dict] = []
 
-    for cwd in active_dirs:
+    for cwd in dict.fromkeys(active_dirs):  # deduplicate: multiple PIDs same cwd = one dir scan
         # Encode path: /Users/foo/bar -> -Users-foo-bar
         encoded = cwd.replace("/", "-")
         proj_dir = projects_dir / encoded
@@ -1817,6 +1831,7 @@ def read_live_sessions(
                 first_ts = ""
                 last_ts = ""
                 user_count = 0
+                tool_counts: dict[str, int] = {}
 
                 with open(jsonl_path) as fh:
                     # Read first 20KB for start info
@@ -1835,6 +1850,14 @@ def read_live_sessions(
                             if not first_ts and ts:
                                 first_ts = ts
                             last_ts = ts
+                        elif rec_type == "assistant":
+                            content = rec.get("message", {}).get("content", [])
+                            if isinstance(content, list):
+                                for item in content:
+                                    if isinstance(item, dict) and item.get("type") == "tool_use":
+                                        name = item.get("name", "")
+                                        if name:
+                                            tool_counts[name] = tool_counts.get(name, 0) + 1
 
                     # If file is bigger than 20KB, read the tail for last timestamp
                     # and count remaining user messages
@@ -1858,6 +1881,14 @@ def read_live_sessions(
                                 user_count += 1
                                 if ts:
                                     last_ts = ts
+                            elif rec_type == "assistant":
+                                content = rec.get("message", {}).get("content", [])
+                                if isinstance(content, list):
+                                    for item in content:
+                                        if isinstance(item, dict) and item.get("type") == "tool_use":
+                                            name = item.get("name", "")
+                                            if name:
+                                                tool_counts[name] = tool_counts.get(name, 0) + 1
 
                 # Skip ghost sessions
                 if user_count == 0:
@@ -1888,7 +1919,7 @@ def read_live_sessions(
                         "session_id": session_id,
                         "user_messages": user_count,
                         "assistant_messages": 0,
-                        "tool_counts": {},
+                        "tool_counts": tool_counts,
                         "tool_errors": 0,
                         "tool_error_categories": {},
                         "duration_minutes": duration_minutes,

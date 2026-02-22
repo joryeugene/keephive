@@ -61,7 +61,7 @@ Prefer `just <recipe>` over raw commands. See `just --list` or the `justfile` fo
 - `hooks/sessionend.py`: SessionEnd hook. Finalizes session stats with accurate end timestamp. No stdout.
 - `hooks/taskcompleted.py`: TaskCompleted hook. Auto-logs DONE entry to daily log when a task is marked complete.
 - `commands/serve.py`: Live web dashboard (HTTP server, 8 views, markdown rendering, auto-refresh, `/ui-feedback` POST endpoint). Zero external deps.
-- `commands/ui.py`: UI feedback queue CLI (`hive ui`/`ui-install`/`ui-clear`) + bookmarklet source as `javascript:` URL.
+- `commands/ui.py`: UI feedback queue CLI (`hive ui`/`ui-install`/`ui-clear`/`ui log`) + bookmarklet source as `javascript:` URL. `hive ui log` scans daily logs newest-first for persisted `[UI Feedback]` entries (last 30 days).
 
 ## Session Data Architecture
 

@@ -1,6 +1,7 @@
 """hive ui: UI feedback queue and bookmarklet installer.
 
 hive ui           Show pending UI feedback queue
+hive ui log       Show UI feedback history from daily logs
 hive ui-install   Print bookmarklet URL (drag to bookmarks bar)
 hive ui-clear     Clear pending feedback
 """
@@ -95,9 +96,9 @@ function showDialog(sel,outerHTML,styles){
   }
   d.querySelector('#hf-submit').addEventListener('click',doSubmit);
   d.querySelector('#hf-cancel').addEventListener('click',function(){document.body.removeChild(d);});
-  ta.addEventListener('keydown',function(e){
-    if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();doSubmit();}
-    if(e.key==='Escape'){e.preventDefault();document.body.removeChild(d);}
+  d.addEventListener('keydown',function(e){
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();doSubmit();}
+    if(e.key==='Escape'){e.preventDefault();if(document.body.contains(d))document.body.removeChild(d);}
   });
 }
 })();"""
@@ -111,44 +112,131 @@ def _build_bookmarklet_url() -> str:
 
 
 def cmd_ui(args: list[str]) -> None:
-    """hive ui — show pending UI feedback queue."""
-    from keephive.storage import ui_queue_path
-
+    """hive ui — show pending UI feedback queue.  hive ui log — history."""
     if args and args[0] in ("install", "--install"):
         cmd_ui_install([])
         return
     if args and args[0] in ("clear", "--clear"):
         cmd_ui_clear([])
         return
+    if args and args[0] in ("log", "history"):
+        cmd_ui_log([])
+        return
 
-    q = ui_queue_path()
-    if not q.exists():
+    from keephive.storage import hive_dir
+
+    # Collect items from all queue files (global + all project-scoped)
+    queue_files = sorted(hive_dir().glob(".ui-queue*"))
+    items = []
+    for q in queue_files:
+        for line in q.read_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                items.append(json.loads(line))
+            except Exception:
+                pass
+
+    if not items:
         print("No pending UI feedback in queue.")
         print("  Use the bookmarklet on hive serve or any page to capture feedback.")
         print("  hive ui-install  — print bookmarklet URL")
         return
 
-    try:
-        data = json.loads(q.read_text())
-    except Exception:
-        print("Queue file exists but could not be read.")
-        return
-
-    page = data.get("page", "?")
-    selector = data.get("selector", "?")
-    note = data.get("note", "")
-
-    print("Pending UI feedback:")
-    print(f"  Page:     {page}")
-    print(f"  Element:  {selector}")
-    if note:
-        # Show just the note part (after "Note: ")
+    if len(items) == 1:
+        data = items[0]
+        page = data.get("page", "?")
+        selector = data.get("selector", "?")
+        note = data.get("note", "")
         note_display = note.split("\n\nNote: ")[-1].strip() if "\n\nNote: " in note else note
+
+        print("Pending UI feedback:")
+        print(f"  Page:     {page}")
+        print(f"  Element:  {selector}")
         if note_display:
             print(f"  Note:     {note_display[:120]}")
+        print()
+        print("This will be prepended to your next Claude Code prompt.")
+        print("  hive ui-clear  — discard without using")
+    else:
+        n = len(items)
+        print(f"Pending UI feedback: {n} items queued")
+        print()
+        for i, data in enumerate(items, 1):
+            page = data.get("page", "?")
+            selector = data.get("selector", "?")
+            note = data.get("note", "")
+            note_display = note.split("\n\nNote: ")[-1].strip() if "\n\nNote: " in note else note
+            print(f"  [{i}] Page:     {page}")
+            print(f"       Element:  {selector}")
+            if note_display:
+                print(f"       Note:     {note_display[:120]}")
+            print()
+        print("All items will be injected into your next Claude Code prompt.")
+        print("  hive ui-clear  — discard without using")
+
+
+def cmd_ui_log(args: list[str]) -> None:
+    """hive ui log — show UI feedback history from daily logs (last 30 days)."""
+    from keephive.storage import daily_dir, safe_read_text
+
+    log_dir = daily_dir()
+    if not log_dir.exists():
+        print("No UI feedback in logs yet.")
+        return
+
+    # Newest-first, up to 30 log files
+    log_files = sorted(log_dir.glob("*.md"), reverse=True)[:30]
+
+    items: list[tuple[str, str, str, str]] = []
+    for log_file in log_files:
+        date = log_file.stem  # YYYY-MM-DD
+        try:
+            content = safe_read_text(log_file)
+        except Exception:
+            continue
+        for line in content.splitlines():
+            if "[UI Feedback]" not in line:
+                continue
+            idx = line.find("[UI Feedback]")
+            # Real entries are the ENTIRE line: "TODO: [UI Feedback] ..."
+            # Entries embedded in prose/code blocks have other text before TODO:
+            if line[:idx].strip() not in ("TODO:", "TODO: "):
+                continue
+            rest = line[idx + len("[UI Feedback]") :].strip()
+            # Real entries always have "{page} · {selector}"; skip pure-text references
+            if " · " not in rest:
+                continue
+            parts = rest.split(" | ")
+            page = selector = note = ""
+            if parts:
+                ps = parts[0].strip()
+                if " · " in ps:
+                    page, selector = ps.split(" · ", 1)
+                else:
+                    page = ps
+            for part in parts[1:]:
+                stripped = part.strip()
+                if stripped.startswith("Note: "):
+                    note = stripped[6:]
+            items.append((date, page.strip(), selector.strip(), note.strip()))
+
+    if not items:
+        print("No UI feedback in logs yet.")
+        return
+
+    n = len(items)
+    print(f"UI Feedback History (last 30 days) — {n} item{'s' if n != 1 else ''}")
     print()
-    print("This will be prepended to your next Claude Code prompt.")
-    print("  hive ui-clear  — discard without using")
+    for date, page, selector, note in items:
+        page_display = (page[:80] + "...") if len(page) > 80 else page
+        print(f"  {date}  {page_display}")
+        if selector:
+            print(f"           {selector}")
+        if note:
+            print(f"           {note[:100]}")
+        print()
 
 
 def cmd_ui_install(args: list[str]) -> None:

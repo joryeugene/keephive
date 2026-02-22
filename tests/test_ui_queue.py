@@ -388,3 +388,115 @@ def test_drain_ui_queue_returns_none_when_empty(hive_env):
 
     result = drain_ui_queue("/Users/jory/Documents/GitHub/keephive")
     assert result is None
+
+
+# ---- Multi-item JSONL queue ----
+
+
+def test_drain_ui_queue_multi_item_context_blocks(hive_env):
+    """drain_ui_queue with two queued items produces two context blocks separated by blank line."""
+    from keephive.storage import daily_file, drain_ui_queue, ui_queue_path
+
+    queue = ui_queue_path()
+    item1 = json.dumps({"page": "http://localhost:3847/stats", "selector": ".chart", "note": "chart too small"})
+    item2 = json.dumps({"page": "http://localhost:3847/daily", "selector": ".entry", "note": "text too dim"})
+    queue.write_text(item1 + "\n" + item2 + "\n")
+
+    result = drain_ui_queue("")
+
+    assert result is not None
+    obj = json.loads(result.strip())
+    ctx = obj["hookSpecificOutput"]["additionalContext"]
+
+    # Both items must appear in the context
+    assert "chart too small" in ctx
+    assert "text too dim" in ctx
+    assert ".chart" in ctx
+    assert ".entry" in ctx
+
+    # The two blocks must be separated
+    assert "[/UI Feedback]" in ctx
+    assert ctx.count("[UI Feedback") == 2
+
+    # Queue deleted after drain
+    assert not queue.exists()
+
+
+def test_drain_ui_queue_multi_item_daily_log(hive_env):
+    """drain_ui_queue with two items writes a TODO log entry for each."""
+    from keephive.storage import daily_file, drain_ui_queue, ui_queue_path
+
+    queue = ui_queue_path()
+    item1 = json.dumps({"page": "http://localhost/a", "selector": ".foo", "note": "first note"})
+    item2 = json.dumps({"page": "http://localhost/b", "selector": ".bar", "note": "second note"})
+    queue.write_text(item1 + "\n" + item2 + "\n")
+
+    drain_ui_queue("")
+
+    log_text = daily_file().read_text()
+    assert "first note" in log_text
+    assert "second note" in log_text
+    # Each item gets its own TODO line
+    todo_lines = [ln for ln in log_text.splitlines() if "TODO" in ln and "UI Feedback" in ln]
+    assert len(todo_lines) == 2
+
+
+def test_cmd_ui_shows_multiple_items(hive_env, capsys):
+    """cmd_ui displays a count header and all items when queue has more than one entry."""
+    from keephive.commands.ui import cmd_ui
+    from keephive.storage import ui_queue_path
+
+    queue = ui_queue_path()
+    item1 = json.dumps({"page": "http://localhost/x", "selector": ".alpha", "note": "first feedback"})
+    item2 = json.dumps({"page": "http://localhost/y", "selector": ".beta", "note": "second feedback"})
+    queue.write_text(item1 + "\n" + item2 + "\n")
+
+    cmd_ui([])
+    out = capsys.readouterr().out
+
+    assert "2 items" in out
+    assert "http://localhost/x" in out
+    assert ".alpha" in out
+    assert "first feedback" in out
+    assert "http://localhost/y" in out
+    assert ".beta" in out
+    assert "second feedback" in out
+
+
+def test_hook_injects_all_items_from_multi_item_queue(hive_env, capsys):
+    """Hook injects all queued items when multiple submissions exist before a prompt."""
+    from keephive.storage import ui_queue_path
+
+    queue = ui_queue_path()
+    item1 = json.dumps({"page": "http://localhost/p1", "selector": ".s1", "note": "note one"})
+    item2 = json.dumps({"page": "http://localhost/p2", "selector": ".s2", "note": "note two"})
+    queue.write_text(item1 + "\n" + item2 + "\n")
+
+    _call_hook({"session_id": "test-multi-queue"})
+
+    out = capsys.readouterr().out
+    assert out.strip(), "Expected output from multi-item queue"
+    obj = json.loads(out.strip())
+    ctx = obj["hookSpecificOutput"]["additionalContext"]
+    assert "note one" in ctx
+    assert "note two" in ctx
+    # Queue consumed
+    assert not queue.exists()
+
+
+def test_drain_ui_queue_skips_malformed_lines(hive_env):
+    """drain_ui_queue silently skips lines that are not valid JSON."""
+    from keephive.storage import drain_ui_queue, ui_queue_path
+
+    queue = ui_queue_path()
+    good = json.dumps({"page": "http://localhost", "selector": ".ok", "note": "valid item"})
+    queue.write_text("NOT_JSON\n" + good + "\n{bad: json}\n")
+
+    result = drain_ui_queue("")
+
+    assert result is not None
+    obj = json.loads(result.strip())
+    ctx = obj["hookSpecificOutput"]["additionalContext"]
+    assert "valid item" in ctx
+    # Only one context block (the malformed lines were skipped)
+    assert ctx.count("[UI Feedback") == 1

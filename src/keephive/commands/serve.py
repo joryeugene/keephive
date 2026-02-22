@@ -1194,6 +1194,30 @@ _JS = """
     saveState('hive-tab-know', target);
   });
 
+  // --- Click-to-focus: sync keyboard nav state on click ---
+  document.addEventListener('click', function(e) {
+    var card = e.target.closest('#main-content .card[tabindex]');
+    if (!card) return;
+    var cards = _cards();
+    var cardIdx = cards.indexOf(card);
+    if (cardIdx < 0) return;
+    var innerItem = e.target.closest(
+      '.todo-item[tabindex], .log-entry[tabindex], .accordion[tabindex], ' +
+      '.note-tile[tabindex], .setting-row[tabindex], .session-item[tabindex]'
+    );
+    if (innerItem) {
+      var items = _innerItems(card);
+      var itemIdx = items.indexOf(innerItem);
+      if (itemIdx >= 0) {
+        _focusIdx = cardIdx;
+        _innerMode = true;
+        _setInnerFocus(card, itemIdx);
+        return;
+      }
+    }
+    _setFocus(cardIdx);
+  });
+
   // --- Keyboard navigation ---
   var _VIEW_KEYS={h:'/',d:'/dev',k:'/know',s:'/stats',c:'/settings'};
 
@@ -2763,11 +2787,11 @@ def _render_stats_commands_panel(data: dict) -> str:
                 tool_title += f", {_e(trend_str)} vs last week"
             tool_rows += (
                 f'<div style="display:flex;align-items:center;gap:8px;margin:2px 0" title="{tool_title}">'
-                f'<span style="min-width:90px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#8b949e;font-size:12px">{_e(tool)}</span>'
+                f'<span style="min-width:130px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#8b949e;font-size:12px">{_e(tool)}{trend_html}</span>'
                 f'<div style="flex:1;background:#161b22;border-radius:2px;height:14px">'
                 f'<div style="width:{bar_w}%;background:#238636;border-radius:2px;height:100%"></div>'
                 f"</div>"
-                f'<span style="min-width:60px;text-align:right;font-size:12px;color:#8b949e;white-space:nowrap">{pct}%{trend_html}</span>'
+                f'<span style="min-width:40px;text-align:right;font-size:12px;color:#8b949e;white-space:nowrap">{pct}%</span>'
                 f"</div>"
             )
         tools_html = f'<div style="margin-top:12px"><div style="font-size:11px;color:#484f58;margin-bottom:4px">Tool usage (from sessions)</div>{tool_rows}</div>'
@@ -3329,15 +3353,16 @@ def _render_sessions_panel(data: dict) -> str:
             # Live session badge and duration
             live_badge = ""
             duration_str = ""
+            dur_title = "running" if is_live else "duration"
             if is_live:
                 live_badge = '<span class="session-live">LIVE</span>'
-                dur = s.get("duration_minutes", 0)
-                if dur >= 60:
-                    duration_str = f"{dur // 60}h {dur % 60}m"
-                elif dur > 0:
-                    duration_str = f"{dur}m"
-                else:
-                    duration_str = "<1m"
+            dur = s.get("duration_minutes", 0)
+            if dur >= 60:
+                duration_str = f"{dur // 60}h {dur % 60}m"
+            elif dur > 0:
+                duration_str = f"{dur}m"
+            elif is_live:
+                duration_str = "<1m"  # only show <1m for live; 0 on completed = unknown
 
             depth_title = f"{depth_label} session: {msgs} {msg_label}, {unique_tools} tools"
             live_cls = " session-live-item" if is_live else ""
@@ -3348,8 +3373,8 @@ def _render_sessions_panel(data: dict) -> str:
                 f'<span class="session-time">{_e(time_str)}</span>'
                 f'<span class="session-prompts" title="{msg_label}">{msgs}{msg_unit}</span>'
             )
-            if is_live and duration_str:
-                items += f'<span class="session-duration" title="running">{_e(duration_str)}</span>'
+            if duration_str:
+                items += f'<span class="session-duration" title="{dur_title}">{_e(duration_str)}</span>'
             items += (
                 f'<span class="session-proj">{_e(proj)}</span>'
                 f'<span class="session-tools">{_e(tool_str)}</span>'
@@ -3421,9 +3446,9 @@ def _get_trend_data() -> dict:
     def _avg_duration(slist: list) -> float:
         durs: list[float] = []
         for s in slist:
-            # CC data has duration_minutes directly; cap at 8h to filter unclosed sessions
+            # CC data has duration_minutes directly; cap at 12h to filter unclosed sessions
             dur_min = s.get("duration_minutes", 0)
-            if dur_min and 0 < dur_min <= 480:
+            if dur_min and 0 < dur_min <= 720:
                 durs.append(dur_min)
                 continue
             started = s.get("started", "")
@@ -3435,7 +3460,7 @@ def _get_trend_data() -> dict:
                     t0 = datetime.fromisoformat(started)
                     t1 = datetime.fromisoformat(last_seen)
                     mins = (t1 - t0).total_seconds() / 60.0
-                    if 0 <= mins <= 480:  # cap at 8h; filters unclosed/corrupted sessions
+                    if 0 <= mins <= 720:  # cap at 12h; filters unclosed/corrupted sessions
                         durs.append(mins)
                 except ValueError:
                     pass
@@ -4377,7 +4402,8 @@ VIEWS: dict[str, dict] = {
         "rows": [
             ["status"],
             ["log-home", "todos"],
-            ["ps", "recurring", "standup"],
+            ["ps", "recurring"],
+            ["standup"],
         ],
     },
     "dev": {
@@ -4842,9 +4868,9 @@ class _HiveHandler(BaseHTTPRequestHandler):
             try:
                 from keephive.storage import ui_queue_path
 
-                ui_queue_path(self.__class__.project_name or None).write_text(
-                    json.dumps(data, indent=2)
-                )
+                q = ui_queue_path(None)
+                with q.open("a") as fh:
+                    fh.write(json.dumps(data) + "\n")
             except Exception as exc:
                 ok = False
                 error = str(exc)
