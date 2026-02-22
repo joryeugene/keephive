@@ -1816,8 +1816,6 @@ def read_live_sessions(
     Returns list of session dicts in same schema as read_cc_sessions(),
     plus is_live=True flag.
     """
-    import time
-
     if active_dirs is None:
         try:
             from keephive.commands.ps import _get_active_session_dirs
@@ -1836,8 +1834,27 @@ def read_live_sessions(
         return []
 
     home = str(Path.home())
-    cutoff_time = time.time() - (recency_minutes * 60)
     result: list[dict] = []
+
+    # Build a session-id → UTC start time lookup from .stats.json so we can restore
+    # the pre-compaction start time for sessions where Claude rewrote the JSONL head.
+    from datetime import datetime as _dt_stats, timezone as _tz
+
+    stats_starts: dict[str, str] = {}
+    try:
+        _s = read_stats()
+        _day_sessions = _s.get("days", {}).get(get_today().isoformat(), {}).get("sessions", {})
+        for _sid, _sd in _day_sessions.items():
+            _local_ts = _sd.get("started", "")
+            if _local_ts:
+                # Convert local naive → UTC-Z (astimezone() uses system tz)
+                stats_starts[_sid] = (
+                    _dt_stats.fromisoformat(_local_ts)
+                    .astimezone(_tz.utc)
+                    .strftime("%Y-%m-%dT%H:%M:%SZ")
+                )
+    except Exception:
+        pass
 
     for cwd in dict.fromkeys(active_dirs):  # deduplicate: multiple PIDs same cwd = one dir scan
         # Encode path: /Users/foo/bar -> -Users-foo-bar
@@ -1846,11 +1863,16 @@ def read_live_sessions(
         if not proj_dir.exists():
             continue
 
-        for jsonl_path in proj_dir.glob("*.jsonl"):
+        # Sort by mtime descending so the active session (most-recently-modified file)
+        # is processed first. active_dirs comes from lsof, so we have positive confirmation
+        # the process is alive — no mtime cutoff needed. Process at most 5 candidates.
+        jsonl_candidates = sorted(
+            proj_dir.glob("*.jsonl"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        for jsonl_path in jsonl_candidates[:5]:
             try:
-                # Skip stale files (not modified recently)
-                if jsonl_path.stat().st_mtime < cutoff_time:
-                    continue
 
                 size = jsonl_path.stat().st_size
                 if size == 0:
@@ -1864,8 +1886,8 @@ def read_live_sessions(
                 tool_counts: dict[str, int] = {}
 
                 with open(jsonl_path) as fh:
-                    # Read first 20KB for start info
-                    chunk = fh.read(20480)
+                    # Read first 32KB for start info
+                    chunk = fh.read(32768)
                     first_chunk_end = fh.tell()
                     for line in chunk.splitlines():
                         if not line.strip():
@@ -1892,8 +1914,8 @@ def read_live_sessions(
 
                     # If file is bigger than 20KB, read the tail for last timestamp
                     # and count remaining user messages
-                    if size > 20480:
-                        fh.seek(max(first_chunk_end, size - 10240))
+                    if size > 32768:
+                        fh.seek(max(first_chunk_end, size - 20480))
                         tail = fh.read()
                         # Skip partial first line
                         nl = tail.find("\n")
@@ -1928,6 +1950,20 @@ def read_live_sessions(
                 if user_count == 0:
                     continue
 
+                # If .stats.json recorded an earlier start (pre-compaction), prefer it so
+                # duration reflects the true session length, not the post-compaction window.
+                stats_start = stats_starts.get(session_id, "")
+                if stats_start and first_ts:
+                    try:
+                        from datetime import datetime as _dt_cmp
+
+                        if _dt_cmp.fromisoformat(
+                            stats_start.replace("Z", "+00:00")
+                        ) < _dt_cmp.fromisoformat(first_ts.replace("Z", "+00:00")):
+                            first_ts = stats_start
+                    except (ValueError, TypeError):
+                        pass
+
                 # Compute duration from timestamps
                 duration_minutes = 0
                 if first_ts and last_ts:
@@ -1937,7 +1973,7 @@ def read_live_sessions(
                         t0 = _dt.fromisoformat(first_ts.replace("Z", "+00:00"))
                         t1 = _dt.fromisoformat(last_ts.replace("Z", "+00:00"))
                         duration_minutes = max(0, int((t1 - t0).total_seconds() / 60))
-                    except (ValueError, OSError):
+                    except (ValueError, OSError, TypeError):
                         pass
 
                 # Normalize project path

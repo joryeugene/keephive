@@ -2789,13 +2789,12 @@ def _render_stats_commands_panel(data: dict) -> str:
             pct = int(tool_pct.get(tool, 0) * 100)
             bar_w = max(2, round(count / max_tool * 100))
             trend_str = tool_trends.get(tool, "")
-            trend_html = ""
             if trend_str:
-                # Determine trend color: green for up, red for down
                 trend_color = "#3fb950" if "\u25b2" in trend_str else "#f85149"
-                trend_html = (
-                    f' <span style="font-size:11px;color:{trend_color}">{_e(trend_str)}</span>'
-                )
+                trend_inner = f'<span style="font-size:11px;color:{trend_color}">{_e(trend_str)}</span>'
+            else:
+                trend_inner = '<span style="font-size:11px;color:#484f58">\u25ac</span>'
+            trend_html = f'<span style="min-width:42px;display:inline-block;text-align:right">{trend_inner}</span>'
             tool_title = f"{_e(tool)}: {count} uses ({pct}% of total)"
             if trend_str:
                 tool_title += f", {_e(trend_str)} vs last week"
@@ -3149,7 +3148,7 @@ def _get_session_data() -> dict:
 
     # Use same data source for histogram and session list
     if use_cc:
-        sessions = read_cc_sessions(days_back=7)
+        sessions = read_cc_sessions(days_back=30)
         msg_key = "user_messages"
         tool_key = "tool_counts"
     else:
@@ -3244,7 +3243,7 @@ def _render_sessions_panel(data: dict) -> str:
     msg_key = "user_messages" if use_cc else "prompts"
     tool_key = "tool_counts" if use_cc else "tools"
     msg_label = "msgs" if use_cc else "prompts"
-    msg_unit = "m" if use_cc else "p"
+    msg_unit = "" if use_cc else "p"
 
     if total == 0 and not recent:
         return (
@@ -3463,9 +3462,9 @@ def _get_trend_data() -> dict:
     def _avg_duration(slist: list) -> float:
         durs: list[float] = []
         for s in slist:
-            # CC data has duration_minutes directly; cap at 12h to filter unclosed sessions
+            # CC data has duration_minutes directly; cap at 24h to filter unclosed sessions
             dur_min = s.get("duration_minutes", 0)
-            if dur_min and 0 < dur_min <= 720:
+            if dur_min and 0 < dur_min <= 1440:
                 durs.append(dur_min)
                 continue
             started = s.get("started", "")
@@ -3477,7 +3476,7 @@ def _get_trend_data() -> dict:
                     t0 = datetime.fromisoformat(started)
                     t1 = datetime.fromisoformat(last_seen)
                     mins = (t1 - t0).total_seconds() / 60.0
-                    if 0 <= mins <= 720:  # cap at 12h; filters unclosed/corrupted sessions
+                    if 0 <= mins <= 1440:  # cap at 24h; filters unclosed/corrupted sessions
                         durs.append(mins)
                 except ValueError:
                     pass

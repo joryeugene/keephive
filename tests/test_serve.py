@@ -3443,3 +3443,219 @@ def test_js_has_transfer_handlers():
     assert "transferExport" in _JS
     assert "transferImport" in _JS
     assert "/api/transfer/import" in _JS
+
+
+# ---- Session duration rendering tests ----
+
+
+def _session_panel_data(recent, *, source="claude_code"):
+    """Build minimal _render_sessions_panel data dict with given recent sessions."""
+    msg_key = "user_messages" if source == "claude_code" else "prompts"
+    return {
+        "total_sessions": len(recent),
+        "avg_prompts_per_session": 0,
+        "avg_duration_minutes": 0,
+        "compaction_rate": 0,
+        "prompts_today": 0,
+        "prompts_week": 0,
+        "buckets": {},
+        "source": source,
+        "depth_shallow": 0,
+        "depth_medium": 0,
+        "depth_deep": 0,
+        "live_count": sum(1 for s in recent if s.get("is_live")),
+        "recent": recent,
+    }
+
+
+class TestSessionDurationRender:
+    """Session duration rendering in the sessions panel HTML."""
+
+    def test_completed_session_renders_duration_minutes(self, hive_env):
+        """Completed session with duration_minutes=45 shows '45m' with class."""
+        from keephive.commands.serve import _render_sessions_panel
+
+        session = {
+            "user_messages": 5,
+            "tool_counts": {"Read": 2},
+            "duration_minutes": 45,
+            "project": "test",
+            "started": "2026-02-22T10:00:00.000Z",
+            "day": "2026-02-22",
+        }
+        html = _render_sessions_panel(_session_panel_data([session]))
+        assert 'class="session-duration"' in html
+        assert "45m" in html
+
+    def test_completed_session_renders_duration_hours(self, hive_env):
+        """125 min renders as '2h 5m' with duration class."""
+        from keephive.commands.serve import _render_sessions_panel
+
+        session = {
+            "user_messages": 5,
+            "tool_counts": {"Read": 2},
+            "duration_minutes": 125,
+            "project": "test",
+            "started": "2026-02-22T10:00:00.000Z",
+            "day": "2026-02-22",
+        }
+        html = _render_sessions_panel(_session_panel_data([session]))
+        assert 'class="session-duration"' in html
+        assert "2h 5m" in html
+
+    def test_completed_session_zero_duration_no_span(self, hive_env):
+        """Completed session with duration=0 omits the duration span entirely."""
+        from keephive.commands.serve import _render_sessions_panel
+
+        session = {
+            "user_messages": 5,
+            "tool_counts": {"Read": 2},
+            "duration_minutes": 0,
+            "project": "test",
+            "started": "2026-02-22T10:00:00.000Z",
+            "day": "2026-02-22",
+        }
+        html = _render_sessions_panel(_session_panel_data([session]))
+        assert "session-duration" not in html
+
+    def test_live_session_zero_duration_shows_lt1m(self, hive_env):
+        """Live session with duration=0 shows '<1m' in duration span."""
+        from keephive.commands.serve import _render_sessions_panel
+
+        session = {
+            "user_messages": 5,
+            "tool_counts": {"Read": 2},
+            "duration_minutes": 0,
+            "project": "test",
+            "started": "2026-02-22T10:00:00.000Z",
+            "day": "2026-02-22",
+            "is_live": True,
+        }
+        html = _render_sessions_panel(_session_panel_data([session]))
+        assert 'class="session-duration"' in html
+        assert "&lt;1m" in html
+
+
+class TestSessionDepthClassification:
+    """Depth classification (shallow/medium/deep) via data-depth attribute."""
+
+    def _make_session(self, user_messages, tool_counts):
+        return {
+            "user_messages": user_messages,
+            "tool_counts": tool_counts,
+            "duration_minutes": 30,
+            "project": "test",
+            "started": "2026-02-22T10:00:00.000Z",
+            "day": "2026-02-22",
+        }
+
+    def test_depth_4_msgs_is_shallow(self, hive_env):
+        """4 messages classifies as shallow regardless of tools."""
+        from keephive.commands.serve import _render_sessions_panel
+
+        session = self._make_session(4, {"Read": 3, "Edit": 2, "Bash": 1, "Grep": 1})
+        html = _render_sessions_panel(_session_panel_data([session]))
+        assert 'data-depth="shallow"' in html
+
+    def test_depth_5_msgs_is_medium(self, hive_env):
+        """Exactly 5 messages (boundary) classifies as medium."""
+        from keephive.commands.serve import _render_sessions_panel
+
+        session = self._make_session(5, {"Read": 2})
+        html = _render_sessions_panel(_session_panel_data([session]))
+        assert 'data-depth="medium"' in html
+
+    def test_depth_14_msgs_3_tools_is_medium(self, hive_env):
+        """14 msgs + 3 unique tools stays medium (not deep, < 15 msgs)."""
+        from keephive.commands.serve import _render_sessions_panel
+
+        session = self._make_session(14, {"Read": 5, "Edit": 3, "Bash": 2})
+        html = _render_sessions_panel(_session_panel_data([session]))
+        assert 'data-depth="medium"' in html
+
+    def test_depth_15_msgs_only_3_tools_is_medium(self, hive_env):
+        """15 msgs + only 3 unique tools stays medium (tool threshold not met)."""
+        from keephive.commands.serve import _render_sessions_panel
+
+        session = self._make_session(15, {"Read": 5, "Edit": 3, "Bash": 2})
+        html = _render_sessions_panel(_session_panel_data([session]))
+        assert 'data-depth="medium"' in html
+
+    def test_depth_15_msgs_4_tools_is_deep(self, hive_env):
+        """15 msgs + 4 unique tools classifies as deep."""
+        from keephive.commands.serve import _render_sessions_panel
+
+        session = self._make_session(15, {"Read": 5, "Edit": 3, "Bash": 2, "Grep": 1})
+        html = _render_sessions_panel(_session_panel_data([session]))
+        assert 'data-depth="deep"' in html
+
+
+class TestAvgDurationCap:
+    """_avg_duration (nested in _get_trend_data) caps at 1440 min (24h)."""
+
+    def _get_avg_duration_kpi(self, sessions, monkeypatch, hive_env):
+        """Call _get_trend_data with mocked sessions and return the Avg duration KPI value."""
+        # Use HIVE_DATE env var for time-travel (standard approach in this codebase)
+        monkeypatch.setenv("HIVE_DATE", "2026-02-22")
+
+        # Sessions need day within "this week" window (last 6 days)
+        for s in sessions:
+            s.setdefault("day", "2026-02-22")
+            s.setdefault("user_messages", 5)
+
+        monkeypatch.setattr(
+            "keephive.storage.read_cc_sessions",
+            lambda days_back=14: sessions,
+        )
+        monkeypatch.setattr(
+            "keephive.storage.read_stats",
+            lambda: {},
+        )
+
+        from keephive.commands.serve import _get_trend_data
+
+        data = _get_trend_data()
+        # "Avg duration" is the 4th KPI (index 3)
+        dur_kpi = next(k for k in data["kpis"] if k["label"] == "Avg duration")
+        return dur_kpi["this"]
+
+    def test_avg_duration_includes_900min(self, hive_env, monkeypatch):
+        """900 min (15h) session is included after cap raise from 720 to 1440."""
+        result = self._get_avg_duration_kpi(
+            [{"duration_minutes": 900}], monkeypatch, hive_env
+        )
+        assert result == 900.0
+
+    def test_avg_duration_includes_1440min_boundary(self, hive_env, monkeypatch):
+        """1440 min (exactly 24h) is included as the boundary."""
+        result = self._get_avg_duration_kpi(
+            [{"duration_minutes": 1440}], monkeypatch, hive_env
+        )
+        assert result == 1440.0
+
+    def test_avg_duration_excludes_1441min(self, hive_env, monkeypatch):
+        """1441 min (just over 24h) is excluded."""
+        result = self._get_avg_duration_kpi(
+            [{"duration_minutes": 1441}], monkeypatch, hive_env
+        )
+        assert result == 0.0
+
+    def test_avg_duration_excludes_corrupted_22921min(self, hive_env, monkeypatch):
+        """22921 min (corrupted/unclosed session) is excluded."""
+        result = self._get_avg_duration_kpi(
+            [{"duration_minutes": 22921}], monkeypatch, hive_env
+        )
+        assert result == 0.0
+
+    def test_avg_duration_mixed_with_corrupted(self, hive_env, monkeypatch):
+        """Mixed sessions: [90, 900, 22921] averages only valid [90, 900] = 495.0."""
+        result = self._get_avg_duration_kpi(
+            [
+                {"duration_minutes": 90},
+                {"duration_minutes": 900},
+                {"duration_minutes": 22921},
+            ],
+            monkeypatch,
+            hive_env,
+        )
+        assert result == 495.0

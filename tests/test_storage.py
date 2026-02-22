@@ -1104,8 +1104,13 @@ class TestLiveSessions:
         # Verify it found the file at the encoded path
         assert (projects_dir / "-Users-foo-bar" / "enc-test.jsonl").exists()
 
-    def test_skips_stale_jsonl(self, hive_env, tmp_path, monkeypatch):
-        """JSONL files older than recency_minutes are excluded."""
+    def test_idle_session_still_returned(self, hive_env, tmp_path, monkeypatch):
+        """JSONL files with old mtime are NOT filtered when active_dirs confirms the process is alive.
+
+        active_dirs comes from lsof, which provides positive confirmation the process is running.
+        Filtering by mtime would incorrectly hide sessions that are idle (waiting for user input)
+        but still alive. recency_minutes is kept for backward-compatibility but is now a no-op.
+        """
         import time
 
         from keephive.storage import read_live_sessions
@@ -1120,12 +1125,14 @@ class TestLiveSessions:
             "old-session",
             [{"type": "user", "timestamp": "2026-02-20T01:00:00Z", "sessionId": "old-session"}],
         )
-        # Set mtime to 2 hours ago
+        # Set mtime to 2 hours ago — simulates a session idle for >30 min
         old_time = time.time() - 7200
         os.utime(path, (old_time, old_time))
 
         result = read_live_sessions(active_dirs=[cwd], recency_minutes=30)
-        assert result == []
+        assert len(result) == 1
+        assert result[0]["session_id"] == "old-session"
+        assert result[0]["is_live"] is True
 
     def test_skips_ghost_sessions(self, hive_env, tmp_path, monkeypatch):
         """JSONL with 0 user messages (only assistant/progress records) is excluded."""

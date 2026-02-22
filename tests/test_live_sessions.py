@@ -201,16 +201,23 @@ class TestReadLiveSessions:
         assert s["user_messages"] == 2
         assert s["session_id"] == "sess-001"
 
-    def test_stale_file_filtered(self, hive_env):
+    def test_idle_session_still_returned(self, hive_env):
+        """Sessions idle for >30 min are NOT filtered when active_dirs confirms the process is alive.
+
+        active_dirs comes from lsof — positive confirmation the process is running.
+        Filtering by mtime would incorrectly hide long-idle but genuinely active sessions.
+        """
         from keephive.storage import read_live_sessions
 
         cwd = "/Users/test/staleproject"
         content = make_jsonl_content(n_user_messages=3)
-        old_mtime = time.time() - (60 * 60)  # 60 min ago
+        old_mtime = time.time() - (60 * 60)  # 60 min ago — simulates idle session
         write_session(cc_projects_dir(hive_env), cwd, "stale-sess", content, mtime=old_mtime)
 
         result = read_live_sessions(active_dirs=[cwd], recency_minutes=30)
-        assert result == []
+        assert len(result) == 1
+        assert result[0]["session_id"] == "stale-sess"
+        assert result[0]["is_live"] is True
 
     def test_empty_file_skipped(self, hive_env):
         from keephive.storage import read_live_sessions
@@ -293,7 +300,7 @@ class TestReadLiveSessions:
         )
 
     def test_message_count_large_50kb(self, hive_env):
-        """50KB file: tail starts at byte 40960, no overlap with first 20KB chunk."""
+        """50KB file: tail read activates for the end of the file."""
         from keephive.storage import read_live_sessions
 
         cwd = "/Users/test/large50kb"
@@ -304,3 +311,171 @@ class TestReadLiveSessions:
         result = read_live_sessions(active_dirs=[cwd], recency_minutes=60)
         assert len(result) == 1
         assert result[0]["user_messages"] == n_msgs
+
+
+# ---- Helpers for tool_counts tests ----
+
+
+def make_jsonl_with_tools(tool_sequences: list[list[str]], user_turns: bool = True) -> bytes:
+    """Generate JSONL content for testing tool_counts parsing.
+
+    Args:
+        tool_sequences: list of lists, each inner list is tool names for one assistant turn
+        user_turns: if True, interleave user turns with timestamps
+    Returns:
+        bytes: JSONL content
+    """
+    lines: list[str] = []
+    ts = "2026-01-01T00:00:00Z"
+    for tools in tool_sequences:
+        if user_turns:
+            lines.append(json.dumps({"type": "user", "timestamp": ts}))
+        content = [{"type": "tool_use", "name": t} for t in tools]
+        lines.append(
+            json.dumps({"type": "assistant", "message": {"content": content}})
+        )
+    return ("\n".join(lines) + "\n").encode()
+
+
+# ---- TestToolCountsParsing ----
+
+
+class TestToolCountsParsing:
+    def test_tool_counts_basic(self, hive_env):
+        """Two assistant turns each with Edit+Write yields {Edit:2, Write:2}."""
+        from keephive.storage import read_live_sessions
+
+        cwd = "/Users/test/toolbasic"
+        content = make_jsonl_with_tools([["Edit", "Write"], ["Edit", "Write"]])
+        write_session(cc_projects_dir(hive_env), cwd, "tc-basic", content, mtime=time.time())
+
+        result = read_live_sessions(active_dirs=[cwd], recency_minutes=30)
+        assert len(result) == 1
+        tc = result[0]["tool_counts"]
+        assert tc == {"Edit": 2, "Write": 2}
+
+    def test_tool_counts_same_tool_accumulates(self, hive_env):
+        """Read in 3 separate turns accumulates to 3."""
+        from keephive.storage import read_live_sessions
+
+        cwd = "/Users/test/toolaccum"
+        content = make_jsonl_with_tools([["Read"], ["Read"], ["Read"]])
+        write_session(cc_projects_dir(hive_env), cwd, "tc-accum", content, mtime=time.time())
+
+        result = read_live_sessions(active_dirs=[cwd], recency_minutes=30)
+        assert len(result) == 1
+        assert result[0]["tool_counts"]["Read"] == 3
+
+    def test_tool_counts_empty_name_skipped(self, hive_env):
+        """tool_use with empty name string is not included in tool_counts."""
+        from keephive.storage import read_live_sessions
+
+        cwd = "/Users/test/toolempty"
+        content = make_jsonl_with_tools([["", "Edit"]])
+        write_session(cc_projects_dir(hive_env), cwd, "tc-empty", content, mtime=time.time())
+
+        result = read_live_sessions(active_dirs=[cwd], recency_minutes=30)
+        assert len(result) == 1
+        tc = result[0]["tool_counts"]
+        assert "" not in tc
+        assert tc == {"Edit": 1}
+
+    def test_tool_counts_non_list_content_safe(self, hive_env):
+        """Assistant record with string content (not list) yields empty tool_counts."""
+        from keephive.storage import read_live_sessions
+
+        cwd = "/Users/test/toolnonlist"
+        # Build manually: user turn + assistant with string content
+        lines = [
+            json.dumps({"type": "user", "timestamp": "2026-01-01T00:00:00Z"}),
+            json.dumps({"type": "assistant", "message": {"content": "a plain string"}}),
+        ]
+        content = ("\n".join(lines) + "\n").encode()
+        write_session(cc_projects_dir(hive_env), cwd, "tc-nonlist", content, mtime=time.time())
+
+        result = read_live_sessions(active_dirs=[cwd], recency_minutes=30)
+        assert len(result) == 1
+        assert result[0]["tool_counts"] == {}
+
+    def test_tool_counts_in_tail_large_file(self, hive_env):
+        """Tool uses in the tail section of a >53KB file are still counted.
+
+        Creates a file where the first ~36KB is user-only padding (no tools),
+        then appends assistant turns with tool_use. The tail-read logic must
+        pick up tools that fall beyond the 32KB head chunk.
+        """
+        from keephive.storage import read_live_sessions
+
+        cwd = "/Users/test/tooltail"
+        ts = "2026-01-01T00:00:00Z"
+
+        # Build ~36KB of user-only lines (no tool_use at all)
+        padding_lines: list[str] = []
+        while len("\n".join(padding_lines).encode()) < 36_000:
+            idx = len(padding_lines)
+            padding_lines.append(
+                json.dumps({
+                    "type": "user",
+                    "timestamp": ts,
+                    "message": {"role": "user", "content": f"padding message {idx:06d}"},
+                })
+            )
+            padding_lines.append(
+                json.dumps({
+                    "type": "assistant",
+                    "message": {"content": [{"type": "text", "text": f"ack {idx:06d}"}]},
+                })
+            )
+
+        # Now add assistant turns with tool_use AFTER the padding
+        tool_lines: list[str] = []
+        for t in ["Bash", "Grep", "Glob"]:
+            tool_lines.append(json.dumps({"type": "user", "timestamp": ts}))
+            tool_lines.append(
+                json.dumps({
+                    "type": "assistant",
+                    "message": {"content": [{"type": "tool_use", "name": t}]},
+                })
+            )
+
+        # Add enough extra padding at the end to push total > 53KB
+        # so the tail seek doesn't overlap with the head chunk
+        extra_pad: list[str] = []
+        combined_so_far = "\n".join(padding_lines + tool_lines).encode()
+        while len(combined_so_far) + len("\n".join(extra_pad).encode()) < 55_000:
+            idx = len(extra_pad)
+            extra_pad.append(
+                json.dumps({
+                    "type": "user",
+                    "timestamp": ts,
+                    "message": {"role": "user", "content": f"tail-pad {idx:06d}"},
+                })
+            )
+
+        all_lines = padding_lines + tool_lines + extra_pad
+        content = ("\n".join(all_lines) + "\n").encode()
+        assert len(content) > 53_000, f"File too small: {len(content)} bytes"
+
+        write_session(cc_projects_dir(hive_env), cwd, "tc-tail", content, mtime=time.time())
+
+        result = read_live_sessions(active_dirs=[cwd], recency_minutes=60)
+        assert len(result) == 1
+        tc = result[0]["tool_counts"]
+        # The tools are in the MIDDLE of the file. With head=32KB and tail=20KB,
+        # at least some should be captured.
+        assert len(tc) > 0, f"Expected non-empty tool_counts, got: {tc}"
+
+    def test_dedup_active_dirs_same_cwd_twice(self, hive_env):
+        """Passing same dir twice in active_dirs returns 2 sessions, not 4."""
+        from keephive.storage import read_live_sessions
+
+        cwd = "/Users/test/dedupdir"
+        projdir = cc_projects_dir(hive_env)
+
+        content_a = make_jsonl_with_tools([["Edit"]])
+        content_b = make_jsonl_with_tools([["Write"]])
+        write_session(projdir, cwd, "dedup-a", content_a, mtime=time.time())
+        write_session(projdir, cwd, "dedup-b", content_b, mtime=time.time())
+
+        result = read_live_sessions(active_dirs=[cwd, cwd], recency_minutes=30)
+        assert len(result) == 2
