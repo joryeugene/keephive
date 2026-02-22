@@ -75,6 +75,7 @@ def hook_userpromptsubmit(args: list[str]) -> None:
         result = drain_ui_queue(input_data.get("cwd", ""))
         if result:
             sys.stdout.write(result)
+            sys.stdout.flush()
             return  # Queue consumed; skip nudge this turn
     except Exception:
         pass  # Never block the prompt
@@ -87,6 +88,7 @@ def hook_userpromptsubmit(args: list[str]) -> None:
             nudge_text = get_prompt_nudge(count)
             output = build_nudge_output(nudge_text, event_name="UserPromptSubmit")
             sys.stdout.write(output)
+            sys.stdout.flush()
     except Exception as e:
         # Never block the user's prompt
         try:

@@ -32,6 +32,9 @@ def hook_taskcompleted(_args: list[str]) -> None:
     except Exception:
         pass
 
+    # Sanitize task_subject before writing to daily log
+    task_subject = task_subject.replace("\n", " ").replace("\r", " ").strip()
+
     # Auto-log DONE entry to daily log
     if task_subject:
         try:

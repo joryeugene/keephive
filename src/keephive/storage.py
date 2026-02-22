@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shutil
+import threading
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -344,9 +345,15 @@ def read_rules() -> str:
 
 
 def backup_and_write(path: Path, content: str) -> None:
-    """Backup a file then atomically write new content."""
+    """Backup a file then atomically write new content.
+
+    Raises OSError if the backup fails so callers know before the write proceeds.
+    """
     if path.exists():
-        shutil.copy2(path, path.with_suffix(path.suffix + ".bak"))
+        try:
+            shutil.copy2(path, path.with_suffix(path.suffix + ".bak"))
+        except OSError as exc:
+            raise OSError(f"Backup failed before write to {path}: {exc}") from exc
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(content)
     os.replace(str(tmp), str(path))
@@ -1018,16 +1025,32 @@ def read_stats() -> dict:
         return {"days": {}}
 
 
+# Module-level lock for thread safety within the same process.
+# fcntl.flock provides cross-process mutual exclusion on the same host,
+# but is not effective between threads in the same process on macOS/Linux.
+_stats_lock = threading.Lock()
+
+
 def _write_stats(data: dict) -> None:
-    """Write stats atomically with exclusive lock."""
+    """Write stats atomically with exclusive lock.
+
+    Uses a threading.Lock for in-process thread safety plus a separate
+    .lock file with fcntl for cross-process mutual exclusion. The actual
+    write is atomic via os.replace() on a .tmp file so the stats file is
+    never truncated before the lock is held.
+    """
     sf = stats_file()
     sf.parent.mkdir(parents=True, exist_ok=True)
-    with open(sf, "w") as f:
-        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-        try:
-            f.write(json.dumps(data, indent=2))
-        finally:
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+    lock_path = sf.with_suffix(".lock")
+    tmp_path = sf.with_suffix(".tmp")
+    with _stats_lock:
+        with open(lock_path, "a") as lock_f:
+            fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX)
+            try:
+                tmp_path.write_text(json.dumps(data, indent=2))
+                os.replace(str(tmp_path), str(sf))
+            finally:
+                fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
 
 
 def track_event(
@@ -1538,7 +1561,14 @@ def drain_ui_queue(cwd: str) -> "str | None":
     queue.unlink(missing_ok=True)
 
     return (
-        json.dumps({"hookSpecificOutput": {"additionalContext": "\n\n".join(context_blocks)}})
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "UserPromptSubmit",
+                    "additionalContext": "\n\n".join(context_blocks),
+                }
+            }
+        )
         + "\n"
     )
 
@@ -1558,7 +1588,7 @@ def score_fact_decay(fact_text: str, verified_date_str: str) -> float:
     try:
         vdate = date.fromisoformat(verified_date_str)
         days_old = (get_today() - vdate).days
-        recency = max(0.0, 1.0 - days_old / (threshold * 2.0))
+        recency = max(0.0, min(1.0, 1.0 - days_old / (threshold * 2.0)))
     except ValueError:
         recency = 0.0
 
@@ -1836,6 +1866,7 @@ def read_live_sessions(
                 with open(jsonl_path) as fh:
                     # Read first 20KB for start info
                     chunk = fh.read(20480)
+                    first_chunk_end = fh.tell()
                     for line in chunk.splitlines():
                         if not line.strip():
                             continue
@@ -1862,7 +1893,7 @@ def read_live_sessions(
                     # If file is bigger than 20KB, read the tail for last timestamp
                     # and count remaining user messages
                     if size > 20480:
-                        fh.seek(max(0, size - 10240))
+                        fh.seek(max(first_chunk_end, size - 10240))
                         tail = fh.read()
                         # Skip partial first line
                         nl = tail.find("\n")

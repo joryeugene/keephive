@@ -2328,3 +2328,151 @@ class TestUndoDoneEdgeCases:
         assert "important fact" in content
         assert "pending task" in content
         assert "completed task" not in content
+
+
+# ---- Concurrent _write_stats (BUG-1 regression) ----
+
+
+class TestConcurrentWriteStats:
+    def test_no_corruption_under_concurrency(self, hive_env):
+        """BUG-1 regression: concurrent _write_stats must not corrupt the file.
+
+        Before the fix: open("w") truncates before lock, so two threads could
+        both truncate and overwrite each other's data, producing corrupt JSON.
+        After the fix: separate lock file + os.replace() ensures atomic writes.
+
+        Note: track_event has an inherent read-modify-write race (read_stats
+        then _write_stats are separate calls), so exact count equality is not
+        guaranteed. What IS guaranteed is: no exceptions, valid JSON on disk,
+        and count > 0.
+        """
+        import threading
+
+        from keephive.clock import get_today
+        from keephive.storage import read_stats, track_event
+
+        errors: list[Exception] = []
+
+        def worker() -> None:
+            for _ in range(20):
+                try:
+                    track_event("commands", "concurrent_test", source="test")
+                except Exception as exc:
+                    errors.append(exc)
+
+        threads = [threading.Thread(target=worker) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors, f"Threads raised exceptions: {errors}"
+
+        day = get_today().isoformat()
+        data = read_stats()
+        assert isinstance(data, dict), "Stats file is not valid JSON dict"
+        assert "days" in data, "Stats missing 'days' key"
+        count = (
+            data.get("days", {})
+            .get(day, {})
+            .get("commands", {})
+            .get("concurrent_test", 0)
+        )
+        assert count > 0, "No increments recorded at all"
+
+    def test_no_exceptions_concurrent(self, hive_env):
+        """No thread raises; file is always valid JSON after concurrent writes."""
+        import threading
+
+        from keephive.storage import read_stats, track_event
+
+        errors: list[Exception] = []
+
+        def worker() -> None:
+            for _ in range(10):
+                try:
+                    track_event("hooks", "concurrent_hook", source="test")
+                except Exception as exc:
+                    errors.append(exc)
+
+        threads = [threading.Thread(target=worker) for _ in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors
+        data = read_stats()
+        assert isinstance(data, dict)
+        assert "days" in data
+
+
+# ---- backup_and_write (BUG-2 regression) ----
+
+
+class TestBackupAndWriteRegression:
+    def test_bak_created_with_old_content(self, hive_env):
+        from keephive.storage import backup_and_write
+
+        path = hive_env / "working" / "test-baw.md"
+        path.write_text("original")
+        backup_and_write(path, "new content")
+
+        bak = path.with_suffix(".md.bak")
+        assert bak.exists()
+        assert bak.read_text() == "original"
+        assert path.read_text() == "new content"
+
+    def test_no_tmp_remains_after_write(self, hive_env):
+        from keephive.storage import backup_and_write
+
+        path = hive_env / "working" / "test-notmp.md"
+        backup_and_write(path, "content here")
+        assert not path.with_suffix(".md.tmp").exists()
+
+    def test_second_write_bak_is_first_content(self, hive_env):
+        from keephive.storage import backup_and_write
+
+        path = hive_env / "working" / "test-bak2.md"
+        backup_and_write(path, "first write")
+        backup_and_write(path, "second write")
+
+        bak = path.with_suffix(".md.bak")
+        assert bak.read_text() == "first write"
+        assert path.read_text() == "second write"
+
+    def test_new_file_no_bak(self, hive_env):
+        from keephive.storage import backup_and_write
+
+        path = hive_env / "working" / "test-newfile.md"
+        assert not path.exists()
+        backup_and_write(path, "brand new")
+        assert not path.with_suffix(".md.bak").exists()
+        assert path.read_text() == "brand new"
+
+    def test_backup_failure_raises(self, hive_env, monkeypatch):
+        """BUG-2 regression: backup failure must raise OSError, not silently continue."""
+        import shutil
+
+        from keephive.storage import backup_and_write
+
+        path = hive_env / "working" / "test-bakfail.md"
+        path.write_text("original")
+
+        def raise_oserror(src, dst):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(shutil, "copy2", raise_oserror)
+
+        with pytest.raises(OSError, match="Backup failed"):
+            backup_and_write(path, "should not be written")
+
+        assert path.read_text() == "original"
+
+    def test_content_integrity(self, hive_env):
+        from keephive.storage import backup_and_write
+
+        path = hive_env / "working" / "test-integrity.md"
+        content = "# Test\n\n" + "line\n" * 100
+        backup_and_write(path, content)
+        assert path.read_text() == content
