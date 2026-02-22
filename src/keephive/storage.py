@@ -1838,22 +1838,29 @@ def read_live_sessions(
 
     # Build a session-id → UTC start time lookup from .stats.json so we can restore
     # the pre-compaction start time for sessions where Claude rewrote the JSONL head.
-    from datetime import datetime as _dt_stats
+    # Include today AND yesterday so sessions that started before midnight are also covered.
+    from datetime import datetime as _dt_stats, timedelta as _td
     from datetime import timezone as _tz
 
     stats_starts: dict[str, str] = {}
     try:
         _s = read_stats()
-        _day_sessions = _s.get("days", {}).get(get_today().isoformat(), {}).get("sessions", {})
-        for _sid, _sd in _day_sessions.items():
-            _local_ts = _sd.get("started", "")
-            if _local_ts:
-                # Convert local naive → UTC-Z (astimezone() uses system tz)
-                stats_starts[_sid] = (
-                    _dt_stats.fromisoformat(_local_ts)
-                    .astimezone(_tz.utc)
-                    .strftime("%Y-%m-%dT%H:%M:%SZ")
-                )
+        _days_data = _s.get("days", {})
+        _today = get_today()
+        for _day_offset in (0, 1):  # today, then yesterday
+            _day_key = (_today - _td(days=_day_offset)).isoformat()
+            _day_sessions = _days_data.get(_day_key, {}).get("sessions", {})
+            for _sid, _sd in _day_sessions.items():
+                if _sid in stats_starts:
+                    continue  # today's entry wins over yesterday's
+                _local_ts = _sd.get("started", "")
+                if _local_ts:
+                    # Convert local naive → UTC-Z (astimezone() uses system tz)
+                    stats_starts[_sid] = (
+                        _dt_stats.fromisoformat(_local_ts)
+                        .astimezone(_tz.utc)
+                        .strftime("%Y-%m-%dT%H:%M:%SZ")
+                    )
     except Exception:
         pass
 
@@ -1867,9 +1874,17 @@ def read_live_sessions(
         # Sort by mtime descending so the active session (most-recently-modified file)
         # is processed first. active_dirs comes from lsof, so we have positive confirmation
         # the process is alive — no mtime cutoff needed. Process at most 5 candidates.
+        # Safe sort key: if a file disappears between glob() and stat() (TOCTOU race),
+        # return 0 so it sorts last and is excluded by [:5] or the size guard below.
+        def _safe_mtime(p: Path) -> float:
+            try:
+                return p.stat().st_mtime
+            except OSError:
+                return 0.0
+
         jsonl_candidates = sorted(
             proj_dir.glob("*.jsonl"),
-            key=lambda p: p.stat().st_mtime,
+            key=_safe_mtime,
             reverse=True,
         )
         for jsonl_path in jsonl_candidates[:5]:

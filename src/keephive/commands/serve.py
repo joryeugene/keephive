@@ -1788,7 +1788,24 @@ def _get_notes_data() -> dict:
     return {"slots": slots}
 
 
+_stats_data_cache: dict = {}
+_STATS_CACHE_TTL: float = 30.0  # seconds; stats data changes rarely
+
+
 def _get_stats_data() -> dict:
+    import time
+
+    now = time.monotonic()
+    cached_ts = _stats_data_cache.get("ts", 0.0)
+    if now - cached_ts < _STATS_CACHE_TTL:
+        return _stats_data_cache["data"]
+    data = _get_stats_data_fresh()
+    _stats_data_cache["ts"] = now
+    _stats_data_cache["data"] = data
+    return data
+
+
+def _get_stats_data_fresh() -> dict:
     from datetime import timedelta
 
     from keephive.clock import get_today
@@ -4444,8 +4461,8 @@ VIEWS: dict[str, dict] = {
         "title": "Stats",
         "rows": [
             ["stats-pipeline", "stats"],
-            ["stats-trends", "sessions"],
-            ["stats-commands"],
+            ["stats-commands", "sessions"],
+            ["stats-trends"],
         ],
     },
     "settings": {
