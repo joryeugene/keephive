@@ -1858,7 +1858,7 @@ def test_activity_panel_title(hive_env):
 
 
 def test_what_you_use_panel_has_tools(hive_env):
-    """What You Use panel renders command table + tool breakdown."""
+    """What You Use panel renders command flex bars + tool breakdown."""
     from keephive.commands.serve import _render_stats_commands_panel
 
     data = {
@@ -1870,9 +1870,15 @@ def test_what_you_use_panel_has_tools(hive_env):
     }
     html = _render_stats_commands_panel(data)
     assert "What You Use" in html
-    assert "Commands" not in html or "What You Use" in html
-    assert "cmd-bar" in html
+    # Commands render as flex bars (not a table)
+    assert "cmd-bar" not in html
+    assert "stats-table" not in html
+    assert "#1f6feb" in html  # blue bar color for commands
     assert "remember" in html
+    # Today badge appears for commands used today
+    assert "5 today" in html
+    # Week badge appears for commands with week count but no today count
+    assert "10 wk" in html
     # Tool breakdown section
     assert "Tool usage (from sessions)" in html
     assert "Edit" in html
@@ -2908,7 +2914,7 @@ def test_dev_view_has_todos_and_log():
 
 
 def test_stats_commands_panel_renders(hive_env):
-    """Stats-commands panel renders the command breakdown table."""
+    """Stats-commands panel renders command flex bars (not a table)."""
     from keephive.commands.serve import _render_stats_commands_panel
 
     data = {
@@ -2918,7 +2924,8 @@ def test_stats_commands_panel_renders(hive_env):
     }
     html = _render_stats_commands_panel(data)
     assert "What You Use" in html
-    assert "stats-table" in html
+    assert "stats-table" not in html
+    assert "#1f6feb" in html  # blue bar color for commands
     assert "status" in html
     assert "remember" in html
 

@@ -2745,23 +2745,37 @@ def _render_stats_commands_panel(data: dict) -> str:
     tool_pct = data.get("tool_pct", {})
     tool_trends = data.get("tool_trends", {})
 
-    rows = ""
+    cmd_rows = ""
     if commands:
-        max_count = commands[0][1] if commands else 1
-        max_count = max_count or 1
-        rows = (
-            '<table class="stats-table">'
-            "<thead><tr><th>Command</th><th>Today</th><th>Week</th><th>All-time</th><th></th></tr></thead><tbody>"
-        )
+        max_count = commands[0][1] or 1
         for name, total in commands:
             t = today_map.get(name, 0)
             w = week_map.get(name, 0)
-            bar_w = max(4, round(total / max_count * 80))
-            rows += (
-                f"<tr><td>{_e(name)}</td><td>{t or ''}</td><td>{w or ''}</td><td>{total}</td>"
-                f'<td><span class="cmd-bar" style="width:{bar_w}px"></span></td></tr>'
+            bar_w = max(2, round(total / max_count * 100))
+            today_badge = (
+                f'<span style="font-size:10px;color:#8b949e;white-space:nowrap"> · {t} today</span>'
+                if t
+                else ""
             )
-        rows += "</tbody></table>"
+            week_badge = (
+                f'<span style="font-size:10px;color:#484f58;white-space:nowrap"> · {w} wk</span>'
+                if w and not t
+                else ""
+            )
+            cmd_rows += (
+                f'<div style="display:flex;align-items:center;gap:8px;margin:2px 0"'
+                f' title="{_e(name)}: {total} all-time, {t} today, {w} this week">'
+                f'<span style="min-width:80px;max-width:80px;overflow:hidden;text-overflow:ellipsis'
+                f';white-space:nowrap;color:#c9d1d9;font-size:12px">{_e(name)}</span>'
+                f'<div style="flex:1;background:#161b22;border-radius:2px;height:12px">'
+                f'<div style="width:{bar_w}%;background:#1f6feb;border-radius:2px;height:100%"></div>'
+                f"</div>"
+                f'<span style="min-width:34px;text-align:right;font-size:12px;color:#58a6ff'
+                f';white-space:nowrap">{total}</span>'
+                f"{today_badge}{week_badge}"
+                f"</div>"
+            )
+        rows = cmd_rows
     else:
         rows = '<div class="empty">No usage data yet</div>'
 
@@ -2780,14 +2794,15 @@ def _render_stats_commands_panel(data: dict) -> str:
                 # Determine trend color: green for up, red for down
                 trend_color = "#3fb950" if "\u25b2" in trend_str else "#f85149"
                 trend_html = (
-                    f' <span style="font-size:10px;color:{trend_color}">{_e(trend_str)}</span>'
+                    f' <span style="font-size:11px;color:{trend_color}">{_e(trend_str)}</span>'
                 )
             tool_title = f"{_e(tool)}: {count} uses ({pct}% of total)"
             if trend_str:
                 tool_title += f", {_e(trend_str)} vs last week"
             tool_rows += (
                 f'<div style="display:flex;align-items:center;gap:8px;margin:2px 0" title="{tool_title}">'
-                f'<span style="min-width:130px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#8b949e;font-size:12px">{_e(tool)}{trend_html}</span>'
+                f'<span style="min-width:160px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#8b949e;font-size:12px">{_e(tool)}</span>'
+                f"{trend_html}"
                 f'<div style="flex:1;background:#161b22;border-radius:2px;height:14px">'
                 f'<div style="width:{bar_w}%;background:#238636;border-radius:2px;height:100%"></div>'
                 f"</div>"

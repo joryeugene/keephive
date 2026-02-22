@@ -1,6 +1,3 @@
-# Import private recipes if present (no error when absent)
-import? '.just/release.just'
-
 # hivedev: always runs the LOCAL dev build (not the global `hive` install)
 hivedev := "uv run python -m keephive"
 
@@ -192,3 +189,35 @@ demo-screenshots: demo-seed
 # Regenerate all demo assets (GIF + screenshots)
 demo-assets: demo-gif demo-screenshots
     @echo "All demo assets regenerated from demo profile"
+
+# ── Release ───────────────────────────────────────────────────────────────────
+
+# Bump version in __init__.py and pyproject.toml
+bump version:
+    sed -i '' 's/__version__ = ".*"/__version__ = "{{version}}"/' src/keephive/__init__.py
+    sed -i '' 's/^version = ".*"/version = "{{version}}"/' pyproject.toml
+    @echo "Bumped to {{version}}"
+    @grep -E "__version__|^version" src/keephive/__init__.py pyproject.toml
+
+# Full release to PyPI + GitHub. Pre-flight runs first; ruff rewrites auto-committed.
+release version desc:
+    @echo "── Pre-flight: lint + format + secrets ──"
+    just pre-flight
+    @# Commit only src/ and tests/ to avoid accidentally staging unrelated local files.
+    @# Without this step, ruff-reformatted files stay unstaged and CI fails on the release tag.
+    git diff --quiet src/ tests/ || (git add src/ tests/ && git commit -m "chore: ruff fmt")
+    @echo "── Bump version ──"
+    just bump {{version}}
+    just sync
+    @echo "── Tests ──"
+    just test
+    git add src/keephive/__init__.py pyproject.toml uv.lock
+    git diff --cached --quiet || git commit -m "v{{version}}: {{desc}}"
+    uv build
+    uv run --with twine twine upload dist/keephive-{{version}}-py3-none-any.whl dist/keephive-{{version}}.tar.gz
+    git push
+    gh release create "v{{version}}" dist/keephive-{{version}}-py3-none-any.whl dist/keephive-{{version}}.tar.gz \
+      --title "v{{version}}: {{desc}}" \
+      --notes "{{desc}}"
+    just upgrade
+    @echo "Released v{{version}} to PyPI and GitHub"
