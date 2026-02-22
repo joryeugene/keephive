@@ -550,9 +550,7 @@ def _session_productivity(days_back: int = 30) -> dict:
     # Error rate: tool_errors / total tool calls
     week_errors = sum(s.get("tool_errors", 0) for s in sessions if s.get("day", "") >= week_ago)
     week_tool_calls = sum(
-        sum(s.get(tool_key, {}).values())
-        for s in sessions
-        if s.get("day", "") >= week_ago
+        sum(s.get(tool_key, {}).values()) for s in sessions if s.get("day", "") >= week_ago
     )
     error_rate = week_errors / week_tool_calls if week_tool_calls > 0 else 0.0
 

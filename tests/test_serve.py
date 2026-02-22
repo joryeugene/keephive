@@ -2116,7 +2116,14 @@ def test_trends_panel_has_inline_gauges(hive_env):
 
     data = {
         "kpis": [
-            {"label": "Freshness", "this": 93, "prev": 91, "trend": "up", "fmt": ".0f", "suffix": "%"},
+            {
+                "label": "Freshness",
+                "this": 93,
+                "prev": 91,
+                "trend": "up",
+                "fmt": ".0f",
+                "suffix": "%",
+            },
             {"label": "Commands", "this": 50, "prev": 30, "trend": "up", "fmt": "d"},
         ],
         "sources": {},
@@ -2125,7 +2132,7 @@ def test_trends_panel_has_inline_gauges(hive_env):
     assert "gauge-track" in html
     assert "gauge-fill" in html
     # Percentage KPIs should have fill width matching their value
-    assert 'width:93%' in html
+    assert "width:93%" in html
 
 
 def test_trends_gauge_prev_zero_fills_bar(hive_env):
@@ -2140,8 +2147,8 @@ def test_trends_gauge_prev_zero_fills_bar(hive_env):
     }
     html = _render_trends_panel(data)
     # prev=0 means this/max(this, 0) = 100%, not 0%
-    assert 'width:100%' in html
-    assert '#3fb950' in html  # green for "up" trend
+    assert "width:100%" in html
+    assert "#3fb950" in html  # green for "up" trend
 
 
 def test_trends_gauge_suffix_m_fills_bar(hive_env):
@@ -2150,13 +2157,20 @@ def test_trends_gauge_suffix_m_fills_bar(hive_env):
 
     data = {
         "kpis": [
-            {"label": "Avg duration", "this": 84, "prev": 42, "trend": "up", "fmt": ".0f", "suffix": "m"},
+            {
+                "label": "Avg duration",
+                "this": 84,
+                "prev": 42,
+                "trend": "up",
+                "fmt": ".0f",
+                "suffix": "m",
+            },
         ],
         "sources": {},
     }
     html = _render_trends_panel(data)
     # suffix="m" should hit else branch: 84/max(84,42) = 100%
-    assert 'width:100%' in html
+    assert "width:100%" in html
 
 
 def test_trends_gauge_flat_pct_uses_health_color(hive_env):
@@ -2165,15 +2179,22 @@ def test_trends_gauge_flat_pct_uses_health_color(hive_env):
 
     data = {
         "kpis": [
-            {"label": "Freshness", "this": 100, "prev": 0, "trend": "flat", "fmt": ".0f", "suffix": "%"},
+            {
+                "label": "Freshness",
+                "this": 100,
+                "prev": 0,
+                "trend": "flat",
+                "fmt": ".0f",
+                "suffix": "%",
+            },
         ],
         "sources": {},
     }
     html = _render_trends_panel(data)
     # 100% freshness with flat trend should be green (health-based), not grey
-    assert '#3fb950' in html  # green for >= 80%
+    assert "#3fb950" in html  # green for >= 80%
     # The gauge-fill specifically should use green, not grey
-    assert 'background:#3fb950' in html
+    assert "background:#3fb950" in html
 
 
 def test_sessions_shows_live_badge(hive_env):
@@ -3204,9 +3225,7 @@ def test_home_view_row_structure(hive_env):
     # Count grid-rows: should match number of rows in VIEWS["home"]
     expected_rows = len(VIEWS["home"]["rows"])
     actual_rows = html.count("grid-row grid-cols-")
-    assert actual_rows == expected_rows, (
-        f"Expected {expected_rows} grid-rows, got {actual_rows}"
-    )
+    assert actual_rows == expected_rows, f"Expected {expected_rows} grid-rows, got {actual_rows}"
     # Every card in the fragment has tabindex
     cards = re.findall(r'<div class="card"[^>]*>', html)
     for tag in cards:
@@ -3417,5 +3436,3 @@ def test_js_has_transfer_handlers():
     assert "transferExport" in _JS
     assert "transferImport" in _JS
     assert "/api/transfer/import" in _JS
-
-

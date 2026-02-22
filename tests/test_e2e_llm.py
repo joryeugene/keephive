@@ -834,7 +834,8 @@ class TestReflectApplyPersistence:
         import re
 
         verified_lines = [
-            ln for ln in final_memory.splitlines()
+            ln
+            for ln in final_memory.splitlines()
             if ln.strip().startswith("- ") and "[verified:" in ln
         ]
         assert len(verified_lines) >= 1, "Expected at least 1 verified fact after apply"

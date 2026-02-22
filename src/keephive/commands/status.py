@@ -218,13 +218,15 @@ def _render_status() -> None:
         sm = _sm(days_back=7)
         msgs_today = sum(
             s.get("user_messages", 0)
-            for s in __import__("keephive.storage", fromlist=["read_cc_sessions"])
-            .read_cc_sessions(days_back=1)
+            for s in __import__("keephive.storage", fromlist=["read_cc_sessions"]).read_cc_sessions(
+                days_back=1
+            )
         )
         msgs_week = sum(
             s.get("user_messages", 0)
-            for s in __import__("keephive.storage", fromlist=["read_cc_sessions"])
-            .read_cc_sessions(days_back=7)
+            for s in __import__("keephive.storage", fromlist=["read_cc_sessions"]).read_cc_sessions(
+                days_back=7
+            )
         )
         lines_added = sm.get("lines_added_week", 0)
         lines_removed = sm.get("lines_removed_week", 0)
@@ -490,7 +492,9 @@ def _render_status() -> None:
                 today_t.add_row("", raw)
         console.print(Panel(today_t, title="Today", border_style="dim", padding=(0, 1)))
     elif today_entries == 0:
-        console.print(Panel("[dim]no entries yet[/dim]", title="Today", border_style="dim", padding=(0, 1)))
+        console.print(
+            Panel("[dim]no entries yet[/dim]", title="Today", border_style="dim", padding=(0, 1))
+        )
 
     # Lookback when today is thin
     if today_entries < 3 and yesterday_entries > 0:
@@ -544,9 +548,7 @@ def _render_status() -> None:
     else:
         console.print(f"[bold]Next:[/bold] [ok]{next_reason}[/ok]")
     console.print()
-    console.print(
-        "[dim]hive v \u00b7 hive go \u00b7 hive l \u00b7 hive rf \u00b7 hive help[/dim]"
-    )
+    console.print("[dim]hive v \u00b7 hive go \u00b7 hive l \u00b7 hive rf \u00b7 hive help[/dim]")
 
 
 def cmd_status(args: list[str]) -> None:

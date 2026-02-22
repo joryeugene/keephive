@@ -1526,12 +1526,7 @@ def drain_ui_queue(cwd: str) -> "str | None":
 
     queue.unlink(missing_ok=True)
 
-    return (
-        json.dumps(
-            {"hookSpecificOutput": {"additionalContext": "\n".join(lines)}}
-        )
-        + "\n"
-    )
+    return json.dumps({"hookSpecificOutput": {"additionalContext": "\n".join(lines)}}) + "\n"
 
 
 def score_fact_decay(fact_text: str, verified_date_str: str) -> float:
@@ -1883,7 +1878,7 @@ def read_live_sessions(
                 # Normalize project path
                 project = cwd
                 if project.startswith(home):
-                    project = "~" + project[len(home):]
+                    project = "~" + project[len(home) :]
 
                 # Extract day from first timestamp
                 day_str = first_ts[:10] if len(first_ts) >= 10 else get_today().isoformat()

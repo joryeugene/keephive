@@ -819,12 +819,20 @@ class TestSessionMetrics:
         from keephive.storage import session_metrics
 
         meta_dir = Path(os.environ["HIVE_CC_META_DIR"])
-        _write_cc_session(meta_dir, "sess-001", user_message_count=3,
-                          start_time="2026-01-15T09:00:00Z",
-                          project_path="/dev/proj")
-        _write_cc_session(meta_dir, "sess-002", user_message_count=1,
-                          start_time="2026-01-15T14:00:00Z",
-                          project_path="/dev/proj")
+        _write_cc_session(
+            meta_dir,
+            "sess-001",
+            user_message_count=3,
+            start_time="2026-01-15T09:00:00Z",
+            project_path="/dev/proj",
+        )
+        _write_cc_session(
+            meta_dir,
+            "sess-002",
+            user_message_count=1,
+            start_time="2026-01-15T14:00:00Z",
+            project_path="/dev/proj",
+        )
 
         metrics = session_metrics()
         assert metrics["total_sessions"] == 2

@@ -33,9 +33,11 @@ def _seed_memory(term, facts: list[str]) -> None:
     lines = ["# Working Memory", ""]
     lines.extend(f"- {f}" for f in facts)
     content = "\\n".join(lines) + "\\n"
-    term.type(f'python -c "from pathlib import Path; import os; '
-              f"Path(os.environ['HIVE_HOME'], 'working', 'memory.md')"
-              f".write_text('{content}')\"")
+    term.type(
+        f'python -c "from pathlib import Path; import os; '
+        f"Path(os.environ['HIVE_HOME'], 'working', 'memory.md')"
+        f".write_text('{content}')\""
+    )
 
 
 def _seed_daily(term, date_str: str, entries: list[str]) -> None:
@@ -43,9 +45,11 @@ def _seed_daily(term, date_str: str, entries: list[str]) -> None:
     lines = [f"# Daily Log: {date_str}"]
     lines.extend(entries)
     content = "\\n".join(lines) + "\\n"
-    term.type(f'python -c "from pathlib import Path; import os; '
-              f"Path(os.environ['HIVE_HOME'], 'daily', '{date_str}.md')"
-              f".write_text('{content}')\"")
+    term.type(
+        f'python -c "from pathlib import Path; import os; '
+        f"Path(os.environ['HIVE_HOME'], 'daily', '{date_str}.md')"
+        f".write_text('{content}')\""
+    )
 
 
 # ============================================================
@@ -61,12 +65,19 @@ class TestAuditClosedLoop:
         """An audit TODO written to daily log is detected by the next audit."""
         # Day 1: Seed a TODO: [audit] entry in the daily log
         term.set_date("2026-03-01")
-        _seed_memory(term, [
-            "FACT: Python is great [verified:2020-01-01]",
-        ])
-        _seed_daily(term, "2026-03-01", [
-            "- [10:00:00] TODO: [audit] Verify stale facts in vault",
-        ])
+        _seed_memory(
+            term,
+            [
+                "FACT: Python is great [verified:2020-01-01]",
+            ],
+        )
+        _seed_daily(
+            term,
+            "2026-03-01",
+            [
+                "- [10:00:00] TODO: [audit] Verify stale facts in vault",
+            ],
+        )
 
         # Day 2: Run audit, check previous_play is detected
         term.set_date("2026-03-02")
@@ -88,9 +99,13 @@ class TestAuditClosedLoop:
         """
         # Day 1: Audit TODO exists
         term.set_date("2026-03-01")
-        _seed_daily(term, "2026-03-01", [
-            "- [10:00:00] TODO: [audit] Run hive doctor to fix duplicates",
-        ])
+        _seed_daily(
+            term,
+            "2026-03-01",
+            [
+                "- [10:00:00] TODO: [audit] Run hive doctor to fix duplicates",
+            ],
+        )
 
         # Day 2: Mark it done via hive td (which preserves the [audit] prefix)
         term.set_date("2026-03-02")
@@ -110,9 +125,13 @@ class TestAuditClosedLoop:
     def test_open_play_shows_age(self, term, save_terminal_output):
         """An open audit TODO shows correct age in days."""
         term.set_date("2026-03-01")
-        _seed_daily(term, "2026-03-01", [
-            "- [10:00:00] TODO: [audit] Review knowledge gaps",
-        ])
+        _seed_daily(
+            term,
+            "2026-03-01",
+            [
+                "- [10:00:00] TODO: [audit] Review knowledge gaps",
+            ],
+        )
 
         # 5 days later, still open
         term.set_date("2026-03-06")
@@ -127,9 +146,12 @@ class TestAuditClosedLoop:
     def test_no_previous_play_when_clean(self, term):
         """Audit with no prior TODO: [audit] entries returns null previous_play."""
         term.set_date("2026-03-01")
-        _seed_memory(term, [
-            "FACT: Clean state [verified:2026-03-01]",
-        ])
+        _seed_memory(
+            term,
+            [
+                "FACT: Clean state [verified:2026-03-01]",
+            ],
+        )
 
         data = _audit_json(term)
         assert data["previous_play"] is None
@@ -137,12 +159,20 @@ class TestAuditClosedLoop:
     def test_most_recent_play_used(self, term, save_terminal_output):
         """When multiple audit TODOs exist, the most recent one is used."""
         term.set_date("2026-03-01")
-        _seed_daily(term, "2026-02-28", [
-            "- [10:00:00] TODO: [audit] Old action from February",
-        ])
-        _seed_daily(term, "2026-03-01", [
-            "- [10:00:00] TODO: [audit] Latest action from March",
-        ])
+        _seed_daily(
+            term,
+            "2026-02-28",
+            [
+                "- [10:00:00] TODO: [audit] Old action from February",
+            ],
+        )
+        _seed_daily(
+            term,
+            "2026-03-01",
+            [
+                "- [10:00:00] TODO: [audit] Latest action from March",
+            ],
+        )
 
         term.set_date("2026-03-02")
         data = _audit_json(term)
@@ -165,12 +195,15 @@ class TestAuditMetricsAccuracy:
     def test_vault_stale_facts_count(self, term, save_terminal_output):
         """Vault stale_facts matches actual count of facts older than 30 days."""
         term.set_date("2026-03-15")
-        _seed_memory(term, [
-            "FACT: Fresh fact [verified:2026-03-10]",
-            "FACT: Stale fact one [verified:2026-01-01]",
-            "FACT: Stale fact two [verified:2025-12-15]",
-            "FACT: Borderline fact [verified:2026-02-13]",
-        ])
+        _seed_memory(
+            term,
+            [
+                "FACT: Fresh fact [verified:2026-03-10]",
+                "FACT: Stale fact one [verified:2026-01-01]",
+                "FACT: Stale fact two [verified:2025-12-15]",
+                "FACT: Borderline fact [verified:2026-02-13]",
+            ],
+        )
 
         data = _audit_json(term)
 
@@ -186,15 +219,23 @@ class TestAuditMetricsAccuracy:
     def test_cleaner_todo_completion_rate(self, term, save_terminal_output):
         """Cleaner completion_rate matches actual TODO/DONE ratio."""
         term.set_date("2026-03-15")
-        _seed_daily(term, "2026-03-14", [
-            "- [10:00:00] TODO: First task to complete",
-            "- [10:05:00] TODO: Second task stays open",
-            "- [10:10:00] TODO: Third task to complete",
-        ])
-        _seed_daily(term, "2026-03-15", [
-            "- [10:00:00] DONE: First task to complete",
-            "- [10:05:00] DONE: Third task to complete",
-        ])
+        _seed_daily(
+            term,
+            "2026-03-14",
+            [
+                "- [10:00:00] TODO: First task to complete",
+                "- [10:05:00] TODO: Second task stays open",
+                "- [10:10:00] TODO: Third task to complete",
+            ],
+        )
+        _seed_daily(
+            term,
+            "2026-03-15",
+            [
+                "- [10:00:00] DONE: First task to complete",
+                "- [10:05:00] DONE: Third task to complete",
+            ],
+        )
 
         data = _audit_json(term)
 
@@ -207,17 +248,25 @@ class TestAuditMetricsAccuracy:
     def test_strategist_topic_distribution(self, term, save_terminal_output):
         """Strategist topic_distribution matches actual category counts."""
         term.set_date("2026-03-15")
-        _seed_daily(term, "2026-03-14", [
-            "- [10:00:00] FACT: Something factual alpha",
-            "- [10:05:00] FACT: Another factual beta",
-            "- [10:10:00] DECISION: Chose approach gamma",
-            "- [10:15:00] TODO: Task to track delta",
-        ])
-        _seed_daily(term, "2026-03-15", [
-            "- [10:00:00] FACT: Third factual epsilon",
-            "- [10:05:00] INSIGHT: Pattern observed zeta",
-            "- [10:10:00] DONE: Task to track delta",
-        ])
+        _seed_daily(
+            term,
+            "2026-03-14",
+            [
+                "- [10:00:00] FACT: Something factual alpha",
+                "- [10:05:00] FACT: Another factual beta",
+                "- [10:10:00] DECISION: Chose approach gamma",
+                "- [10:15:00] TODO: Task to track delta",
+            ],
+        )
+        _seed_daily(
+            term,
+            "2026-03-15",
+            [
+                "- [10:00:00] FACT: Third factual epsilon",
+                "- [10:05:00] INSIGHT: Pattern observed zeta",
+                "- [10:10:00] DONE: Task to track delta",
+            ],
+        )
 
         data = _audit_json(term)
         dist = data["strategist"]["topic_distribution_7d"]
@@ -253,9 +302,12 @@ class TestAuditMetricsAccuracy:
     def test_score_is_deterministic(self, term, save_terminal_output):
         """Same input produces same score on repeated runs."""
         term.set_date("2026-03-15")
-        _seed_memory(term, [
-            "FACT: Stable fact [verified:2026-03-10]",
-        ])
+        _seed_memory(
+            term,
+            [
+                "FACT: Stable fact [verified:2026-03-10]",
+            ],
+        )
 
         scores = []
         for _ in range(3):
@@ -269,14 +321,22 @@ class TestAuditMetricsAccuracy:
     def test_vault_correction_count(self, term):
         """Vault correction_count_7d counts CORRECTION entries in daily logs."""
         term.set_date("2026-03-15")
-        _seed_daily(term, "2026-03-14", [
-            "- [10:00:00] CORRECTION: old assumption -> new reality",
-            "- [10:05:00] CORRECTION: wrong config -> correct config",
-            "- [10:10:00] FACT: unrelated fact",
-        ])
-        _seed_daily(term, "2026-03-15", [
-            "- [10:00:00] CORRECTION: another fix applied",
-        ])
+        _seed_daily(
+            term,
+            "2026-03-14",
+            [
+                "- [10:00:00] CORRECTION: old assumption -> new reality",
+                "- [10:05:00] CORRECTION: wrong config -> correct config",
+                "- [10:10:00] FACT: unrelated fact",
+            ],
+        )
+        _seed_daily(
+            term,
+            "2026-03-15",
+            [
+                "- [10:00:00] CORRECTION: another fix applied",
+            ],
+        )
 
         data = _audit_json(term)
         assert data["vault"]["correction_count_7d"] == 3
@@ -285,13 +345,21 @@ class TestAuditMetricsAccuracy:
         """Cleaner stale_todos counts TODOs older than 7 days."""
         term.set_date("2026-03-15")
         # Stale TODO (>7 days old)
-        _seed_daily(term, "2026-03-01", [
-            "- [10:00:00] TODO: Ancient task from two weeks ago",
-        ])
+        _seed_daily(
+            term,
+            "2026-03-01",
+            [
+                "- [10:00:00] TODO: Ancient task from two weeks ago",
+            ],
+        )
         # Fresh TODO (<7 days old)
-        _seed_daily(term, "2026-03-14", [
-            "- [10:00:00] TODO: Recent task from yesterday",
-        ])
+        _seed_daily(
+            term,
+            "2026-03-14",
+            [
+                "- [10:00:00] TODO: Recent task from yesterday",
+            ],
+        )
 
         data = _audit_json(term)
         assert data["cleaner"]["stale_todos"] >= 1, (
@@ -303,9 +371,13 @@ class TestAuditMetricsAccuracy:
         term.set_date("2026-03-15")
         # Create entries on 3 different days within the window
         for day_str in ["2026-03-13", "2026-03-14", "2026-03-15"]:
-            _seed_daily(term, day_str, [
-                f"- [10:00:00] FACT: Entry on {day_str}",
-            ])
+            _seed_daily(
+                term,
+                day_str,
+                [
+                    f"- [10:00:00] FACT: Entry on {day_str}",
+                ],
+            )
 
         data = _audit_json(term)
         assert data["strategist"]["active_days_7d"] == 3
@@ -324,11 +396,14 @@ class TestAuditScoreTimeTravel:
         """Score drops when fresh facts age past the 30-day staleness boundary."""
         # Day 0: All facts fresh, score should be high
         term.set_date("2026-03-01")
-        _seed_memory(term, [
-            "FACT: Alpha fact [verified:2026-03-01]",
-            "FACT: Beta fact [verified:2026-03-01]",
-            "FACT: Gamma fact [verified:2026-03-01]",
-        ])
+        _seed_memory(
+            term,
+            [
+                "FACT: Alpha fact [verified:2026-03-01]",
+                "FACT: Beta fact [verified:2026-03-01]",
+                "FACT: Gamma fact [verified:2026-03-01]",
+            ],
+        )
         # Also seed rules and active days to avoid strategist penalties
         term.type(
             'python -c "from pathlib import Path; import os; '
@@ -344,9 +419,13 @@ class TestAuditScoreTimeTravel:
         for i in range(5):
             day = f"2026-02-{24 + i:02d}"
             _seed_daily(term, day, [f"- [10:00:00] FACT: Activity day {i}"])
-        _seed_daily(term, "2026-03-01", [
-            "- [10:00:00] DECISION: Made a choice today",
-        ])
+        _seed_daily(
+            term,
+            "2026-03-01",
+            [
+                "- [10:00:00] DECISION: Made a choice today",
+            ],
+        )
 
         data_fresh = _audit_json(term)
         score_fresh = data_fresh["score"]
@@ -354,13 +433,21 @@ class TestAuditScoreTimeTravel:
         # Day 31: Facts are now stale (>30 days)
         term.set_date("2026-04-01")
         # Add some activity so strategist penalty for low activity doesn't dominate
-        _seed_daily(term, "2026-03-31", [
-            "- [10:00:00] FACT: Recent activity alpha",
-            "- [10:05:00] DECISION: Recent decision beta",
-        ])
-        _seed_daily(term, "2026-04-01", [
-            "- [10:00:00] FACT: Today activity gamma",
-        ])
+        _seed_daily(
+            term,
+            "2026-03-31",
+            [
+                "- [10:00:00] FACT: Recent activity alpha",
+                "- [10:05:00] DECISION: Recent decision beta",
+            ],
+        )
+        _seed_daily(
+            term,
+            "2026-04-01",
+            [
+                "- [10:00:00] FACT: Today activity gamma",
+            ],
+        )
         # Seed a few more active days
         for i in range(3):
             day = f"2026-03-{28 + i:02d}"
@@ -370,8 +457,7 @@ class TestAuditScoreTimeTravel:
         score_stale = data_stale["score"]
 
         assert score_stale < score_fresh, (
-            f"Score should drop when facts go stale: "
-            f"fresh={score_fresh}, stale={score_stale}"
+            f"Score should drop when facts go stale: fresh={score_fresh}, stale={score_stale}"
         )
 
         save_terminal_output("audit_time_travel/score_degradation", term)
@@ -381,24 +467,33 @@ class TestAuditScoreTimeTravel:
         term.set_date("2026-03-15")
 
         # 0 stale facts
-        _seed_memory(term, [
-            "FACT: Fresh [verified:2026-03-10]",
-        ])
+        _seed_memory(
+            term,
+            [
+                "FACT: Fresh [verified:2026-03-10]",
+            ],
+        )
         data_0 = _audit_json(term)
 
         # 1 stale fact
-        _seed_memory(term, [
-            "FACT: Fresh [verified:2026-03-10]",
-            "FACT: Stale [verified:2020-01-01]",
-        ])
+        _seed_memory(
+            term,
+            [
+                "FACT: Fresh [verified:2026-03-10]",
+                "FACT: Stale [verified:2020-01-01]",
+            ],
+        )
         data_1 = _audit_json(term)
 
         # 2 stale facts
-        _seed_memory(term, [
-            "FACT: Fresh [verified:2026-03-10]",
-            "FACT: Stale A [verified:2020-01-01]",
-            "FACT: Stale B [verified:2019-06-01]",
-        ])
+        _seed_memory(
+            term,
+            [
+                "FACT: Fresh [verified:2026-03-10]",
+                "FACT: Stale A [verified:2020-01-01]",
+                "FACT: Stale B [verified:2019-06-01]",
+            ],
+        )
         data_2 = _audit_json(term)
 
         # Score should drop ~10 per stale fact (other factors constant)

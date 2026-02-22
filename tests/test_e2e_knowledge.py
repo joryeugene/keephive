@@ -69,11 +69,7 @@ class TestKnowledgeGuideLifecycle:
     def test_guide_with_tags_displayed(self, term, save_terminal_output):
         """Guide with YAML frontmatter tags shows tags in listing."""
         guide_content = (
-            "---\\n"
-            "tags: [keephive, testing]\\n"
-            "---\\n"
-            "# Tagged Guide\\n\\n"
-            "Content with tags.\\n"
+            "---\\ntags: [keephive, testing]\\n---\\n# Tagged Guide\\n\\nContent with tags.\\n"
         )
         term.type(
             'python -c "from pathlib import Path; import os; '

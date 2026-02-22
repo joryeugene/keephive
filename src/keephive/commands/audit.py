@@ -677,9 +677,7 @@ def _check_previous_play() -> dict | None:
     norm_play = last_play.lower()
     completed = norm_play in dones
     if not completed:
-        completed = any(
-            re.sub(r"^\[[\w-]+\]\s*", "", d).strip() == norm_play for d in dones
-        )
+        completed = any(re.sub(r"^\[[\w-]+\]\s*", "", d).strip() == norm_play for d in dones)
     age = (get_today() - date.fromisoformat(last_date)).days
 
     return {
