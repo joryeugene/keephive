@@ -462,16 +462,18 @@ def _session_productivity(days_back: int = 30) -> dict:
     prompts_today = sum(s.get(msg_key, 0) for s in sessions if s.get("day") == today_str)
     prompts_week = sum(s.get(msg_key, 0) for s in sessions if s.get("day", "") >= week_ago)
 
-    # Session depth buckets (thresholds tuned for real user message counts)
+    # Session depth buckets (calibrated for real user_message_count from CC)
+    # OLD thresholds (10/20) were still too high for CC data where avg is ~4 msgs
+    # NEW: shallow <5, medium 5-15, deep 15+ with 4+ unique tools
     shallow = medium = deep = 0
     for s in sessions:
         if s.get("day", "") < week_ago:
             continue
         user_msgs = s.get(msg_key, 0)
         unique_tools = len(s.get(tool_key, {}))
-        if user_msgs >= 20 and unique_tools >= 4:
+        if user_msgs >= 15 and unique_tools >= 4:
             deep += 1
-        elif user_msgs >= 10 or unique_tools >= 3:
+        elif user_msgs >= 5:
             medium += 1
         else:
             shallow += 1
@@ -520,7 +522,9 @@ def _session_productivity(days_back: int = 30) -> dict:
         tool_dist.append((tool, pct, trend_str))
 
     # Success rate from facets (CC sessions only, same ID space)
+    # Only count sessions WITH facets data in denominator
     success_rate = 0.0
+    success_denominator = 0
     if use_cc:
         try:
             from keephive.insights import read_facets_full
@@ -528,15 +532,42 @@ def _session_productivity(days_back: int = 30) -> dict:
             facets = read_facets_full()
             week_sessions = [s for s in sessions if s.get("day", "") >= week_ago]
             if week_sessions:
-                achieved = sum(
-                    1
-                    for s in week_sessions
-                    if facets.get(s.get("session_id", ""), {}).get("outcome", "")
-                    in ("fully_achieved", "mostly_achieved")
-                )
-                success_rate = achieved / len(week_sessions)
+                for s in week_sessions:
+                    outcome = facets.get(s.get("session_id", ""), {}).get("outcome", "")
+                    if outcome:
+                        success_denominator += 1
+                        if outcome in ("fully_achieved", "mostly_achieved"):
+                            success_rate += 1
+                success_rate = success_rate / success_denominator if success_denominator else 0.0
         except Exception:
             pass
+
+    # Efficiency ratio: lines_added per user message (how much Claude does per prompt)
+    week_msgs = sum(s.get(msg_key, 0) for s in sessions if s.get("day", "") >= week_ago)
+    la_week = sm.get("lines_added_week", 0)
+    efficiency_ratio = la_week / week_msgs if week_msgs > 0 else 0.0
+
+    # Error rate: tool_errors / total tool calls
+    week_errors = sum(s.get("tool_errors", 0) for s in sessions if s.get("day", "") >= week_ago)
+    week_tool_calls = sum(
+        sum(s.get(tool_key, {}).values())
+        for s in sessions
+        if s.get("day", "") >= week_ago
+    )
+    error_rate = week_errors / week_tool_calls if week_tool_calls > 0 else 0.0
+
+    # Agent delegation: % of sessions using sub-agents
+    week_sessions_list = [s for s in sessions if s.get("day", "") >= week_ago]
+    agent_sessions = sum(1 for s in week_sessions_list if s.get("uses_task_agent", False))
+    agent_delegation = agent_sessions / len(week_sessions_list) if week_sessions_list else 0.0
+
+    # Interaction pattern: avg user_response_times
+    all_response_times: list[float] = []
+    for s in week_sessions_list:
+        all_response_times.extend(s.get("user_response_times", []))
+    avg_response_time = (
+        sum(all_response_times) / len(all_response_times) if all_response_times else 0.0
+    )
 
     return {
         "prompts_today": prompts_today,
@@ -561,6 +592,12 @@ def _session_productivity(days_back: int = 30) -> dict:
         "total_input_tokens": sm.get("total_input_tokens", 0),
         "total_output_tokens": sm.get("total_output_tokens", 0),
         "success_rate": success_rate,
+        "efficiency_ratio": efficiency_ratio,
+        "error_rate": error_rate,
+        "error_count": week_errors,
+        "total_tool_calls": week_tool_calls,
+        "agent_delegation": agent_delegation,
+        "avg_response_time": avg_response_time,
         "source": sm.get("source", "keephive"),
     }
 

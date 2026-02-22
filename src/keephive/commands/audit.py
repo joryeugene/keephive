@@ -670,7 +670,16 @@ def _check_previous_play() -> dict | None:
     last_date, last_play = plays[-1]
     _, dones = collect_todos()
 
-    completed = last_play.lower() in dones
+    # Match play against dones, accounting for [audit] prefix in DONE entries.
+    # collect_todos() preserves bracketed prefixes (e.g. "[audit] Fix X") in
+    # DONE text, but our regex stripped the [audit] prefix from last_play.
+    # Check both the raw text and prefix-stripped forms.
+    norm_play = last_play.lower()
+    completed = norm_play in dones
+    if not completed:
+        completed = any(
+            re.sub(r"^\[[\w-]+\]\s*", "", d).strip() == norm_play for d in dones
+        )
     age = (get_today() - date.fromisoformat(last_date)).days
 
     return {

@@ -328,7 +328,8 @@ def _extract_todo_texts(output: str) -> list[str]:
     for line in output.splitlines():
         m = re.search(r"\[(?:today|\d+d)(?:\s+\d{2}:\d{2}(?::\d{2})?)?\]\s*(.+)", line)
         if m:
-            texts.append(m.group(1).strip())
+            # Strip trailing Rich Panel border chars (│) and whitespace
+            texts.append(m.group(1).strip().rstrip("│").strip())
     return texts
 
 
@@ -876,7 +877,7 @@ class TestStatusReflectNudge:
         cmd_status([])
         out = capsys.readouterr().out
         assert "reflect" in out.lower()
-        assert "hive rf apply" in out
+        assert "addition" in out or "contradiction" in out
 
     def test_no_nudge_when_no_analysis(self, hive_env, capsys):
         """Status shows no nudge when no analysis exists."""
@@ -884,7 +885,7 @@ class TestStatusReflectNudge:
 
         cmd_status([])
         out = capsys.readouterr().out
-        assert "hive rf apply" not in out
+        assert "reflect:" not in out.lower()
 
     def test_no_nudge_when_analysis_old(self, hive_env, capsys):
         """Status shows no nudge when analysis is older than 24h."""

@@ -68,22 +68,13 @@ def hook_userpromptsubmit(args: list[str]) -> None:
     # accurate user_message_count. Hook invocations overcount (~71x) due to
     # sub-agent spawns and tool continuations.
 
-    # Check UI feedback queue — inject before nudge
+    # Check UI feedback queue — inject before nudge, persist to daily log
     try:
-        from pathlib import Path
+        from keephive.storage import drain_ui_queue
 
-        from keephive.storage import ui_queue_path
-
-        cwd = input_data.get("cwd", "")
-        project_name = Path(cwd).name if cwd else ""
-        queue = ui_queue_path(project_name) if project_name else ui_queue_path()
-        if not queue.exists() and project_name:
-            queue = ui_queue_path()  # fall back to legacy global queue
-        if queue.exists():
-            data = json.loads(queue.read_text())
-            context = _format_ui_context(data)
-            sys.stdout.write(context)
-            queue.unlink()
+        result = drain_ui_queue(input_data.get("cwd", ""))
+        if result:
+            sys.stdout.write(result)
             return  # Queue consumed; skip nudge this turn
     except Exception:
         pass  # Never block the prompt

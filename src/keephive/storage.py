@@ -1465,6 +1465,75 @@ def ui_queue_path(project: str | None = None) -> "Path":
     return hive_dir() / ".ui-queue"
 
 
+def drain_ui_queue(cwd: str) -> "str | None":
+    """Consume the UI feedback queue and persist to daily log.
+
+    Checks for a project-scoped queue file (`.ui-queue-{project}`) then falls
+    back to the global `.ui-queue`.  When a queued item is found it:
+      1. Writes the feedback as a daily log entry so it survives compaction.
+      2. Returns a JSON string with ``hookSpecificOutput.additionalContext``
+         ready to be written to hook stdout.
+      3. Deletes the queue file.
+
+    Returns None when no queue file exists.
+    """
+    import json
+    from pathlib import Path
+
+    project_name = Path(cwd).name if cwd else ""
+    queue = ui_queue_path(project_name) if project_name else ui_queue_path()
+    if not queue.exists() and project_name:
+        queue = ui_queue_path()  # fall back to legacy global queue
+    if not queue.exists():
+        return None
+
+    try:
+        data = json.loads(queue.read_text())
+    except Exception:
+        queue.unlink(missing_ok=True)
+        return None
+
+    # Extract fields
+    page = data.get("page", "?")
+    selector = data.get("selector", "?")
+    html_snippet = data.get("html", "")[:400]
+    styles = data.get("styles", "")
+    note = data.get("note", "")
+    if "\n\nNote: " in note:
+        note = note.split("\n\nNote: ")[-1].strip()
+
+    # Persist to daily log so it survives context compaction
+    try:
+        log_parts = [f"[UI Feedback] {page} · {selector}"]
+        if note:
+            log_parts.append(f"  Note: {note}")
+        if html_snippet:
+            log_parts.append(f"  HTML: {html_snippet[:120]}")
+        append_to_daily("TODO: " + " | ".join(log_parts))
+    except Exception:
+        pass  # Never block on log write failure
+
+    # Build additionalContext for hook injection
+    lines = [f"[UI Feedback — {page}]"]
+    lines.append(f"Element: {selector}")
+    if html_snippet:
+        lines.append(f"HTML: {html_snippet}")
+    if styles:
+        lines.append(f"Styles:\n{styles}")
+    if note:
+        lines.append(f"Note: {note}")
+    lines.append("[/UI Feedback]")
+
+    queue.unlink(missing_ok=True)
+
+    return (
+        json.dumps(
+            {"hookSpecificOutput": {"additionalContext": "\n".join(lines)}}
+        )
+        + "\n"
+    )
+
+
 def score_fact_decay(fact_text: str, verified_date_str: str) -> float:
     """Score a fact for decay. Lower score = better candidate for archiving.
 
@@ -1666,7 +1735,10 @@ def read_cc_sessions(days_back: int = 30) -> list[dict]:
             {
                 "session_id": data.get("session_id", fpath.stem),
                 "user_messages": data.get("user_message_count", 0),
+                "assistant_messages": data.get("assistant_message_count", 0),
                 "tool_counts": data.get("tool_counts", {}),
+                "tool_errors": data.get("tool_errors", 0),
+                "tool_error_categories": data.get("tool_error_categories", {}),
                 "duration_minutes": data.get("duration_minutes", 0),
                 "project": project,
                 "started": start_time,
@@ -1678,6 +1750,13 @@ def read_cc_sessions(days_back: int = 30) -> list[dict]:
                 "output_tokens": data.get("output_tokens", 0),
                 "git_commits": data.get("git_commits", 0),
                 "git_pushes": data.get("git_pushes", 0),
+                "uses_task_agent": data.get("uses_task_agent", False),
+                "uses_mcp": data.get("uses_mcp", False),
+                "uses_web_search": data.get("uses_web_search", False),
+                "uses_web_fetch": data.get("uses_web_fetch", False),
+                "message_hours": data.get("message_hours", []),
+                "user_response_times": data.get("user_response_times", []),
+                "user_interruptions": data.get("user_interruptions", 0),
             }
         )
 
@@ -1685,12 +1764,172 @@ def read_cc_sessions(days_back: int = 30) -> list[dict]:
     return result
 
 
+def read_live_sessions(
+    active_dirs: list[str] | None = None,
+    recency_minutes: int = 30,
+) -> list[dict]:
+    """Detect running Claude Code sessions from conversation JSONL files.
+
+    Cross-references active process working directories with JSONL files
+    under ~/.claude/projects/ to find sessions that are currently active
+    but not yet in session-meta (which is bulk-written, not real-time).
+
+    Returns list of session dicts in same schema as read_cc_sessions(),
+    plus is_live=True flag.
+    """
+    import time
+
+    if active_dirs is None:
+        try:
+            from keephive.commands.ps import _get_active_session_dirs
+
+            active_dirs = _get_active_session_dirs()
+        except Exception:
+            return []
+
+    if not active_dirs:
+        return []
+
+    # Allow test isolation via env var
+    env_dir = os.environ.get("HIVE_CC_PROJECTS_DIR")
+    projects_dir = Path(env_dir) if env_dir else Path.home() / ".claude" / "projects"
+    if not projects_dir.exists():
+        return []
+
+    home = str(Path.home())
+    cutoff_time = time.time() - (recency_minutes * 60)
+    result: list[dict] = []
+
+    for cwd in active_dirs:
+        # Encode path: /Users/foo/bar -> -Users-foo-bar
+        encoded = cwd.replace("/", "-")
+        proj_dir = projects_dir / encoded
+        if not proj_dir.exists():
+            continue
+
+        for jsonl_path in proj_dir.glob("*.jsonl"):
+            try:
+                # Skip stale files (not modified recently)
+                if jsonl_path.stat().st_mtime < cutoff_time:
+                    continue
+
+                size = jsonl_path.stat().st_size
+                if size == 0:
+                    continue
+
+                # Read first chunk for session_id and first timestamp
+                session_id = jsonl_path.stem
+                first_ts = ""
+                last_ts = ""
+                user_count = 0
+
+                with open(jsonl_path) as fh:
+                    # Read first 20KB for start info
+                    chunk = fh.read(20480)
+                    for line in chunk.splitlines():
+                        if not line.strip():
+                            continue
+                        try:
+                            rec = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        rec_type = rec.get("type", "")
+                        ts = rec.get("timestamp", "")
+                        if rec_type == "user":
+                            user_count += 1
+                            if not first_ts and ts:
+                                first_ts = ts
+                            last_ts = ts
+
+                    # If file is bigger than 20KB, read the tail for last timestamp
+                    # and count remaining user messages
+                    if size > 20480:
+                        fh.seek(max(0, size - 10240))
+                        tail = fh.read()
+                        # Skip partial first line
+                        nl = tail.find("\n")
+                        if nl >= 0:
+                            tail = tail[nl + 1 :]
+                        for line in tail.splitlines():
+                            if not line.strip():
+                                continue
+                            try:
+                                rec = json.loads(line)
+                            except json.JSONDecodeError:
+                                continue
+                            rec_type = rec.get("type", "")
+                            ts = rec.get("timestamp", "")
+                            if rec_type == "user":
+                                user_count += 1
+                                if ts:
+                                    last_ts = ts
+
+                # Skip ghost sessions
+                if user_count == 0:
+                    continue
+
+                # Compute duration from timestamps
+                duration_minutes = 0
+                if first_ts and last_ts:
+                    try:
+                        from datetime import datetime as _dt
+
+                        t0 = _dt.fromisoformat(first_ts.replace("Z", "+00:00"))
+                        t1 = _dt.fromisoformat(last_ts.replace("Z", "+00:00"))
+                        duration_minutes = max(0, int((t1 - t0).total_seconds() / 60))
+                    except (ValueError, OSError):
+                        pass
+
+                # Normalize project path
+                project = cwd
+                if project.startswith(home):
+                    project = "~" + project[len(home):]
+
+                # Extract day from first timestamp
+                day_str = first_ts[:10] if len(first_ts) >= 10 else get_today().isoformat()
+
+                result.append(
+                    {
+                        "session_id": session_id,
+                        "user_messages": user_count,
+                        "assistant_messages": 0,
+                        "tool_counts": {},
+                        "tool_errors": 0,
+                        "tool_error_categories": {},
+                        "duration_minutes": duration_minutes,
+                        "project": project,
+                        "started": first_ts,
+                        "day": day_str,
+                        "lines_added": 0,
+                        "lines_removed": 0,
+                        "files_modified": 0,
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "git_commits": 0,
+                        "git_pushes": 0,
+                        "uses_task_agent": False,
+                        "uses_mcp": False,
+                        "uses_web_search": False,
+                        "uses_web_fetch": False,
+                        "message_hours": [],
+                        "user_response_times": [],
+                        "user_interruptions": 0,
+                        "is_live": True,
+                    }
+                )
+            except Exception:
+                continue
+
+    result.sort(key=lambda x: x.get("started", ""), reverse=True)
+    return result
+
+
 def session_metrics(days_back: int = 30) -> dict:
     """Compute derived session metrics from the last N days.
 
-    Prefers Claude Code session-meta as source of truth for session analytics
-    (user messages, tool counts, duration, code impact). Falls back to
-    keephive's hook-tracked sessions when session-meta is unavailable.
+    Uses Claude Code session-meta as the sole source of truth for session
+    analytics (user messages, tool counts, duration, code impact).
+    Returns zeros when no session-meta data is available.
 
     Returns dict with total_sessions, sessions_today, sessions_this_week,
     avg/median user messages per session, avg duration, tool breakdown,
@@ -1699,17 +1938,12 @@ def session_metrics(days_back: int = 30) -> dict:
     """
     from statistics import median
 
-    # Prefer Claude Code session-meta data (accurate user message counts,
-    # full tool breakdown, code impact metrics). Fall back to keephive
-    # hook-tracked sessions if session-meta is unavailable.
+    # Claude Code session-meta is the sole source of truth for session analytics.
+    # keephive hook data is for workflow tracking (nudge cadence), not display.
+    # If session-meta is unavailable, return zeros rather than inflated hook data.
     cc_sessions = read_cc_sessions(days_back=days_back)
     use_cc = len(cc_sessions) > 0
-
-    if use_cc:
-        sessions = cc_sessions
-    else:
-        all_sessions = read_sessions(days_back=days_back)
-        sessions = [s for s in all_sessions if not is_ghost_session(s)]
+    sessions = cc_sessions
 
     today_str = get_today().isoformat()
     week_ago = (get_today() - timedelta(days=7)).isoformat()
@@ -1814,5 +2048,5 @@ def session_metrics(days_back: int = 30) -> dict:
         "git_commits_week": git_commits_week,
         "total_input_tokens": total_input_tokens,
         "total_output_tokens": total_output_tokens,
-        "source": "claude_code" if use_cc else "keephive",
+        "source": "claude_code",
     }

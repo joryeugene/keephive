@@ -328,6 +328,7 @@ def _reflect_analyze(args: list[str]) -> None:
         return
 
     if not prompt_yn("  Analyze with LLM? (~20s)"):
+        console.print("  [dim]Skipped.[/dim]")
         return
 
     current_memory = read_memory()
@@ -544,7 +545,11 @@ def _reflect_apply(args: list[str]) -> None:
             if auto:
                 choice = "y"
             else:
-                choice = prompt_choice("         (y)es  (n)o  (e)dit ? ", ["y", "n", "e"])
+                choice = prompt_choice(
+                    "         (y)es  (N)o  (e)dit ? ",
+                    ["y", "n", "e"],
+                    default="n",
+                )
             if choice == "y":
                 line = f"- {_strip_verified_tags(a.fact)} [verified:{today_str}]"
                 mem_content = _append_to_memory(mem_content, line)
@@ -698,6 +703,7 @@ def _reflect_draft(args: list[str]) -> None:
         return
 
     if not prompt_yn("  Draft guide with LLM?"):
+        console.print("  [dim]Skipped.[/dim]")
         return
 
     # Build input for LLM

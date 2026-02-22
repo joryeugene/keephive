@@ -31,17 +31,23 @@ _no_color = "NO_COLOR" in os.environ
 console = Console(theme=_theme, no_color=_no_color, force_terminal=not _no_color)
 
 
-def prompt_choice(prompt: str, valid: list[str]) -> str:
-    """Prompt for single-char choice. Instant keypress on TTY, no Enter needed."""
+def prompt_choice(prompt: str, valid: list[str], default: str | None = None) -> str:
+    """Prompt for single-char choice. Instant keypress on TTY, no Enter needed.
+
+    If the input is cancelled or not recognized, return the provided default
+    choice. When no default is supplied, fall back to the last valid option.
+    """
     import sys
+
+    fallback = default if default in valid else valid[-1]
 
     if not sys.stdin.isatty():
         # Piped input: fall back to input()
         try:
             answer = input(prompt).strip().lower()
         except (EOFError, KeyboardInterrupt):
-            return valid[-1]
-        return answer if answer in valid else valid[-1]
+            return fallback
+        return answer if answer in valid else fallback
 
     import termios
     import tty
@@ -54,7 +60,7 @@ def prompt_choice(prompt: str, valid: list[str]) -> str:
         tty.setraw(fd)
         ch = sys.stdin.read(1).lower()
     except (EOFError, KeyboardInterrupt):
-        ch = valid[-1]
+        ch = fallback
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
     if ch == "\x03":  # Ctrl+C in raw mode (tty.setraw disables ISIG)
@@ -62,9 +68,45 @@ def prompt_choice(prompt: str, valid: list[str]) -> str:
         raise KeyboardInterrupt
     if ch == "\x1b":  # Escape = cancel
         sys.stdout.write("cancelled\n")
-        return valid[-1]
+        return fallback
     sys.stdout.write(ch + "\n")
-    return ch if ch in valid else valid[-1]
+    return ch if ch in valid else fallback
+
+
+def prompt_review_item(
+    label: str = "Accept?",
+    edit_label: str = "Edit",
+    indent: str = "  ",
+) -> tuple[str, str | None]:
+    """Interactive y/n/s/e review prompt with per-choice feedback.
+
+    Returns (action, text):
+        ("accept", None)         - user pressed y
+        ("accept", "edited...")  - user edited and provided text
+        ("dismiss", None)        - user pressed n/Enter (reject, remove from pending)
+        ("skip", None)           - user pressed s (defer to next review)
+        ("defer", None)          - edit started but empty input
+    """
+    choice = prompt_choice(
+        f"{indent}{label} (y)es (N)o (s)kip (e)dit ? ",
+        ["y", "n", "s", "e"],
+        default="n",
+    )
+    if choice == "y":
+        console.print(f"{indent}[ok]\u2713 accepted[/ok]")
+        return ("accept", None)
+    if choice == "e":
+        edited = input(f"{indent}{edit_label}: ").strip()
+        if edited:
+            console.print(f"{indent}[ok]\u2713 accepted (edited)[/ok]")
+            return ("accept", edited)
+        console.print(f"{indent}[dim]deferred (empty edit)[/dim]")
+        return ("defer", None)
+    if choice == "s":
+        console.print(f"{indent}[dim]skipped[/dim]")
+        return ("skip", None)
+    console.print(f"{indent}[dim]dismissed[/dim]")
+    return ("dismiss", None)
 
 
 def copy_to_clipboard(text: str) -> bool:

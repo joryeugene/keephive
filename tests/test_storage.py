@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -815,15 +816,15 @@ class TestSessionMetrics:
 
     def test_computes_from_data(self, hive_env, monkeypatch):
         monkeypatch.setenv("HIVE_DATE", "2026-01-15")
-        from keephive.storage import session_metrics, track_session_event
+        from keephive.storage import session_metrics
 
-        track_session_event("sess-001", "start", project="/dev/proj")
-        track_session_event("sess-001", "prompt")
-        track_session_event("sess-001", "prompt")
-        track_session_event("sess-001", "prompt")
-
-        track_session_event("sess-002", "start", project="/dev/proj")
-        track_session_event("sess-002", "prompt")
+        meta_dir = Path(os.environ["HIVE_CC_META_DIR"])
+        _write_cc_session(meta_dir, "sess-001", user_message_count=3,
+                          start_time="2026-01-15T09:00:00Z",
+                          project_path="/dev/proj")
+        _write_cc_session(meta_dir, "sess-002", user_message_count=1,
+                          start_time="2026-01-15T14:00:00Z",
+                          project_path="/dev/proj")
 
         metrics = session_metrics()
         assert metrics["total_sessions"] == 2
@@ -837,17 +838,17 @@ class TestSessionMetrics:
         metrics = session_metrics()
         assert len(metrics["daily_sessions"]) == 14
 
-    def test_compaction_rate(self, hive_env, monkeypatch):
+    def test_compaction_rate_zero_for_cc(self, hive_env, monkeypatch):
         monkeypatch.setenv("HIVE_DATE", "2026-01-15")
-        from keephive.storage import session_metrics, track_session_event
+        from keephive.storage import session_metrics
 
-        track_session_event("sess-001", "start")
-        track_session_event("sess-001", "compact")
-        track_session_event("sess-002", "start")
-        track_session_event("sess-002", "prompt")  # real activity so not a ghost
+        # CC sessions don't have compacted flag; rate is always 0
+        meta_dir = Path(os.environ["HIVE_CC_META_DIR"])
+        _write_cc_session(meta_dir, "sess-001", start_time="2026-01-15T09:00:00Z")
+        _write_cc_session(meta_dir, "sess-002", start_time="2026-01-15T14:00:00Z")
 
         metrics = session_metrics()
-        assert metrics["compaction_rate"] == pytest.approx(0.5)
+        assert metrics["compaction_rate"] == 0.0
 
 
 # ---- Claude Code session-meta (read_cc_sessions) ----
@@ -1009,17 +1010,151 @@ class TestSessionMetricsWithCcData:
         assert m["git_commits_week"] == 2
         assert m["total_output_tokens"] == 30000
 
-    def test_falls_back_to_keephive_data(self, hive_env, monkeypatch):
-        """When no CC data exists, uses keephive session data."""
+    def test_returns_zeros_when_no_cc_data(self, hive_env, monkeypatch):
+        """When no CC session-meta exists, returns zeros (no fallback to hook data)."""
         monkeypatch.setenv("HIVE_DATE", "2026-01-15")
         from keephive.storage import session_metrics, track_session_event
 
+        # Write keephive hook data that should NOT be used
         track_session_event("kh-001", "start")
         track_session_event("kh-001", "prompt")
 
         m = session_metrics(days_back=7)
-        assert m["source"] == "keephive"
-        assert m["total_sessions"] == 1
+        assert m["source"] == "claude_code"
+        assert m["total_sessions"] == 0
+
+
+# ---- Live sessions ----
+
+
+class TestLiveSessions:
+    """Tests for read_live_sessions() that detects running Claude Code sessions."""
+
+    def _write_jsonl(self, projects_dir, cwd, session_id, records):
+        """Write a JSONL file under the projects dir for a given working directory."""
+        import json
+
+        encoded = cwd.replace("/", "-")
+        proj_dir = projects_dir / encoded
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        path = proj_dir / f"{session_id}.jsonl"
+        lines = [json.dumps(r) for r in records]
+        path.write_text("\n".join(lines) + "\n")
+        return path
+
+    def test_empty_when_no_active_dirs(self, hive_env):
+        """No active dirs returns empty list."""
+        from keephive.storage import read_live_sessions
+
+        result = read_live_sessions(active_dirs=[])
+        assert result == []
+
+    def test_reads_jsonl_session(self, hive_env, tmp_path, monkeypatch):
+        """JSONL file with user messages produces a live session entry."""
+        from keephive.storage import read_live_sessions
+
+        projects_dir = tmp_path / "cc-projects"
+        monkeypatch.setenv("HIVE_CC_PROJECTS_DIR", str(projects_dir))
+
+        cwd = "/Users/test/myproject"
+        sid = "abc-123-live"
+        records = [
+            {"type": "user", "timestamp": "2026-02-21T10:00:00.000Z", "sessionId": sid},
+            {"type": "assistant", "timestamp": "2026-02-21T10:00:05.000Z", "sessionId": sid},
+            {"type": "user", "timestamp": "2026-02-21T10:05:00.000Z", "sessionId": sid},
+            {"type": "assistant", "timestamp": "2026-02-21T10:05:10.000Z", "sessionId": sid},
+            {"type": "user", "timestamp": "2026-02-21T10:10:00.000Z", "sessionId": sid},
+        ]
+        self._write_jsonl(projects_dir, cwd, sid, records)
+
+        result = read_live_sessions(active_dirs=[cwd], recency_minutes=9999)
+        assert len(result) == 1
+        s = result[0]
+        assert s["session_id"] == sid
+        assert s["user_messages"] == 3
+        assert s["is_live"] is True
+        assert s["duration_minutes"] == 10
+        assert s["project"] == cwd  # not normalized since home != /Users/test
+
+    def test_path_encoding(self, hive_env, tmp_path, monkeypatch):
+        """Working directory /Users/foo/bar encodes to -Users-foo-bar."""
+        from keephive.storage import read_live_sessions
+
+        projects_dir = tmp_path / "cc-projects"
+        monkeypatch.setenv("HIVE_CC_PROJECTS_DIR", str(projects_dir))
+
+        cwd = "/Users/foo/bar"
+        self._write_jsonl(
+            projects_dir,
+            cwd,
+            "enc-test",
+            [{"type": "user", "timestamp": "2026-02-21T10:00:00Z", "sessionId": "enc-test"}],
+        )
+
+        result = read_live_sessions(active_dirs=[cwd], recency_minutes=9999)
+        assert len(result) == 1
+        # Verify it found the file at the encoded path
+        assert (projects_dir / "-Users-foo-bar" / "enc-test.jsonl").exists()
+
+    def test_skips_stale_jsonl(self, hive_env, tmp_path, monkeypatch):
+        """JSONL files older than recency_minutes are excluded."""
+        import time
+
+        from keephive.storage import read_live_sessions
+
+        projects_dir = tmp_path / "cc-projects"
+        monkeypatch.setenv("HIVE_CC_PROJECTS_DIR", str(projects_dir))
+
+        cwd = "/Users/test/old"
+        path = self._write_jsonl(
+            projects_dir,
+            cwd,
+            "old-session",
+            [{"type": "user", "timestamp": "2026-02-20T01:00:00Z", "sessionId": "old-session"}],
+        )
+        # Set mtime to 2 hours ago
+        old_time = time.time() - 7200
+        os.utime(path, (old_time, old_time))
+
+        result = read_live_sessions(active_dirs=[cwd], recency_minutes=30)
+        assert result == []
+
+    def test_skips_ghost_sessions(self, hive_env, tmp_path, monkeypatch):
+        """JSONL with 0 user messages (only assistant/progress records) is excluded."""
+        from keephive.storage import read_live_sessions
+
+        projects_dir = tmp_path / "cc-projects"
+        monkeypatch.setenv("HIVE_CC_PROJECTS_DIR", str(projects_dir))
+
+        cwd = "/Users/test/ghost"
+        self._write_jsonl(
+            projects_dir,
+            cwd,
+            "ghost-session",
+            [
+                {"type": "progress", "timestamp": "2026-02-21T10:00:00Z"},
+                {"type": "assistant", "timestamp": "2026-02-21T10:00:05Z"},
+            ],
+        )
+
+        result = read_live_sessions(active_dirs=[cwd], recency_minutes=9999)
+        assert result == []
+
+    def test_handles_corrupt_jsonl(self, hive_env, tmp_path, monkeypatch):
+        """Corrupt JSONL produces empty list, no crash."""
+        from keephive.storage import read_live_sessions
+
+        projects_dir = tmp_path / "cc-projects"
+        monkeypatch.setenv("HIVE_CC_PROJECTS_DIR", str(projects_dir))
+
+        cwd = "/Users/test/corrupt"
+        encoded = cwd.replace("/", "-")
+        proj_dir = projects_dir / encoded
+        proj_dir.mkdir(parents=True)
+        (proj_dir / "bad-session.jsonl").write_text("not json at all\n{broken\n")
+
+        result = read_live_sessions(active_dirs=[cwd], recency_minutes=9999)
+        assert result == []
 
 
 # ---- Memory decay ----

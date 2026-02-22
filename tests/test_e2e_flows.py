@@ -66,7 +66,7 @@ class TestDayOneCaptureAndRetrieval:
         cmd_status([])
         out = capsys.readouterr().out
         assert "fix the widget" in out
-        assert "open TODO" in out
+        assert "TODO" in out
 
 
 # ---------------------------------------------------------------------------
@@ -512,15 +512,13 @@ class TestStatusOutputCompleteness:
         assert "stale" in out.lower()
         # TODO summary
         assert "fix regression" in out
-        assert "open TODO" in out
-        # Due recurring
-        assert "due recurring" in out.lower()
+        assert "TODO" in out
+        # Due recurring (shown in Attention panel)
         assert "Check builds" in out
         # Note indicator (new format)
-        assert "Active draft" in out and "slot 1" in out
-        # Footer (stale facts -> suggests verify session)
+        assert "Active Draft" in out and "slot 1" in out
+        # Footer
         assert "hive v" in out
-        assert "session verify" in out
 
 
 # ---------------------------------------------------------------------------

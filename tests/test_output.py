@@ -95,6 +95,48 @@ class TestPromptYn:
             prompt_yn("Continue?")
 
 
+class TestPromptReviewItem:
+    def _patch(self, monkeypatch, char: str):
+        fake = FakeTTY(char)
+        monkeypatch.setattr("sys.stdin", fake)
+        monkeypatch.setattr("termios.tcgetattr", lambda _fd: [])
+        monkeypatch.setattr("termios.tcsetattr", lambda _fd, _when, _attrs: None)
+        monkeypatch.setattr("tty.setraw", lambda _fd: None)
+
+    def test_y_returns_accept(self, monkeypatch):
+        self._patch(monkeypatch, "y")
+        from keephive.output import prompt_review_item
+
+        action, text = prompt_review_item()
+        assert action == "accept"
+        assert text is None
+
+    def test_n_returns_dismiss(self, monkeypatch):
+        self._patch(monkeypatch, "n")
+        from keephive.output import prompt_review_item
+
+        action, text = prompt_review_item()
+        assert action == "dismiss"
+        assert text is None
+
+    def test_enter_returns_dismiss(self, monkeypatch):
+        # Enter (\r) triggers the default "n" → dismiss, not skip
+        self._patch(monkeypatch, "\r")
+        from keephive.output import prompt_review_item
+
+        action, text = prompt_review_item()
+        assert action == "dismiss"
+        assert text is None
+
+    def test_s_returns_skip(self, monkeypatch):
+        self._patch(monkeypatch, "s")
+        from keephive.output import prompt_review_item
+
+        action, text = prompt_review_item()
+        assert action == "skip"
+        assert text is None
+
+
 def test_console_force_terminal(capsys):
     """Console with force_terminal=True outputs to stdout even when piped."""
     from keephive.output import console

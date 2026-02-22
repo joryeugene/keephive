@@ -220,6 +220,36 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .pulse-kpi{display:flex;flex-direction:column;align-items:center;gap:2px}
 .pulse-kpi-val{font-size:16px;font-weight:700;color:#e6edf3}
 .pulse-kpi-label{font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap}
+.metric-hero{font-size:36px;font-weight:700;color:#f0f6fc;line-height:1}
+.metric-hero-unit{font-size:16px;color:#484f58;font-weight:400}
+.metric-hero-delta{font-size:14px;margin-left:4px}
+.metric-hero-delta.up{color:#3fb950}
+.metric-hero-delta.down{color:#f85149}
+.metric-hero-delta.flat{color:#484f58}
+.kpi-row{display:flex;justify-content:center;gap:20px;flex-wrap:wrap;margin:8px 0}
+.kpi-item{text-align:center;min-width:48px}
+.kpi-value{font-size:18px;font-weight:700;color:#e6edf3;line-height:1.2}
+.kpi-label{font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.gauge-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.gauge-label{font-size:11px;color:#8b949e;width:110px;text-align:right;flex-shrink:0}
+.gauge-track{flex:1;height:6px;border-radius:3px;background:#21262d}
+.gauge-fill{height:100%;border-radius:3px;transition:width .3s ease}
+.gauge-pct{font-size:11px;color:#8b949e;width:36px;text-align:right;flex-shrink:0}
+.sparkline-unicode{font-family:monospace;font-size:14px;letter-spacing:1px;color:#58a6ff}
+.sparkline-axis{display:flex;justify-content:space-between;font-size:9px;color:#484f58;margin-top:1px}
+.health-dots{display:flex;gap:6px;align-items:center}
+.health-dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+.health-dot.ok{background:#3fb950}
+.health-dot.warn{background:#e3b341}
+.health-dot.off{background:#484f58}
+.action-timeline{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
+.action-item{font-size:11px;display:flex;align-items:center;gap:4px}
+.action-dot{width:8px;height:8px;border-radius:50%}
+.action-dot.recent{background:#3fb950}
+.action-dot.overdue{background:#e3b341;border:1px solid #e3b34155}
+.action-dot.never{background:none;border:1px solid #484f58}
+.action-label{color:#8b949e}
+.action-ago{color:#484f58;font-size:10px}
 .health-row{display:flex;gap:12px;margin-top:6px;justify-content:center}
 .dot-ok{color:#3fb950}.dot-off{color:#6e7681}
 .health-label{font-size:12px;color:#8b949e}
@@ -452,10 +482,9 @@ mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 .trend-up{color:#3fb950}.trend-down{color:#f85149}.trend-flat{color:#6e7681}
 .trend-row{display:flex;align-items:center;gap:12px;padding:4px 0;border-bottom:1px solid #21262d;font-size:12px}
 .trend-row:last-child{border-bottom:none}
-.trend-label{flex:1;color:#8b949e}
+.trend-label{width:90px;flex:none;color:#8b949e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trend-val{min-width:40px;text-align:right;color:#c9d1d9;font-weight:600}
-.trend-arrow{min-width:16px;text-align:center;font-size:14px}
-.trend-prev{min-width:40px;text-align:right;color:#6e7681;font-size:11px}
+.trend-delta{font-size:10px;min-width:44px;text-align:right;color:#6e7681}
 .cmd-bar{display:inline-block;height:12px;border-radius:2px;background:#1a3a5c;vertical-align:middle}
 .prompt-hist{display:flex;align-items:flex-end;gap:3px;height:80px;padding:8px 12px 0}
 .prompt-hist-bar{flex:1;border-radius:2px 2px 0 0;background:#238636;min-width:18px;position:relative;cursor:default}
@@ -469,6 +498,11 @@ mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 .session-prompts{color:#58a6ff;font-weight:600;min-width:20px;text-align:right}
 .session-proj{color:#8b949e;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .session-tools{color:#6e7681;font-size:11px;flex-shrink:0}
+.session-live{display:inline-block;font-size:10px;font-weight:700;color:#3fb950;background:#0d2e1a;padding:1px 5px;border-radius:3px;margin-right:4px;letter-spacing:.5px;animation:pulse-live 2s ease-in-out infinite}
+@keyframes pulse-live{0%,100%{opacity:1}50%{opacity:.6}}
+.session-live-item{border-left:2px solid #3fb950}
+.session-duration{color:#3fb950;font-size:11px;font-family:monospace;flex-shrink:0}
+.session-item.session-filtered{display:none}
 .source-row{display:flex;align-items:center;gap:8px;padding:3px 0}
 .source-label{min-width:100px;text-align:right;color:#8b949e;font-size:12px}
 .source-bar-track{flex:1;background:#161b22;border-radius:2px;height:14px;overflow:hidden}
@@ -510,15 +544,36 @@ _JS = """
   function restoreState() {
     // Log type filter
     var sf = loadState('hive-log-filter', '');
-    var btns = document.querySelectorAll('.log-filter-btn');
-    if (btns.length && sf) {
-      btns.forEach(function(b) {
+    var logFilter = document.querySelector('.log-filter:not([data-filter-group])');
+    if (logFilter && sf) {
+      logFilter.querySelectorAll('.log-filter-btn').forEach(function(b) {
         b.classList.toggle('active', b.dataset.type === sf);
         b.setAttribute('aria-pressed', String(b.dataset.type === sf));
       });
-      document.querySelectorAll('.log-entry').forEach(function(e) {
-        e.classList.toggle('filtered', e.dataset.type !== sf);
+      var card = logFilter.closest('.card');
+      if (card) {
+        card.querySelectorAll('.log-entry').forEach(function(e) {
+          e.classList.toggle('filtered', e.dataset.type !== sf);
+        });
+      }
+    }
+    // Session filter
+    var ssf = loadState('hive-session-filter', '');
+    var sessFilter = document.querySelector('.log-filter[data-filter-group="session"]');
+    if (sessFilter && ssf) {
+      sessFilter.querySelectorAll('.log-filter-btn').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.type === ssf);
+        b.setAttribute('aria-pressed', String(b.dataset.type === ssf));
       });
+      var scard = sessFilter.closest('.card');
+      if (scard) {
+        scard.querySelectorAll('.session-item').forEach(function(item) {
+          if(!ssf){item.classList.remove('session-filtered');}
+          else if(ssf==='live'){item.classList.toggle('session-filtered',item.dataset.live!=='true');}
+          else if(ssf==='deep'){item.classList.toggle('session-filtered',item.dataset.depth!=='deep');}
+          else{item.classList.toggle('session-filtered',item.dataset.depth!==ssf);}
+        });
+      }
     }
     // Accordions (per-view)
     var accNames = loadState('hive-acc-' + view, null);
@@ -655,23 +710,94 @@ _JS = """
     var savedIdx=_focusIdx;
     var savedInner=_innerMode;
     var savedInnerIdx=_innerIdx;
+    // Skip refresh if user is typing in an input (avoid destroying their text)
+    var ae=document.activeElement;
+    if(ae&&mc&&mc.contains(ae)&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA')){
+      mc.classList.remove('is-loading');
+      return;
+    }
     if(mc)mc.classList.add('is-loading');
+    // Save ephemeral UI state before refresh
+    var detailsState={};
+    var scrollState={};
+    var inputState={};
+    if(mc){
+      mc.querySelectorAll('details').forEach(function(d){
+        var key=d.closest('[data-panel-id]');
+        var pid=key?key.getAttribute('data-panel-id'):'';
+        var sum=d.querySelector('summary');
+        var label=sum?sum.textContent.trim():'';
+        if(pid&&label)detailsState[pid+'::'+label]=d.open;
+      });
+      mc.querySelectorAll('.session-list,.log-list,.todo-list').forEach(function(el){
+        if(el.scrollTop>0){
+          var key=el.closest('[data-panel-id]');
+          var pid=key?key.getAttribute('data-panel-id'):'';
+          var cls=el.className.split(' ')[0];
+          if(pid)scrollState[pid+'::'+cls]=el.scrollTop;
+        }
+      });
+      // Save input/textarea values
+      mc.querySelectorAll('input[type="text"],textarea').forEach(function(inp){
+        if(!inp.value)return;
+        var panel=inp.closest('[data-panel-id]');
+        var pid=panel?panel.getAttribute('data-panel-id'):'';
+        var id=inp.id||inp.name||inp.placeholder;
+        if(pid&&id)inputState[pid+'::'+id]=inp.value;
+      });
+    }
     fetch(url)
       .then(function(r){return r.text();})
       .then(function(h){
         if(mc){
           var tmp=document.createElement('div');
           tmp.innerHTML=h;
-          var newPanels=tmp.querySelectorAll('.grid-panel[data-panel-id]');
+          var newPanels=tmp.querySelectorAll('[data-panel-id]');
           if(newPanels.length){
             newPanels.forEach(function(np){
               var id=np.getAttribute('data-panel-id');
-              var ep=mc.querySelector('.grid-panel[data-panel-id="'+id+'"]');
-              if(ep)ep.innerHTML=np.innerHTML;
+              var ep=mc.querySelector('[data-panel-id="'+id+'"]');
+              if(ep){
+                // Update inner content, preserving gridstack wrapper
+                var innerTarget=ep.querySelector('.grid-panel')||ep;
+                var innerSource=np.querySelector('.grid-panel')||np;
+                innerTarget.innerHTML=innerSource.innerHTML;
+              }
             });
           } else {
             mc.innerHTML=h;
           }
+          // Restore details open state
+          Object.keys(detailsState).forEach(function(k){
+            var parts=k.split('::');
+            var pid=parts[0],label=parts[1];
+            var panel=mc.querySelector('[data-panel-id="'+pid+'"]');
+            if(!panel)return;
+            panel.querySelectorAll('details').forEach(function(d){
+              var sum=d.querySelector('summary');
+              if(sum&&sum.textContent.trim()===label)d.open=detailsState[k];
+            });
+          });
+          // Restore scroll positions
+          Object.keys(scrollState).forEach(function(k){
+            var parts=k.split('::');
+            var pid=parts[0],cls=parts[1];
+            var panel=mc.querySelector('[data-panel-id="'+pid+'"]');
+            if(!panel)return;
+            var el=panel.querySelector('.'+cls);
+            if(el)el.scrollTop=scrollState[k];
+          });
+          // Restore input values
+          Object.keys(inputState).forEach(function(k){
+            var parts=k.split('::');
+            var pid=parts[0],id=parts[1];
+            var panel=mc.querySelector('[data-panel-id="'+pid+'"]');
+            if(!panel)return;
+            var el=panel.querySelector('#'+CSS.escape(id))
+                 ||panel.querySelector('[name="'+id+'"]')
+                 ||panel.querySelector('[placeholder="'+id+'"]');
+            if(el)el.value=inputState[k];
+          });
           mc.classList.remove('is-loading');
         }
         lastSuccess=Date.now();
@@ -850,6 +976,11 @@ _JS = """
     var ov=document.getElementById('search-overlay');
     if(ov)ov.style.display='none';
     _searchIdx=-1;
+    // Restore card focus after closing search
+    if(_focusIdx>=0){
+      var cards=_cards();
+      if(cards[_focusIdx])cards[_focusIdx].classList.add('hive-focus');
+    }
   }
   var si=document.getElementById('search-input');
   if(si){
@@ -917,15 +1048,31 @@ _JS = """
     var type=btn.dataset.type;
     var container=btn.closest('.card');
     if(!container)return;
+    var filterGroup=btn.closest('.log-filter');
+    var isSession=filterGroup&&filterGroup.dataset.filterGroup==='session';
     container.querySelectorAll('.log-filter-btn').forEach(function(b){
-      b.classList.toggle('active',b===btn);
-      b.setAttribute('aria-pressed',String(b===btn));
+      // Only toggle buttons in the same filter group
+      if(b.closest('.log-filter')===filterGroup){
+        b.classList.toggle('active',b===btn);
+        b.setAttribute('aria-pressed',String(b===btn));
+      }
     });
-    container.querySelectorAll('.log-entry').forEach(function(entry){
-      if(!type){entry.classList.remove('filtered');}
-      else{entry.classList.toggle('filtered',entry.dataset.type!==type);}
-    });
-    saveState('hive-log-filter', type || '');
+    if(isSession){
+      // Session filter: match on data-depth or data-live attributes
+      container.querySelectorAll('.session-item').forEach(function(item){
+        if(!type){item.classList.remove('session-filtered');}
+        else if(type==='live'){item.classList.toggle('session-filtered',item.dataset.live!=='true');}
+        else if(type==='deep'){item.classList.toggle('session-filtered',item.dataset.depth!=='deep');}
+        else{item.classList.toggle('session-filtered',item.dataset.depth!==type);}
+      });
+      saveState('hive-session-filter',type||'');
+    }else{
+      container.querySelectorAll('.log-entry').forEach(function(entry){
+        if(!type){entry.classList.remove('filtered');}
+        else{entry.classList.toggle('filtered',entry.dataset.type!==type);}
+      });
+      saveState('hive-log-filter', type || '');
+    }
   });
 
   // --- Note slot switcher ---
@@ -935,6 +1082,51 @@ _JS = """
       .then(function(r){return r.json();})
       .then(function(d){if(d.ok)refresh();})
       .catch(function(){document.querySelectorAll('.slot-btn').forEach(function(b){b.disabled=false;});});
+  };
+
+  // --- Profile management ---
+  window.profileSwitch=function(name){
+    fetch('/api/profiles/use',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+      .then(function(r){return r.json();})
+      .then(function(d){if(d.ok)location.reload();});
+  };
+  window.profileCreate=function(){
+    var inp=document.getElementById('profile-name');
+    var seed=document.getElementById('profile-seed');
+    var name=(inp?inp.value:'').trim();
+    if(!name)return;
+    fetch('/api/profiles/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,seed:seed?seed.checked:false})})
+      .then(function(r){return r.json();})
+      .then(function(d){if(d.ok){if(inp)inp.value='';refresh();}});
+  };
+  window.profileDelete=function(name){
+    if(!confirm('Delete profile "'+name+'" and ALL its data?'))return;
+    fetch('/api/profiles/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+      .then(function(r){return r.json();})
+      .then(function(d){if(d.ok)refresh();});
+  };
+
+  // --- Data transfer ---
+  window.transferExport=function(){
+    var a=document.createElement('a');
+    a.href='/api/transfer/export';
+    a.download='';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+  window.transferImport=function(){
+    var inp=document.getElementById('import-file');
+    if(!inp||!inp.files||!inp.files.length)return;
+    var file=inp.files[0];
+    var reader=new FileReader();
+    reader.onload=function(){
+      var b64=btoa(String.fromCharCode.apply(null,new Uint8Array(reader.result)));
+      fetch('/api/transfer/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:b64})})
+        .then(function(r){return r.json();})
+        .then(function(d){if(d.ok){inp.value='';refresh();}});
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   // --- Edit modal ---
@@ -1097,7 +1289,9 @@ _JS = """
       e.preventDefault();
     }
     // h/l: move left/right within row, or prev/next row if solo card
-    else if(k==='h'&&!_innerMode){
+    // In inner mode, exit inner and move to adjacent card
+    else if(k==='h'){
+      if(_innerMode){_innerMode=false;_innerIdx=-1;}
       var cellH=_findCell(_focusIdx);var rsH=_rows();
       if(cellH){
         var rowH=rsH[cellH.rowIdx];
@@ -1106,7 +1300,8 @@ _JS = """
       }
       e.preventDefault();
     }
-    else if(k==='l'&&!_innerMode){
+    else if(k==='l'){
+      if(_innerMode){_innerMode=false;_innerIdx=-1;}
       var cellL=_findCell(_focusIdx);var rsL=_rows();
       if(cellL){
         var rowL=rsL[cellL.rowIdx];
@@ -1190,9 +1385,20 @@ _JS = """
       if(nextBtn&&!nextBtn.disabled)nextBtn.click();
       e.preventDefault();
     }
-    // Note slot switching (1-9)
+    // Number keys: know view tab switching or note slot switching
     else if(k>='1'&&k<='9'){
-      if(view==='know'){window.switchNote(parseInt(k,10));}
+      if(view==='know'){
+        // Check active tab: if Notes tab, switch slots; otherwise 1/2/3 switch tabs
+        var activeTab=document.querySelector('.tab-btn.active');
+        var tabName=activeTab?activeTab.dataset.tab:'';
+        if(tabName==='notes'||tabName===''){
+          window.switchNote(parseInt(k,10));
+        } else if(k>='1'&&k<='3'){
+          var tabBtns=document.querySelectorAll('.tab-btn');
+          var idx=parseInt(k,10)-1;
+          if(tabBtns[idx])tabBtns[idx].click();
+        }
+      }
       e.preventDefault();
     }
     // Edit focused item
@@ -1215,6 +1421,18 @@ _JS = """
     else if(k==='?'){
       var ho=document.getElementById('help-overlay');
       if(ho)ho.classList.toggle('open');
+      e.preventDefault();
+    }
+    // Tab/Shift+Tab: card-level navigation
+    else if(k==='Tab'&&!_innerMode){
+      var cardsT=_cards();
+      if(cardsT.length){
+        if(e.shiftKey){
+          _setFocus(_focusIdx>0?_focusIdx-1:cardsT.length-1);
+        }else{
+          _setFocus(_focusIdx<cardsT.length-1?_focusIdx+1:0);
+        }
+      }
       e.preventDefault();
     }
     // Escape: exit inner mode first, then clear focus
@@ -1716,99 +1934,108 @@ def _render_status_panel(data: dict) -> str:
     stale = data.get("stale", 0)
     total = data.get("total_verified", 0)
     today_entries = data.get("today_entries", 0)
-    yesterday_entries = data.get("yesterday_entries", 0)
     hooks_ok = data.get("hooks_ok", False)
     mcp_ok = data.get("mcp_ok", False)
     data_ok = data.get("data_ok", True)
     stale_facts = data.get("stale_facts", [])
     todo_count = data.get("todo_count", 0)
 
-    stale_cls = "warn" if stale > 0 else "ok"
-    stale_val = f'<span class="stat-value {stale_cls}">{stale}</span>'
-    rows = (
-        f'<div class="stat-row">'
-        f'<div class="stat-item"><span class="stat-value">{total}</span><span class="stat-label">verified facts</span></div>'
-        f'<div class="stat-item">{stale_val}<span class="stat-label">stale facts</span></div>'
-        f'<div class="stat-item"><span class="stat-value">{todo_count}</span><span class="stat-label">open todos</span></div>'
-        f'<div class="stat-item"><span class="stat-value">{today_entries}</span><span class="stat-label">logged today</span></div>'
-        f'<div class="stat-item"><span class="stat-value">{yesterday_entries}</span><span class="stat-label">logged yesterday</span></div>'
-        f"</div>"
-    )
+    # Health dots in header (moved from body)
+    def _header_dot(ok: bool, label: str) -> str:
+        cls = "ok" if ok else "off"
+        return f'<span class="health-dot {cls}" title="{label}"></span>'
 
-    def _dot(ok: bool, label: str) -> str:
-        dot_cls = "dot-ok" if ok else "dot-off"
-        sym = "●" if ok else "○"
-        return f'<span class="{dot_cls}">{sym}</span><span class="health-label">{label}</span>'
-
-    health = (
-        '<div class="health-row">'
-        + _dot(hooks_ok, "hooks")
-        + _dot(mcp_ok, "mcp")
-        + _dot(data_ok, "data")
+    health_dots = (
+        f'<div class="health-dots">'
+        + _header_dot(hooks_ok, "hooks")
+        + _header_dot(mcp_ok, "mcp")
+        + _header_dot(data_ok, "data")
         + "</div>"
     )
 
-    # Stale facts accordion
-    stale_accordion = ""
+    # Data for metrics
+    fresh_pct = data.get("fresh_pct", 0)
+    capture_recall = data.get("capture_recall", 0)
+    activity_today = data.get("activity_today", 0)
+    activity_week = data.get("activity_week", 0)
+    activity_streak = data.get("activity_streak", 0)
+    activity_hours = data.get("activity_hours", {})
+    pending_rules_count = data.get("pending_rules_count", 0)
+
+    # Full-width 2-column layout: left = KPIs + gauge, right = activity + heatmap
+    stale_cls = "warn" if stale > 0 else "ok"
+
+    # Left column: core health KPIs + gauge
+    kpi_html = (
+        f'<div class="kpi-row" style="justify-content:flex-start;gap:16px">'
+        f'<div class="kpi-item"><div class="kpi-value">{total}</div><div class="kpi-label">verified facts</div></div>'
+        f'<div class="kpi-item"><div class="kpi-value {stale_cls}">{stale}</div><div class="kpi-label">stale</div></div>'
+        f'<div class="kpi-item"><div class="kpi-value">{todo_count}</div><div class="kpi-label">open todos</div></div>'
+        f'<div class="kpi-item"><div class="kpi-value">{today_entries}</div><div class="kpi-label">logged today</div></div>'
+        f"</div>"
+    )
+    gauge_html = ""
+    if fresh_pct > 0 or capture_recall > 0:
+        fp_clamped = max(0, min(100, fresh_pct))
+        gauge_html = (
+            f'<div class="gauge-row" style="margin-top:6px">'
+            f'<span class="gauge-label" style="width:60px">freshness</span>'
+            f'<div class="gauge-track">'
+            f'<div class="gauge-fill" style="width:{fp_clamped:.0f}%;background:#3fb950"></div></div>'
+            f'<span class="gauge-pct">{fresh_pct:.0f}%</span>'
+            f"</div>"
+            f'<div style="font-size:11px;color:#8b949e;margin-top:2px">'
+            f'<span style="color:#58a6ff">{capture_recall:.0f}%</span> recall'
+            f' &middot; <a href="/stats" style="color:#484f58;text-decoration:none">details &rarr;</a></div>'
+        )
+
+    # Stale facts (inline)
+    stale_html = ""
     if stale > 0 and stale_facts:
         items_html = "".join(
             f'<div class="fact-item"><span class="fact-text">{_e(f)}</span></div>'
             for f in stale_facts
         )
         label = f"{stale} stale fact{'s' if stale != 1 else ''} &#9658;"
-        verify_hint = '<div style="margin-top:6px"><span class="cmd-hint">hive verify</span></div>'
-        stale_accordion = (
-            f'<details class="stale-accordion">'
+        stale_html = (
+            f'<details class="stale-accordion" style="margin-top:4px">'
             f'<summary class="stale-summary">{label}</summary>'
-            f'<div style="margin-top:6px">{items_html}</div>'
-            f"{verify_hint}"
+            f'<div style="margin-top:4px">{items_html}</div>'
             f"</details>"
         )
 
-    # Pipeline health summary (compact for home view)
-    pulse_html = ""
-    fresh_pct = data.get("fresh_pct", 0)
-    capture_recall = data.get("capture_recall", 0)
-    if fresh_pct > 0 or capture_recall > 0:
-        pulse_html = (
-            f'<div style="margin-top:6px;font-size:12px;color:#8b949e">'
-            f'<span style="color:#3fb950">{fresh_pct:.0f}%</span> fresh'
-            f' &middot; <span style="color:#58a6ff">{capture_recall:.0f}%</span> recall'
-            f' &middot; <a href="/stats" style="color:#484f58;text-decoration:none">details &rarr;</a>'
-            f"</div>"
-        )
-
-    # Pending rules hint
+    # Pending rules
     pending_html = ""
-    pending_rules_count = data.get("pending_rules_count", 0)
     if pending_rules_count > 0:
         s = "s" if pending_rules_count != 1 else ""
         pending_html = (
-            f'<div style="margin-top:6px;padding:4px 8px;border-radius:4px;background:#e3b34122;border:1px solid #e3b34144;font-size:12px;color:#e3b341">'
-            f"{pending_rules_count} pending rule suggestion{s} &rarr; <code>hive rule review</code>"
-            f"</div>"
+            f'<div style="margin-top:4px;padding:3px 8px;border-radius:4px;background:#e3b34122;border:1px solid #e3b34144;font-size:11px;color:#e3b341">'
+            f"{pending_rules_count} pending rule{s} &rarr; <code>hive rule review</code></div>"
         )
 
-    # Activity section (merged from stats-summary)
-    activity_today = data.get("activity_today", 0)
-    activity_week = data.get("activity_week", 0)
-    activity_streak = data.get("activity_streak", 0)
-    activity_hours = data.get("activity_hours", {})
+    left_col = f"{kpi_html}{gauge_html}{stale_html}{pending_html}"
 
-    activity_html = ""
+    # Right column: activity KPIs + heatmap
+    right_col = ""
     if activity_today > 0 or activity_week > 0 or activity_streak > 0:
-        activity_html = (
-            f'<div class="status-divider"></div>'
-            f'<div class="stat-row">'
-            f'<div class="stat-item"><span class="stat-value">{activity_today}</span><span class="stat-label">commands today</span></div>'
-            f'<div class="stat-item"><span class="stat-value">{activity_week}</span><span class="stat-label">commands this week</span></div>'
-            f'<div class="stat-item"><span class="stat-value">{activity_streak}d</span><span class="stat-label">day streak</span></div>'
+        right_col = (
+            f'<div class="kpi-row" style="justify-content:flex-start;gap:16px">'
+            f'<div class="kpi-item"><div class="kpi-value">{activity_today}</div><div class="kpi-label">commands today</div></div>'
+            f'<div class="kpi-item"><div class="kpi-value">{activity_week}</div><div class="kpi-label">this week</div></div>'
+            f'<div class="kpi-item"><div class="kpi-value">{activity_streak}d</div><div class="kpi-label">streak</div></div>'
             f"</div>"
         )
         hourly = _render_hourly_heatmap(activity_hours)
         if hourly:
-            activity_html += hourly
-        activity_html += '<a class="summary-link" href="/stats">Full stats &rarr;</a>'
+            right_col += hourly
+
+    # Assemble: 2-column grid when full-width, stacks on narrow
+    body_html = (
+        f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">'
+        f"<div>{left_col}</div>"
+        f"<div>{right_col}</div>"
+        f"</div>"
+    )
 
     hints = ["hive status", "hive verify", "hive doctor"]
     if stale > 0:
@@ -1817,9 +2044,9 @@ def _render_status_panel(data: dict) -> str:
         hints = ["hive setup", "hive status", "hive doctor"]
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Status">'
-        f'<div class="card-header"><span class="card-title">Status</span></div>'
+        f'<div class="card-header"><span class="card-title">Status</span>{health_dots}</div>'
         f"{_cmd_hints(hints)}"
-        f'<div class="card-body">{rows}{health}{stale_accordion}{pulse_html}{pending_html}{activity_html}</div>'
+        f'<div class="card-body">{body_html}</div>'
         f"</div>"
     )
 
@@ -2536,11 +2763,11 @@ def _render_stats_commands_panel(data: dict) -> str:
                 tool_title += f", {_e(trend_str)} vs last week"
             tool_rows += (
                 f'<div style="display:flex;align-items:center;gap:8px;margin:2px 0" title="{tool_title}">'
-                f'<span style="width:50px;text-align:right;color:#8b949e;font-size:12px">{_e(tool)}</span>'
+                f'<span style="min-width:90px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#8b949e;font-size:12px">{_e(tool)}</span>'
                 f'<div style="flex:1;background:#161b22;border-radius:2px;height:14px">'
                 f'<div style="width:{bar_w}%;background:#238636;border-radius:2px;height:100%"></div>'
                 f"</div>"
-                f'<span style="width:35px;text-align:right;font-size:12px;color:#8b949e">{pct}%{trend_html}</span>'
+                f'<span style="min-width:60px;text-align:right;font-size:12px;color:#8b949e;white-space:nowrap">{pct}%{trend_html}</span>'
                 f"</div>"
             )
         tools_html = f'<div style="margin-top:12px"><div style="font-size:11px;color:#484f58;margin-bottom:4px">Tool usage (from sessions)</div>{tool_rows}</div>'
@@ -2647,7 +2874,7 @@ def _render_standup_panel(data: dict) -> str:
 
 
 def _get_stats_summary_data() -> dict:
-    """Compact stats for the home view: today, week, streak, hourly."""
+    """Activity stats: sparkline, heatmap, streaks, lifetime capture counts."""
     from datetime import timedelta
 
     from keephive.clock import get_today
@@ -2668,43 +2895,127 @@ def _get_stats_summary_data() -> dict:
             week_total += sum(day_data.get("commands", {}).values())
 
     curr_streak = 0
+    longest_streak = 0
     try:
         from keephive.commands.stats import _calculate_streak
 
-        curr_streak, _ = _calculate_streak(days)
+        curr_streak, longest_streak = _calculate_streak(days)
     except Exception:
         pass
+
+    # 14-day sparkline data
+    sparkline_values: list[int] = []
+    sparkline_labels: list[str] = []
+    for i in range(13, -1, -1):
+        d = (get_today() - timedelta(days=i)).isoformat()
+        day_cmds = sum(days.get(d, {}).get("commands", {}).values())
+        sparkline_values.append(day_cmds)
+        # Short label: "Mon DD"
+        dt = get_today() - timedelta(days=i)
+        sparkline_labels.append(dt.strftime("%b %d"))
+
+    days_active = len([d for d, dd in days.items() if sum(dd.get("commands", {}).values()) > 0])
+
+    # Lifetime capture counts from daily logs
+    capture_counts: dict[str, int] = {}
+    try:
+        from keephive.storage import daily_dir
+
+        dd = daily_dir()
+        if dd.exists():
+            for log_file in dd.glob("*.md"):
+                for line in log_file.read_text().splitlines():
+                    for cat in ("INSIGHT", "DECISION", "CORRECTION", "DONE"):
+                        if f"] {cat}:" in line or f"] {cat} " in line:
+                            capture_counts[cat] = capture_counts.get(cat, 0) + 1
+                            break
+    except Exception:
+        pass
+
+    # Standup count from commands
+    standups = 0
+    for _, day_data in days.items():
+        cmds = day_data.get("commands", {})
+        standups += cmds.get("standup", 0) + cmds.get("su", 0)
+
+    capture_counts["standups"] = standups
 
     return {
         "today_total": today_total,
         "week_total": week_total,
         "curr_streak": curr_streak,
+        "longest_streak": longest_streak,
+        "days_active": days_active,
         "today_hours": today_hours,
+        "daily_sparkline": sparkline_values,
+        "daily_sparkline_labels": sparkline_labels,
+        "capture_counts": capture_counts,
     }
 
 
 def _render_stats_summary_panel(data: dict) -> str:
-    today_total = data.get("today_total", 0)
-    week_total = data.get("week_total", 0)
     curr_streak = data.get("curr_streak", 0)
+    longest_streak = data.get("longest_streak", 0)
+    days_active = data.get("days_active", 0)
     today_hours = data.get("today_hours", {})
 
-    stats_row = (
-        f'<div class="summary-stats">'
-        f'<div class="summary-stat"><span class="stat-value">{today_total}</span><span class="stat-label">today</span></div>'
-        f'<div class="summary-stat"><span class="stat-value">{week_total}</span><span class="stat-label">this week</span></div>'
-        f'<div class="summary-stat"><span class="stat-value">{curr_streak}d</span><span class="stat-label">day streak</span></div>'
+    # Stats from daily data
+    capture_counts = data.get("capture_counts", {})
+    insights = capture_counts.get("INSIGHT", 0)
+    decisions = capture_counts.get("DECISION", 0)
+    corrections = capture_counts.get("CORRECTION", 0)
+    completed = capture_counts.get("DONE", 0)
+    standups = capture_counts.get("standups", 0)
+
+    hourly = _render_hourly_heatmap(today_hours)
+
+    # 14-day sparkline
+    daily_sparkline = data.get("daily_sparkline", [])
+    spark_html = ""
+    if daily_sparkline:
+        spark_blocks = " \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588"
+        mx = max(daily_sparkline) or 1
+        chars = "".join(
+            spark_blocks[min(8, round(v / mx * 8))] for v in daily_sparkline
+        )
+        labels = data.get("daily_sparkline_labels", [])
+        first_label = labels[0] if labels else ""
+        last_label = labels[-1] if labels else ""
+        spark_html = (
+            f'<div style="margin:8px 0 4px">'
+            f'<div style="font-family:monospace;font-size:14px;letter-spacing:1px;color:#58a6ff">{chars}</div>'
+            f'<div style="display:flex;justify-content:space-between;font-size:9px;color:#484f58">'
+            f"<span>{first_label}</span><span>{last_label}</span></div></div>"
+        )
+
+    # Streak + lifetime KPIs
+    streak_kpis = (
+        f'<div class="kpi-row">'
+        f'<div class="kpi-item"><div class="kpi-value">{curr_streak}</div><div class="kpi-label">current streak</div></div>'
+        f'<div class="kpi-item"><div class="kpi-value">{longest_streak}</div><div class="kpi-label">longest streak</div></div>'
+        f'<div class="kpi-item"><div class="kpi-value">{days_active}</div><div class="kpi-label">days active</div></div>'
         f"</div>"
     )
 
-    hourly = _render_hourly_heatmap(today_hours)
-    link = '<a class="summary-link" href="/stats">Full stats &rarr;</a>'
+    # Capture lifetime KPIs
+    capture_kpis = ""
+    if insights or decisions or corrections or completed:
+        capture_kpis = (
+            f'<div class="kpi-row" style="margin-top:4px">'
+            f'<div class="kpi-item"><div class="kpi-value">{insights}</div><div class="kpi-label">insights</div></div>'
+            f'<div class="kpi-item"><div class="kpi-value">{decisions}</div><div class="kpi-label">decisions</div></div>'
+            f'<div class="kpi-item"><div class="kpi-value">{corrections}</div><div class="kpi-label">corrections</div></div>'
+            f'<div class="kpi-item"><div class="kpi-value">{completed}</div><div class="kpi-label">completed</div></div>'
+            f'<div class="kpi-item"><div class="kpi-value">{standups}</div><div class="kpi-label">standups</div></div>'
+            f"</div>"
+        )
 
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Activity">'
-        f'<div class="card-header"><span class="card-title">Activity</span></div>'
-        f'<div class="card-body">{stats_row}{hourly}</div>'
-        f"{link}"
+        f'<div class="card-header"><span class="card-title">Activity</span>'
+        f'<span class="card-meta">{days_active} days tracked</span></div>'
+        f"{_cmd_hints(['hive stats', 'hive stats -p <project>', 'hive stats yesterday'])}"
+        f'<div class="card-body">{spark_html}{hourly}{streak_kpis}{capture_kpis}</div>'
         f"</div>"
     )
 
@@ -2791,6 +3102,7 @@ def _get_session_data() -> dict:
     from keephive.clock import get_today
     from keephive.storage import (
         read_cc_sessions,
+        read_live_sessions,
         read_sessions,
         session_metrics,
     )
@@ -2807,6 +3119,18 @@ def _get_session_data() -> dict:
         sessions = read_sessions(7)
         msg_key = "prompts"
         tool_key = "tools"
+
+    # Merge in live sessions (currently running, not yet in session-meta)
+    live: list[dict] = []
+    try:
+        live = read_live_sessions()
+        if live:
+            # Deduplicate: live sessions override any matching session_id in CC data
+            live_ids = {s["session_id"] for s in live}
+            sessions = [s for s in sessions if s["session_id"] not in live_ids]
+            sessions = live + sessions
+    except Exception:
+        pass
 
     # Message histogram buckets
     buckets = {"0": 0, "1-5": 0, "6-10": 0, "11-20": 0, "21-50": 0, "51+": 0}
@@ -2835,15 +3159,16 @@ def _get_session_data() -> dict:
     recent = sorted(sessions, key=lambda x: x.get("started", ""), reverse=True)[:20]
 
     # Session depth buckets: shallow / medium / deep
+    # Calibrated for real user_message_count from CC session-meta (avg ~4 msgs)
     shallow = 0
     medium = 0
     deep = 0
     for s in sessions:
         user_msgs = s.get(msg_key, 0)
         unique_tools = len(s.get(tool_key, {}))
-        if user_msgs >= 20 and unique_tools >= 4:
+        if user_msgs >= 15 and unique_tools >= 4:
             deep += 1
-        elif user_msgs >= 10 or unique_tools >= 3:
+        elif user_msgs >= 5:
             medium += 1
         else:
             shallow += 1
@@ -2862,6 +3187,7 @@ def _get_session_data() -> dict:
         "prompts_today": prompts_today,
         "prompts_week": prompts_week,
         "tool_trends": tool_trends,
+        "live_count": len(live),
     }
 
 
@@ -2869,7 +3195,6 @@ def _render_sessions_panel(data: dict) -> str:
     """Sessions panel: compact header stats, histogram, session list."""
     total = data.get("total_sessions", 0)
     avg_prompts = data.get("avg_prompts_per_session", 0)
-    median_prompts = data.get("median_prompts_per_session", 0)
     avg_dur = data.get("avg_duration_minutes", 0)
     compaction_rate = data.get("compaction_rate", 0)
     prompts_today = data.get("prompts_today", 0)
@@ -2902,75 +3227,42 @@ def _render_sessions_panel(data: dict) -> str:
     depth_html = ""
     if d_shallow + d_medium + d_deep > 0:
         depth_html = (
-            f'<div class="stat-item" title="Sessions with 20+ {msg_label}, 4+ unique tools"><span class="stat-value">{d_deep}</span><span class="stat-label">deep sessions</span></div>'
-            f'<div class="stat-item" title="Sessions with 10+ {msg_label} or 3+ tools"><span class="stat-value">{d_medium}</span><span class="stat-label">medium sessions</span></div>'
-            f'<div class="stat-item" title="Sessions with fewer than 10 {msg_label} and 2 or fewer tools"><span class="stat-value">{d_shallow}</span><span class="stat-label">brief sessions</span></div>'
+            f'<div class="stat-item" title="Sessions with 15+ {msg_label}, 4+ unique tools"><span class="stat-value">{d_deep}</span><span class="stat-label">deep sessions</span></div>'
+            f'<div class="stat-item" title="Sessions with 5-14 {msg_label}"><span class="stat-value">{d_medium}</span><span class="stat-label">medium sessions</span></div>'
+            f'<div class="stat-item" title="Sessions with fewer than 5 {msg_label}"><span class="stat-value">{d_shallow}</span><span class="stat-label">brief sessions</span></div>'
         )
 
-    # Median prompts display
-    median_html = (
-        f' <span style="color:#484f58;font-size:11px">[{median_prompts:.0f} median]</span>'
-        if median_prompts > 0
-        else ""
-    )
-
-    # Messages today/week stats
-    prompts_period_html = ""
-    if prompts_today > 0 or prompts_week > 0:
-        prompts_period_html = (
-            f'<div class="stat-item"><span class="stat-value">{prompts_today}</span><span class="stat-label">{msg_label} today</span></div>'
-            f'<div class="stat-item"><span class="stat-value">{prompts_week}</span><span class="stat-label">{msg_label} this week</span></div>'
-        )
-
-    # New metrics from CC data (code velocity, git, tokens, success rate)
-    new_metrics_html = ""
+    # Tier 1: Hero section with code velocity
+    hero_section = ""
     if use_cc:
-        parts = []
         lines_add = data.get("lines_added_week", 0)
         lines_rm = data.get("lines_removed_week", 0)
-        files_mod = data.get("files_modified_week", 0)
-        if lines_add or lines_rm:
-            parts.append(
-                f'<div class="stat-item" title="Code changes this week">'
-                f'<span class="stat-value">+{lines_add}/-{lines_rm}</span>'
-                f'<span class="stat-label">lines ({files_mod} files)</span></div>'
-            )
-        git_commits = data.get("git_commits_week", 0)
-        if git_commits:
-            parts.append(
-                f'<div class="stat-item" title="Git commits this week">'
-                f'<span class="stat-value">{git_commits}</span>'
-                f'<span class="stat-label">commits</span></div>'
-            )
-        success_rate = data.get("success_rate", 0)
-        if success_rate > 0:
-            parts.append(
-                f'<div class="stat-item" title="Sessions achieving their goal (from /insights)">'
-                f'<span class="stat-value">{success_rate:.0%}</span>'
-                f'<span class="stat-label">success rate</span></div>'
-            )
-        out_tokens = data.get("total_output_tokens", 0)
-        in_tokens = data.get("total_input_tokens", 0)
-        if out_tokens:
-            ratio = f" ({in_tokens / out_tokens:.1f}x read:write)" if out_tokens > 0 else ""
-            parts.append(
-                f'<div class="stat-item" title="Token usage this week">'
-                f'<span class="stat-value">{out_tokens // 1000}K out</span>'
-                f'<span class="stat-label">tokens{ratio}</span></div>'
-            )
-        if parts:
-            new_metrics_html = (
-                f'<div class="stat-row" style="margin-bottom:4px">{"".join(parts)}</div>'
+        git_commits_wk = data.get("git_commits_week", 0)
+        if lines_add or lines_rm or git_commits_wk:
+            hero_section = (
+                f'<div style="text-align:center;padding:6px 0 8px;border-bottom:1px solid #21262d;margin-bottom:8px">'
+                f'<div class="kpi-label" style="letter-spacing:1px;margin-bottom:2px">CODE VELOCITY</div>'
+                f'<span class="metric-hero" style="font-size:28px">+{lines_add:,}/-{lines_rm:,}</span>'
+                f'<span class="metric-hero-unit"> lines</span>'
+                f'<div class="kpi-row" style="margin-top:6px">'
+                f'<div class="kpi-item"><div class="kpi-value">{git_commits_wk}</div><div class="kpi-label">commits</div></div>'
+                f'<div class="kpi-item"><div class="kpi-value">{data.get("files_modified_week", 0)}</div><div class="kpi-label">files</div></div>'
+                f'<div class="kpi-item"><div class="kpi-value">{total}</div><div class="kpi-label">sessions</div></div>'
+                f"</div></div>"
             )
 
+    # Tier 2: KPI stats
     header_stats = (
-        f'<div class="stat-row" style="margin-bottom:8px">'
-        f'<div class="stat-item"><span class="stat-value">{avg_prompts:.0f}{median_html}</span><span class="stat-label">avg {msg_label}/session</span></div>'
-        f'<div class="stat-item"><span class="stat-value">{avg_dur:.0f}m</span><span class="stat-label">avg session length</span></div>'
-        f"{prompts_period_html}"
+        f"{hero_section}"
+        f'<div class="kpi-row">'
+        f'<div class="kpi-item"><div class="kpi-value">{avg_prompts:.0f}</div><div class="kpi-label">avg {msg_label}</div></div>'
+        f'<div class="kpi-item"><div class="kpi-value">{avg_dur:.0f}m</div><div class="kpi-label">avg length</div></div>'
+        f'<div class="kpi-item"><div class="kpi-value">{prompts_today}</div><div class="kpi-label">{msg_label} today</div></div>'
+        f'<div class="kpi-item"><div class="kpi-value">{prompts_week}</div><div class="kpi-label">{msg_label} week</div></div>'
+        f"</div>"
+        f'<div class="kpi-row" style="margin-top:4px">'
         f"{depth_html}"
         f"</div>"
-        f"{new_metrics_html}"
     )
 
     # Prompt histogram (absorbed from sessions-detail)
@@ -2992,13 +3284,33 @@ def _render_sessions_panel(data: dict) -> str:
             f'<div class="prompt-hist-labels">{labels}</div>'
         )
 
+    # Filter buttons (All / Deep / Active)
+    live_count = data.get("live_count", 0)
+    filter_html = (
+        '<div class="log-filter" data-filter-group="session" style="padding:4px 12px">'
+        '<button class="log-filter-btn active" data-type="">All</button>'
+        '<button class="log-filter-btn" data-type="deep">Deep</button>'
+        '<button class="log-filter-btn" data-type="live">Active</button>'
+        "</div>"
+    )
+
     # Session list (absorbed from sessions-detail)
     list_html = ""
     if recent:
         items = ""
         for s in recent:
+            is_live = s.get("is_live", False)
             started = s.get("started", "")
-            time_str = started[11:16] if len(started) > 16 else started[:5]
+            # Convert UTC (Z suffix) to local time for display
+            time_str = ""
+            if started:
+                try:
+                    from datetime import datetime as _dt
+
+                    utc = _dt.fromisoformat(started.replace("Z", "+00:00"))
+                    time_str = utc.astimezone().strftime("%H:%M")
+                except (ValueError, OSError):
+                    time_str = started[11:16] if len(started) > 16 else started[:5]
             msgs = s.get(msg_key, 0)
             proj = s.get("project", "")
             if "/" in proj:
@@ -3007,30 +3319,57 @@ def _render_sessions_panel(data: dict) -> str:
             tool_str = ", ".join(
                 f"{t}:{c}" for t, c in sorted(tools.items(), key=lambda x: -x[1])[:5]
             )
-            # Depth classification for tooltip (aligned with _get_session_data thresholds)
+            # Depth classification for tooltip (aligned with stats.py thresholds)
             unique_tools = len(tools)
-            if msgs >= 20 and unique_tools >= 4:
+            if msgs >= 15 and unique_tools >= 4:
                 depth_label = "deep"
-            elif msgs >= 10 or unique_tools >= 3:
+            elif msgs >= 5:
                 depth_label = "medium"
             else:
                 depth_label = "shallow"
+
+            # Live session badge and duration
+            live_badge = ""
+            duration_str = ""
+            if is_live:
+                live_badge = '<span class="session-live">LIVE</span>'
+                dur = s.get("duration_minutes", 0)
+                if dur >= 60:
+                    duration_str = f"{dur // 60}h {dur % 60}m"
+                elif dur > 0:
+                    duration_str = f"{dur}m"
+                else:
+                    duration_str = "<1m"
+
             depth_title = f"{depth_label} session: {msgs} {msg_label}, {unique_tools} tools"
+            live_cls = " session-live-item" if is_live else ""
             items += (
-                f'<div class="session-item" tabindex="0" title="{_e(depth_title)}">'
+                f'<div class="session-item{live_cls}" tabindex="0" title="{_e(depth_title)}" '
+                f'data-live="{str(is_live).lower()}" data-depth="{depth_label}">'
+                f"{live_badge}"
                 f'<span class="session-time">{_e(time_str)}</span>'
                 f'<span class="session-prompts" title="{msg_label}">{msgs}{msg_unit}</span>'
+            )
+            if is_live and duration_str:
+                items += f'<span class="session-duration" title="running">{_e(duration_str)}</span>'
+            items += (
                 f'<span class="session-proj">{_e(proj)}</span>'
                 f'<span class="session-tools">{_e(tool_str)}</span>'
                 f"</div>"
             )
         list_html = f'<div class="session-list">{items}</div>'
 
+    # Card header with live count badge
+    live_badge_header = ""
+    if live_count > 0:
+        live_badge_header = f' <span class="session-live" style="font-size:9px;vertical-align:middle">{live_count} LIVE</span>'
+
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Sessions">'
-        f'<div class="card-header"><span class="card-title">Sessions</span><span class="card-meta">{total} tracked{compact_pct}</span></div>'
+        f'<div class="card-header"><span class="card-title">Sessions{live_badge_header}</span><span class="card-meta">{total} tracked{compact_pct}</span></div>'
         f'<div class="card-body">{header_stats}</div>'
         f"{hist_html}"
+        f"{filter_html}"
         f"{list_html}"
         f"</div>"
     )
@@ -3084,9 +3423,9 @@ def _get_trend_data() -> dict:
     def _avg_duration(slist: list) -> float:
         durs: list[float] = []
         for s in slist:
-            # CC data has duration_minutes directly
+            # CC data has duration_minutes directly; cap at 8h to filter unclosed sessions
             dur_min = s.get("duration_minutes", 0)
-            if dur_min and dur_min > 0:
+            if dur_min and 0 < dur_min <= 480:
                 durs.append(dur_min)
                 continue
             started = s.get("started", "")
@@ -3098,7 +3437,7 @@ def _get_trend_data() -> dict:
                     t0 = datetime.fromisoformat(started)
                     t1 = datetime.fromisoformat(last_seen)
                     mins = (t1 - t0).total_seconds() / 60.0
-                    if mins >= 0:
+                    if 0 <= mins <= 480:  # cap at 8h; filters unclosed/corrupted sessions
                         durs.append(mins)
                 except ValueError:
                     pass
@@ -3202,7 +3541,7 @@ def _get_trend_data() -> dict:
                 "label": "Freshness",
                 "this": fresh_pct_this,
                 "prev": 0,
-                "trend": "flat",
+                "trend": "up" if fresh_pct_this >= 80 else ("flat" if fresh_pct_this >= 50 else "down"),
                 "fmt": ".0f",
                 "suffix": "%",
             },
@@ -3210,7 +3549,7 @@ def _get_trend_data() -> dict:
                 "label": "Recall rate",
                 "this": recall_pct_this,
                 "prev": 0,
-                "trend": "flat",
+                "trend": "up" if recall_pct_this >= 80 else ("flat" if recall_pct_this >= 50 else "down"),
                 "fmt": ".0f",
                 "suffix": "%",
             },
@@ -3226,8 +3565,6 @@ def _render_trends_panel(data: dict) -> str:
     arrows = {"up": "\u25b2", "down": "\u25bc", "flat": "\u2014"}
     rows = ""
     for kpi in kpis:
-        arrow = arrows.get(kpi["trend"], "\u2014")
-        cls = f"trend-{kpi['trend']}"
         fmt = kpi.get("fmt", "d")
         suffix = kpi.get("suffix", "")
         if fmt == "d":
@@ -3236,18 +3573,47 @@ def _render_trends_panel(data: dict) -> str:
         else:
             this_str = f"{kpi['this']:{fmt}}"
             prev_str = f"{kpi['prev']:{fmt}}"
+        # Gauge fill %
+        if suffix == "%":
+            gauge_pct = min(100, int(kpi["this"]))
+        else:
+            # Scale relative to max(this, prev); when prev=0, bar fills to 100%
+            mx = max(kpi["this"], kpi["prev"]) or 1
+            gauge_pct = round(kpi["this"] / mx * 100)
+        gauge_pct = max(0, min(100, gauge_pct))
+        # Gauge color: % KPIs use health-based color; others use trend direction
+        if suffix == "%":
+            gauge_color = (
+                "#3fb950" if kpi["this"] >= 80 else "#e3b341" if kpi["this"] >= 50 else "#f85149"
+            )
+        else:
+            gauge_color = {"up": "#3fb950", "down": "#f85149", "flat": "#484f58"}.get(
+                kpi["trend"], "#484f58"
+            )
+        gauge_html = (
+            f'<div class="gauge-track" style="flex:1;margin:0 6px">'
+            f'<div class="gauge-fill" style="width:{gauge_pct}%;background:{gauge_color}"></div>'
+            f"</div>"
+        )
+        # Delta: only show comparison when prev week has real data
+        has_prev = kpi.get("prev", 0) > 0
+        if has_prev:
+            arrow = arrows.get(kpi["trend"], "\u2014")
+            delta_html = f'<span class="trend-delta trend-{kpi["trend"]}">{arrow} {prev_str}{suffix}</span>'
+        else:
+            delta_html = ""
         rows += (
             f'<div class="trend-row">'
             f'<span class="trend-label">{_e(kpi["label"])}</span>'
+            f"{gauge_html}"
             f'<span class="trend-val">{this_str}{suffix}</span>'
-            f'<span class="trend-arrow {cls}">{arrow}</span>'
-            f'<span class="trend-prev">{prev_str}{suffix}</span>'
+            f"{delta_html}"
             f"</div>"
         )
     if not rows:
         rows = '<div class="empty">Not enough data for trends</div>'
 
-    # Source breakdown bars (absorbed from Quality panel)
+    # Source breakdown bars using gauge classes
     sources_html = ""
     if sources:
         total = sum(sources.values()) or 1
@@ -3257,10 +3623,10 @@ def _render_trends_panel(data: dict) -> str:
             pct = round(count / total * 100)
             bar_w = max(2, pct)
             src_rows += (
-                f'<div class="source-row">'
-                f'<span class="source-label">{_e(src)}</span>'
-                f'<div class="source-bar-track"><div class="source-bar-fill" style="width:{bar_w}%"></div></div>'
-                f'<span class="source-pct">{pct}%</span>'
+                f'<div class="gauge-row">'
+                f'<span class="gauge-label">{_e(src)}</span>'
+                f'<div class="gauge-track"><div class="gauge-fill" style="width:{bar_w}%;background:#58a6ff"></div></div>'
+                f'<span class="gauge-pct">{pct}%</span>'
                 f"</div>"
             )
         sources_html = f'<div style="margin-top:10px"><div style="font-size:11px;color:#484f58;margin-bottom:4px">Sources</div>{src_rows}</div>'
@@ -3377,7 +3743,7 @@ def _get_pulse_data() -> dict:
 
 
 def _render_pulse_panel(data: dict) -> str:
-    """Full-width hero: pulse score + 6 mini-KPIs."""
+    """Full-width hero: pulse score + 6 mini-KPIs using 3-tier number hierarchy."""
     pulse = data.get("pulse", {})
     health = data.get("health", {})
     sess = data.get("sess", {})
@@ -3385,33 +3751,20 @@ def _render_pulse_panel(data: dict) -> str:
     score = pulse.get("score", 0)
     delta = pulse.get("delta", 0)
 
-    delta_html = ""
+    # Tier 1: Hero metric with delta
     if delta > 0:
-        delta_html = f' <span style="color:#3fb950">&#9650;{delta}</span>'
+        delta_html = f' <span class="metric-hero-delta up">&#9650;{delta}</span>'
     elif delta < 0:
-        delta_html = f' <span style="color:#f85149">&#9660;{abs(delta)}</span>'
+        delta_html = f' <span class="metric-hero-delta down">&#9660;{abs(delta)}</span>'
+    else:
+        delta_html = ""
 
+    # Tier 2: KPI row
     kpis = [
-        (
-            f"{health.get('fresh_pct', 0):.0f}%",
-            "fresh",
-            "Memory freshness: percentage of facts less than 14 days old",
-        ),
-        (
-            f"{health.get('capture_recall_ratio', 0):.0f}%",
-            "recall",
-            "Capture-recall ratio: how often stored facts are retrieved",
-        ),
-        (
-            f"{health.get('fact_survival_rate', 0):.0f}%",
-            "survival",
-            "Fact survival rate: percentage of facts not corrected or removed",
-        ),
-        (
-            f"{sess.get('avg_prompts_per_convo', 0):.0f}",
-            "prompts/convo",
-            "Average number of prompts per conversation (30-day window)",
-        ),
+        (f"{health.get('fresh_pct', 0):.0f}%", "fresh", "Memory freshness: % of facts under 14 days old"),
+        (f"{health.get('capture_recall_ratio', 0):.0f}%", "recall", "Capture-recall ratio: recalls vs. captures"),
+        (f"{health.get('fact_survival_rate', 0):.0f}%", "survival", "Fact survival rate: % not corrected or removed"),
+        (f"{sess.get('avg_prompts_per_convo', 0):.0f}", "prompts/convo", "Average prompts per conversation (30d)"),
         (f"{sess.get('convos_week', 0)}", "conversations", "Total conversations this week"),
         (f"{streak}d", "day streak", "Consecutive days with at least one hive command"),
     ]
@@ -3419,57 +3772,32 @@ def _render_pulse_panel(data: dict) -> str:
     kpi_html = ""
     for val, label, tooltip in kpis:
         kpi_html += (
-            f'<div class="pulse-kpi" title="{_e(tooltip)}">'
-            f'<span class="pulse-kpi-val">{val}</span>'
-            f'<span class="pulse-kpi-label">{label}</span>'
+            f'<div class="kpi-item" title="{_e(tooltip)}">'
+            f'<div class="kpi-value">{val}</div>'
+            f'<div class="kpi-label">{label}</div>'
             f"</div>"
         )
 
-    # Component breakdown (expandable details)
+    # Component breakdown (expandable, uses gauge-row classes)
     components = pulse.get("components", {})
     comp_defs = [
-        (
-            "freshness",
-            "Freshness",
-            "#3fb950",
-            "Memory freshness: % of facts under 14 days old (25% weight)",
-        ),
-        ("recall", "Recall", "#58a6ff", "Capture-recall ratio: recalls vs. captures (20% weight)"),
-        (
-            "depth",
-            "Depth",
-            "#a371f7",
-            "Session depth: weighted quality of session engagement (20% weight)",
-        ),
-        (
-            "todo_rate",
-            "TODO",
-            "#e3b341",
-            "TODO completion rate: done / (open + done) in last 7 days (15% weight)",
-        ),
-        (
-            "verify",
-            "Verify",
-            "#d2a8ff",
-            "Verification cadence: recency of last verify run (10% weight)",
-        ),
-        (
-            "streak",
-            "Streak",
-            "#39d353",
-            "Usage streak: consecutive active days, capped at 7 (10% weight)",
-        ),
+        ("freshness", "Freshness", "#3fb950", "Memory freshness (25% weight)"),
+        ("recall", "Recall", "#58a6ff", "Capture-recall ratio (20% weight)"),
+        ("depth", "Depth", "#a371f7", "Session depth quality (20% weight)"),
+        ("todo_rate", "TODO", "#e3b341", "TODO completion rate (15% weight)"),
+        ("verify", "Verify", "#d2a8ff", "Verification cadence (10% weight)"),
+        ("streak", "Streak", "#39d353", "Usage streak (10% weight)"),
     ]
     comp_bars = ""
     for key, label, color, tooltip in comp_defs:
         pct = components.get(key, 0)
         clamped = max(0, min(100, pct))
         comp_bars += (
-            f'<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px" title="{_e(tooltip)}">'
-            f'<span style="font-size:10px;color:#8b949e;width:65px;text-align:right">{label}</span>'
-            f'<div style="flex:1;height:4px;border-radius:2px;background:#21262d">'
-            f'<div style="width:{clamped}%;height:100%;border-radius:2px;background:{color}"></div></div>'
-            f'<span style="font-size:10px;color:#8b949e;width:32px">{pct}%</span>'
+            f'<div class="gauge-row" title="{_e(tooltip)}">'
+            f'<span class="gauge-label" style="width:65px">{label}</span>'
+            f'<div class="gauge-track">'
+            f'<div class="gauge-fill" style="width:{clamped}%;background:{color}"></div></div>'
+            f'<span class="gauge-pct">{pct}%</span>'
             f"</div>"
         )
     comp_details = (
@@ -3483,9 +3811,10 @@ def _render_pulse_panel(data: dict) -> str:
     return (
         f'<div class="card pulse-hero" tabindex="0" role="region" aria-label="Pulse">'
         f'<div class="card-body" style="text-align:center;padding:16px 24px">'
-        f'<div style="font-size:11px;color:#484f58;text-transform:uppercase;letter-spacing:1px">Productivity Pulse</div>'
-        f'<div style="font-size:36px;font-weight:700;color:#e6edf3;margin:4px 0">{score}<span style="font-size:16px;color:#484f58">/100</span>{delta_html}</div>'
-        f'<div style="display:flex;justify-content:center;gap:16px;margin-top:8px">{kpi_html}</div>'
+        f'<div class="kpi-label" style="letter-spacing:1px">Productivity Pulse</div>'
+        f'<div style="margin:4px 0"><span class="metric-hero">{score}</span>'
+        f'<span class="metric-hero-unit">/100</span>{delta_html}</div>'
+        f'<div class="kpi-row" style="margin-top:8px">{kpi_html}</div>'
         f"{comp_details}"
         f"</div></div>"
     )
@@ -3604,18 +3933,45 @@ def _render_pipeline_panel(data: dict) -> str:
         detail_parts.append(f'<span style="color:#f85149">{stale} stale</span>')
     detail_str = ", ".join(detail_parts)
 
+    # Tier 1: Hero metric (pulse score)
+    pulse_score = pulse.get("score", 0)
+    pulse_delta = pulse.get("delta", 0)
+    if pulse_delta > 0:
+        p_delta_html = f' <span class="metric-hero-delta up">&#9650;{pulse_delta}</span>'
+    elif pulse_delta < 0:
+        p_delta_html = f' <span class="metric-hero-delta down">&#9660;{abs(pulse_delta)}</span>'
+    else:
+        p_delta_html = ""
+    hero_html = (
+        f'<div style="text-align:center;padding:8px 0 4px">'
+        f'<div class="kpi-label" style="letter-spacing:1px;margin-bottom:2px">PULSE</div>'
+        f'<span class="metric-hero">{pulse_score}</span>'
+        f'<span class="metric-hero-unit">/100</span>{p_delta_html}'
+        f"</div>"
+    )
+
+    # Tier 2: KPI row
+    kpi_items = (
+        f'<div class="kpi-row" style="margin-bottom:8px">'
+        f'<div class="kpi-item"><div class="kpi-value">{fresh_pct:.0f}%</div><div class="kpi-label">fresh</div></div>'
+        f'<div class="kpi-item"><div class="kpi-value">{capture_recall:.0f}%</div><div class="kpi-label">recall</div></div>'
+        f'<div class="kpi-item"><div class="kpi-value">{survival:.0f}%</div><div class="kpi-label">survival</div></div>'
+        f'<div class="kpi-item"><div class="kpi-value">{data.get("streak", 0)}d</div><div class="kpi-label">streak</div></div>'
+        f"</div>"
+    )
+
     # Knowledge health gauges (transparent component bars, not opaque composite)
     components = pulse.get("components", {})
 
     def _gauge_bar(label: str, pct: float, color: str) -> str:
-        """Single labeled gauge bar."""
+        """Single labeled gauge bar using gauge-row CSS classes."""
         clamped = max(0, min(100, pct))
         return (
-            f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
-            f'<span style="font-size:10px;color:#8b949e;width:100px;text-align:right">{label}</span>'
-            f'<div style="flex:1;height:4px;border-radius:2px;background:#21262d">'
-            f'<div style="width:{clamped:.0f}%;height:100%;border-radius:2px;background:{color}"></div></div>'
-            f'<span style="font-size:10px;color:#8b949e;width:32px">{pct:.0f}%</span>'
+            f'<div class="gauge-row">'
+            f'<span class="gauge-label">{label}</span>'
+            f'<div class="gauge-track">'
+            f'<div class="gauge-fill" style="width:{clamped:.0f}%;background:{color}"></div></div>'
+            f'<span class="gauge-pct">{pct:.0f}%</span>'
             f"</div>"
         )
 
@@ -3671,42 +4027,42 @@ def _render_pipeline_panel(data: dict) -> str:
         from keephive.clock import get_today
 
         today = get_today().isoformat()
-        rows = ""
+        action_items = ""
         for act in actions:
             last = act.get("last_date")
             hint = _e(act.get("hint", ""))
             _ = act.get("desc", "")
             ctx = act.get("ctx", "")
             if last is None:
-                # Never run: amber warning
-                status = '<span style="color:#e3b341">not yet run</span>'
-                icon = "&#9888;"  # ⚠
-                icon_color = "#e3b341"
+                dot_cls = "never"
+                ago_text = "never"
             else:
                 try:
                     days_ago = (date.fromisoformat(today) - date.fromisoformat(last)).days
-                    if days_ago == 0:
-                        status = '<span style="color:#3fb950">today</span>'
-                    elif days_ago == 1:
-                        status = '<span style="color:#3fb950">yesterday</span>'
+                    if days_ago <= 1:
+                        dot_cls = "recent"
+                        ago_text = "today" if days_ago == 0 else "1d ago"
                     elif days_ago <= 7:
-                        status = f'<span style="color:#8b949e">{days_ago}d ago</span>'
+                        dot_cls = "recent"
+                        ago_text = f"{days_ago}d ago"
                     else:
-                        status = f'<span style="color:#e3b341">{days_ago}d ago</span>'
+                        dot_cls = "overdue"
+                        ago_text = f"{days_ago}d ago"
                 except ValueError:
-                    status = f'<span style="color:#484f58">{_e(last)}</span>'
-                icon = "&#10003;"  # ✓
-                icon_color = "#3fb950"
-            ctx_span = f' <span style="color:#484f58">&middot; {_e(ctx)}</span>' if ctx else ""
-            rows += (
-                f'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px">'
-                f'<span style="color:{icon_color};width:14px;text-align:center">{icon}</span>'
-                f'<code style="color:#e6edf3;background:#21262d;padding:1px 4px;border-radius:3px;font-size:10px">{hint}</code>'
-                f" {status}{ctx_span}"
+                    dot_cls = "never"
+                    ago_text = _e(last) if last else "?"
+            ctx_span = f' <span class="action-ago">&middot; {_e(ctx)}</span>' if ctx else ""
+            action_items += (
+                f'<div class="action-item">'
+                f'<span class="action-dot {dot_cls}"></span>'
+                f'<span class="action-label">{hint}</span>'
+                f'<span class="action-ago">{ago_text}</span>'
+                f"{ctx_span}"
                 f"</div>"
             )
         actions_html = (
-            f'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #21262d">{rows}</div>'
+            f'<div class="action-timeline" style="padding-top:8px;border-top:1px solid #21262d">'
+            f"{action_items}</div>"
         )
 
     # Most recalled facts (compact, fills vertical space)
@@ -3742,7 +4098,11 @@ def _render_pipeline_panel(data: dict) -> str:
         f'<div class="card" tabindex="0" role="region" aria-label="Pipeline Health">'
         f'<div class="card-header"><span class="card-title">Pipeline Health</span>'
         f'<span class="card-meta">{total} facts ({detail_str})</span></div>'
-        f'<div class="card-body">{gauges_html}{pills_html}{actions_html}{recalled_html}</div>'
+        f'<div class="card-body">{hero_html}{kpi_items}'
+        f'<details style="margin-top:4px"><summary style="font-size:11px;color:#484f58;cursor:pointer;list-style:none">'
+        f'<span style="border-bottom:1px dotted #484f58">Gauges</span></summary>'
+        f'<div style="margin-top:6px">{gauges_html}</div></details>'
+        f"{pills_html}{actions_html}{recalled_html}</div>"
         f"</div>"
     )
 
@@ -3863,6 +4223,97 @@ def _render_recalled_panel(data: dict) -> str:
     )
 
 
+# ---- Profiles + Transfer panels ----
+
+
+def _get_profiles_data() -> dict:
+    """Get profile list and active profile."""
+    from keephive.storage import active_profile, list_profiles
+
+    return {
+        "profiles": list_profiles(),
+        "active": active_profile() or "default",
+    }
+
+
+def _render_profiles_panel(data: dict) -> str:
+    """Render profile management card."""
+    profiles = data.get("profiles", [])
+    active = data.get("active", "default")
+
+    rows = ""
+    for p in profiles:
+        name = _e(p["name"])
+        is_active = p.get("active", False)
+        if is_active:
+            rows += (
+                f'<div class="kpi-row" style="justify-content:flex-start;gap:12px;padding:6px 0">'
+                f'<span style="color:#3fb950;font-size:14px">&#9679;</span>'
+                f'<span class="kpi-value" style="font-size:14px">{name}</span>'
+                f'<span class="kpi-label" style="margin-top:0;color:#3fb950">active</span>'
+                f"</div>"
+            )
+        else:
+            rows += (
+                f'<div class="kpi-row" style="justify-content:flex-start;gap:12px;padding:6px 0">'
+                f'<span style="color:#484f58;font-size:14px">&#9675;</span>'
+                f'<span style="font-size:14px;color:#e6edf3">{name}</span>'
+                f'<button class="todo-done-btn" onclick="profileSwitch(\'{name}\')">switch</button>'
+            )
+            if name != "default":
+                rows += f'<button class="todo-done-btn" style="color:#f85149" onclick="profileDelete(\'{name}\')">&#10005;</button>'
+            rows += "</div>"
+
+    # Create form
+    create_form = (
+        '<div style="margin-top:12px;display:flex;gap:6px;align-items:center">'
+        '<input type="text" id="profile-name" placeholder="new profile name" '
+        'style="background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:4px 8px;border-radius:4px;flex:1;font-size:12px">'
+        '<label style="font-size:11px;color:#8b949e;display:flex;align-items:center;gap:4px">'
+        '<input type="checkbox" id="profile-seed"> seed</label>'
+        '<button class="todo-done-btn" onclick="profileCreate()">Create</button>'
+        "</div>"
+    )
+
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Profiles">'
+        f'<div class="card-header"><span class="card-title">Profiles</span>'
+        f'<span class="card-meta">{len(profiles)} profiles</span></div>'
+        f'<div class="card-body">{rows}{create_form}</div>'
+        f"</div>"
+    )
+
+
+def _get_transfer_data() -> dict:
+    """Get transfer data (just active profile label)."""
+    from keephive.storage import active_profile_label
+
+    return {"profile": active_profile_label()}
+
+
+def _render_transfer_panel(data: dict) -> str:
+    """Render data transfer card (export/import)."""
+    profile = _e(data.get("profile", "default"))
+
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Data Transfer">'
+        f'<div class="card-header"><span class="card-title">Data Transfer</span></div>'
+        f'<div class="card-body">'
+        f'<div style="margin-bottom:12px">'
+        f'<div style="font-size:11px;color:#8b949e;margin-bottom:6px">Export current profile as archive</div>'
+        f'<button class="todo-done-btn" onclick="transferExport()">Export &ldquo;{profile}&rdquo; &#8595;</button>'
+        f"</div>"
+        f'<div>'
+        f'<div style="font-size:11px;color:#8b949e;margin-bottom:6px">Import from archive file</div>'
+        f'<input type="file" id="import-file" accept=".tar.gz,.tgz" '
+        f'style="font-size:11px;color:#8b949e;background:none;border:none">'
+        f'<button class="todo-done-btn" onclick="transferImport()" style="margin-left:6px">Import</button>'
+        f"</div>"
+        f"</div>"
+        f"</div>"
+    )
+
+
 # ---- Panel registry ----
 
 PANELS: dict[str, tuple] = {
@@ -3894,6 +4345,8 @@ PANELS: dict[str, tuple] = {
     "stats-pipeline": (_get_pipeline_data, _render_pipeline_panel),
     "stats-capture": (_get_capture_data, _render_capture_panel),
     "stats-recalled": (_get_recalled_data, _render_recalled_panel),
+    "profiles": (_get_profiles_data, _render_profiles_panel),
+    "transfer": (_get_transfer_data, _render_transfer_panel),
 }
 
 # ---- View definitions ----
@@ -3903,10 +4356,9 @@ VIEWS: dict[str, dict] = {
         "path": "/",
         "title": "Home",
         "rows": [
-            ["status", "ps"],
-            ["log-home"],
-            ["todos", "recurring"],
-            ["standup"],
+            ["status"],
+            ["log-home", "todos"],
+            ["ps", "recurring", "standup"],
         ],
     },
     "dev": {
@@ -3915,8 +4367,8 @@ VIEWS: dict[str, dict] = {
         "rows": [
             ["status-brief"],
             ["todos-brief", "log-brief"],
-            ["facts"],
-            ["knowledge-compact", "memory"],
+            ["facts", "memory"],
+            ["knowledge-compact"],
         ],
     },
     "know": {
@@ -3928,15 +4380,15 @@ VIEWS: dict[str, dict] = {
         "path": "/stats",
         "title": "Stats",
         "rows": [
-            ["stats-pipeline", "stats-trends"],
-            ["stats", "sessions"],
+            ["stats-pipeline", "stats"],
+            ["stats-trends", "sessions"],
             ["stats-commands"],
         ],
     },
     "settings": {
         "path": "/settings",
         "title": "Settings",
-        "rows": [["settings"]],
+        "rows": [["settings", "profiles"], ["transfer"]],
     },
 }
 
@@ -4060,7 +4512,8 @@ def render_page(view_name: str, port: int) -> str:
     <h3>Navigation</h3>
     <div class="help-keys">
       <span class="help-key">j / k</span><span class="help-desc">Next / previous card (or item inside card)</span>
-      <span class="help-key">h / l</span><span class="help-desc">Left / right card in same row</span>
+      <span class="help-key">h / l</span><span class="help-desc">Left / right card (exits inner mode)</span>
+      <span class="help-key">Tab</span><span class="help-desc">Next card (Shift+Tab = previous)</span>
       <span class="help-key">J / K</span><span class="help-desc">Half-page scroll down / up</span>
       <span class="help-key">gg</span><span class="help-desc">Focus first card</span>
       <span class="help-key">G</span><span class="help-desc">Focus last card</span>
@@ -4083,7 +4536,7 @@ def render_page(view_name: str, port: int) -> str:
       <span class="help-key">i</span><span class="help-desc">Focus first input</span>
       <span class="help-key">r</span><span class="help-desc">Refresh now</span>
       <span class="help-key">[ / ]</span><span class="help-desc">Previous / next log date</span>
-      <span class="help-key">1-9</span><span class="help-desc">Switch note slot</span>
+      <span class="help-key">1-9</span><span class="help-desc">Switch note slot (or Know tab)</span>
       <span class="help-key">n / N</span><span class="help-desc">Next / prev search result</span>
       <span class="help-key">?</span><span class="help-desc">Toggle this help</span>
       <span class="help-key">Esc</span><span class="help-desc">Exit inner mode / clear focus</span>
@@ -4260,6 +4713,78 @@ class _HiveHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(resp_body)))
             self.end_headers()
             self.wfile.write(resp_body)
+            return
+
+
+        if path == "/api/profiles":
+            try:
+                from keephive.storage import active_profile, list_profiles
+
+                data = {
+                    "profiles": list_profiles(),
+                    "active": active_profile() or "default",
+                }
+                resp_body = json.dumps(data).encode()
+            except Exception as exc:
+                resp_body = json.dumps({"error": str(exc)}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._cors()
+            self.send_header("Content-Length", str(len(resp_body)))
+            self.end_headers()
+            self.wfile.write(resp_body)
+            return
+
+        if path == "/api/transfer/export":
+            try:
+                import io
+                import tarfile
+
+                from keephive.commands.transfer import _EXPORT_DIRS, _EXPORT_DOTS
+                from keephive.storage import active_profile, hive_dir
+
+                source = hive_dir()
+                profile = active_profile() or "default"
+                buf = io.BytesIO()
+                with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+                    manifest = json.dumps(
+                        {"version": "export", "profile": profile, "source": str(source)},
+                        indent=2,
+                    ).encode()
+                    info = tarfile.TarInfo(name="manifest.json")
+                    info.size = len(manifest)
+                    tar.addfile(info, io.BytesIO(manifest))
+                    for dirname in _EXPORT_DIRS:
+                        dirpath = source / dirname
+                        if dirpath.exists():
+                            for fpath in sorted(dirpath.rglob("*")):
+                                if fpath.is_file():
+                                    arcname = str(fpath.relative_to(source))
+                                    tar.add(str(fpath), arcname=arcname)
+                    for dotfile in _EXPORT_DOTS:
+                        fpath = source / dotfile
+                        if fpath.exists():
+                            tar.add(str(fpath), arcname=dotfile)
+
+                body = buf.getvalue()
+                filename = f"hive-{profile}.tar.gz"
+                self.send_response(200)
+                self.send_header("Content-Type", "application/gzip")
+                self.send_header(
+                    "Content-Disposition", f'attachment; filename="{filename}"'
+                )
+                self._cors()
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as exc:
+                resp_body = json.dumps({"error": str(exc)}).encode()
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self._cors()
+                self.send_header("Content-Length", str(len(resp_body)))
+                self.end_headers()
+                self.wfile.write(resp_body)
             return
 
         # Redirect old paths to consolidated views
@@ -4495,6 +5020,150 @@ class _HiveHandler(BaseHTTPRequestHandler):
                     if not existing.endswith("\n"):
                         existing += "\n"
                     mf.write_text(existing + f"- {text}\n")
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/profiles/use":
+            name = (data.get("name") or "").strip()
+            if not name:
+                ok = False
+                error = "name required"
+            else:
+                try:
+                    from keephive.commands.profile import _validate_name
+                    from keephive.storage import profile_dir, set_active_profile
+
+                    err = _validate_name(name)
+                    if err:
+                        ok = False
+                        error = err
+                    elif name == "default":
+                        set_active_profile(None)
+                    else:
+                        target = profile_dir(name)
+                        if not target.exists():
+                            ok = False
+                            error = f"Profile '{name}' does not exist"
+                        else:
+                            set_active_profile(name)
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/profiles/create":
+            name = (data.get("name") or "").strip()
+            seed = data.get("seed", False)
+            if not name:
+                ok = False
+                error = "name required"
+            else:
+                try:
+                    from keephive.commands.profile import _validate_name
+                    from keephive.storage import (
+                        active_profile,
+                        ensure_dirs,
+                        profile_dir,
+                        set_active_profile,
+                    )
+
+                    err = _validate_name(name)
+                    if err:
+                        ok = False
+                        error = err
+                    elif name == "default":
+                        ok = False
+                        error = "Cannot create 'default' profile"
+                    else:
+                        target = profile_dir(name)
+                        if target.exists():
+                            ok = False
+                            error = f"Profile '{name}' already exists"
+                        else:
+                            target.mkdir(parents=True, exist_ok=True)
+                            old_profile = active_profile()
+                            set_active_profile(name)
+                            try:
+                                ensure_dirs()
+                            finally:
+                                set_active_profile(old_profile)
+                            if seed:
+                                try:
+                                    from keephive.commands.seed import cmd_seed
+
+                                    set_active_profile(name)
+                                    try:
+                                        cmd_seed(["--force"])
+                                    finally:
+                                        set_active_profile(old_profile)
+                                except ImportError:
+                                    pass
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/profiles/delete":
+            name = (data.get("name") or "").strip()
+            if not name:
+                ok = False
+                error = "name required"
+            else:
+                try:
+                    import shutil
+
+                    from keephive.commands.profile import _validate_name
+                    from keephive.storage import active_profile, profile_dir
+
+                    err = _validate_name(name)
+                    if err:
+                        ok = False
+                        error = err
+                    elif name == "default":
+                        ok = False
+                        error = "Cannot delete the default profile"
+                    elif active_profile() == name:
+                        ok = False
+                        error = f"Cannot delete active profile '{name}'"
+                    else:
+                        target = profile_dir(name)
+                        if not target.exists():
+                            ok = False
+                            error = f"Profile '{name}' does not exist"
+                        else:
+                            shutil.rmtree(target)
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/transfer/import":
+            import base64
+
+            b64 = (data.get("data") or "").strip()
+            if not b64:
+                ok = False
+                error = "data required (base64 tar.gz)"
+            else:
+                try:
+                    import io
+                    import tarfile
+
+                    from keephive.storage import hive_dir
+
+                    archive_bytes = base64.b64decode(b64)
+                    buf = io.BytesIO(archive_bytes)
+                    with tarfile.open(fileobj=buf, mode="r:gz") as tar:
+                        target = hive_dir()
+                        for member in tar.getmembers():
+                            if member.name.startswith("/") or ".." in member.name:
+                                continue
+                            if member.name == "manifest.json":
+                                continue
+                            if member.isfile():
+                                dest = target / member.name
+                                dest.parent.mkdir(parents=True, exist_ok=True)
+                                src = tar.extractfile(member)
+                                if src:
+                                    dest.write_bytes(src.read())
                 except Exception as exc:
                     ok = False
                     error = str(exc)

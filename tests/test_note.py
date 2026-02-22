@@ -171,9 +171,9 @@ def test_note_status_indicator(hive_env):
     r = _run(["s"], str(hive_env))
     assert r.returncode == 0
     # ANSI escape codes split "slot 1" across spans; check parts individually
-    assert "Active draft" in r.stdout
+    assert "Active Draft" in r.stdout
     assert "slot" in r.stdout
-    assert "words" in r.stdout
+    assert "w)" in r.stdout
 
 
 # ---- Backward compat aliases ----

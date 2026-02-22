@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 
-from keephive.output import console
+from keephive.output import console, prompt_review_item
 from keephive.storage import (
     backup_and_write,
     ensure_dirs,
@@ -120,7 +120,7 @@ def cmd_mem_review(args: list[str]) -> None:
     corrections: list[tuple[str, str]] = []  # (new_text, old_text)
     remaining: list[str] = []
 
-    for line in lines:
+    for idx, line in enumerate(lines, 1):
         fact_text = line.lstrip("- ").strip()
 
         # Extract metadata
@@ -143,35 +143,27 @@ def cmd_mem_review(args: list[str]) -> None:
 
         if replaces_match:
             old_text = replaces_match.group(1)
-            console.print("\n  [warn]Correction:[/warn]")
+            console.print(f"\n  [dim]\\[{idx}/{len(lines)}][/dim] [warn]Correction:[/warn]")
             console.print(f"    Old: [dim]{old_text}[/dim]")
             console.print(f"    New: [bold]{clean_fact}[/bold]")
             if proj_tag:
                 console.print(f"    {proj_tag}")
         else:
-            console.print("\n  Pending fact:")
+            console.print(f"\n  [dim]\\[{idx}/{len(lines)}][/dim] Pending fact:")
             console.print(f"  [bold]{clean_fact}[/bold]")
             if proj_tag:
                 console.print(f"    {proj_tag}")
 
-        console.print()
-        response = input("  Add to memory? [y/N/e(dit)]: ").strip().lower()
-        if response == "y":
+        action, edited = prompt_review_item("Add to memory?", "Edit fact")
+        if action == "accept":
+            text = edited or clean_fact
             if replaces_match:
-                corrections.append((clean_fact, replaces_match.group(1)))
+                corrections.append((text, replaces_match.group(1)))
             else:
-                accepted.append(clean_fact)
-        elif response.startswith("e"):
-            edited = input("  Edit fact: ").strip()
-            if edited:
-                if replaces_match:
-                    corrections.append((edited, replaces_match.group(1)))
-                else:
-                    accepted.append(edited)
-            else:
-                remaining.append(line)
-        else:
+                accepted.append(text)
+        elif action in ("skip", "defer"):
             remaining.append(line)
+        # "dismiss" = reject and drop from pending permanently
 
     # Apply all changes to memory.md in a single backup-and-write pass
     if corrections or accepted:
@@ -281,7 +273,7 @@ def _rule_review() -> None:
 
     accepted = []
     remaining = []
-    for line in lines:
+    for idx, line in enumerate(lines, 1):
         rule_text = line.lstrip("- ").strip()
 
         # Extract and display annotation if present (from rule learn)
@@ -289,27 +281,20 @@ def _rule_review() -> None:
         if annotation_match:
             annotation = annotation_match.group(0).strip()
             clean_rule = rule_text[annotation_match.end() :]
-            console.print(f"\n  [dim]{annotation}[/dim]")
+            console.print(f"\n  [dim]\\[{idx}/{len(lines)}] {annotation}[/dim]")
             console.print("  Suggested rule:")
             console.print(f"  [bold]{clean_rule}[/bold]")
         else:
             clean_rule = rule_text
-            console.print("\n  Suggested rule:")
+            console.print(f"\n  [dim]\\[{idx}/{len(lines)}][/dim] Suggested rule:")
             console.print(f"  [bold]{clean_rule}[/bold]")
 
-        console.print()
-        response = input("  Add to rules.md? [y/N/e(dit)]: ").strip().lower()
-        if response == "y":
-            # Strip annotation before writing to rules.md
-            accepted.append(clean_rule)
-        elif response.startswith("e"):
-            edited = input("  Edit rule: ").strip()
-            if edited:
-                accepted.append(edited)
-            else:
-                remaining.append(line)
-        else:
+        action, edited = prompt_review_item("Add to rules.md?", "Edit rule")
+        if action == "accept":
+            accepted.append(edited or clean_rule)
+        elif action in ("skip", "defer"):
             remaining.append(line)
+        # "dismiss" = reject and drop from pending permanently
 
     # Apply accepted rules
     if accepted:

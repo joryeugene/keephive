@@ -36,6 +36,17 @@ def hook_posttooluse(_args: list[str]) -> None:
     # full tool_counts for ALL tools. PostToolUse only fires for Edit|Write,
     # giving at most 2 tool types (of ~15 available).
 
+    # Check UI feedback queue — inject immediately on the next tool use, persist to daily log
+    try:
+        from keephive.storage import drain_ui_queue
+
+        result = drain_ui_queue(input_data.get("cwd", ""))
+        if result:
+            sys.stdout.write(result)
+            return  # Queue consumed; skip nudge this turn
+    except Exception:
+        pass  # Never block tool use
+
     try:
         from keephive.nudge import build_nudge_output, get_tool_nudge, should_nudge
 

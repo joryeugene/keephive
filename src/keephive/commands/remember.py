@@ -178,6 +178,8 @@ def cmd_recall(args: list[str]) -> None:
             expanded = _expand_and_search(query, results)
             if expanded is not None:
                 results = expanded
+        else:
+            console.print("  [dim]Skipped.[/dim]")
 
     _display_results(query, results)
 

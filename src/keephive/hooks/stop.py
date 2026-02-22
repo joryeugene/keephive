@@ -41,6 +41,17 @@ def hook_stop(_args: list[str]) -> None:
     except Exception:
         pass
 
+    # Check UI feedback queue — inject at end of every turn, persist to daily log
+    try:
+        from keephive.storage import drain_ui_queue
+
+        result = drain_ui_queue(input_data.get("cwd", ""))
+        if result:
+            sys.stdout.write(result)
+            return  # Queue consumed; skip nudge this turn
+    except Exception:
+        pass  # Never block the turn
+
     # Periodic nudge (every 12 turns by default)
     try:
         from keephive.nudge import build_nudge_output, get_stop_nudge, should_nudge

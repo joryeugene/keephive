@@ -670,3 +670,176 @@ class TestLifecycleWorstPath:
             assert "No entries found" in out_draft, (
                 f"No guide created and no 'No entries found'. Output:\n{out_draft[:500]}"
             )
+
+
+# ============================================================
+#  Priority 4: Verify Evidence Compounding
+# ============================================================
+
+
+class TestVerifyEvidenceCompounding:
+    """Verify that prior verification evidence is used in subsequent runs.
+
+    The evidence system (store_evidence / get_evidence_for_fact) tracks
+    verify_count, last_reason, and source_locations. On a second verify run,
+    _build_verify_prompt includes "Previous evidence (date): ..." context.
+    """
+
+    def test_second_verify_uses_prior_evidence(self, llm_hive_env, save_e2e_output, capsys):
+        """Run verify twice on the same fact. Second run should have prior evidence stored."""
+        _skip_if_no_claude()
+
+        fact_text = "Pydantic uses BaseModel as its core class"
+        (llm_hive_env / "working" / "memory.md").write_text(
+            f"# Working Memory\n\n- {fact_text} [verified:2020-01-01]\n"
+        )
+
+        from keephive.commands.verify import cmd_verify
+
+        # Run 1: First verification
+        cmd_verify([])
+        out1 = capsys.readouterr().out
+
+        save_e2e_output(
+            "verify_evidence_run1",
+            out1,
+            {
+                "fact": fact_text,
+                "expected": "VALID verdict, evidence stored",
+            },
+        )
+
+        # Check evidence was stored
+        from keephive.storage import get_evidence_for_fact
+
+        evidence = get_evidence_for_fact(fact_text)
+        assert evidence is not None, "Evidence should be stored after first verify"
+        assert evidence["verify_count"] >= 1, (
+            f"verify_count should be >= 1, got {evidence['verify_count']}"
+        )
+        assert evidence.get("last_reason"), "last_reason should be non-empty"
+
+        # The prompt for a second run would include this evidence.
+        # We verify the evidence structure is correct for prompt injection.
+        from keephive.commands.verify import _build_verify_prompt
+
+        prompt = _build_verify_prompt([(1, fact_text, f"- {fact_text}")], "test")
+        assert "Previous evidence" in prompt, (
+            f"Second verify prompt should include prior evidence. Prompt:\n{prompt[:500]}"
+        )
+
+        save_e2e_output(
+            "verify_evidence_prompt",
+            prompt,
+            {
+                "fact": fact_text,
+                "expected": "Prompt includes 'Previous evidence'",
+            },
+        )
+
+    def test_evidence_tracks_correction_count(self, llm_hive_env, save_e2e_output, capsys):
+        """STALE verdicts increment correction_count in evidence."""
+        _skip_if_no_claude()
+
+        fact_text = "Python 2.7 is the latest Python release"
+        (llm_hive_env / "working" / "memory.md").write_text(
+            f"# Working Memory\n\n- {fact_text} [verified:2020-01-01]\n"
+        )
+
+        from keephive.commands.verify import cmd_verify
+
+        cmd_verify([])
+        out = capsys.readouterr().out
+
+        save_e2e_output(
+            "verify_evidence_correction",
+            out,
+            {
+                "fact": fact_text,
+                "expected": "STALE verdict, correction_count >= 1",
+            },
+        )
+
+        from keephive.storage import get_evidence_for_fact
+
+        evidence = get_evidence_for_fact(fact_text)
+        assert evidence is not None, "Evidence should be stored"
+        # If the fact was found STALE (which it should be), correction_count increments
+        if "STALE" in out:
+            assert evidence.get("correction_count", 0) >= 1, (
+                f"Expected correction_count >= 1, got {evidence}"
+            )
+
+
+# ============================================================
+#  Priority 5: Reflect Apply Persistence
+# ============================================================
+
+
+class TestReflectApplyPersistence:
+    """Verify that reflect apply writes correct [verified:YYYY-MM-DD] tags to memory.md."""
+
+    def test_apply_writes_verified_tags(self, llm_hive_env, save_e2e_output, capsys, monkeypatch):
+        """After reflect apply, new facts in memory.md have today's verified date tag."""
+        _skip_if_no_claude()
+
+        today_str = date.today().isoformat()
+
+        (llm_hive_env / "working" / "memory.md").write_text(
+            "# Working Memory\n\n- Old fact from long ago [verified:2025-01-01]\n"
+        )
+
+        # Create daily logs with clear, promotable facts
+        for i in range(4):
+            d = date.today() - timedelta(days=i)
+            daily = llm_hive_env / "daily" / f"{d.isoformat()}.md"
+            daily.write_text(
+                f"# Daily Log: {d.isoformat()}\n\n"
+                f"- [10:00:00] FACT: Docker multi-stage builds reduce image size by 60 percent\n"
+                f"- [10:05:00] FACT: GitHub Actions uses YAML workflow files\n"
+            )
+
+        monkeypatch.setattr("builtins.input", _smart_input)
+
+        from keephive.commands.reflect import cmd_reflect
+
+        # Stage 1: Analyze
+        cmd_reflect(["analyze"])
+        out_analyze = capsys.readouterr().out
+
+        analyze_path = llm_hive_env / ".last-analyze.json"
+        assert analyze_path.exists(), f"No .last-analyze.json created. Output:\n{out_analyze[:500]}"
+
+        # Stage 2: Apply
+        cmd_reflect(["apply"])
+        out_apply = capsys.readouterr().out
+
+        save_e2e_output(
+            "reflect_apply_persistence",
+            out_apply,
+            {
+                "stage": "apply",
+                "expected": "Memory updated with [verified:YYYY-MM-DD] tags",
+            },
+        )
+
+        final_memory = (llm_hive_env / "working" / "memory.md").read_text()
+
+        # Memory should contain today's date in verified tags
+        assert today_str in final_memory, (
+            f"Expected today's date {today_str} in verified tags. Memory:\n{final_memory[:500]}"
+        )
+
+        # Every verified line should have a well-formed tag
+        import re
+
+        verified_lines = [
+            ln for ln in final_memory.splitlines()
+            if ln.strip().startswith("- ") and "[verified:" in ln
+        ]
+        assert len(verified_lines) >= 1, "Expected at least 1 verified fact after apply"
+
+        for ln in verified_lines:
+            assert re.search(r"\[verified:\d{4}-\d{2}-\d{2}\]", ln), (
+                f"Malformed verified tag in line: {ln}"
+            )

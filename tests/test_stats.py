@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from datetime import date, timedelta
@@ -781,48 +782,73 @@ class TestReadSessions:
 
 
 class TestSessionMetrics:
-    def _seed_sessions(self, hive_env):
-        from keephive.storage import stats_file
+    """Tests for session_metrics() using Claude Code session-meta as source of truth."""
 
+    def _seed_sessions(self, hive_env):
+        """Seed CC session-meta files (the authoritative source)."""
+        meta_dir = Path(os.environ["HIVE_CC_META_DIR"])
         today = date.today().isoformat()
         yesterday = (date.today() - timedelta(days=1)).isoformat()
-        data = {
-            "days": {
-                today: {
-                    "sessions": {
-                        "s1": {
-                            "project": "~/proj/a",
-                            "started": f"{today}T09:00:00",
-                            "last_seen": f"{today}T10:00:00",
-                            "prompts": 30,
-                            "tools": {"Edit": 10, "Write": 5},
-                            "compacted": True,
-                        },
-                        "s2": {
-                            "project": "~/proj/a",
-                            "started": f"{today}T14:00:00",
-                            "last_seen": f"{today}T14:30:00",
-                            "prompts": 10,
-                            "tools": {"Edit": 3},
-                            "compacted": False,
-                        },
-                    }
-                },
-                yesterday: {
-                    "sessions": {
-                        "s3": {
-                            "project": "~/proj/b",
-                            "started": f"{yesterday}T11:00:00",
-                            "last_seen": f"{yesterday}T12:30:00",
-                            "prompts": 50,
-                            "tools": {"Edit": 20, "Write": 10, "Bash": 5},
-                            "compacted": True,
-                        }
-                    }
-                },
-            }
-        }
-        stats_file().write_text(json.dumps(data))
+
+        # s1: today, 30 user msgs, Edit+Write, 60min
+        (meta_dir / "s1.json").write_text(
+            json.dumps(
+                {
+                    "session_id": "s1",
+                    "user_message_count": 30,
+                    "tool_counts": {"Edit": 10, "Write": 5},
+                    "duration_minutes": 60,
+                    "start_time": f"{today}T09:00:00Z",
+                    "project_path": str(Path.home() / "proj" / "a"),
+                    "lines_added": 100,
+                    "lines_removed": 20,
+                    "files_modified": 5,
+                    "input_tokens": 80000,
+                    "output_tokens": 30000,
+                    "git_commits": 2,
+                }
+            )
+        )
+
+        # s2: today, 10 user msgs, Edit only, 30min
+        (meta_dir / "s2.json").write_text(
+            json.dumps(
+                {
+                    "session_id": "s2",
+                    "user_message_count": 10,
+                    "tool_counts": {"Edit": 3},
+                    "duration_minutes": 30,
+                    "start_time": f"{today}T14:00:00Z",
+                    "project_path": str(Path.home() / "proj" / "a"),
+                    "lines_added": 30,
+                    "lines_removed": 5,
+                    "files_modified": 2,
+                    "input_tokens": 20000,
+                    "output_tokens": 8000,
+                    "git_commits": 0,
+                }
+            )
+        )
+
+        # s3: yesterday, 50 user msgs, Edit+Write+Bash, 90min
+        (meta_dir / "s3.json").write_text(
+            json.dumps(
+                {
+                    "session_id": "s3",
+                    "user_message_count": 50,
+                    "tool_counts": {"Edit": 20, "Write": 10, "Bash": 5},
+                    "duration_minutes": 90,
+                    "start_time": f"{yesterday}T11:00:00Z",
+                    "project_path": str(Path.home() / "proj" / "b"),
+                    "lines_added": 200,
+                    "lines_removed": 50,
+                    "files_modified": 8,
+                    "input_tokens": 100000,
+                    "output_tokens": 40000,
+                    "git_commits": 3,
+                }
+            )
+        )
 
     def test_total_counts(self, hive_env):
         from keephive.storage import session_metrics
@@ -871,13 +897,13 @@ class TestSessionMetrics:
         # Total tool uses: 33+15+5 = 53
         assert 0.6 < sm["tool_pct"]["Edit"] < 0.65  # ~62%
 
-    def test_compaction_rate(self, hive_env):
+    def test_compaction_rate_zero_for_cc(self, hive_env):
         from keephive.storage import session_metrics
 
         self._seed_sessions(hive_env)
         sm = session_metrics()
-        # 2 of 3 sessions compacted
-        assert abs(sm["compaction_rate"] - 2.0 / 3.0) < 0.01
+        # CC sessions don't have compacted flag, rate is 0
+        assert sm["compaction_rate"] == 0.0
 
     def test_sessions_by_project(self, hive_env):
         from keephive.storage import session_metrics
@@ -908,6 +934,24 @@ class TestSessionMetrics:
         assert sm["avg_duration_minutes"] == 0.0
         assert sm["tool_totals"] == {}
         assert sm["compaction_rate"] == 0.0
+
+    def test_source_is_claude_code(self, hive_env):
+        from keephive.storage import session_metrics
+
+        self._seed_sessions(hive_env)
+        sm = session_metrics()
+        assert sm["source"] == "claude_code"
+
+    def test_code_velocity_week(self, hive_env):
+        from keephive.storage import session_metrics
+
+        self._seed_sessions(hive_env)
+        sm = session_metrics()
+        # All 3 sessions are within last 7 days
+        assert sm["lines_added_week"] == 330  # 100+30+200
+        assert sm["lines_removed_week"] == 75  # 20+5+50
+        assert sm["files_modified_week"] == 15  # 5+2+8
+        assert sm["git_commits_week"] == 5  # 2+0+3
 
 
 class TestSessionsInDisplay:
@@ -945,9 +989,25 @@ class TestSessionsInDisplay:
 
     def test_stats_text_includes_sessions(self, hive_env):
         from keephive.commands.stats import stats_text
-        from keephive.storage import track_session_event
+        from keephive.storage import track_event
 
-        track_session_event("txt-001", "start")
-        track_session_event("txt-001", "prompt")
+        # stats_text() needs days_data to not be empty, seed a command event
+        track_event("commands", "status")
+
+        # Seed CC session-meta (authoritative source)
+        meta_dir = Path(os.environ["HIVE_CC_META_DIR"])
+        today = date.today().isoformat()
+        (meta_dir / "txt-001.json").write_text(
+            json.dumps(
+                {
+                    "session_id": "txt-001",
+                    "user_message_count": 5,
+                    "tool_counts": {"Read": 2},
+                    "duration_minutes": 10,
+                    "start_time": f"{today}T10:00:00Z",
+                    "project_path": "/tmp/test",
+                }
+            )
+        )
         result = stats_text()
         assert "Sessions" in result or "session" in result.lower()

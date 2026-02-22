@@ -51,6 +51,10 @@ def hive_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     cc_meta = tmp_path / "cc-session-meta"
     cc_meta.mkdir()
     monkeypatch.setenv("HIVE_CC_META_DIR", str(cc_meta))
+    # Isolate CC projects dir (JSONL conversation files) for live session detection
+    cc_projects = tmp_path / "cc-projects"
+    cc_projects.mkdir()
+    monkeypatch.setenv("HIVE_CC_PROJECTS_DIR", str(cc_projects))
 
     # Create directories
     (hive_dir / "working").mkdir()

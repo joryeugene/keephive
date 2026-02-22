@@ -1052,12 +1052,11 @@ def test_render_status_panel_clearer_labels(hive_env):
     }
     html = _render_status_panel(data)
     assert "verified facts" in html
-    assert "stale facts" in html
+    assert "stale" in html
     assert "logged today" in html
-    # Old cryptic single-word labels should be gone from the metric cells
-    assert '<span class="stat-label">facts</span>' not in html
-    assert '<span class="stat-label">today</span>' not in html
-    assert '<span class="stat-label">guides</span>' not in html
+    # Uses KPI-style labels (kpi-label class) instead of old stat-label
+    assert "kpi-label" in html
+    assert "kpi-value" in html
 
 
 def test_render_status_brief_panel_clearer_labels(hive_env):
@@ -1079,8 +1078,8 @@ def test_render_status_brief_panel_clearer_labels(hive_env):
 # ---- logged yesterday hero stat ----
 
 
-def test_status_panel_shows_logged_yesterday(hive_env):
-    """Status panel must show a 'logged yesterday' stat box."""
+def test_status_panel_shows_todo_count(hive_env):
+    """Status panel must show open TODO count as a KPI."""
     from keephive.commands.serve import _render_status_panel
 
     data = {
@@ -1096,8 +1095,8 @@ def test_status_panel_shows_logged_yesterday(hive_env):
         "stale_facts": [],
     }
     html = _render_status_panel(data)
-    assert "logged yesterday" in html
-    assert "42" in html
+    assert "open todos" in html
+    assert "15" in html
 
 
 def test_status_data_has_yesterday_entries(hive_env):
@@ -1160,8 +1159,7 @@ def test_render_fragment_two_col_uses_grid_row(hive_env):
     from keephive.commands.serve import render_fragment
 
     html = render_fragment("stats")  # stats view has 2-col rows
-    assert "grid-row" in html
-    assert "grid-cols-2" in html
+    assert "grid-row grid-cols-2" in html
     assert "grid-panel" in html
     assert "data-panel-id" in html
 
@@ -1631,13 +1629,13 @@ def test_css_has_panel_input_styles():
 
 
 def test_js_has_crud_form_handler():
-    """JS includes form submission handler for panel-input forms."""
+    """JS includes generic form submission handler for panel-input forms."""
     from keephive.commands.serve import _JS
 
     assert "panel-input" in _JS
-    assert "/api/remember" not in _JS  # generic handler, not hardcoded URL
     assert "dataset.action" in _JS  # reads action from form's data-action attribute
     assert "dataset.field" in _JS
+    assert "/api/remember" not in _JS  # generic handler, not hardcoded URL
 
 
 def test_js_has_todo_done_handler():
@@ -1894,7 +1892,7 @@ def test_trends_panel_has_sources(hive_env):
     html = _render_trends_panel(data)
     assert "Trends" in html
     assert "Sources" in html
-    assert "source-bar-fill" in html
+    assert "gauge-fill" in html
     assert "claude_code" in html
 
 
@@ -2014,6 +2012,255 @@ def test_css_has_new_panel_styles():
     assert ".prompt-hist{" in _CSS
     assert ".session-item{" in _CSS
     assert ".source-bar-fill{" in _CSS
+
+
+# ---- 3-Tier Metric Design System Tests ----
+
+
+def test_css_has_metric_hero_classes():
+    """CSS includes Tier 1 hero metric classes."""
+    from keephive.commands.serve import _CSS
+
+    assert ".metric-hero{" in _CSS
+    assert ".metric-hero-unit{" in _CSS
+    assert ".metric-hero-delta{" in _CSS
+    assert ".metric-hero-delta.up{" in _CSS
+    assert ".metric-hero-delta.down{" in _CSS
+
+
+def test_css_has_kpi_classes():
+    """CSS includes Tier 2 KPI row and item classes."""
+    from keephive.commands.serve import _CSS
+
+    assert ".kpi-row{" in _CSS
+    assert ".kpi-item{" in _CSS
+    assert ".kpi-value{" in _CSS
+    assert ".kpi-label{" in _CSS
+
+
+def test_css_has_gauge_classes():
+    """CSS includes gauge bar classes for F1 telemetry style bars."""
+    from keephive.commands.serve import _CSS
+
+    assert ".gauge-row{" in _CSS
+    assert ".gauge-label{" in _CSS
+    assert ".gauge-track{" in _CSS
+    assert ".gauge-fill{" in _CSS
+    assert ".gauge-pct{" in _CSS
+
+
+def test_css_has_action_timeline_classes():
+    """CSS includes action timeline dot classes."""
+    from keephive.commands.serve import _CSS
+
+    assert ".action-timeline{" in _CSS
+    assert ".action-dot{" in _CSS
+    assert ".action-dot.recent{" in _CSS
+    assert ".action-dot.overdue{" in _CSS
+    assert ".action-dot.never{" in _CSS
+
+
+def test_pulse_panel_uses_metric_hero(hive_env):
+    """Pulse panel renders hero score with Tier 1 metric-hero class."""
+    from keephive.commands.serve import _render_pulse_panel
+
+    data = {
+        "pulse": {
+            "score": 87,
+            "delta": 4,
+            "components": {
+                "freshness": 93,
+                "recall": 71,
+                "survival": 96,
+            },
+        },
+        "health": {"fresh_pct": 93, "capture_recall_ratio": 71, "fact_survival_rate": 96},
+        "sess": {"avg_prompts_per_convo": 47, "convos_week": 8},
+        "streak": 12,
+    }
+    html = _render_pulse_panel(data)
+    assert "metric-hero" in html
+    assert "metric-hero-unit" in html
+    assert "87" in html
+    assert "kpi-row" in html
+    assert "kpi-value" in html
+    assert "gauge-track" in html
+
+
+def test_status_panel_uses_kpi_row(hive_env):
+    """Status panel renders stats with Tier 2 KPI classes."""
+    from keephive.commands.serve import _render_status_panel
+
+    data = {
+        "facts_total": 42,
+        "stale": 2,
+        "today_total": 5,
+        "yesterday_total": 3,
+        "open_todos": 3,
+        "curr_streak": 12,
+        "fresh_pct": 93,
+        "health": {"hooks": True, "mcp": True, "data": True},
+    }
+    html = _render_status_panel(data)
+    assert "kpi-row" in html
+    assert "kpi-item" in html
+    assert "kpi-value" in html
+    assert "kpi-label" in html
+    assert "health-dot" in html
+    assert "gauge-track" in html
+
+
+def test_trends_panel_has_inline_gauges(hive_env):
+    """Trends panel renders inline gauge bars for each KPI row."""
+    from keephive.commands.serve import _render_trends_panel
+
+    data = {
+        "kpis": [
+            {"label": "Freshness", "this": 93, "prev": 91, "trend": "up", "fmt": ".0f", "suffix": "%"},
+            {"label": "Commands", "this": 50, "prev": 30, "trend": "up", "fmt": "d"},
+        ],
+        "sources": {},
+    }
+    html = _render_trends_panel(data)
+    assert "gauge-track" in html
+    assert "gauge-fill" in html
+    # Percentage KPIs should have fill width matching their value
+    assert 'width:93%' in html
+
+
+def test_trends_gauge_prev_zero_fills_bar(hive_env):
+    """When prev=0 (no last-week data), gauge fills to 100% (not 0%)."""
+    from keephive.commands.serve import _render_trends_panel
+
+    data = {
+        "kpis": [
+            {"label": "Commands", "this": 292, "prev": 0, "trend": "up", "fmt": "d"},
+        ],
+        "sources": {},
+    }
+    html = _render_trends_panel(data)
+    # prev=0 means this/max(this, 0) = 100%, not 0%
+    assert 'width:100%' in html
+    assert '#3fb950' in html  # green for "up" trend
+
+
+def test_trends_gauge_suffix_m_fills_bar(hive_env):
+    """Duration KPIs with suffix='m' get gauge fill (not 0%)."""
+    from keephive.commands.serve import _render_trends_panel
+
+    data = {
+        "kpis": [
+            {"label": "Avg duration", "this": 84, "prev": 42, "trend": "up", "fmt": ".0f", "suffix": "m"},
+        ],
+        "sources": {},
+    }
+    html = _render_trends_panel(data)
+    # suffix="m" should hit else branch: 84/max(84,42) = 100%
+    assert 'width:100%' in html
+
+
+def test_trends_gauge_flat_pct_uses_health_color(hive_env):
+    """Percentage KPIs with flat trend use value-health color, not grey."""
+    from keephive.commands.serve import _render_trends_panel
+
+    data = {
+        "kpis": [
+            {"label": "Freshness", "this": 100, "prev": 0, "trend": "flat", "fmt": ".0f", "suffix": "%"},
+        ],
+        "sources": {},
+    }
+    html = _render_trends_panel(data)
+    # 100% freshness with flat trend should be green (health-based), not grey
+    assert '#3fb950' in html  # green for >= 80%
+    # The gauge-fill specifically should use green, not grey
+    assert 'background:#3fb950' in html
+
+
+def test_sessions_shows_live_badge(hive_env):
+    """Live sessions render with LIVE indicator and data attributes."""
+    from keephive.commands.serve import _render_sessions_panel
+
+    data = {
+        "total_sessions": 5,
+        "avg_prompts_per_session": 4.0,
+        "avg_duration_minutes": 30.0,
+        "compaction_rate": 0,
+        "prompts_today": 10,
+        "prompts_week": 50,
+        "buckets": {"0": 0, "1-5": 3, "6-10": 1, "11-20": 1, "21-50": 0, "51+": 0},
+        "source": "claude_code",
+        "depth_shallow": 2,
+        "depth_medium": 2,
+        "depth_deep": 1,
+        "live_count": 1,
+        "lines_added_week": 100,
+        "lines_removed_week": 20,
+        "git_commits_week": 3,
+        "files_modified_week": 5,
+        "recent": [
+            {
+                "session_id": "live-001",
+                "user_messages": 8,
+                "tool_counts": {"Read": 5, "Edit": 3, "Bash": 2, "Grep": 1},
+                "duration_minutes": 45,
+                "project": "~/myproject",
+                "started": "2026-02-21T10:00:00.000Z",
+                "day": "2026-02-21",
+                "is_live": True,
+            },
+            {
+                "session_id": "done-002",
+                "user_messages": 3,
+                "tool_counts": {"Read": 2},
+                "duration_minutes": 10,
+                "project": "~/other",
+                "started": "2026-02-21T09:00:00.000Z",
+                "day": "2026-02-21",
+            },
+        ],
+    }
+    html = _render_sessions_panel(data)
+    # Live badge in session item
+    assert 'class="session-live"' in html
+    assert "LIVE" in html
+    # Data attributes for filtering
+    assert 'data-live="true"' in html
+    assert 'data-live="false"' in html
+    assert 'data-depth="medium"' in html
+    # Live session has green left border class
+    assert "session-live-item" in html
+    # Duration shown for live session
+    assert "session-duration" in html
+    # Header badge
+    assert "1 LIVE" in html
+
+
+def test_sessions_filter_buttons_present(hive_env):
+    """Session panel includes filter buttons for All/Deep/Active."""
+    from keephive.commands.serve import _render_sessions_panel
+
+    data = {
+        "total_sessions": 1,
+        "avg_prompts_per_session": 4.0,
+        "avg_duration_minutes": 30.0,
+        "compaction_rate": 0,
+        "prompts_today": 4,
+        "prompts_week": 4,
+        "buckets": {"0": 0, "1-5": 1, "6-10": 0, "11-20": 0, "21-50": 0, "51+": 0},
+        "source": "claude_code",
+        "depth_shallow": 1,
+        "depth_medium": 0,
+        "depth_deep": 0,
+        "live_count": 0,
+        "recent": [],
+    }
+    html = _render_sessions_panel(data)
+    assert 'data-filter-group="session"' in html
+    assert 'data-type="deep"' in html
+    assert 'data-type="live"' in html
+    assert ">All<" in html
+    assert ">Deep<" in html
+    assert ">Active<" in html
 
 
 def test_notes_panel_strips_slot_header_from_body(hive_env):
@@ -2444,22 +2691,29 @@ def test_stats_summary_panel_renders(hive_env):
     """Stats summary panel renders Activity card."""
     from keephive.commands.serve import _render_stats_summary_panel
 
-    data = {"today_total": 12, "week_total": 87, "curr_streak": 5, "today_hours": {"10": 5}}
+    data = {
+        "curr_streak": 5,
+        "longest_streak": 10,
+        "days_active": 30,
+        "today_hours": {"10": 5},
+        "daily_sparkline": [3, 5, 7, 2, 8, 4, 6, 1, 9, 3, 5, 7, 2, 8],
+        "daily_sparkline_labels": ["Feb 7", "Feb 21"],
+        "capture_counts": {},
+    }
     html = _render_stats_summary_panel(data)
     assert "Activity" in html
-    assert "12" in html
-    assert "87" in html
-    assert "5d" in html
+    assert "current streak" in html
+    assert "days active" in html
 
 
-def test_stats_summary_links_to_full_stats(hive_env):
-    """Stats summary panel has a link to /stats."""
+def test_stats_summary_has_cmd_hints(hive_env):
+    """Stats summary panel includes command hints for CLI."""
     from keephive.commands.serve import _render_stats_summary_panel
 
-    data = {"today_total": 0, "week_total": 0, "curr_streak": 0, "today_hours": {}}
+    data = {"curr_streak": 0, "today_hours": {}, "capture_counts": {}}
     html = _render_stats_summary_panel(data)
-    assert "/stats" in html
-    assert "summary-link" in html
+    assert "hive stats" in html
+    assert "cmd-hint" in html
 
 
 def test_home_view_no_separate_stats_summary():
@@ -2544,10 +2798,9 @@ def test_status_panel_has_activity_section(hive_env):
     }
     html = _render_status_panel(data)
     assert "commands today" in html
-    assert "commands this week" in html
-    assert "day streak" in html
+    assert "this week" in html
+    assert "streak" in html
     assert "42" in html
-    assert "status-divider" in html
 
 
 def test_status_panel_no_activity_when_zero(hive_env):
@@ -2574,8 +2827,8 @@ def test_status_panel_no_activity_when_zero(hive_env):
     assert "status-divider" not in html
 
 
-def test_status_panel_has_stats_link(hive_env):
-    """Status panel links to /stats when activity is present."""
+def test_status_panel_has_cmd_hints(hive_env):
+    """Status panel has cmd-hint chips for CLI commands."""
     from keephive.commands.serve import _render_status_panel
 
     data = {
@@ -2594,8 +2847,8 @@ def test_status_panel_has_stats_link(hive_env):
         "activity_hours": {},
     }
     html = _render_status_panel(data)
-    assert "/stats" in html
-    assert "summary-link" in html
+    assert "cmd-hint" in html
+    assert "hive status" in html
 
 
 def test_render_knowledge_compact_panel(hive_env):
@@ -2936,25 +3189,24 @@ def test_all_panels_have_tabindex():
 
 
 def test_home_view_row_structure(hive_env):
-    """Home view fragment has correct grid-row wrapping for row-based nav.
-
-    The JS _rows() walks #main-content children looking for .grid-row containers.
-    Verify the HTML structure matches expectations.
-    """
+    """Home view fragment emits grid-row elements matching VIEWS definition."""
     import re
 
     from keephive.commands.serve import VIEWS, render_fragment
 
     html = render_fragment("home")
-    # All rows wrapped in grid-row
+    # Grid-row structure
     assert "grid-row" in html
+    assert "data-panel-id" in html
     # No old split-pane markup
     assert "split-pane" not in html
     assert "split-divider" not in html
-    # Count grid-rows: should match number of rows in VIEWS definition
+    # Count grid-rows: should match number of rows in VIEWS["home"]
     expected_rows = len(VIEWS["home"]["rows"])
     actual_rows = html.count("grid-row grid-cols-")
-    assert actual_rows == expected_rows, f"Expected {expected_rows} grid-rows, got {actual_rows}"
+    assert actual_rows == expected_rows, (
+        f"Expected {expected_rows} grid-rows, got {actual_rows}"
+    )
     # Every card in the fragment has tabindex
     cards = re.findall(r'<div class="card"[^>]*>', html)
     for tag in cards:
@@ -2987,11 +3239,55 @@ def test_js_refresh_preserves_inner_mode():
     assert "savedInnerIdx=_innerIdx" in _JS
 
 
+def test_js_hl_exits_inner_mode():
+    """h/l keys exit inner mode and move to adjacent card."""
+    from keephive.commands.serve import _JS
+
+    # h/l should NOT have !_innerMode guard anymore
+    assert "k==='h'&&!_innerMode" not in _JS
+    assert "k==='l'&&!_innerMode" not in _JS
+    # Instead they should exit inner mode when active
+    assert "if(_innerMode){_innerMode=false;_innerIdx=-1;}" in _JS
+
+
+def test_js_tab_navigates_cards():
+    """Tab/Shift+Tab navigates between cards."""
+    from keephive.commands.serve import _JS
+
+    assert "k==='Tab'" in _JS
+    assert "e.shiftKey" in _JS
+
+
+def test_js_search_close_restores_focus():
+    """closeSearch restores card focus after closing."""
+    from keephive.commands.serve import _JS
+
+    assert "cards[_focusIdx]" in _JS.split("closeSearch")[1].split("function")[0]
+
+
+def test_js_know_tab_switching():
+    """Number keys switch tabs on Know view when not on Notes tab."""
+    from keephive.commands.serve import _JS
+
+    assert "tabName==='notes'" in _JS
+    assert "tabBtns[idx]" in _JS
+
+
+def test_help_overlay_documents_tab_nav(hive_env):
+    """Help overlay documents Tab and h/l inner mode behavior."""
+    from keephive.commands.serve import render_page
+
+    html = render_page("home", 3847)
+    assert "Shift+Tab" in html
+    assert "exits inner mode" in html
+    assert "Know tab" in html
+
+
 # ---- Dashboard State Persistence + CSS Grid Layout ----
 
 
 def test_render_fragment_uses_grid_rows(hive_env):
-    """render_fragment wraps panels in grid-row containers."""
+    """render_fragment emits grid-row wrappers with grid-panel children."""
     from keephive.commands.serve import render_fragment
 
     html = render_fragment("home")
@@ -3010,17 +3306,18 @@ def test_render_fragment_grid_cols_match_row_size(hive_env):
     for view_name, view_def in VIEWS.items():
         html = render_fragment(view_name)
         for row in view_def.get("rows", []):
-            expected_class = f"grid-cols-{len(row)}"
-            assert expected_class in html, f"{view_name} missing {expected_class}"
+            expected_cols = len(row)
+            assert f"grid-cols-{expected_cols}" in html, (
+                f"{view_name} missing grid-cols-{expected_cols} for {expected_cols}-col row"
+            )
 
 
 def test_css_has_grid_row_styles(hive_env):
-    """CSS contains grid-row layout rules."""
+    """CSS contains grid-row and grid-cols-* layout rules."""
     from keephive.commands.serve import _CSS
 
-    assert ".grid-row" in _CSS
-    assert ".grid-cols-1" in _CSS
-    assert ".grid-cols-2" in _CSS
+    assert ".grid-row{" in _CSS
+    assert ".grid-cols-2{" in _CSS
 
 
 def test_css_no_split_pane_styles():
@@ -3049,3 +3346,76 @@ def test_js_no_split_pane_drag():
 
     assert "split-divider" not in _JS
     assert "split-pane" not in _JS
+
+
+# ---- Profiles + Transfer Panels ----
+
+
+def test_profiles_panel_renders(hive_env):
+    """Profiles panel shows active profile and create form."""
+    from keephive.commands.serve import _render_profiles_panel
+
+    data = {
+        "profiles": [
+            {"name": "default", "active": True, "exists": True},
+            {"name": "demo", "active": False, "exists": True},
+        ],
+        "active": "default",
+    }
+    html = _render_profiles_panel(data)
+    assert "Profiles" in html
+    assert "default" in html
+    assert "demo" in html
+    assert "active" in html
+    assert "profile-name" in html  # create form input
+    assert "profileCreate" in html
+
+
+def test_transfer_panel_renders(hive_env):
+    """Transfer panel shows export button and import input."""
+    from keephive.commands.serve import _render_transfer_panel
+
+    data = {"profile": "default"}
+    html = _render_transfer_panel(data)
+    assert "Data Transfer" in html
+    assert "transferExport" in html
+    assert "import-file" in html
+    assert "transferImport" in html
+
+
+def test_settings_view_has_profiles(hive_env):
+    """Settings view includes profiles and transfer panels."""
+    from keephive.commands.serve import VIEWS
+
+    rows = VIEWS["settings"]["rows"]
+    panel_ids = [p for row in rows for p in row]
+    assert "profiles" in panel_ids
+    assert "transfer" in panel_ids
+
+
+def test_panels_registry_has_profiles():
+    """PANELS dict includes profiles and transfer entries."""
+    from keephive.commands.serve import PANELS
+
+    assert "profiles" in PANELS
+    assert "transfer" in PANELS
+
+
+def test_js_has_profile_handlers():
+    """JS contains profile management functions."""
+    from keephive.commands.serve import _JS
+
+    assert "profileSwitch" in _JS
+    assert "profileCreate" in _JS
+    assert "profileDelete" in _JS
+
+
+def test_js_has_transfer_handlers():
+    """JS contains data transfer functions."""
+    from keephive.commands.serve import _JS
+
+    assert "transferExport" in _JS
+    assert "transferImport" in _JS
+    assert "/api/transfer/import" in _JS
+
+

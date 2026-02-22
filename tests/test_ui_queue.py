@@ -345,3 +345,46 @@ def test_hook_ignores_other_project_queue(hive_env, capsys):
 
     # The other-project queue must still exist (not consumed)
     assert other_queue.exists(), "Queue for a different project must not be consumed"
+
+
+# ---- drain_ui_queue: daily log persistence ----
+
+
+def test_drain_ui_queue_writes_to_daily_log(hive_env):
+    """drain_ui_queue persists feedback to daily log so it survives compaction."""
+    from keephive.storage import daily_file, drain_ui_queue, ui_queue_path
+
+    queue = ui_queue_path()
+    queue.write_text(
+        json.dumps(
+            {
+                "page": "http://localhost:3847/stats",
+                "selector": ".gauge-row",
+                "note": "gauge bars not visible in dark mode",
+            }
+        )
+    )
+
+    result = drain_ui_queue("")
+
+    # Returns the additionalContext JSON string
+    assert result is not None
+    obj = json.loads(result.strip())
+    assert "additionalContext" in obj["hookSpecificOutput"]
+    assert "gauge bars not visible" in obj["hookSpecificOutput"]["additionalContext"]
+
+    # Queue file is deleted
+    assert not queue.exists()
+
+    # Content is also in the daily log as a TODO
+    log_text = daily_file().read_text()
+    assert "gauge bars not visible" in log_text
+    assert "TODO" in log_text
+
+
+def test_drain_ui_queue_returns_none_when_empty(hive_env):
+    """drain_ui_queue returns None when no queue file exists."""
+    from keephive.storage import drain_ui_queue
+
+    result = drain_ui_queue("/Users/jory/Documents/GitHub/keephive")
+    assert result is None

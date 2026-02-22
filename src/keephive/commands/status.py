@@ -6,6 +6,10 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+
 from keephive import __version__
 from keephive.clock import get_today
 from keephive.output import console
@@ -145,144 +149,109 @@ def _watch_paths_status() -> list[Path]:
     return paths
 
 
+_SPARK = " \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588"
+
+
+def _cli_gauge(pct: int, width: int = 20) -> str:
+    """Return exactly `width` chars: filled + empty blocks."""
+    filled = round(pct / 100 * width)
+    return "\u2588" * filled + "\u2591" * (width - filled)
+
+
+def _cli_sparkline(values: list[int], width: int = 24) -> str:
+    """Return exactly `width` chars of sparkline."""
+    if not values:
+        return " " * width
+    if len(values) > width:
+        step = len(values) / width
+        values = [values[int(i * step)] for i in range(width)]
+    elif len(values) < width:
+        values = values + [0] * (width - len(values))
+    mx = max(values) or 1
+    return "".join(_SPARK[min(8, round(v / mx * 8))] for v in values)
+
+
 def _render_status() -> None:
-    """Render the status display (extracted for watch_loop reuse)."""
+    """Render the status display using Rich Panels for card-based layout."""
+    import re
+
+    # ── Phase 1: Gather ALL data before rendering ──────────────────────
     mem = memory_file()
     stale = count_stale_facts()
     today_entries = count_daily_entries()
     yesterday_entries = count_daily_entries(yesterday())
 
-    total_verified = 0
-    if mem.exists():
-        import re
-
-        text = mem.read_text()
-        total_verified = len(re.findall(r"\[verified:", text))
-
-    guide_count = sum(1 for _ in guides_dir().glob("*.md")) if guides_dir().exists() else 0
-
-    disk_usage = "?"
-    try:
-        import subprocess
-
-        r = subprocess.run(
-            ["du", "-sh", str(hive_dir())],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if r.returncode == 0:
-            disk_usage = r.stdout.split()[0]
-    except Exception:
-        pass
-
-    from keephive.health import check_anthropic_memory, health_summary
+    from keephive.health import health_summary
 
     hooks_ok, mcp_ok, data_ok = health_summary()
-    anthropic_mem = check_anthropic_memory()
-
-    console.print()
     prof = active_profile()
-    prof_tag = f"  [dim]profile: {prof}[/dim]" if prof else ""
-    console.print(f"[bold]keephive[/bold] v{__version__}{prof_tag}")
 
-    def _dot(ok: bool, label: str) -> str:
-        return f"[ok]\u25cf[/ok] {label}" if ok else f"[dim]\u25cb[/dim] {label}"
-
-    health_parts = [_dot(hooks_ok, "hooks"), _dot(mcp_ok, "mcp"), _dot(data_ok, "data")]
-    if anthropic_mem == "active":
-        health_parts.append("[dim]anthropic-mem[/dim]")
-    health_line = f"  {'  '.join(health_parts)}"
-    console.print(health_line)
-    if not all([hooks_ok, mcp_ok, data_ok]):
-        console.print("  Run: [bold]hive setup[/bold]")
-    console.print()
-
-    # Stats line
+    # Knowledge health
+    kh: dict = {}
     try:
         from keephive.commands.stats import _calculate_streak, _knowledge_health
 
         kh = _knowledge_health()
-        parts = []
-        if kh["total_facts"] > 0:
-            ok = kh["fresh"] + kh["aging"]
-            fact_detail = f"{ok} ok"
-            if kh["aging"] > 0:
-                fact_detail += f", {kh['aging']} aging"
-            if kh["stale"] > 0:
-                fact_detail += f", [warn]{kh['stale']} stale[/warn]"
-            parts.append(f"[bold]{kh['total_facts']} facts[/bold] ({fact_detail})")
-        else:
-            parts.append(f"{today_entries} today")
-            parts.append(f"{yesterday_entries} yesterday")
-
-        try:
-            from keephive.storage import session_metrics as _sm
-
-            sm = _sm(days_back=7)
-            if sm["avg_prompts_per_session"] > 0:
-                parts.append(f"{sm['avg_prompts_per_session']:.0f} prompts/convo")
-        except Exception:
-            pass
-
-        stats = read_stats()
-        days_data = stats.get("days", {})
-        curr_streak, _ = _calculate_streak(days_data)
-        if curr_streak > 0:
-            parts.append(f"{curr_streak}d streak")
-
-        console.print(f"  {' | '.join(parts)}")
-    except Exception:
-        verified_ok = total_verified - stale
-        parts = []
-        if total_verified > 0:
-            parts.append(f"[bold]{total_verified} facts[/bold] ({verified_ok} ok)")
-        parts.append(f"{today_entries} today")
-        parts.append(f"{yesterday_entries} yesterday")
-        parts.append(f"{guide_count} guides")
-        parts.append(disk_usage)
-        console.print(f"  {' | '.join(parts)}")
-
-    # Activity line
-    try:
-        from keephive.commands.stats import _calculate_streak, _hourly_sparkline
-
-        stats = read_stats()
-        days_data = stats.get("days", {})
-        today_str = get_today().isoformat()
-        today_data_st = days_data.get(today_str, {})
-        today_cmds = sum(today_data_st.get("commands", {}).values())
-        week_ago = (get_today() - timedelta(days=7)).isoformat()
-        week_cmds = sum(
-            sum(dd.get("commands", {}).values()) for ds, dd in days_data.items() if ds >= week_ago
-        )
-        curr_streak, _ = _calculate_streak(days_data)
-        activity_parts = [
-            f"[bold]{today_cmds}[/bold] cmds today",
-            f"{week_cmds} this week",
-        ]
-        if curr_streak > 0:
-            activity_parts.append(f"{curr_streak}d streak")
-        today_hours = today_data_st.get("hours", {})
-        if today_hours:
-            activity_parts.append(_hourly_sparkline(today_hours))
-        console.print(f"  {' \u00b7 '.join(activity_parts)}")
     except Exception:
         pass
 
-    console.print()
+    # Stats + streak
+    stats = read_stats()
+    days_data = stats.get("days", {})
+    curr_streak = 0
+    try:
+        from keephive.commands.stats import _calculate_streak
 
-    if stale > 0:
-        console.print(f"  [warn]{stale} stale fact(s)[/warn]  \u2192  [bold]hive v[/bold]")
-        console.print()
+        curr_streak, _ = _calculate_streak(days_data)
+    except Exception:
+        pass
 
-    # Quality Pulse
+    # Session metrics from Claude Code session-meta (real data)
+    msgs_today = 0
+    msgs_week = 0
+    lines_added = 0
+    lines_removed = 0
+    git_commits = 0
+    try:
+        from keephive.storage import session_metrics as _sm
+
+        sm = _sm(days_back=7)
+        msgs_today = sum(
+            s.get("user_messages", 0)
+            for s in __import__("keephive.storage", fromlist=["read_cc_sessions"])
+            .read_cc_sessions(days_back=1)
+        )
+        msgs_week = sum(
+            s.get("user_messages", 0)
+            for s in __import__("keephive.storage", fromlist=["read_cc_sessions"])
+            .read_cc_sessions(days_back=7)
+        )
+        lines_added = sm.get("lines_added_week", 0)
+        lines_removed = sm.get("lines_removed_week", 0)
+        git_commits = sm.get("git_commits_week", 0)
+    except Exception:
+        pass
+
+    # Hourly sparkline for today
+    today_str = get_today().isoformat()
+    today_data = days_data.get(today_str, {})
+    hourly_spark = ""
+    try:
+        from keephive.commands.stats import _hourly_sparkline
+
+        today_hours = today_data.get("hours", {})
+        if today_hours:
+            hourly_spark = _hourly_sparkline(today_hours)
+    except Exception:
+        pass
+
+    # Pulse score
+    pulse_score: int | None = None
     try:
         from keephive.commands.audit import (
             _analyze_cleaner,
             _analyze_strategist,
             _analyze_vault,
-            _check_previous_play,
             _compute_score,
         )
 
@@ -290,71 +259,189 @@ def _render_status() -> None:
         cleaner = _analyze_cleaner()
         strategist = _analyze_strategist()
         pulse_score = _compute_score(vault, cleaner, strategist)
-
-        if pulse_score < 70:
-            console.print(
-                f"  [warn]Quality Pulse: {pulse_score}/100[/warn]  →  [bold]hive audit[/bold]"
-            )
-            console.print()
-
-        prev_play = _check_previous_play()
-        if prev_play and not prev_play["completed"] and prev_play["age_days"] >= 2:
-            console.print(
-                f"  [info]Unfinished audit action ({prev_play['date']}): {prev_play['action']}[/info]"
-            )
-            console.print(
-                '    \u2192 [bold]hive audit[/bold] (re-assess)  |  [bold]hive todo done "audit"[/bold] (mark done)'
-            )
-            console.print()
     except Exception:
         pass
 
-    # Guide update notification
+    # Collect warnings for Attention panel
+    warnings: list[tuple[str, str]] = []
+
+    if stale > 0:
+        s = "s" if stale != 1 else ""
+        warnings.append(("\u26a0", f"{stale} stale fact{s} (30+ days)"))
+
+    # Old TODOs
+    todos = open_todos()
+    old_todos = 0
+    if todos:
+        cutoff_3d = (get_today() - timedelta(days=3)).isoformat()
+        for d, _, _ in todos:
+            if d < cutoff_3d:
+                old_todos += 1
+    if old_todos > 0:
+        s = "s" if old_todos != 1 else ""
+        warnings.append(("\u26a0", f"{old_todos} TODO{s} older than 3 days"))
+
+    # Pending facts
+    pending_facts_count = 0
+    pending_facts_path = hive_dir() / ".pending-facts.md"
+    if pending_facts_path.exists() and pending_facts_path.read_text().strip():
+        pending_facts_count = sum(
+            1 for ln in pending_facts_path.read_text().splitlines() if ln.strip().startswith("- ")
+        )
+    if pending_facts_count > 0:
+        s = "s" if pending_facts_count != 1 else ""
+        warnings.append(("\u26a1", f"{pending_facts_count} fact{s} pending review"))
+
+    # Pending rules
+    pending_rules_count = 0
+    pending_rules_path = hive_dir() / ".pending-rules.md"
+    if pending_rules_path.exists() and pending_rules_path.read_text().strip():
+        pending_rules_count = sum(
+            1 for ln in pending_rules_path.read_text().splitlines() if ln.strip().startswith("- ")
+        )
+    if pending_rules_count > 0:
+        s = "s" if pending_rules_count != 1 else ""
+        warnings.append(("\u26a1", f"{pending_rules_count} rule suggestion{s} pending"))
+
+    # Quality pulse
+    if pulse_score is not None and pulse_score < 70:
+        warnings.append(("\u2726", f"Quality pulse {pulse_score}/100"))
+
+    # Guide updates
     try:
         from keephive.commands.setup import check_bundled_updates as _cbu
 
         _stale_guides = _cbu()
         if _stale_guides > 0:
-            console.print(
-                f"  [info]{_stale_guides} bundled guide(s) have updates[/info]"
-                "  →  [bold]hive setup[/bold]"
-            )
-            console.print()
+            warnings.append(("\u26a1", f"{_stale_guides} bundled guide(s) have updates"))
     except Exception:
         pass
 
-    # Memory accumulation warnings
+    # Memory accumulation
     if mem.exists():
         from keephive.hooks.sessionstart import _accumulation_warnings
 
-        mem_content = mem.read_text()
-        acc_warnings = _accumulation_warnings(mem_content)
-        for w in acc_warnings:
-            console.print(f"  [warn]{w}[/warn]")
-        if acc_warnings:
-            console.print()
+        for w in _accumulation_warnings(mem.read_text()):
+            warnings.append(("\u26a0", w))
 
-    # Reflect analysis nudge
-    from keephive.commands.reflect import get_pending_analysis
+    # Reflect analysis
+    try:
+        from keephive.commands.reflect import get_pending_analysis
 
-    pending = get_pending_analysis()
-    if pending:
-        add_count, contra_count = pending
-        parts_nudge = []
-        if add_count:
-            parts_nudge.append(f"{add_count} addition{'s' if add_count != 1 else ''}")
-        if contra_count:
-            parts_nudge.append(f"{contra_count} contradiction{'s' if contra_count != 1 else ''}")
-        console.print(f"  [info]\\[reflect] {', '.join(parts_nudge)} ready[/info]")
-        console.print("    \u2192 [bold]hive rf apply[/bold]")
-        console.print()
+        pending_analysis = get_pending_analysis()
+        if pending_analysis:
+            add_count, contra_count = pending_analysis
+            parts_nudge = []
+            if add_count:
+                parts_nudge.append(f"{add_count} addition{'s' if add_count != 1 else ''}")
+            if contra_count:
+                parts_nudge.append(
+                    f"{contra_count} contradiction{'s' if contra_count != 1 else ''}"
+                )
+            warnings.append(("\u26a1", f"reflect: {', '.join(parts_nudge)} ready"))
+    except Exception:
+        pass
 
-    # Open TODOs
-    todos = open_todos()
+    # Due recurring tasks
+    due = due_recurring()
+    if due:
+        for freq, text, overdue in due:
+            over_s = f"+{overdue}d overdue" if overdue > 0 else "due today"
+            warnings.append(("\u26a0", f"[{freq}] [{over_s}] {text}"))
+
+    # Unfinished audit action
+    try:
+        from keephive.commands.audit import _check_previous_play
+
+        prev_play = _check_previous_play()
+        if prev_play and not prev_play["completed"] and prev_play["age_days"] >= 2:
+            warnings.append(
+                ("\u26a0", f"Unfinished audit action ({prev_play['date']}): {prev_play['action']}")
+            )
+    except Exception:
+        pass
+
+    # ── Phase 2: Render ────────────────────────────────────────────────
+
+    # Header (no panel, just version + health dots)
+    console.print()
+    prof_tag = f"  [dim]profile: {prof}[/dim]" if prof else ""
+    console.print(f"[bold]keephive[/bold] v{__version__}{prof_tag}")
+
+    def _dot(ok: bool, label: str) -> str:
+        return f"[ok]\u25cf[/ok] {label}" if ok else f"[dim]\u25cb[/dim] {label}"
+
+    health_parts = [_dot(hooks_ok, "hooks"), _dot(mcp_ok, "mcp"), _dot(data_ok, "data")]
+    console.print(f"{'  '.join(health_parts)}")
+
+    # ── Metrics Panel (always shown) ──────────────────────────────────
+    total_facts = kh.get("total_facts", 0)
+    fresh_pct = kh.get("fresh_pct", 0)
+
+    metrics_t = Table(show_header=False, show_edge=False, box=None, padding=(0, 2))
+    metrics_t.add_column(justify="right")
+    metrics_t.add_column(justify="left")
+    metrics_t.add_column(justify="right")
+    metrics_t.add_column(justify="left")
+    metrics_t.add_column(justify="right")
+    metrics_t.add_column(justify="left")
+    metrics_t.add_column(justify="right")
+    metrics_t.add_column(justify="left")
+
+    pulse_str = f"{pulse_score}/100" if pulse_score is not None else "..."
+    metrics_t.add_row(
+        f"[bold]{total_facts}[/bold]",
+        "facts",
+        f"[bold]{fresh_pct:.0f}%[/bold]",
+        "fresh",
+        f"[bold]{curr_streak}d[/bold]",
+        "streak",
+        f"[bold]{pulse_str}[/bold]",
+        "pulse",
+    )
+
+    # Activity line
+    activity_parts = []
+    if msgs_today > 0:
+        activity_parts.append(f"[bold]{msgs_today}[/bold] msgs today")
+    if msgs_week > 0:
+        activity_parts.append(f"{msgs_week} this week")
+    if lines_added > 0 or lines_removed > 0:
+        activity_parts.append(f"[ok]+{lines_added}[/ok]/[warn]-{lines_removed}[/warn] lines")
+    if git_commits > 0:
+        activity_parts.append(f"{git_commits} commits")
+
+    from rich.console import Group
+
+    metrics_content_parts = [metrics_t]
+    if activity_parts:
+        activity_text = Text.from_markup("  ".join(activity_parts))
+        metrics_content_parts.append(Text(""))
+        metrics_content_parts.append(activity_text)
+    if hourly_spark:
+        metrics_content_parts.append(Text(f"  {hourly_spark}", style="dim"))
+
+    console.print(
+        Panel(Group(*metrics_content_parts), title="Metrics", border_style="dim", padding=(0, 1))
+    )
+
+    # ── Attention Panel (conditional) ─────────────────────────────────
+    if warnings:
+        att_t = Table(show_header=False, show_edge=False, box=None, padding=(0, 1))
+        att_t.add_column(width=2)
+        att_t.add_column()
+        for icon, msg in warnings:
+            style = "warn" if icon == "\u26a0" else "info" if icon == "\u26a1" else "dim"
+            att_t.add_row(f"[{style}]{icon}[/{style}]", f"[{style}]{msg}[/{style}]")
+        console.print(Panel(att_t, title="Attention", border_style="yellow", padding=(0, 1)))
+
+    # ── TODOs Panel (conditional) ─────────────────────────────────────
     if todos:
         t = get_today()
         shown = list(reversed(todos[-3:]))
-        console.print(f"  [bold]{len(todos)} open TODO(s):[/bold]")
+        todo_t = Table(show_header=False, show_edge=False, box=None, padding=(0, 1))
+        todo_t.add_column(width=7, justify="right")
+        todo_t.add_column()
         for d, _ts, text in shown:
             try:
                 td = date.fromisoformat(d)
@@ -367,114 +454,99 @@ def _render_status() -> None:
                     age_s = f"{age}d"
             except ValueError:
                 age_s = "?"
-            console.print(f"    [info]\\[{age_s}] {text}[/info]")
+            age_style = "warn" if age_s not in ("today", "1d", "?") else "dim"
+            todo_t.add_row(f"[{age_style}]\\[{age_s}][/{age_style}]", text)
+        overflow = ""
         if len(todos) > 3:
-            console.print(f"    [dim]... and {len(todos) - 3} more (hive todo)[/dim]")
-        if len(todos) > 10:
-            console.print(
-                "    [warn]Triage: hive todo done <pat>  |  hive doctor (find duplicates)[/warn]"
-            )
-        console.print()
-
-    # Pending facts nudge
-    pending_facts_path = hive_dir() / ".pending-facts.md"
-    if pending_facts_path.exists() and pending_facts_path.read_text().strip():
-        n = sum(
-            1 for ln in pending_facts_path.read_text().splitlines() if ln.strip().startswith("- ")
-        )
-        if n > 0:
-            s = "s" if n != 1 else ""
-            console.print(
-                f"  [yellow]\u26a1 {n} fact{s} pending review[/yellow]  \u2192  [bold]hive mem review[/bold]"
-            )
-            console.print()
-
-    # Pending rule suggestions nudge
-    pending_rules_path = hive_dir() / ".pending-rules.md"
-    if pending_rules_path.exists() and pending_rules_path.read_text().strip():
-        n = sum(
-            1 for ln in pending_rules_path.read_text().splitlines() if ln.strip().startswith("- ")
-        )
-        if n > 0:
-            console.print(
-                f"  [yellow]\u26a1 {n} rule suggestion(s) pending[/yellow]  \u2192  [bold]hive rule review[/bold]"
-            )
-            console.print()
-
-    # Due recurring tasks
-    due = due_recurring()
-    if due:
-        console.print(f"  [bold]{len(due)} due recurring task(s):[/bold]")
-        for freq, text, overdue in due:
-            over_s = f"+{overdue}d overdue" if overdue > 0 else "due today"
-            console.print(f"    [warn]\\[{freq}] \\[{over_s}] {text}[/warn]")
+            overflow = f"  ... and {len(todos) - 3} more (hive todo)"
+        content_parts = [todo_t]
+        if overflow:
+            content_parts.append(Text(overflow, style="dim"))
         console.print(
-            "    \u2192 [bold]hive todo[/bold] (view all)  |  [bold]hive todo done <pat>[/bold] (complete)"
+            Panel(
+                Group(*content_parts),
+                title=f"TODOs ({len(todos)} open)",
+                border_style="dim",
+                padding=(0, 1),
+            )
         )
-        console.print()
 
-    # Today's entries
+    # ── Today Panel (conditional) ─────────────────────────────────────
     entries = get_meaningful_entries()
     if entries:
-        console.print("  [bold]Today:[/bold]")
+        today_t = Table(show_header=False, show_edge=False, box=None, padding=(0, 1))
+        today_t.add_column(width=7, justify="right", style="dim")
+        today_t.add_column()
         for e in reversed(entries):
-            console.print(e)
-        console.print()
-    else:
-        console.print("  [bold]Today:[/bold] [dim](no entries yet)[/dim]")
-        console.print()
+            # Parse out the timestamp and content from formatted entry
+            # get_meaningful_entries returns "  ~ [HH:MM] text" or "  [HH:MM] text"
+            raw = e.strip()
+            if raw.startswith("~"):
+                raw = raw[1:].strip()
+            m = re.match(r"\[(\d{2}:\d{2})\]\s*(.*)", raw)
+            if m:
+                today_t.add_row(m.group(1), m.group(2))
+            else:
+                today_t.add_row("", raw)
+        console.print(Panel(today_t, title="Today", border_style="dim", padding=(0, 1)))
+    elif today_entries == 0:
+        console.print(Panel("[dim]no entries yet[/dim]", title="Today", border_style="dim", padding=(0, 1)))
 
     # Lookback when today is thin
     if today_entries < 3 and yesterday_entries > 0:
         yday = yesterday()
         yday_entries = get_meaningful_entries(yday, limit=5)
         if yday_entries:
-            console.print(f"  [bold]Yesterday[/bold] ({yday}):")
+            yday_t = Table(show_header=False, show_edge=False, box=None, padding=(0, 1))
+            yday_t.add_column(width=7, justify="right", style="dim")
+            yday_t.add_column()
             for e in reversed(yday_entries):
-                console.print(e)
-            console.print()
+                raw = e.strip()
+                if raw.startswith("~"):
+                    raw = raw[1:].strip()
+                m = re.match(r"\[(\d{2}:\d{2})\]\s*(.*)", raw)
+                if m:
+                    yday_t.add_row(m.group(1), m.group(2))
+                else:
+                    yday_t.add_row("", raw)
+            console.print(
+                Panel(yday_t, title=f"Yesterday ({yday})", border_style="dim", padding=(0, 1))
+            )
 
-    # Note slot indicator
+    # ── Draft Panel (conditional) ─────────────────────────────────────
     current_slot = active_slot()
     slot_path = slot_file(current_slot)
     if slot_path.exists() and slot_path.read_text().strip():
-        text = slot_path.read_text()
-        words = len(text.split())
-        flat = text.replace("\n", " ")
+        slot_text = slot_path.read_text()
+        words = len(slot_text.split())
+        flat = slot_text.replace("\n", " ")
         preview = flat[:40] + ("..." if len(flat) > 40 else "")
-        console.print(
-            f'  [info]Active draft: slot {current_slot} \u00b7 "{preview}" ({words} words)[/info]'
-            f"  →  [bold]hive nc[/bold]"
-        )
+        draft_line = f'slot {current_slot} \u00b7 "{preview}" ({words}w)'
         filled = sum(
             1
             for n in range(1, NOTE_SLOT_COUNT + 1)
             if slot_file(n).exists() and slot_file(n).read_text().strip()
         )
+        slot_parts = [Text.from_markup(f"[info]{draft_line}[/info]")]
         if filled > 1:
             from keephive.commands.note import _slot_bar
 
-            console.print(f"  {_slot_bar()}")
-        console.print()
-
-    # Next action suggestion
-    next_cmd, next_reason = _suggest_next()
-    if next_cmd:
-        console.print(f"  [bold]Next:[/bold] [info]{next_cmd}[/info]  ({next_reason})")
-    else:
-        console.print(f"  [bold]Next:[/bold] [ok]{next_reason}[/ok]")
-    console.print()
-
-    # Contextual footer
-    todo_count = len(todos) if todos else 0
-    if stale > 0:
-        console.print("  [dim]hive v | hive session verify (interactive) | hive help[/dim]")
-    elif todo_count > 5:
-        console.print("  [dim]hive session todo (triage) | hive dr (duplicates) | hive help[/dim]")
-    else:
+            slot_parts.append(Text(_slot_bar()))
         console.print(
-            "  [dim]hive go (session) | hive l (log) | hive rf (reflect) | hive help[/dim]"
+            Panel(Group(*slot_parts), title="Active Draft", border_style="dim", padding=(0, 1))
         )
+
+    # ── Footer ────────────────────────────────────────────────────────
+    next_cmd, next_reason = _suggest_next()
+    console.print()
+    if next_cmd:
+        console.print(f"[bold]Next:[/bold] [info]{next_cmd}[/info]  ({next_reason})")
+    else:
+        console.print(f"[bold]Next:[/bold] [ok]{next_reason}[/ok]")
+    console.print()
+    console.print(
+        "[dim]hive v \u00b7 hive go \u00b7 hive l \u00b7 hive rf \u00b7 hive help[/dim]"
+    )
 
 
 def cmd_status(args: list[str]) -> None:

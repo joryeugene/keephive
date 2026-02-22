@@ -473,7 +473,7 @@ class TestStatusDisplay:
         cmd_status([])
         out = capsys.readouterr().out
         assert "fix regression" in out
-        assert "open TODO" in out
+        assert "TODO" in out
 
     def test_status_shows_due_recurring(self, hive_env, capsys):
         """Due recurring tasks appear in status."""
@@ -484,7 +484,6 @@ class TestStatusDisplay:
         capsys.readouterr()  # clear recurring output
         cmd_status([])
         out = capsys.readouterr().out
-        assert "due recurring" in out.lower()
         assert "Review PRs" in out
 
     def test_status_json_mode(self, hive_env, capsys):

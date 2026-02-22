@@ -32,14 +32,14 @@ class TestKnowledgeLifecycle:
         """Remember 1 fact, verify it appears in today's status."""
         term.type("python -m keephive r 'FACT: PostgreSQL uses MVCC'").has("Remembered")
         screen = term.type("python -m keephive s")
-        screen.has("1 today", "FACT: PostgreSQL uses MVCC")
+        screen.has("Today", "FACT: PostgreSQL uses MVCC")
         save_terminal_output("knowledge/single_fact", term)
 
     def test_multiple_facts(self, term):
-        """Remember 5 facts, verify today's count in status."""
+        """Remember 5 facts, verify entries appear in status Today panel."""
         for i in range(5):
             term.type(f"python -m keephive r 'FACT: test fact number {i}'")
-        term.type("python -m keephive s").has("5 today")
+        term.type("python -m keephive s").has("Today", "test fact number")
 
     def test_category_variety(self, term, save_terminal_output):
         """Each category type is captured correctly."""
@@ -48,7 +48,7 @@ class TestKnowledgeLifecycle:
         term.type("python -m keephive r 'INSIGHT: Batch inserts 10x faster than singles'")
         term.type("python -m keephive r 'CORRECTION: Max connections is 100, not 50'")
         screen = term.type("python -m keephive s")
-        screen.has("4 today")
+        screen.has("Today", "FACT:", "DECISION:", "INSIGHT:", "CORRECTION:")
         save_terminal_output("knowledge/category_variety", term)
 
     def test_recall_hit(self, term, save_terminal_output):
@@ -380,7 +380,7 @@ class TestMultiDayWorkflows:
         # Status on last day shows current day's entries
         term.set_date("2026-04-30")
         screen = term.type("python -m keephive s")
-        screen.has("keephive", "1 today")
+        screen.has("keephive", "Day 30 observation")
         save_terminal_output("workflows/30day_accumulation", term)
 
     def test_weekend_gap(self, term):
@@ -410,7 +410,7 @@ class TestProfileWorkflows:
         """Data in one HIVE_HOME does not appear in another."""
         # Add fact in current env
         term.type("python -m keephive r 'FACT: profile A data'")
-        term.type("python -m keephive s").has("1 today")
+        term.type("python -m keephive s").has("profile A data")
 
         # Switch HIVE_HOME to a different directory
         alt_home = term.hive_home.parent / "hive_alt"
@@ -427,7 +427,7 @@ class TestProfileWorkflows:
         time.sleep(0.1)
 
         # Alt env should have no entries from profile A
-        term.type("python -m keephive s").has("0 yesterday")
+        term.type("python -m keephive s").has("no entries yet")
         term.type("python -m keephive s").lacks("profile A data")
 
         save_terminal_output("profiles/data_isolation", term)

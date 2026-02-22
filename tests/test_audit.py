@@ -466,6 +466,35 @@ class TestAuditClosedLoop:
         assert result is not None
         assert result["completed"] is True
 
+    def test_completed_play_with_audit_prefix_in_done(self, hive_env):
+        """DONE entry with [audit] prefix still matches stripped play text.
+
+        Bug regression test: save_audit_insights writes TODO: [audit] X,
+        hive td marks it DONE: [audit] X, but _check_previous_play strips
+        [audit] from the play. The match must succeed despite prefix mismatch.
+        """
+        make_daily(
+            hive_env,
+            2,
+            [
+                "- [10:00:00] TODO: [audit] Run hive doctor",
+            ],
+        )
+        make_daily(
+            hive_env,
+            1,
+            [
+                "- [10:00:00] DONE: [audit] Run hive doctor",
+            ],
+        )
+        from keephive.commands.audit import _check_previous_play
+
+        result = _check_previous_play()
+        assert result is not None
+        assert result["completed"] is True, (
+            f"DONE with [audit] prefix should match stripped play text. Got: {result}"
+        )
+
     def test_no_previous_play(self, hive_env):
         """No previous audit returns None."""
         from keephive.commands.audit import _check_previous_play

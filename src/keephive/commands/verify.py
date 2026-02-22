@@ -119,6 +119,7 @@ def cmd_verify(args: list[str]) -> None:
     console.print()
 
     if not prompt_yn("  Verify with LLM?"):
+        console.print("  [dim]Skipped.[/dim]")
         return
 
     # Capture pre-verification freshness for delta
@@ -191,6 +192,7 @@ def cmd_verify(args: list[str]) -> None:
         if batch_num < len(batches):
             console.print()
             if not prompt_yn(f"  Continue with batch {batch_num + 1}/{len(batches)}?"):
+                console.print(f"  [dim]Stopped at batch {batch_num}.[/dim]")
                 break
 
     if json_mode:

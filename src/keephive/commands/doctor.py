@@ -230,6 +230,7 @@ def _data_quality_checks() -> tuple[int, list[str]]:
     if os.environ.get("HIVE_SKIP_LLM"):
         _detect_duplicates_deterministic(ot)
     elif not prompt_yn("  Check for semantic duplicates with LLM?"):
+        console.print("  [dim]Skipped.[/dim]")
         _detect_duplicates_deterministic(ot)
     else:
         dupes = _detect_duplicates_llm(ot)

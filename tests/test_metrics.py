@@ -8,7 +8,9 @@ related storage functions (track_recall_miss, count_log_entries_by_prefix).
 from __future__ import annotations
 
 import json
+import os
 from datetime import date, timedelta
+from pathlib import Path
 
 from conftest import make_daily
 
@@ -194,14 +196,30 @@ class TestSessionProductivity:
         assert sp["depth_medium"] == 0
         assert sp["depth_deep"] == 0
 
-    def test_session_counts(self, hive_env):
-        from keephive.storage import track_session_event
+    def _write_cc(self, session_id, **fields):
+        """Helper: write a CC session-meta file."""
+        meta_dir = Path(os.environ["HIVE_CC_META_DIR"])
+        today = date.today().isoformat()
+        data = {
+            "session_id": session_id,
+            "user_message_count": fields.get("user_message_count", 5),
+            "tool_counts": fields.get("tool_counts", {"Read": 2}),
+            "duration_minutes": fields.get("duration_minutes", 10),
+            "start_time": fields.get("start_time", f"{today}T10:00:00Z"),
+            "project_path": fields.get("project_path", "/tmp/test"),
+            "lines_added": fields.get("lines_added", 0),
+            "lines_removed": fields.get("lines_removed", 0),
+            "files_modified": fields.get("files_modified", 0),
+            "input_tokens": fields.get("input_tokens", 0),
+            "output_tokens": fields.get("output_tokens", 0),
+            "git_commits": fields.get("git_commits", 0),
+        }
+        (meta_dir / f"{session_id}.json").write_text(json.dumps(data))
 
-        track_session_event("sp-001", "start")
-        track_session_event("sp-001", "prompt")
-        track_session_event("sp-001", "prompt")
-        track_session_event("sp-002", "start")
-        track_session_event("sp-002", "prompt")
+    def test_session_counts(self, hive_env):
+        today = date.today().isoformat()
+        self._write_cc("sp-001", user_message_count=2, start_time=f"{today}T09:00:00Z")
+        self._write_cc("sp-002", user_message_count=1, start_time=f"{today}T14:00:00Z")
 
         from keephive.commands.stats import _session_productivity
 
@@ -211,13 +229,14 @@ class TestSessionProductivity:
         assert sp["avg_prompts_per_convo"] == 1.5
 
     def test_depth_buckets_shallow(self, hive_env):
-        from keephive.storage import track_session_event
-
-        # Shallow: <20 prompts, <=2 tools
-        track_session_event("sh-001", "start")
-        for _ in range(5):
-            track_session_event("sh-001", "prompt")
-        track_session_event("sh-001", "tool", tool_name="Read")
+        # Shallow: <5 user messages
+        today = date.today().isoformat()
+        self._write_cc(
+            "sh-001",
+            user_message_count=3,
+            tool_counts={"Read": 1},
+            start_time=f"{today}T10:00:00Z",
+        )
 
         from keephive.commands.stats import _session_productivity
 
@@ -225,13 +244,13 @@ class TestSessionProductivity:
         assert sp["depth_shallow"] == 1
 
     def test_tool_distribution(self, hive_env):
-        from keephive.storage import track_session_event
-
-        track_session_event("td-001", "start")
-        for _ in range(5):
-            track_session_event("td-001", "tool", tool_name="Edit")
-        for _ in range(3):
-            track_session_event("td-001", "tool", tool_name="Read")
+        today = date.today().isoformat()
+        self._write_cc(
+            "td-001",
+            user_message_count=5,
+            tool_counts={"Edit": 5, "Read": 3},
+            start_time=f"{today}T10:00:00Z",
+        )
 
         from keephive.commands.stats import _session_productivity
 
