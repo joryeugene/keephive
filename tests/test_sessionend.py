@@ -1,4 +1,9 @@
-"""Tests for the SessionEnd hook handler."""
+"""Tests for the SessionEnd hook handler.
+
+SessionEnd is a pure stats-finalization hook: it NEVER writes to stdout.
+Any stdout output from sessionend would inject unexpected data into Claude's
+conversation context, which would be a silent bug.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +22,28 @@ def run_hook(input_data: dict | str, monkeypatch, hive_env: Path) -> None:
     from keephive.hooks.sessionend import hook_sessionend
 
     hook_sessionend([])
+
+
+class TestSessionEndProducesNoStdout:
+    """SessionEnd must NEVER write to stdout, regardless of input."""
+
+    def test_no_stdout_on_valid_input(self, hive_env, monkeypatch, capsys):
+        """Valid session_id+reason -> zero bytes to stdout."""
+        run_hook({"session_id": "sess-nostdout-1", "reason": "user_exit"}, monkeypatch, hive_env)
+        out = capsys.readouterr().out
+        assert out == "", f"SessionEnd must never write to stdout, got: {out!r}"
+
+    def test_no_stdout_on_bad_json(self, hive_env, monkeypatch, capsys):
+        """Malformed JSON -> zero bytes to stdout."""
+        run_hook("{{bad json", monkeypatch, hive_env)
+        out = capsys.readouterr().out
+        assert out == ""
+
+    def test_no_stdout_on_missing_session_id(self, hive_env, monkeypatch, capsys):
+        """Missing session_id -> zero bytes to stdout."""
+        run_hook({}, monkeypatch, hive_env)
+        out = capsys.readouterr().out
+        assert out == ""
 
 
 class TestHookSessionEnd:

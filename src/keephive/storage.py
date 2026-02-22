@@ -1488,7 +1488,7 @@ def ui_queue_path(project: str | None = None) -> "Path":
     return hive_dir() / ".ui-queue"
 
 
-def drain_ui_queue(cwd: str) -> "str | None":
+def drain_ui_queue(cwd: str, event_name: str = "UserPromptSubmit") -> "str | None":
     """Consume the UI feedback queue and persist to daily log.
 
     Checks for a project-scoped queue file (`.ui-queue-{project}`) then falls
@@ -1564,7 +1564,7 @@ def drain_ui_queue(cwd: str) -> "str | None":
         json.dumps(
             {
                 "hookSpecificOutput": {
-                    "hookEventName": "UserPromptSubmit",
+                    "hookEventName": event_name,
                     "additionalContext": "\n\n".join(context_blocks),
                 }
             }

@@ -206,6 +206,9 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .grid-cols-2{grid-template-columns:1fr 1fr}
 .grid-cols-3{grid-template-columns:1fr 1fr 1fr}
 @media(max-width:900px){.grid-cols-2,.grid-cols-3{grid-template-columns:1fr}}
+.layout-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.layout-col{display:flex;flex-direction:column;gap:12px}
+.layout-col>.grid-panel>.card{margin-bottom:0}
 .card{background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:hidden;margin-bottom:12px;transition:border-color .1s}
 .card-header{padding:7px 14px;background:#1e252e;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .card-title{font-weight:600;font-size:13px;color:#f0f6fc}
@@ -3301,7 +3304,9 @@ def _render_sessions_panel(data: dict) -> str:
             hero_section = (
                 f'<div style="text-align:center;padding:6px 0 8px;border-bottom:1px solid #21262d;margin-bottom:8px">'
                 f'<div class="kpi-label" style="letter-spacing:1px;margin-bottom:2px">CODE VELOCITY</div>'
-                f'<span class="metric-hero" style="font-size:28px">+{lines_add:,}/-{lines_rm:,}</span>'
+                f'<span class="metric-hero" style="font-size:28px;color:#3fb950">+{lines_add:,}</span>'
+                f'<span class="metric-hero" style="font-size:28px;color:#6e7681">/</span>'
+                f'<span class="metric-hero" style="font-size:28px;color:#f85149">-{lines_rm:,}</span>'
                 f'<span class="metric-hero-unit"> lines</span>'
                 f'<div class="kpi-row" style="margin-top:6px">'
                 f'<div class="kpi-item"><div class="kpi-value">{git_commits_wk}</div><div class="kpi-label">commits</div></div>'
@@ -4476,10 +4481,12 @@ VIEWS: dict[str, dict] = {
     "stats": {
         "path": "/stats",
         "title": "Stats",
+        "cols": [
+            ["stats-pipeline", "sessions"],  # Left column: Pipeline Health → Sessions
+            ["stats", "stats-commands"],  # Right column: Activity → What You Use
+        ],
         "rows": [
-            ["stats-pipeline", "stats"],
-            ["stats-commands", "sessions"],
-            ["stats-trends"],
+            ["stats-trends"],  # Full-width row below both columns
         ],
     },
     "settings": {
@@ -4531,6 +4538,19 @@ def render_fragment(view_name: str, extra_params: dict | None = None) -> str:
     if not view_def:
         return '<div class="empty">Unknown view</div>'
     parts = []
+
+    # Column-based layout (puzzle pieces — independent columns, no height matching)
+    if "cols" in view_def:
+        col_htmls = []
+        for col_panels in view_def["cols"]:
+            col_items = [
+                f'<div class="grid-panel" data-panel-id="{_e(name)}">{_render_panel_safe(name, extra_params)}</div>'
+                for name in col_panels
+            ]
+            col_htmls.append(f'<div class="layout-col">{"".join(col_items)}</div>')
+        parts.append(f'<div class="layout-cols">{"".join(col_htmls)}</div>')
+
+    # Row-based layout (existing behavior)
     for row in view_def.get("rows", []):
         row_panels = []
         for name in row:

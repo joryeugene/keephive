@@ -47,7 +47,7 @@ def test_status(hive_env):
     assert len(r.stdout) > 50, f"Status output too short ({len(r.stdout)} chars): {r.stdout!r}"
     assert "keephive" in r.stdout
     assert "facts" in r.stdout
-    assert "today" in r.stdout
+    assert "Today" in r.stdout
 
 
 def test_remember(hive_env):

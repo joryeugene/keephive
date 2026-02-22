@@ -72,7 +72,7 @@ def hook_userpromptsubmit(args: list[str]) -> None:
     try:
         from keephive.storage import drain_ui_queue
 
-        result = drain_ui_queue(input_data.get("cwd", ""))
+        result = drain_ui_queue(input_data.get("cwd", ""), event_name="UserPromptSubmit")
         if result:
             sys.stdout.write(result)
             sys.stdout.flush()

@@ -1155,11 +1155,12 @@ def test_css_grid_row_align_items_start():
 
 
 def test_render_fragment_two_col_uses_grid_row(hive_env):
-    """Two-column rows must emit grid-row grid-cols-2 structure."""
+    """Stats view uses puzzle-piece column layout (layout-cols + layout-col)."""
     from keephive.commands.serve import render_fragment
 
-    html = render_fragment("stats")  # stats view has 2-col rows
-    assert "grid-row grid-cols-2" in html
+    html = render_fragment("stats")  # stats view uses cols-based layout
+    assert "layout-cols" in html
+    assert "layout-col" in html
     assert "grid-panel" in html
     assert "data-panel-id" in html
 
@@ -1960,11 +1961,14 @@ def test_activity_panel_has_quality_kpis(hive_env):
 
 
 def test_stats_view_has_expected_rows():
-    """Stats view definition has pipeline, trends, activity, commands, recalled."""
+    """Stats view definition has pipeline, trends, activity, commands panels."""
     from keephive.commands.serve import VIEWS
 
-    stats_rows = VIEWS["stats"]["rows"]
-    flat = [panel for row in stats_rows for panel in row]
+    stats_def = VIEWS["stats"]
+    # Flatten both cols and rows to find all panels regardless of layout type
+    flat_rows = [panel for row in stats_def.get("rows", []) for panel in row]
+    flat_cols = [panel for col in stats_def.get("cols", []) for panel in col]
+    flat = flat_rows + flat_cols
     assert "stats-pipeline" in flat
     assert "stats-trends" in flat
     assert "stats" in flat  # Activity panel
@@ -2931,11 +2935,12 @@ def test_stats_commands_panel_renders(hive_env):
 
 
 def test_stats_view_has_commands_row():
-    """Stats view layout includes stats-commands row."""
+    """Stats view layout includes stats-commands panel (in cols or rows)."""
     from keephive.commands.serve import VIEWS
 
-    stats_rows = VIEWS["stats"]["rows"]
-    flat = [p for row in stats_rows for p in row]
+    stats_def = VIEWS["stats"]
+    flat = [p for row in stats_def.get("rows", []) for p in row]
+    flat += [p for col in stats_def.get("cols", []) for p in col]
     assert "stats-commands" in flat, "Stats view must include stats-commands panel"
 
 

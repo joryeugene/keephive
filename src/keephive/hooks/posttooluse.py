@@ -40,7 +40,7 @@ def hook_posttooluse(_args: list[str]) -> None:
     try:
         from keephive.storage import drain_ui_queue
 
-        result = drain_ui_queue(input_data.get("cwd", ""))
+        result = drain_ui_queue(input_data.get("cwd", ""), event_name="PostToolUse")
         if result:
             sys.stdout.write(result)
             return  # Queue consumed; skip nudge this turn
