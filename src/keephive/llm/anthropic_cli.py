@@ -12,7 +12,7 @@ from typing import Type, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from keephive.llm import Backend
-from keephive.llm.exceptions import ClaudePipeError
+from keephive.llm.exceptions import BackendTimeoutError, ClaudePipeError
 
 T = TypeVar("T", bound=BaseModel)
 _BLOCKED_ENV_VARS = {"CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"}
@@ -172,7 +172,7 @@ def _call_structured(
     except subprocess.TimeoutExpired:
         msg = f"claude -p timed out after {timeout}s. Try increasing timeout or simplifying the prompt."
         print(f"[keephive] {msg}", file=sys.stderr)
-        raise ClaudePipeError(msg)
+        raise BackendTimeoutError(msg)
 
     if verbose:
         print(f"[verbose] returncode: {result.returncode}", file=sys.stderr)

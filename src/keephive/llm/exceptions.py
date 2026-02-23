@@ -19,3 +19,10 @@ class CapabilityError(ClaudePipeError):
     """Raised when the selected backend lacks required capabilities."""
 
     pass
+
+
+class BackendTimeoutError(ClaudePipeError):
+    """Raised when a backend times out. Not retriable — a different backend
+    would silently change model behavior for the same prompt."""
+
+    pass

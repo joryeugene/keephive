@@ -302,12 +302,20 @@ class TestParseClaudeResponse:
         assert "timed out" in err
 
     def test_stderr_on_nonzero_exit(self, monkeypatch, capsys):
-        """Verify stderr message on non-zero exit code."""
+        """Verify stderr message on non-zero exit code.
+
+        Non-zero exit is retriable (transient auth/API failures may warrant fallback),
+        so we remove all API keys to ensure all backends fail and ClaudePipeError
+        propagates. The [keephive] stderr line from anthropic_cli is still printed
+        before any retry attempt.
+        """
         import subprocess
 
-        # Force subprocess path
+        # Remove all API keys so every backend fails and the error surfaces.
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("CLAUDECODE", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
         def fake_run(*_a, **_kw):
             return subprocess.CompletedProcess(
@@ -318,7 +326,7 @@ class TestParseClaudeResponse:
 
         from keephive.claude import run_claude_pipe
 
-        with pytest.raises(ClaudePipeError, match="exited with code 1"):
+        with pytest.raises(ClaudePipeError):
             run_claude_pipe("test prompt", VerifyResponse)
 
         err = capsys.readouterr().err

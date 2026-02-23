@@ -11,7 +11,7 @@ from typing import Callable, Dict, Iterable, Optional, Type, TypeVar
 
 from pydantic import BaseModel
 
-from keephive.llm.exceptions import BackendNotAvailable, CapabilityError, ClaudePipeError
+from keephive.llm.exceptions import BackendNotAvailable, BackendTimeoutError, CapabilityError, ClaudePipeError
 from keephive.settings import read_settings
 from keephive.storage import hive_dir
 
@@ -239,6 +239,11 @@ def call_structured(
             meta["status"] = "error"
             meta["error"] = str(exc)
             _write_state(meta)
+
+            # Timeouts are non-retriable: a different backend would silently
+            # change model behavior for the same prompt.
+            if isinstance(exc, BackendTimeoutError):
+                raise
 
             # If we are in auto-select mode (no explicit override or setting),
             # try the next best backend.
