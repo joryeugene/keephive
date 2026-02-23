@@ -217,9 +217,15 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .grid-cols-2{grid-template-columns:1fr 1fr}
 .grid-cols-3{grid-template-columns:1fr 1fr 1fr}
 @media(max-width:900px){.grid-cols-2,.grid-cols-3{grid-template-columns:1fr}}
-.layout-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
-.layout-col{display:flex;flex-direction:column;gap:12px}
-.layout-col>.grid-panel>.card{margin-bottom:0}
+.grid-col-stack{display:flex;flex-direction:column;gap:12px}
+.masonry{column-gap:12px;margin-bottom:12px}
+.masonry[data-cols="1"]{column-count:1}
+.masonry[data-cols="2"]{column-count:2}
+.masonry[data-cols="3"]{column-count:3}
+@media(max-width:1200px){.masonry[data-cols="3"]{column-count:2}}
+@media(max-width:900px){.masonry{column-count:1!important}}
+.masonry-item{display:inline-block;width:100%;margin:0 0 12px;break-inside:avoid;vertical-align:top}
+.masonry-item .card{width:100%}
 .card{background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:hidden;margin-bottom:12px;transition:border-color .1s}
 .card-header{padding:7px 14px;background:#1e252e;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .card-title{font-weight:600;font-size:13px;color:#f0f6fc}
@@ -483,6 +489,19 @@ mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 .tab-content.active{display:block}
 .setting-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #21262d}
 .setting-row:last-child{border-bottom:none}
+.profile-row{display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid #21262d}
+.profile-row:last-child{border-bottom:none}
+.profile-option{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+.profile-radio{accent-color:#58a6ff;width:14px;height:14px;cursor:pointer}
+.profile-name{color:#e6edf3;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.profile-actions{margin-left:auto;display:inline-flex;align-items:center;gap:8px;flex-shrink:0;font-size:11px;white-space:nowrap}
+.profile-status{color:#3fb950;text-transform:uppercase;letter-spacing:.08em}
+.profile-meta{color:#6e7681}
+.profile-availability{text-transform:uppercase;letter-spacing:.08em}
+.profile-switch{background:none;border:1px solid #30363d;border-radius:999px;color:#8b949e;font-size:10px;padding:2px 8px;cursor:pointer;transition:border-color .15s,background .15s,color .15s;line-height:1}
+.profile-switch:hover{border-color:#58a6ff;color:#58a6ff}
+.profile-delete{background:none;border:1px solid #30363d;border-radius:999px;color:#f85149;font-size:10px;padding:2px 6px;cursor:pointer;transition:border-color .15s,background .15s,color .15s;line-height:1}
+.profile-delete:hover{border-color:#f85149;background:#2f1517;color:#ff7b72}
 .setting-label{font-weight:500;min-width:80px}
 .setting-desc{color:#8b949e;font-size:12px;flex:1}
 .setting-toggle{position:relative;width:36px;height:20px;display:inline-block}
@@ -2014,14 +2033,18 @@ def _get_stats_data_fresh() -> dict:
 def _get_ps_data() -> dict:
     import os
 
-    from keephive.commands.ps import (
-        _count_claude_processes,
-        _recent_projects,
-    )
     from keephive.storage import read_stats
 
+    stats = _safe_call(read_stats) or {}
+    try:
+        from keephive.commands.ps import (
+            _count_claude_processes,
+            _recent_projects,
+        )
+    except Exception:
+        return {"projects": [], "active_sessions": 0}
+
     cwd = os.getcwd()
-    stats = read_stats()
     projects = _safe_call(_recent_projects, stats, cwd) or []
     active = _safe_call(_count_claude_processes) or 0
     return {"projects": projects[:8], "active_sessions": active}
@@ -2848,10 +2871,15 @@ def _render_stats_panel(data: dict) -> str:
 
 
 def _render_stats_platforms_panel(data: dict) -> str:
-    platforms = data.get("platforms", {}).get("platforms", {})
+    platforms = data.get("platforms", {})
+    if isinstance(platforms, dict) and "platforms" in platforms and isinstance(
+        platforms["platforms"], dict
+    ):
+        platforms = platforms["platforms"]
     if not platforms:
-        body = '<div class="empty">No platform telemetry yet</div>' + _cmd_hints(
-            ["keephive setup --yes", "hive doctor"]
+        body = (
+            '<div class="empty">No platform telemetry yet. Run setup to enable streaming.</div>'
+            + _cmd_hints(["keephive setup --yes", "hive doctor"])
         )
     else:
         header = (
@@ -2884,7 +2912,7 @@ def _render_stats_platforms_panel(data: dict) -> str:
         body = f'<table class="stats-table stats-platform-table">{header}{rows}</table>'
     return (
         '<div class="card" tabindex="0" role="region" aria-label="Platform telemetry">'
-        '<div class="card-header"><span class="card-title">Platforms</span></div>'
+        '<div class="card-header"><span class="card-title">Platform Telemetry</span></div>'
         f'<div class="card-body">{body}</div>'
         "</div>"
     )
@@ -4013,6 +4041,7 @@ def _get_brain_data() -> dict:
         "backend": _get_backend_overview(),
         "platforms": _get_platform_overview(),
         "pending_llm": list_pending(limit=6),
+        "soul": _get_soul_data(),
     }
 
 
@@ -4148,6 +4177,7 @@ def _render_brain_panel(data: dict) -> str:
     rules = data.get("rules", {})
     todos = data.get("todos", {})
     log_entries = data.get("log", [])
+    soul_data = data.get("soul") or {"soul": "", "last_modified": "", "pending_count": 0}
 
     def _brain_card(
         title: str,
@@ -4320,24 +4350,30 @@ def _render_brain_panel(data: dict) -> str:
         )
 
     cards = [
-        backend_card,
-        memory_card,
-        rules_card,
-        todos_card,
-        pending_card,
-        log_card,
-        platform_summary_card,
-        *platform_detail_cards,
+        ("brain-backend", backend_card),
+        ("brain-pending", pending_card),
+        ("brain-platform-summary", platform_summary_card),
     ]
+    cards.extend(
+        (f"brain-platform-{idx}", card)
+        for idx, card in enumerate(platform_detail_cards, start=1)
+    )
+    cards.extend(
+        [
+            ("brain-todos", todos_card),
+            ("brain-log", log_card),
+            ("brain-memory", memory_card),
+            ("brain-rules", rules_card),
+            ("brain-soul", _render_soul_panel(soul_data)),
+        ]
+    )
     if not cards:
         return ""
-    rows: list[str] = []
-    chunk = 3
-    for idx in range(0, len(cards), chunk):
-        row_cards = cards[idx : idx + chunk]
-        cols = min(3, max(1, len(row_cards)))
-        rows.append(f'<div class="grid-row grid-cols-{cols}">{"".join(row_cards)}</div>')
-    return "".join(rows)
+    masonry_items = "".join(
+        f'<div class="masonry-item" data-brain-card="{_e(card_id)}">{card_html}</div>'
+        for card_id, card_html in cards
+    )
+    return f'<div class="masonry" data-cols="2">{masonry_items}</div>'
 
 
 # ---- Pipeline health panels ----
@@ -4752,7 +4788,7 @@ def _render_pipeline_panel(data: dict) -> str:
 
 
 def _get_capture_data() -> dict:
-    """Capture mix: category breakdown + sparkline + consistency."""
+    """Capture activity: category breakdown + sparkline + consistency."""
     from keephive.commands.stats import _capture_mix
 
     return _capture_mix()
@@ -4767,8 +4803,8 @@ def _render_capture_panel(data: dict) -> str:
 
     if total == 0:
         return (
-            '<div class="card" tabindex="0" role="region" aria-label="Capture Mix">'
-            '<div class="card-header"><span class="card-title">Capture Mix</span></div>'
+            '<div class="card" tabindex="0" role="region" aria-label="Capture signals">'
+            '<div class="card-header"><span class="card-title">Capture Signals</span></div>'
             '<div class="card-body"><div class="empty">No entries in last 7 days</div></div>'
             "</div>"
         )
@@ -4809,8 +4845,8 @@ def _render_capture_panel(data: dict) -> str:
         )
 
     return (
-        f'<div class="card" tabindex="0" role="region" aria-label="Capture Mix">'
-        f'<div class="card-header"><span class="card-title">Capture Mix</span>'
+        f'<div class="card" tabindex="0" role="region" aria-label="Capture signals">'
+        f'<div class="card-header"><span class="card-title">Capture Signals</span>'
         f'<span class="card-meta">last 7 days</span></div>'
         f'<div class="card-body">{sparkline_html}<div>{pills_html}</div>{consistency_html}</div>'
         f"</div>"
@@ -4870,6 +4906,50 @@ def _render_recalled_panel(data: dict) -> str:
 # ---- Profiles + Transfer panels ----
 
 
+def _api_delete_profile(name: str) -> tuple[bool, str]:
+    """Delete profile data across preferred + legacy paths."""
+    import shutil
+
+    from keephive.storage import (
+        active_profile,
+        list_profiles,
+        profile_exists,
+        profile_paths,
+    )
+
+    name = (name or "").strip()
+    if not name:
+        return False, "name required"
+    if name == "default":
+        return False, "Cannot delete the default profile"
+
+    available = {p.get("name") for p in list_profiles()}
+    if name not in available:
+        return False, f"Profile '{name}' does not exist"
+
+    if active_profile() == name:
+        return False, f"Cannot delete active profile '{name}'"
+
+    if not profile_exists(name):
+        return False, f"Profile '{name}' does not exist"
+
+    preferred, legacy = profile_paths(name)
+    for target in (preferred, legacy):
+        if not target.exists() and not target.is_symlink():
+            continue
+        try:
+            if target.is_symlink():
+                target.unlink(missing_ok=True)
+            elif target.is_dir():
+                shutil.rmtree(target)
+            else:
+                target.unlink(missing_ok=True)
+        except FileNotFoundError:
+            continue
+
+    return True, ""
+
+
 def _get_profiles_data() -> dict:
     """Get profile list and active profile."""
     from keephive.storage import active_profile, list_profiles
@@ -4886,26 +4966,40 @@ def _render_profiles_panel(data: dict) -> str:
 
     rows = ""
     for p in profiles:
-        name = _e(p["name"])
+        raw_name = p.get("name", "")
+        name = _e(raw_name)
         is_active = p.get("active", False)
+        actions: list[str] = []
         if is_active:
-            rows += (
-                f'<div class="kpi-row" style="justify-content:flex-start;gap:12px;padding:6px 0">'
-                f'<span style="color:#3fb950;font-size:14px">&#9679;</span>'
-                f'<span class="kpi-value" style="font-size:14px">{name}</span>'
-                f'<span class="kpi-label" style="margin-top:0;color:#3fb950">active</span>'
-                f"</div>"
-            )
+            actions.append('<span class="profile-status">active</span>')
         else:
-            rows += (
-                f'<div class="kpi-row" style="justify-content:flex-start;gap:12px;padding:6px 0">'
-                f'<span style="color:#484f58;font-size:14px">&#9675;</span>'
-                f'<span style="font-size:14px;color:#e6edf3">{name}</span>'
-                f'<button class="todo-done-btn" onclick="profileSwitch(\'{name}\')">switch</button>'
+            actions.append(
+                f'<button type="button" class="profile-switch" data-profile="{name}" '
+                'onclick="profileSwitch(this.dataset.profile)">switch</button>'
             )
-            if name != "default":
-                rows += f'<button class="todo-done-btn" style="color:#f85149" onclick="profileDelete(\'{name}\')">&#10005;</button>'
-            rows += "</div>"
+            actions.append('<span class="profile-meta profile-availability">available</span>')
+        rows += (
+            '<div class="profile-row">'
+            f'<label class="profile-option">'
+            f'<input type="radio" name="profile-select" class="profile-radio" value="{name}"'
+        )
+        if is_active:
+            rows += " checked"
+        rows += ' onchange="profileSwitch(this.value)">'
+        rows += f'<span class="profile-name" title="{name}">{name}</span>'
+        rows += "</label>"
+        if not is_active and raw_name != "default":
+            actions.append(
+                f'<button type="button" class="profile-delete" data-profile="{name}" '
+                f'title="Delete {name}" aria-label="Delete profile {name}" '
+                'onclick="profileDelete(this.dataset.profile)">&#10005;</button>'
+            )
+        if actions:
+            rows += f'<div class="profile-actions">{"".join(actions)}</div>'
+        rows += "</div>"
+
+    if not rows:
+        rows = '<div class="empty">No profiles yet</div>'
 
     # Create form
     create_form = (
@@ -4925,6 +5019,7 @@ def _render_profiles_panel(data: dict) -> str:
         f'<div class="card-body">{rows}{create_form}</div>'
         f"</div>"
     )
+
 
 
 def _get_transfer_data() -> dict:
@@ -5001,22 +5096,19 @@ VIEWS: dict[str, dict] = {
     "home": {
         "path": "/",
         "title": "Home",
-        "rows": [
-            ["status"],
+        "rows_first": True,
+        "rows": [["status", "stats"]],
+        "cols": [
             ["log-home", "todos"],
-            ["ps", "recurring"],
-            ["standup"],
+            ["standup", "stats-capture", "recurring", "ps"],
         ],
     },
     "dev": {
         "path": "/dev",
         "title": "Dev",
-        "rows": [
-            ["soul", "memory"],
-            ["status-brief"],
-            ["todos-brief", "log-brief"],
-            ["facts"],
-            ["knowledge-compact"],
+        "cols": [
+            ["status-brief", "log-brief", "todos-brief", "facts"],
+            ["notes-compact", "knowledge-compact"],
         ],
     },
     "brain": {
@@ -5033,18 +5125,18 @@ VIEWS: dict[str, dict] = {
         "path": "/stats",
         "title": "Stats",
         "cols": [
-            ["stats-pipeline", "sessions"],  # Left column: Pipeline Health → Sessions
-            ["stats", "stats-commands"],  # Right column: Activity → What You Use
+            ["stats", "stats-pipeline", "stats-capture", "stats-platforms"],
+            ["sessions", "stats-commands"],
         ],
-        "rows": [
-            ["stats-platforms"],
-            ["stats-trends"],  # Full-width row below both columns
-        ],
+        "rows": [["stats-trends"]],
     },
     "settings": {
         "path": "/settings",
         "title": "Settings",
-        "rows": [["settings", "profiles"], ["transfer"]],
+        "cols": [
+            ["settings"],
+            ["profiles", "transfer"],
+        ],
     },
 }
 
@@ -5089,29 +5181,42 @@ def render_fragment(view_name: str, extra_params: dict | None = None) -> str:
     view_def = VIEWS.get(view_name)
     if not view_def:
         return '<div class="empty">Unknown view</div>'
-    parts = []
 
-    # Column-based layout (puzzle pieces — independent columns, no height matching)
-    if "cols" in view_def:
-        col_htmls = []
-        for col_panels in view_def["cols"]:
-            col_items = [
+    parts: list[str] = []
+
+    def add_columns() -> None:
+        columns = view_def.get("cols") or []
+        if not columns:
+            return
+        col_count = max(1, len(columns))
+        column_html = []
+        for col in columns:
+            panels_html = "".join(
                 f'<div class="grid-panel" data-panel-id="{_e(name)}">{_render_panel_safe(name, extra_params)}</div>'
-                for name in col_panels
-            ]
-            col_htmls.append(f'<div class="layout-col">{"".join(col_items)}</div>')
-        parts.append(f'<div class="layout-cols">{"".join(col_htmls)}</div>')
-
-    # Row-based layout (existing behavior)
-    for row in view_def.get("rows", []):
-        row_panels = []
-        for name in row:
-            panel_html = _render_panel_safe(name, extra_params)
-            row_panels.append(
-                f'<div class="grid-panel" data-panel-id="{_e(name)}">{panel_html}</div>'
+                for name in col
             )
-        cols = len(row)
-        parts.append(f'<div class="grid-row grid-cols-{cols}">{"".join(row_panels)}</div>')
+            column_html.append(f'<div class="grid-col-stack">{panels_html}</div>')
+        parts.append(
+            f'<div class="grid-row grid-cols-{col_count}">{"".join(column_html)}</div>'
+        )
+
+    def add_rows() -> None:
+        for row in view_def.get("rows", []) or []:
+            row_panels = []
+            for name in row:
+                panel_html = _render_panel_safe(name, extra_params)
+                row_panels.append(
+                    f'<div class="grid-panel" data-panel-id="{_e(name)}">{panel_html}</div>'
+                )
+            cols = len(row)
+            parts.append(f'<div class="grid-row grid-cols-{cols}">{"".join(row_panels)}</div>')
+
+    if view_def.get("rows_first"):
+        add_rows()
+        add_columns()
+    else:
+        add_columns()
+        add_rows()
     return "\n".join(parts)
 
 
@@ -5770,47 +5875,11 @@ class _HiveHandler(BaseHTTPRequestHandler):
 
         elif self.path == "/api/profiles/delete":
             name = (data.get("name") or "").strip()
-            if not name:
+            try:
+                ok, error = _api_delete_profile(name)
+            except Exception as exc:
                 ok = False
-                error = "name required"
-            else:
-                try:
-                    import shutil
-
-                    from keephive.commands.profile import _validate_name
-                    from keephive.storage import active_profile, profile_exists, profile_paths
-
-                    err = _validate_name(name)
-                    if err:
-                        ok = False
-                        error = err
-                    elif name == "default":
-                        ok = False
-                        error = "Cannot delete the default profile"
-                    elif active_profile() == name:
-                        ok = False
-                        error = f"Cannot delete active profile '{name}'"
-                    else:
-                        if not profile_exists(name):
-                            ok = False
-                            error = f"Profile '{name}' does not exist"
-                        else:
-                            preferred, legacy = profile_paths(name)
-                            for target in (preferred, legacy):
-                                if not target.exists():
-                                    continue
-                                try:
-                                    if target.is_symlink():
-                                        target.unlink(missing_ok=True)
-                                    elif target.is_dir():
-                                        shutil.rmtree(target)
-                                    else:
-                                        target.unlink(missing_ok=True)
-                                except FileNotFoundError:
-                                    continue
-                except Exception as exc:
-                    ok = False
-                    error = str(exc)
+                error = str(exc)
 
         elif self.path == "/api/transfer/import":
             import base64

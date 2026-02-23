@@ -11,6 +11,30 @@ from pathlib import Path
 # ---- Markdown renderer tests ----
 
 
+def _flatten_view_panels(view_def: dict) -> list[str]:
+    """Return panels in the order render_fragment will emit them."""
+    panels: list[str] = []
+
+    def add_cols() -> None:
+        cols = view_def.get("cols") or []
+        if not cols:
+            return
+        for col in cols:
+            panels.extend(col)
+
+    def add_rows() -> None:
+        for row in view_def.get("rows", []) or []:
+            panels.extend(row)
+
+    if view_def.get("rows_first"):
+        add_rows()
+        add_cols()
+    else:
+        add_cols()
+        add_rows()
+    return panels
+
+
 def test_render_md_headers():
     from keephive.commands.serve import render_md
 
@@ -191,10 +215,14 @@ def test_render_brain_panel_empty_guidance():
         "rules": {"total": 0, "preview": []},
         "todos": {"total": 0, "items": []},
         "log": [],
+        "soul": {"soul": "", "last_modified": "", "pending_count": 0},
     }
     html = _render_brain_panel(data)
     assert "No platform telemetry yet" in html
     assert "keephive setup --yes" in html
+    assert "Soul" in html
+    assert 'class="masonry"' in html
+    assert 'data-cols="2"' in html
 
 
 def test_render_stats_platforms_panel_empty_hint():
@@ -202,6 +230,27 @@ def test_render_stats_platforms_panel_empty_hint():
 
     html = _render_stats_platforms_panel({"platforms": {}})
     assert "keephive setup --yes" in html
+
+
+def test_render_stats_platforms_panel_with_data():
+    from keephive.commands.serve import _render_stats_platforms_panel
+
+    payload = {
+        "platforms": {
+            "gemini": {
+                "title": "Gemini CLI",
+                "detected": True,
+                "telemetry": {"total": 400, "by_event": {"after_model": 345, "before_tool": 54}},
+                "hook_scripts": ["after_model.py", "before_tool.py"],
+                "skill_installed": True,
+            }
+        }
+    }
+    html = _render_stats_platforms_panel(payload)
+    assert "<table" in html
+    assert "Gemini CLI" in html
+    assert "400" in html
+    assert "after_model:345" in html
 
 
 def test_render_fragment_unknown():
@@ -1136,9 +1185,10 @@ def test_home_view_has_todos():
     """Home view includes a todos panel."""
     from keephive.commands.serve import VIEWS
 
-    home_rows = VIEWS["home"]["rows"]
-    flat = [p for row in home_rows for p in row]
-    assert any("todos" in p for p in flat), "Home view should contain todos panel"
+    panels = _flatten_view_panels(VIEWS["home"])
+    assert any("todos" in p for p in panels), "Home view should contain todos panel"
+    assert panels[0] == "status", "Status card should render first on Home"
+    assert panels[1] == "stats", "Activity panel should sit directly under status on Home"
 
 
 # ---- Round 3: Fix 1 - accordion animation (no textContent swap) ----
@@ -1175,18 +1225,36 @@ def test_css_grid_row_align_items_start():
     assert "align-items:start" in _CSS
 
 
+def test_css_includes_masonry_rules():
+    """Masonry helpers are defined for multi-column layouts."""
+    from keephive.commands.serve import _CSS
+
+    assert ".masonry{" in _CSS
+    assert "masonry-item" in _CSS
+
+
+def test_css_includes_grid_col_stack():
+    """Grid column stack helper keeps column cards spaced."""
+    from keephive.commands.serve import _CSS
+
+    assert ".grid-col-stack" in _CSS
+    assert "flex-direction:column" in _CSS
+
+
 # ---- Round 3: Fix 4 - split-pane ----
 
 
-def test_render_fragment_two_col_uses_grid_row(hive_env):
-    """Stats view uses puzzle-piece column layout (layout-cols + layout-col)."""
+def test_render_fragment_two_col_uses_grid_columns(hive_env):
+    """Stats view renders stacked grid columns when cols are defined."""
     from keephive.commands.serve import render_fragment
 
     html = render_fragment("stats")  # stats view uses cols-based layout
-    assert "layout-cols" in html
-    assert "layout-col" in html
-    assert "grid-panel" in html
-    assert "data-panel-id" in html
+    assert 'grid-row grid-cols-2' in html
+    assert 'grid-col-stack' in html
+    assert 'data-panel-id="stats"' in html
+    assert 'data-panel-id="stats-pipeline"' in html
+    assert 'data-panel-id="stats-commands"' in html
+    assert 'data-panel-id="stats-platforms"' in html
 
 
 def test_render_fragment_no_split_pane(hive_env):
@@ -1353,10 +1421,9 @@ def test_home_view_log_before_todos():
     """Log (most dynamic) comes before todos in Home view."""
     from keephive.commands.serve import VIEWS
 
-    home_rows = VIEWS["home"]["rows"]
-    flat = [p for row in home_rows for p in row]
-    log_idx = flat.index("log-home")
-    todos_idx = flat.index("todos")
+    panels = _flatten_view_panels(VIEWS["home"])
+    log_idx = panels.index("log-home")
+    todos_idx = panels.index("todos")
     assert log_idx < todos_idx
 
 
@@ -1364,9 +1431,8 @@ def test_home_view_has_standup():
     """Home view includes standup panel."""
     from keephive.commands.serve import VIEWS
 
-    home_rows = VIEWS["home"]["rows"]
-    flat = [p for row in home_rows for p in row]
-    assert "standup" in flat, "Home view should include standup panel"
+    panels = _flatten_view_panels(VIEWS["home"])
+    assert "standup" in panels, "Home view should include standup panel"
 
 
 def test_know_view_has_tabbed_panel():
@@ -1774,10 +1840,13 @@ def test_dev_view_uses_knowledge_compact():
     """Dev view uses knowledge-compact (flat list, no accordions)."""
     from keephive.commands.serve import VIEWS
 
-    dev_rows = VIEWS["dev"]["rows"]
-    know_row = next((r for r in dev_rows if any("knowledge" in p for p in r)), None)
-    assert know_row is not None, "No knowledge panel in Dev view"
-    assert "knowledge-compact" in know_row, "Dev view should use knowledge-compact"
+    dev_view = VIEWS["dev"]
+    panels = _flatten_view_panels(dev_view)
+    assert "knowledge-compact" in panels, "Dev view should use knowledge-compact"
+    assert len(dev_view.get("cols", [])) == 2, "Dev view should be a two-column layout"
+    assert panels.index("notes-compact") < panels.index(
+        "knowledge-compact"
+    ), "Notes should precede knowledge guides"
 
 
 def test_know_view_has_tabbed_content():
@@ -1989,14 +2058,15 @@ def test_stats_view_has_expected_rows():
     from keephive.commands.serve import VIEWS
 
     stats_def = VIEWS["stats"]
-    # Flatten both cols and rows to find all panels regardless of layout type
-    flat_rows = [panel for row in stats_def.get("rows", []) for panel in row]
-    flat_cols = [panel for col in stats_def.get("cols", []) for panel in col]
-    flat = flat_rows + flat_cols
+    flat = _flatten_view_panels(stats_def)
+    assert flat[0] == "stats", "Activity panel should render first"
     assert "stats-pipeline" in flat
-    assert "stats-trends" in flat
-    assert "stats" in flat  # Activity panel
+    assert "stats-capture" in flat
+    assert "sessions" in flat
     assert "stats-commands" in flat
+    assert "stats-platforms" in flat
+    trend_panels = [panel for row in stats_def.get("rows", []) for panel in row]
+    assert "stats-trends" in trend_panels
 
 
 def test_render_fragment_stats_all_panels(hive_env):
@@ -2771,14 +2841,13 @@ def test_stats_summary_has_cmd_hints(hive_env):
     assert "cmd-hint" in html
 
 
-def test_home_view_no_separate_stats_summary():
-    """Home view does not have a separate stats-summary row (merged into status panel)."""
+def test_home_view_reference_column_includes_ps():
+    """Home view reference column keeps project switcher without duplicate activity."""
     from keephive.commands.serve import VIEWS
 
-    home_rows = VIEWS["home"]["rows"]
-    assert not any("stats-summary" in r for r in home_rows), (
-        "stats-summary should not be in Home view"
-    )
+    panels = _flatten_view_panels(VIEWS["home"])
+    assert "ps" in panels
+    assert "stats-summary" not in panels
 
 
 def test_sparkline_wrap_in_css():
@@ -2935,10 +3004,9 @@ def test_dev_view_has_todos_and_log():
     """Dev view includes todos-brief and log-brief rows."""
     from keephive.commands.serve import VIEWS
 
-    dev_rows = VIEWS["dev"]["rows"]
-    flat = [p for row in dev_rows for p in row]
-    assert "todos-brief" in flat, "Dev view must include todos-brief"
-    assert "log-brief" in flat, "Dev view must include log-brief"
+    panels = _flatten_view_panels(VIEWS["dev"])
+    assert "todos-brief" in panels, "Dev view must include todos-brief"
+    assert "log-brief" in panels, "Dev view must include log-brief"
 
 
 def test_stats_commands_panel_renders(hive_env):
@@ -2963,9 +3031,9 @@ def test_stats_view_has_commands_row():
     from keephive.commands.serve import VIEWS
 
     stats_def = VIEWS["stats"]
-    flat = [p for row in stats_def.get("rows", []) for p in row]
-    flat += [p for col in stats_def.get("cols", []) for p in col]
-    assert "stats-commands" in flat, "Stats view must include stats-commands panel"
+    panels = _flatten_view_panels(stats_def)
+    panels.extend(panel for row in stats_def.get("rows", []) for panel in row)
+    assert "stats-commands" in panels, "Stats view must include stats-commands panel"
 
 
 def test_status_brief_shows_cmds_today(hive_env):
@@ -3021,10 +3089,9 @@ def test_home_view_log_before_standup():
     """Log (dynamic) comes before standup (static once-a-day) in home view."""
     from keephive.commands.serve import VIEWS
 
-    rows = VIEWS["home"]["rows"]
-    flat = [p for row in rows for p in row]
-    log_idx = flat.index("log-home")
-    standup_idx = flat.index("standup")
+    panels = _flatten_view_panels(VIEWS["home"])
+    log_idx = panels.index("log-home")
+    standup_idx = panels.index("standup")
     assert log_idx < standup_idx, f"log ({log_idx}) should come before standup ({standup_idx})"
 
 
@@ -3032,15 +3099,17 @@ def test_dev_view_todos_log_before_knowledge_memory():
     """Soul+memory form the identity row at top; todos above knowledge (reference)."""
     from keephive.commands.serve import VIEWS
 
-    rows = VIEWS["dev"]["rows"]
-    flat = [p for row in rows for p in row]
-    todos_idx = flat.index("todos-brief")
-    know_idx = flat.index("knowledge-compact")
-    # soul+memory are intentionally first row (agent identity section)
-    # Active work (todos) must still appear above reference content (knowledge)
-    assert todos_idx < know_idx, (
-        f"todos-brief ({todos_idx}) should come before knowledge-compact ({know_idx})"
-    )
+    panels = _flatten_view_panels(VIEWS["dev"])
+    assert panels[0] == "status-brief"
+    assert panels.index("todos-brief") < panels.index(
+        "knowledge-compact"
+    ), "Todos should precede knowledge guides"
+    assert panels.index("log-brief") < panels.index(
+        "knowledge-compact"
+    ), "Log snippet should appear before knowledge"
+    assert panels.index("notes-compact") < panels.index(
+        "knowledge-compact"
+    ), "Notes preview should sit above knowledge guides"
 
 
 def test_consolidated_views_exist():
@@ -3254,13 +3323,21 @@ def test_home_view_row_structure(hive_env):
     # Grid-row structure
     assert "grid-row" in html
     assert "data-panel-id" in html
+    assert 'grid-row grid-cols-2' in html
+    assert 'grid-col-stack' in html
+    first_grid = html.index('grid-row')
+    first_stack = html.index('grid-col-stack')
+    assert first_grid < first_stack, (
+        "Status/activity grid row should render before column stacks"
+    )
     # No old split-pane markup
     assert "split-pane" not in html
     assert "split-divider" not in html
     # Count grid-rows: should match number of rows in VIEWS["home"]
     expected_rows = len(VIEWS["home"]["rows"])
+    expected_total = expected_rows + (1 if VIEWS["home"].get("cols") else 0)
     actual_rows = html.count("grid-row grid-cols-")
-    assert actual_rows == expected_rows, f"Expected {expected_rows} grid-rows, got {actual_rows}"
+    assert actual_rows == expected_total, f"Expected {expected_total} grid-rows, got {actual_rows}"
     # Every card in the fragment has tabindex
     cards = re.findall(r'<div class="card"[^>]*>', html)
     for tag in cards:
@@ -3441,8 +3518,10 @@ def test_settings_view_has_profiles(hive_env):
     """Settings view includes profiles and transfer panels."""
     from keephive.commands.serve import VIEWS
 
-    rows = VIEWS["settings"]["rows"]
-    panel_ids = [p for row in rows for p in row]
+    view = VIEWS["settings"]
+    panel_ids = []
+    panel_ids.extend([p for row in view.get("rows", []) for p in row])
+    panel_ids.extend([p for col in view.get("cols", []) for p in col])
     assert "profiles" in panel_ids
     assert "transfer" in panel_ids
 
@@ -3453,6 +3532,37 @@ def test_panels_registry_has_profiles():
 
     assert "profiles" in PANELS
     assert "transfer" in PANELS
+
+
+def test_api_delete_profile_removes_legacy_symlink(tmp_path, monkeypatch):
+    """Helper removes preferred dir and legacy symlink when deleting profiles."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("HIVE_HOME", raising=False)
+
+    keephive_dir = home / ".keephive"
+    claude_dir = home / ".claude"
+    preferred = keephive_dir / "hive-Legacy123"
+    preferred.mkdir(parents=True)
+    (preferred / "note.txt").write_text("data")
+    claude_dir.mkdir(parents=True)
+    legacy = claude_dir / "hive-Legacy123"
+    legacy.symlink_to(preferred)
+
+    import importlib
+
+    storage = importlib.import_module("keephive.storage")
+    importlib.reload(storage)
+    serve_mod = importlib.import_module("keephive.commands.serve")
+    serve_mod = importlib.reload(serve_mod)
+
+    ok, err = serve_mod._api_delete_profile("Legacy123")
+    assert ok, err
+    assert err == ""
+    assert not preferred.exists()
+    assert not legacy.exists()
+    assert "Legacy123" not in {p["name"] for p in storage.list_profiles()}
 
 
 def test_js_has_profile_handlers():
