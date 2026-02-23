@@ -301,6 +301,75 @@ class TestSoulUpdateThrottle:
         assert llm_called, "Expected LLM call — 1-hour throttle should not have blocked this"
 
 
+class TestRunTaskThrottle:
+    """_run_task only calls _mark_last_run when the task returns True (did work)."""
+
+    def test_run_task_soul_update_within_throttle_does_not_mark(self, monkeypatch, hive_env):
+        """_run_task soul-update within 1h throttle must NOT write last_run.
+
+        Bug caught: running 'hive daemon run soul-update' within the 1-hour window
+        used to reset the throttle even though no work was done, pushing the next
+        eligible run further out.
+        """
+        from keephive.commands.daemon import _run_task
+        from keephive.storage import write_daemon_state
+
+        # Pre-set last_run to 10 minutes ago (inside 1h throttle)
+        state = {"soul-update": {"last_run": (datetime.now() - timedelta(minutes=10)).isoformat()}}
+        write_daemon_state(state)
+
+        mark_calls: list[str] = []
+        monkeypatch.setattr("keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t))
+
+        _run_task("soul-update")  # should throttle — _task_soul_update returns False
+
+        assert mark_calls == [], f"Expected no _mark_last_run calls, got: {mark_calls}"
+
+    def test_run_task_soul_update_outside_throttle_marks_once(self, monkeypatch, hive_env):
+        """_run_task soul-update outside 1h throttle calls _mark_last_run exactly once.
+
+        Bug caught: double _mark_last_run — internal call in _task_soul_update plus
+        the unconditional call in _run_task meant two JSON writes for the same event.
+        """
+        from keephive.commands.daemon import _run_task
+        from keephive.storage import write_daemon_state
+
+        # Pre-set last_run to 2 hours ago (outside 1h throttle)
+        state = {"soul-update": {"last_run": (datetime.now() - timedelta(hours=2)).isoformat()}}
+        write_daemon_state(state)
+
+        mark_calls: list[str] = []
+        monkeypatch.setattr("keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t))
+        # Simulate work done without needing real log files or LLM
+        monkeypatch.setattr("keephive.commands.daemon._task_soul_update", lambda: True)
+
+        _run_task("soul-update")
+
+        assert mark_calls == ["soul-update"], (
+            f"Expected exactly one _mark_last_run('soul-update'), got: {mark_calls}"
+        )
+
+    def test_run_task_self_improve_within_throttle_does_not_mark(self, monkeypatch, hive_env):
+        """_run_task self-improve within 7d throttle must NOT write last_run.
+
+        Bug caught: 7-day throttle was being reset on every manual run even when
+        self-improve returned early — pushing the next eligible run further out.
+        """
+        from keephive.commands.daemon import _run_task
+        from keephive.storage import write_daemon_state
+
+        # Pre-set last_run to 3 days ago (inside 7d throttle)
+        state = {"self-improve": {"last_run": (datetime.now() - timedelta(days=3)).isoformat()}}
+        write_daemon_state(state)
+
+        mark_calls: list[str] = []
+        monkeypatch.setattr("keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t))
+
+        _run_task("self-improve")  # should throttle — _task_self_improve returns False
+
+        assert mark_calls == [], f"Expected no _mark_last_run calls, got: {mark_calls}"
+
+
 class TestSessionendFiresSoulUpdate:
     """sessionend fires a non-blocking subprocess for soul-update when enabled."""
 
