@@ -452,9 +452,7 @@ def _task_soul_update() -> bool:
     if last_run_str:
         last_run_dt = datetime.fromisoformat(last_run_str)
         if (datetime.now() - last_run_dt) < timedelta(hours=1):
-            mins = int((datetime.now() - last_run_dt).total_seconds() / 60)
-            _log_daemon(f"soul-update: throttled ({mins}m since last run, threshold 60m)")
-            return False
+            return False  # silent — throttle skip is not a diagnostic event
 
     from keephive.claude import ClaudePipeError, run_claude_pipe
     from keephive.clock import get_today
@@ -541,8 +539,7 @@ def _task_self_improve() -> bool:
     if last_run_str:
         days_since = (datetime.now() - datetime.fromisoformat(last_run_str)).days
         if days_since < _SELF_IMPROVE_THROTTLE_DAYS:
-            _log_daemon(f"self-improve: throttled ({days_since}d since last run, threshold {_SELF_IMPROVE_THROTTLE_DAYS}d)")
-            return False
+            return False  # silent — throttle skip is not a diagnostic event
 
     # ── Depth cap: don't pile on if user hasn't reviewed ─────────────
     existing = read_pending_improvements()
