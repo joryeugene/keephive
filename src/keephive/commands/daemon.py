@@ -162,10 +162,13 @@ def _run_task(task_name: str) -> None:
         status_msg = "🐝 KingBee: distilling session patterns into SOUL.md..."
 
     with console.status(status_msg, spinner="dots"):
-        _execute_task(task_name)
-        _mark_last_run(task_name)
+        did_work = _execute_task(task_name)
 
-    console.print(f"🐝 Done: {task_name}")
+    if did_work:
+        _mark_last_run(task_name)
+        console.print(f"🐝 Done: {task_name}")
+    else:
+        console.print(f"🐝 {task_name}: skipped (throttled or no data)")
 
 
 # ── Edit / Log ───────────────────────────────────────────────────────
@@ -270,7 +273,7 @@ def _mark_last_run(task_name: str) -> None:
 # ── Task Implementations ─────────────────────────────────────────────
 
 
-def _execute_task(task_name: str) -> None:
+def _execute_task(task_name: str) -> bool:
     dispatch = {
         "morning-briefing": _task_morning_briefing,
         "stale-check": _task_stale_check,
@@ -280,12 +283,12 @@ def _execute_task(task_name: str) -> None:
     }
     fn = dispatch.get(task_name)
     if fn:
-        fn()
-    else:
-        _log_daemon(f"unknown task: {task_name}")
+        return fn() or False  # coerce None → False
+    _log_daemon(f"unknown task: {task_name}")
+    return False
 
 
-def _task_morning_briefing() -> None:
+def _task_morning_briefing() -> bool:
     """Read yesterday's log + pending counts. Write briefing to today's log."""
     from datetime import timedelta
 
@@ -349,9 +352,10 @@ No markdown headers."""
             append_to_daily(entry)
     except ClaudePipeError as e:
         _log_daemon(f"morning-briefing failed: {e}")
+    return True
 
 
-def _task_stale_check() -> None:
+def _task_stale_check() -> bool:
     """Review memory.md for potentially stale facts. Write warnings to daily log."""
     from keephive.claude import ClaudePipeError, run_claude_pipe
     from keephive.clock import get_now
@@ -360,7 +364,7 @@ def _task_stale_check() -> None:
 
     memory_path = hive_dir() / "memory.md"
     if not memory_path.exists():
-        return
+        return False
 
     memory = safe_read_text(memory_path)
     prompt = f"""You are KingBee. Review these memory.md facts for staleness.
@@ -378,9 +382,10 @@ Memory:
             append_to_daily(entry)
     except ClaudePipeError as e:
         _log_daemon(f"stale-check failed: {e}")
+    return True
 
 
-def _task_standup_draft() -> None:
+def _task_standup_draft() -> bool:
     """Read recent logs. Write standup draft to today's log."""
     from keephive.clock import get_now
     from keephive.storage import append_to_daily
@@ -396,14 +401,18 @@ def _task_standup_draft() -> None:
             append_to_daily(entry)
     except Exception as e:
         _log_daemon(f"standup-draft failed: {e}")
+    return True
 
 
-def _task_soul_update() -> None:
+def _task_soul_update() -> bool:
     """Read today's log. Update SOUL.md ## Summary + ## Session Patterns.
 
     Does exactly one thing: update SOUL.md. Self-improve is a separate process.
     Throttled: max once per hour (PreCompact fires this mid-session; SessionEnd
     fires it at exit — without throttle a long session would run it many times).
+
+    Returns True when SOUL.md is written, False in all other paths.
+    Caller (_run_task) handles _mark_last_run when True is returned.
     """
     from datetime import datetime, timedelta
 
@@ -413,7 +422,7 @@ def _task_soul_update() -> None:
     if last_run_str:
         last_run_dt = datetime.fromisoformat(last_run_str)
         if (datetime.now() - last_run_dt) < timedelta(hours=1):
-            return
+            return False
 
     from keephive.claude import ClaudePipeError, run_claude_pipe
     from keephive.clock import get_today
@@ -434,7 +443,7 @@ def _task_soul_update() -> None:
 
     current_soul = read_soul()
     if not today_log and not yesterday_log:
-        return
+        return False
 
     prompt = f"""You are KingBee updating your own SOUL.md after recent sessions.
 Review the logs and rewrite SOUL.md with STRICT size budgets.
@@ -463,17 +472,22 @@ Return the complete updated SOUL.md content (bounded, distilled, not expanded)."
         result = run_claude_pipe(prompt, SoulUpdateResponse, model="sonnet")
         if result and result.content:
             soul_file().write_text(result.content)
-            _mark_last_run("soul-update")
             _log_daemon("SOUL.md updated")
+            return True  # caller handles _mark_last_run
+        return False
     except ClaudePipeError as e:
         _log_daemon(f"soul-update failed: {e}")
+        return False
 
 
-def _task_self_improve() -> None:
+def _task_self_improve() -> bool:
     """Analyze patterns across recent sessions. Propose skills, tasks, and rules.
 
     Time-throttled: max once per 7 days. Queue-depth-capped: stops at 20 pending.
     Appends to existing queue (never replaces). Deduplicates against existing pending.
+
+    Returns True when LLM ran (with or without proposals), False when throttled/skipped.
+    Caller (_run_task) handles _mark_last_run when True is returned.
     """
     from datetime import timedelta
 
@@ -496,13 +510,13 @@ def _task_self_improve() -> None:
         days_since = (datetime.now() - datetime.fromisoformat(last_run_str)).days
         if days_since < 7:
             _log_daemon(f"self-improve: skipped ({days_since}d since last run, threshold 7d)")
-            return
+            return False
 
     # ── Depth cap: don't pile on if user hasn't reviewed ─────────────
     existing = read_pending_improvements()
     if len(existing) >= 20:
         _log_daemon(f"self-improve: queue at {len(existing)} items — review before new proposals")
-        return
+        return False
 
     today = get_today()
 
@@ -516,7 +530,7 @@ def _task_self_improve() -> None:
     recent_logs = "\n\n".join(recent_log_parts)
 
     if not recent_logs.strip():
-        return  # Nothing to analyze
+        return False  # Nothing to analyze
 
     # ── Scan note slots (0-9) ─────────────────────────────────────────
     from keephive.storage import slot_file
@@ -654,16 +668,17 @@ If nothing warrants a proposal, return all empty lists with summary "No patterns
 
             if new_items:
                 append_pending_improvements(new_items)
-                _mark_last_run("self-improve")
                 _log_daemon(
                     f"self-improve: {len(new_items)} proposals appended "
                     f"(queue now {len(existing) + len(new_items)})"
                 )
             else:
-                _mark_last_run("self-improve")
                 _log_daemon("self-improve: no new proposals this cycle")
+            return True  # caller handles _mark_last_run
+        return False  # run_claude_pipe returned None
     except ClaudePipeError as e:
         _log_daemon(f"self-improve failed: {e}")
+        return False
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
