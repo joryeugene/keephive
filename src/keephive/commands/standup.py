@@ -11,7 +11,7 @@ from datetime import date, timedelta
 
 from keephive.clock import get_today
 from keephive.output import console, copy_to_clipboard, notify_sound, prompt_yn
-from keephive.storage import collect_todos, daily_dir, get_meaningful_entries, safe_read_text, today
+from keephive.storage import collect_todos, daily_dir, daily_file, get_meaningful_entries, safe_read_text, today
 
 
 def _weekend_aware_cutoff() -> date:
@@ -172,6 +172,22 @@ def _gather_raw_data() -> dict:
             if fpath.stem >= yday.isoformat():
                 daily_text += f"--- {fpath.stem} ---\n{safe_read_text(fpath)}\n\n"
 
+    # KingBee standup draft: scan last 7 days newest-first, stop at first match.
+    # Handles Friday draft → Monday standup (3-day gap) and weekend/holiday scenarios.
+    _DRAFT_PATTERN = r"\[🐝 KingBee \d{2}:\d{2}\] standup draft\n(.*?)(?=\n\[🐝|\Z)"
+    kingbee_draft = None
+    for i in range(7):
+        day = t - timedelta(days=i)
+        log_path = daily_file(day.isoformat())
+        if not log_path.exists():
+            continue
+        log_text = safe_read_text(log_path)
+        if log_text:
+            m = re.search(_DRAFT_PATTERN, log_text, re.DOTALL)
+            if m:
+                kingbee_draft = m.group(1).strip()
+                break  # Use most recent draft found
+
     return {
         "recent_done": recent_done,
         "open_todos": open_list,
@@ -180,6 +196,7 @@ def _gather_raw_data() -> dict:
         "merged_prs": pr_data["merged_prs"],
         "closed_prs": pr_data["closed_prs"],
         "daily_text": daily_text,
+        "kingbee_draft": kingbee_draft,
     }
 
 
@@ -359,7 +376,11 @@ CRITICAL: Every item you output must trace to a specific entry in the data. Do N
 {insight_text}
 
 === DAILY LOG (last 2 days) ===
-{data["daily_text"][:3000]}"""
+{data["daily_text"][:3000]}
+
+=== KINGBEE STANDUP DRAFT ===
+{data.get("kingbee_draft") or "(no KingBee draft available)"}
+If a KingBee draft is present above, use it as a strong starting point — cross-reference and update with the actual data sections."""
 
     try:
         with console.status("  Generating standup...", spinner="dots"):
@@ -421,6 +442,10 @@ def cmd_standup(args: list[str]) -> None:
         console.print('  hive t "what you\'re working on"')
         console.print('  hive r "FACT: something you learned"')
         return
+
+    if data.get("kingbee_draft"):
+        console.print("[dim]🐝 KingBee drafted this standup[/dim]")
+        console.print()
 
     # LLM mode vs deterministic
     if os.environ.get("HIVE_SKIP_LLM"):

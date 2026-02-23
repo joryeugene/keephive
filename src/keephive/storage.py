@@ -344,6 +344,205 @@ def read_rules() -> str:
     return f.read_text() if f.exists() else ""
 
 
+# ---- KingBee identity + daemon ----
+
+
+def soul_file() -> "Path":
+    """Path to SOUL.md — the agent's persistent identity."""
+    return hive_dir() / "SOUL.md"
+
+
+def read_soul() -> str:
+    """Full SOUL.md content, empty string if missing."""
+    path = soul_file()
+    return safe_read_text(path) if path.exists() else ""
+
+
+def read_soul_summary() -> str:
+    """Extract ## Summary section only — max ~300 tokens for sessionstart injection.
+
+    HTML template comments (<!-- ... -->) are stripped before returning.
+    Returns empty string if SOUL.md missing or has no ## Summary section.
+    """
+    content = read_soul()
+    if not content:
+        return ""
+    for block in content.split("##"):
+        stripped = block.strip()
+        if stripped.lower().startswith("summary"):
+            clean = re.sub(r"<!--.*?-->", "", stripped, flags=re.DOTALL)
+            lines = [ln for ln in clean.splitlines() if ln.strip()]
+            return "## " + "\n".join(lines).strip()
+    return ""
+
+
+def daemon_config_file() -> "Path":
+    return hive_dir() / "daemon.json"
+
+
+def daemon_state_file() -> "Path":
+    return hive_dir() / ".daemon-state.json"
+
+
+def daemon_pid_file() -> "Path":
+    return hive_dir() / ".daemon.pid"
+
+
+def read_daemon_config() -> dict:
+    path = daemon_config_file()
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def read_daemon_state() -> dict:
+    path = daemon_state_file()
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def write_daemon_state(state: dict) -> None:
+    """Atomic write via temp-rename."""
+    path = daemon_state_file()
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(state, indent=2))
+    tmp.replace(path)
+
+
+def daemon_task_enabled(task_name: str) -> bool:
+    config = read_daemon_config()
+    return config.get("tasks", {}).get(task_name, {}).get("enabled", False)
+
+
+def pending_improvements_file() -> "Path":
+    return hive_dir() / ".pending-improvements.json"
+
+
+def read_pending_improvements() -> list[dict]:
+    path = pending_improvements_file()
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def write_pending_improvements(items: list[dict]) -> None:
+    """Atomic write via temp-rename. Used by hive improve review to save remaining items."""
+    path = pending_improvements_file()
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(items, indent=2))
+    tmp.replace(path)
+
+
+def append_pending_improvements(new_items: list[dict]) -> None:
+    """Append new proposals to the queue with proposed_at timestamps. Atomic write.
+
+    Never replaces existing items — queue accumulates until user reviews.
+    """
+    existing = read_pending_improvements()
+    now_iso = datetime.now().isoformat()
+    for item in new_items:
+        item["proposed_at"] = now_iso
+    all_items = existing + new_items
+    path = pending_improvements_file()
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(all_items, indent=2))
+    tmp.replace(path)
+
+
+def dismissed_improvements_file() -> "Path":
+    return hive_dir() / ".dismissed-improvements.json"
+
+
+def read_dismissed_improvements() -> list[dict]:
+    path = dismissed_improvements_file()
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def append_dismissed_improvements(dismissed_items: list[dict]) -> None:
+    """Record items the user explicitly skipped/dismissed in hive improve review.
+
+    Stores compact summary (type + name + dismissed_at). Rolling cap: 100 items max.
+    self-improve reads this to avoid re-proposing rejected work.
+    """
+    existing = read_dismissed_improvements()
+    now_iso = datetime.now().isoformat()
+    for item in dismissed_items:
+        existing.append({
+            "type": item.get("type", "?"),
+            "name": item.get("name", item.get("rule", ""))[:80],
+            "dismissed_at": now_iso,
+        })
+    # Rolling cap: keep most recent 100 dismissals
+    existing = existing[-100:]
+    path = dismissed_improvements_file()
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(existing, indent=2))
+    tmp.replace(path)
+
+
+# ---- BM25 recall ranking ----
+
+
+def _bm25_score(
+    query_terms: list[str],
+    doc_terms: list[str],
+    avg_dl: float,
+    k1: float = 1.5,
+    b: float = 0.75,
+) -> float:
+    """Single-document BM25 score. Standard Okapi BM25."""
+    import math
+
+    dl = len(doc_terms)
+    score = 0.0
+    term_freq: dict[str, int] = {}
+    for t in doc_terms:
+        term_freq[t] = term_freq.get(t, 0) + 1
+    for term in set(query_terms):
+        tf = term_freq.get(term, 0)
+        if tf == 0:
+            continue
+        # Simplified IDF: each doc either has the term or doesn't
+        idf = math.log(1 + 1.0)
+        tf_norm = (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / max(avg_dl, 1)))
+        score += idf * tf_norm
+    return score
+
+
+def rank_recall(query: str, entries: list[str]) -> list[str]:
+    """Rank entries by BM25 relevance to query. Returns entries sorted best-first.
+
+    Drop-in for anywhere we return a list of facts/entries. No new deps.
+    Falls back to original order if query is empty.
+    """
+    if not query.strip() or not entries:
+        return entries
+    query_terms = query.lower().split()
+    tokenized = [e.lower().split() for e in entries]
+    avg_dl = sum(len(t) for t in tokenized) / max(len(tokenized), 1)
+    scored = [
+        (_bm25_score(query_terms, doc_terms, avg_dl), entry)
+        for doc_terms, entry in zip(tokenized, entries)
+    ]
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [entry for _, entry in scored]
+
+
 def backup_and_write(path: Path, content: str) -> None:
     """Backup a file then atomically write new content.
 

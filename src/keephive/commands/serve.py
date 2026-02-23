@@ -1774,6 +1774,59 @@ def _get_knowledge_data() -> dict:
     return {"guides": guides, "prompts": prompts, "skills": skills}
 
 
+def _get_soul_data() -> dict:
+    import datetime
+    import re as _re
+
+    from keephive.storage import read_pending_improvements, read_soul, soul_file
+
+    content = read_soul()
+    last_modified = ""
+    sf = soul_file()
+    if sf.exists():
+        mtime = sf.stat().st_mtime
+        last_modified = datetime.datetime.fromtimestamp(mtime).strftime("%b %d")
+    pending_count = len(read_pending_improvements())
+    # Strip HTML template comments before storing (they're author hints, not content)
+    if content:
+        content = _re.sub(r"<!--.*?-->", "", content, flags=_re.DOTALL).strip()
+    return {"soul": content, "last_modified": last_modified, "pending_count": pending_count}
+
+
+def _render_soul_panel(data: dict) -> str:
+    soul = data.get("soul", "").strip()
+    last_mod = data.get("last_modified", "")
+    pending_count = data.get("pending_count", 0)
+    meta = f"updated {_e(last_mod)}" if last_mod else ""
+    if soul:
+        body = f'<div class="md">{render_md(soul)}</div>'
+    else:
+        body = (
+            '<div class="empty">'
+            "No SOUL.md yet. Run <code>hive setup</code> to meet KingBee."
+            "</div>"
+        )
+    pending_hint = ""
+    if pending_count:
+        pending_hint = (
+            f'<div class="kpi-row" style="margin-top:6px">'
+            f'<span style="color:#f0883e">🐝 {pending_count} '
+            f'improvement{"s" if pending_count != 1 else ""} pending</span>'
+            f'<code style="margin-left:8px">hive improve review</code>'
+            f"</div>"
+        )
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Agent Identity">'
+        f'<div class="card-header">'
+        f'<span class="card-title">🐝 Soul</span>'
+        f'<span class="card-meta">{meta}</span>'
+        f"</div>"
+        f"{_cmd_hints(['hive edit soul', 'hive daemon status'])}"
+        f'<div class="card-body">{body}{pending_hint}</div>'
+        f"</div>"
+    )
+
+
 def _get_memory_data() -> dict:
     from keephive.storage import read_memory, read_rules
 
@@ -4429,6 +4482,7 @@ PANELS: dict[str, tuple] = {
     "knowledge": (_get_knowledge_data, _render_knowledge_panel),
     "knowledge-limited": (_get_knowledge_data, _render_knowledge_limited_panel),
     "knowledge-compact": (_get_knowledge_data, _render_knowledge_compact_panel),
+    "soul": (_get_soul_data, _render_soul_panel),
     "memory": (_get_memory_data, _render_memory_panel),
     "notes": (_get_notes_data, _render_notes_panel),
     "notes-compact": (_get_notes_data, _render_notes_compact_panel),
@@ -4467,9 +4521,10 @@ VIEWS: dict[str, dict] = {
         "path": "/dev",
         "title": "Dev",
         "rows": [
+            ["soul", "memory"],
             ["status-brief"],
             ["todos-brief", "log-brief"],
-            ["facts", "memory"],
+            ["facts"],
             ["knowledge-compact"],
         ],
     },

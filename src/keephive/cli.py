@@ -75,6 +75,8 @@ _CANONICAL: dict[str, str] = {
     "rl": "rule",
     "ws": "serve",
     "pf": "profile",
+    "daemon": "daemon",
+    "improve": "improve",
 }
 
 # Command families: (display_label, description, shorthand, tracked_aliases)
@@ -343,6 +345,9 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "hook-stop": ("keephive.hooks.stop", "hook_stop"),
     "hook-sessionend": ("keephive.hooks.sessionend", "hook_sessionend"),
     "hook-taskcompleted": ("keephive.hooks.taskcompleted", "hook_taskcompleted"),
+    "daemon":      ("keephive.commands.daemon", "cmd_daemon"),
+    "daemon-loop": ("keephive.commands.daemon", "cmd_daemon_loop"),
+    "improve":     ("keephive.commands.improve", "cmd_improve"),
 }
 
 

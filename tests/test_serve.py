@@ -3005,19 +3005,18 @@ def test_home_view_log_before_standup():
 
 
 def test_dev_view_todos_log_before_knowledge_memory():
-    """Active content (todos, log) above static reference (knowledge, memory)."""
+    """Soul+memory form the identity row at top; todos above knowledge (reference)."""
     from keephive.commands.serve import VIEWS
 
     rows = VIEWS["dev"]["rows"]
     flat = [p for row in rows for p in row]
     todos_idx = flat.index("todos-brief")
-    log_idx = flat.index("log-brief")
     know_idx = flat.index("knowledge-compact")
-    mem_idx = flat.index("memory")
+    # soul+memory are intentionally first row (agent identity section)
+    # Active work (todos) must still appear above reference content (knowledge)
     assert todos_idx < know_idx, (
         f"todos-brief ({todos_idx}) should come before knowledge-compact ({know_idx})"
     )
-    assert log_idx < mem_idx, f"log-brief ({log_idx}) should come before memory ({mem_idx})"
 
 
 def test_consolidated_views_exist():

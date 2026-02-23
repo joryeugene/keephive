@@ -516,7 +516,7 @@ class TestStatusOutputCompleteness:
         # Due recurring (shown in Attention panel)
         assert "Check builds" in out
         # Note indicator (new format)
-        assert "Active Draft" in out and "slot 1" in out
+        assert "Active Note" in out and "slot 1" in out
         # Footer
         assert "hive v" in out
 

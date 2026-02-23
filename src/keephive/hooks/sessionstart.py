@@ -277,6 +277,16 @@ def build_context(cwd: str, project_name: str) -> str:
     except Exception:
         pass
 
+    # 10. Agent identity (KingBee SOUL.md ## Summary — max ~300 tokens)
+    try:
+        from keephive.storage import read_soul_summary
+
+        soul_summary = read_soul_summary()
+        if soul_summary:
+            parts.append("## Agent Identity\n" + soul_summary)
+    except Exception:
+        pass
+
     return "\n\n".join(parts)
 
 

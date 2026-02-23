@@ -1192,6 +1192,28 @@ def _display_full(data: dict) -> None:
         ctx_str = f"  [dim]{ctx}[/dim]" if ctx else ""
         console.print(f"  {meta['hint']:<10} {status}{ctx_str}")
 
+    # KingBee status line — shows last soul-update + pending improvement count
+    try:
+        import datetime
+
+        from keephive.storage import read_pending_improvements, soul_file
+
+        sf = soul_file()
+        pending_count = len(read_pending_improvements())
+        if sf.exists():
+            mtime = sf.stat().st_mtime
+            last_updated = datetime.datetime.fromtimestamp(mtime).strftime("%b %d %H:%M")
+            soul_line = f"  🐝 [dim]KingBee[/dim]  last updated {last_updated}"
+            if pending_count:
+                soul_line += (
+                    f"  ·  {pending_count} improvement{'s' if pending_count != 1 else ''}"
+                )
+                soul_line += "  [dim](hive improve review)[/dim]"
+            console.print()
+            console.print(soul_line)
+    except Exception:
+        pass
+
     show_hint("hive s", "live status")
 
 

@@ -8,6 +8,8 @@ No stdout output. Pure stats finalization.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 
 
@@ -38,5 +40,31 @@ def hook_sessionend(_args: list[str]) -> None:
         from keephive.storage import track_session_event
 
         track_session_event(session_id, "end", reason=reason)
+    except Exception:
+        pass
+
+    # Fire non-blocking KingBee tasks (soul-update always, self-improve weekly-throttled)
+    # Both default to enabled: true in daemon.json. Neither requires the daemon process.
+    # start_new_session=True detaches child from parent FDs — no stdout contamination.
+    try:
+        from keephive.storage import daemon_task_enabled
+
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+        if daemon_task_enabled("soul-update"):
+            subprocess.Popen(
+                [sys.executable, "-m", "keephive", "daemon", "run", "soul-update"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+                env=env,
+            )
+        if daemon_task_enabled("self-improve"):
+            subprocess.Popen(
+                [sys.executable, "-m", "keephive", "daemon", "run", "self-improve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+                env=env,
+            )
     except Exception:
         pass

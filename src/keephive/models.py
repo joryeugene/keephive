@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # ---- Verify ----
 
@@ -170,3 +170,65 @@ class DailySummaryResponse(BaseModel):
 
 class NoteExtractResponse(BaseModel):
     items: list[str]  # extracted action items from freeform text
+
+
+# ---- KingBee ----
+
+
+class MorningBriefingResponse(BaseModel):
+    content: str = Field(description="The morning briefing text, under 150 words")
+
+
+class StaleCheckResponse(BaseModel):
+    content: str = Field(description="Stale fact warnings, one per line, or 'Nothing stale'")
+
+
+class SoulUpdateResponse(BaseModel):
+    content: str = Field(description="Complete updated SOUL.md content")
+
+
+class ProposedSkill(BaseModel):
+    name: str = Field(description="Slug name for the skill guide, e.g. 'fast-git-summary'")
+    rationale: str = Field(description="Why this skill would help, with evidence from logs")
+    content: str = Field(description="Complete skill markdown content")
+
+
+class ProposedTask(BaseModel):
+    name: str = Field(description="Task identifier for daemon.json, e.g. 'weekly-git-activity'")
+    rationale: str = Field(description="Why this task would help, with evidence from logs")
+    config: dict = Field(description="daemon.json task config dict (enabled, time, day)")
+
+
+class ProposedRule(BaseModel):
+    rule: str = Field(description="Behavioral rule text for rules.md")
+    rationale: str = Field(description="Evidence from logs (N sessions showing this pattern)")
+
+
+class ProposedEdit(BaseModel):
+    """Refine, prune, or merge existing skills/tasks/rules based on observed usage."""
+
+    action: str = Field(description="'edit' | 'prune' | 'merge'")
+    target_type: str = Field(description="'skill' | 'task' | 'rule'")
+    target_name: str = Field(description="Name/slug of the existing item to modify")
+    rationale: str = Field(
+        description="Evidence from logs: why this edit improves things"
+    )
+    changes: str = Field(
+        description=(
+            "For edit: full updated content. "
+            "For prune: reason to remove. "
+            "For merge: merged full content combining both."
+        )
+    )
+    merge_with: str | None = Field(
+        default=None,
+        description="For merge: name of second item to combine with target_name",
+    )
+
+
+class ImprovementResponse(BaseModel):
+    proposed_skills: list[ProposedSkill] = Field(default_factory=list)
+    proposed_tasks: list[ProposedTask] = Field(default_factory=list)
+    proposed_rules: list[ProposedRule] = Field(default_factory=list)
+    proposed_edits: list[ProposedEdit] = Field(default_factory=list)
+    summary: str = Field(description="Brief summary of what patterns triggered these proposals")

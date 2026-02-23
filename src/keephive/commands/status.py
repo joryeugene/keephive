@@ -525,7 +525,7 @@ def _render_status() -> None:
         words = len(slot_text.split())
         flat = slot_text.replace("\n", " ")
         preview = flat[:40] + ("..." if len(flat) > 40 else "")
-        draft_line = f'slot {current_slot} \u00b7 "{preview}" ({words}w)'
+        draft_line = f'slot {current_slot} \u00b7 "{preview}" ({words} words)'
         filled = sum(
             1
             for n in range(1, NOTE_SLOT_COUNT + 1)
@@ -535,9 +535,9 @@ def _render_status() -> None:
         if filled > 1:
             from keephive.commands.note import _slot_bar
 
-            slot_parts.append(Text(_slot_bar()))
+            slot_parts.append(Text.from_markup(_slot_bar()))
         console.print(
-            Panel(Group(*slot_parts), title="Active Draft", border_style="dim", padding=(0, 1))
+            Panel(Group(*slot_parts), title="Active Note", border_style="dim", padding=(0, 1))
         )
 
     # ── Footer ────────────────────────────────────────────────────────

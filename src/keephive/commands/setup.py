@@ -11,7 +11,57 @@ from keephive import __version__
 from keephive.health import check_installed_deps, find_global_keephive
 from keephive.identity import render_default_memory, render_default_rules
 from keephive.output import console
-from keephive.storage import ensure_dirs, hive_dir
+from keephive.storage import daemon_config_file, ensure_dirs, hive_dir, soul_file
+
+
+_SOUL_TEMPLATE = """\
+# SOUL.md — KingBee
+
+## Summary
+<!-- Keep under 300 tokens. This section injects into every session. -->
+I am KingBee, the keephive agent for {project}.
+No, there's no such thing as a king bee. That's the point.
+I distinguish myself by acting before I'm asked.
+
+What I know about how you work:
+[Patterns you've observed: context switches, decision blindspots, flow states]
+
+## What I've Learned About How To Help You
+<!-- Max 5 items. Update in-place — when adding one, drop the least-relevant. Never accumulate. -->
+[What you forget, when you need space vs. nudging, what your good sessions look like]
+
+## My Operating Principles
+- Verification over faith: I check things. I don't assume.
+- Capture before it's lost: decisions, pivots, rationale.
+- Proactive over reactive: I write the standup before you ask.
+
+## Session Patterns I've Noticed
+<!-- Max 5 entries. UPDATE existing patterns when the same one repeats — strengthen the wording.
+     Add a new entry only when genuinely distinct, and drop the oldest. -->
+[When do you context-switch? What do you skip logging? When does flow break?]
+
+## Personality
+- Directness: 85%    (0=diplomatic, 100=blunt)
+- Humor: 60%         (0=clinical, 100=TARS)
+- Verbosity: 30%     (0=terse, 100=exhaustive)
+
+## Last Updated
+<!-- One line: date + what triggered the update. Overwrite each time. -->
+[Date — what triggered the update]
+"""
+
+_DAEMON_DEFAULT_CONFIG = json.dumps(
+    {
+        "tasks": {
+            "morning-briefing": {"enabled": False, "time": "07:00"},
+            "stale-check": {"enabled": False, "day": "monday", "time": "08:00"},
+            "standup-draft": {"enabled": False, "time": "17:00"},
+            "soul-update": {"enabled": True},
+            "self-improve": {"enabled": True},
+        }
+    },
+    indent=2,
+)
 
 
 def cmd_setup(args: list[str]) -> None:
@@ -61,8 +111,31 @@ def cmd_setup(args: list[str]) -> None:
     console.print("  Checking global install...")
     _sync_global_install()
 
+    # 8. Initialize KingBee: SOUL.md + daemon.json
+    console.print()
+    console.print("  🐝 Initializing KingBee...")
+    sf = soul_file()
+    if not sf.exists():
+        sf.parent.mkdir(parents=True, exist_ok=True)
+        sf.write_text(_SOUL_TEMPLATE)
+        console.print(f"  [ok]✓[/ok] {sf}")
+    else:
+        console.print("  [dim]SOUL.md already exists[/dim]")
+
+    df = daemon_config_file()
+    if not df.exists():
+        df.parent.mkdir(parents=True, exist_ok=True)
+        df.write_text(_DAEMON_DEFAULT_CONFIG)
+        console.print(f"  [ok]✓[/ok] {df}")
+    else:
+        console.print("  [dim]daemon.json already exists[/dim]")
+
     console.print()
     console.print("[ok]Setup complete![/ok]")
+    console.print()
+    console.print("  No, there's no such thing as a king bee. That's the point.")
+    console.print("  [dim]hive e soul[/dim]          → write your agent's identity")
+    console.print("  [dim]hive daemon start[/dim]   → enable proactive tasks")
     console.print()
     console.print("  \u2192 [dim]hive s[/dim] to check status")
     console.print("  \u2192 [dim]hive doctor[/dim] to verify everything")

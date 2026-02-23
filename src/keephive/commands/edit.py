@@ -15,6 +15,7 @@ from keephive.storage import (
     knowledge_dir,
     prompts_dir,
     slot_file,
+    soul_file,
     working_dir,
 )
 
@@ -27,6 +28,7 @@ def cmd_edit(args: list[str]) -> None:
         console.print("[bold]Edit targets:[/bold]")
         console.print("  memory     working/memory.md")
         console.print("  rules      working/rules.md")
+        console.print("  soul       SOUL.md — KingBee identity")
         console.print("  claude     nearest CLAUDE.md (walks up from cwd)")
         console.print("  settings   ~/.claude/settings.json")
         console.print("  local      ~/.claude/settings.local.json")
@@ -41,6 +43,7 @@ def cmd_edit(args: list[str]) -> None:
         "memory": working_dir() / "memory.md",
         "mem": working_dir() / "memory.md",
         "rules": working_dir() / "rules.md",
+        "soul": soul_file(),
         "note": slot_file(active_slot()),
         "draft": slot_file(active_slot()),
         "settings": Path.home() / ".claude" / "settings.json",
@@ -98,7 +101,7 @@ def cmd_edit(args: list[str]) -> None:
             return
 
     console.print(f"[err]File not found:[/err] {target}")
-    console.print("Shortcuts: memory, rules, claude, claude-root, settings, local, today")
+    console.print("Shortcuts: memory, rules, soul, claude, claude-root, settings, local, today")
 
 
 def _open_editor(editor: str, path: Path) -> None:
