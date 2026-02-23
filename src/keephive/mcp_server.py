@@ -19,6 +19,7 @@ from keephive.storage import (
     guides_dir,
     memory_file,
     open_todos,
+    rank_recall,
     safe_read_text,
     track_event,
 )
@@ -65,6 +66,11 @@ def hive_recall(query: str) -> str:
     results = _search_all_tiers(query)
     if not results:
         return f"No results for: {query}"
+
+    # Apply BM25 ranking to reorder results by query relevance
+    ranked_lines = rank_recall(query, [r["line"] for r in results])
+    line_to_result = {r["line"]: r for r in results}
+    results = [line_to_result[ln] for ln in ranked_lines if ln in line_to_result]
 
     lines = [f"Found {len(results)} result(s) for: {query}\n"]
     for r in results[:15]:

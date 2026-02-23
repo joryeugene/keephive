@@ -55,6 +55,24 @@ FRICTION_RULES: dict[str, str] = {
 _FRICTION_ANNOTATION_RE = re.compile(r"^\[\d+ sessions?: [^\]]+\]\s*")
 
 
+def _count_pending_facts() -> int:
+    """Return the number of pending facts in .pending-facts.md."""
+    from keephive.storage import hive_dir
+    path = hive_dir() / ".pending-facts.md"
+    if not path.exists():
+        return 0
+    return sum(1 for ln in path.read_text().splitlines() if ln.strip().startswith("- "))
+
+
+def _count_pending_rules() -> int:
+    """Return the number of pending rules in .pending-rules.md."""
+    from keephive.storage import hive_dir
+    path = hive_dir() / ".pending-rules.md"
+    if not path.exists():
+        return 0
+    return sum(1 for ln in path.read_text().splitlines() if ln.strip().startswith("- "))
+
+
 def cmd_mem(args: list[str]) -> None:
     """Show, add, or remove facts from working memory."""
     if args and args[0] == "review":

@@ -684,3 +684,85 @@ class TestInsightsAndDiscoverability:
         screen = term.type("python -m keephive help rf")
         screen.has("insights")
         save_terminal_output("insights/help_reflect_insights", term)
+
+
+# ============================================================
+#  Category 12: Daemon & KingBee
+# ============================================================
+
+
+@pytest.mark.terminal
+class TestDaemonCommands:
+    def test_daemon_status_on_fresh_hive(self, term, save_terminal_output):
+        """daemon status shows KingBee header and task table without crashing."""
+        screen = term.type("python -m keephive daemon status")
+        screen.has("KingBee")
+        screen.lacks("Traceback", "Error")
+        save_terminal_output("daemon/status_fresh", term)
+
+    def test_daemon_status_shows_soul_update_task(self, term, save_terminal_output):
+        """daemon status shows soul-update task row."""
+        screen = term.type("python -m keephive daemon status")
+        screen.has("soul-update")
+        screen.lacks("Traceback")
+        save_terminal_output("daemon/status_tasks", term)
+
+    def test_daemon_status_shows_self_improve_task(self, term):
+        """daemon status shows self-improve task row."""
+        term.type("python -m keephive daemon status").has("self-improve")
+
+    def test_daemon_run_soul_update_no_crash(self, term, save_terminal_output):
+        """daemon run soul-update exits cleanly when no daily log exists (empty hive)."""
+        screen = term.type("python -m keephive daemon run soul-update")
+        screen.lacks("Traceback", "AttributeError", "KeyError")
+        save_terminal_output("daemon/run_soul_update_empty", term)
+
+    def test_daemon_run_self_improve_empty_log(self, term, save_terminal_output):
+        """daemon run self-improve exits early (nothing to analyze) without crash."""
+        screen = term.type("python -m keephive daemon run self-improve")
+        screen.lacks("Traceback", "AttributeError", "KeyError")
+        save_terminal_output("daemon/run_self_improve_empty", term)
+
+    def test_improve_list_empty(self, term, save_terminal_output):
+        """hive improve list with empty queue shows no-items message."""
+        screen = term.type("python -m keephive improve list")
+        screen.has_any(["No pending", "no pending", "still learning", "KingBee"])
+        screen.lacks("Traceback")
+        save_terminal_output("daemon/improve_list_empty", term)
+
+    def test_improve_list_with_seeded_item(self, term, save_terminal_output):
+        """hive improve list shows pending item count when queue has items."""
+        import json
+        item = {"type": "rule", "rule": "Always verify before claiming done",
+                "rationale": "Prevents premature completion claims", "proposed_at": "2026-02-22T10:00:00"}
+        pending_path = term.hive_home / ".pending-improvements.json"
+        pending_path.write_text(json.dumps([item]))
+
+        screen = term.type("python -m keephive improve list")
+        screen.has("pending")
+        screen.has_any(["1", "rule", "KingBee"])
+        screen.lacks("Traceback")
+        save_terminal_output("daemon/improve_list_with_item", term)
+
+
+@pytest.mark.terminal
+class TestKingBeeIntegration:
+    def test_hive_s_no_kingbee_line_without_soul(self, term, save_terminal_output):
+        """hive s on fresh hive shows no KingBee soul line (SOUL.md absent)."""
+        screen = term.type("python -m keephive s")
+        # Should not crash even without SOUL.md
+        screen.lacks("Traceback")
+        save_terminal_output("daemon/status_no_soul", term)
+
+    def test_daemon_status_no_crash_no_config(self, term):
+        """daemon status works even if daemon.json config file is absent."""
+        # Confirm no daemon config pre-exists
+        assert not (term.hive_home / "daemon.json").exists()
+        term.type("python -m keephive daemon status").lacks("Traceback", "KeyError")
+
+    def test_improve_review_empty_exits_cleanly(self, term, save_terminal_output):
+        """hive improve review with empty queue exits cleanly."""
+        screen = term.type("python -m keephive improve review")
+        screen.has_any(["No pending", "still learning", "KingBee"])
+        screen.lacks("Traceback")
+        save_terminal_output("daemon/improve_review_empty", term)

@@ -50,6 +50,15 @@ class Screen:
             )
         return self
 
+    def has_any(self, texts: list[str]) -> "Screen":
+        """Assert at least one of the texts appears in output."""
+        for t in texts:
+            if t in self.plain:
+                return self
+        raise AssertionError(
+            f"Expected at least one of {texts!r} in output of `{self.command}`:\n{self.plain}"
+        )
+
     def has_ansi(self) -> "Screen":
         """Assert ANSI escape codes are present."""
         assert "\x1b[" in self.ansi, f"No ANSI codes in output of `{self.command}`"

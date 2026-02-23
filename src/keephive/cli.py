@@ -25,6 +25,7 @@ HELP: dict[str, str] = {
     "standup": "Usage: hive su\n  Generate standup summary from daily logs + GitHub PRs\n  Uses LLM for formatting. Copies to clipboard.",
     "stats": "Usage: hive st [-p <project>] [date]\n  Usage statistics. Date: today, N (days ago), YYYY-MM-DD",
     "mem": "Usage: hive m [rm|review] <text>\n  Add or remove working memory facts\n  hive m <text>      Add fact to memory.md\n  hive m rm <pat>    Remove line matching pattern\n  hive m review      Review pending auto-captured facts",
+    "flow": "Usage: hive flow [--skip-verify]\n  Guided maintenance flow: review pending facts, rules, improvements, then verify\n  --skip-verify  Skip the LLM verify stage",
     "rule": "Usage: hive rule [rm|review|learn] <text>  (alias: rl = rule learn)\n  Add or remove behavioral rules\n  hive rule <text>      Add rule\n  hive rule rm <pat>    Remove matching rule\n  hive rule review      Review pending rule suggestions\n  hive rule learn       Learn rules from /insights friction data\n  hive rule learn --dry-run   Preview without queuing\n  hive rl               Shortcut for 'hive rule learn'",
     "session": "Usage: hive go [mode|prompt]\n  Modes: todo, verify, learn, reflect\n  Or load a custom prompt from knowledge/prompts/",
     "skill": "Usage: hive sk [publish <name>|unpublish <name>|sync|find <q>]\n  Manage skill plugins",
@@ -77,6 +78,7 @@ _CANONICAL: dict[str, str] = {
     "pf": "profile",
     "daemon": "daemon",
     "improve": "improve",
+    "flow": "flow",
 }
 
 # Command families: (display_label, description, shorthand, tracked_aliases)
@@ -94,6 +96,7 @@ _CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
     ("prompt [name]", "Prompt templates", "p", {"p", "prompt", "pe"}),
     ("reflect", "Find patterns in logs", "rf", {"rf", "reflect"}),
     ("audit [-v]", "Quality analysis", "a", {"a", "audit"}),
+    ("flow [--skip-verify]", "Guided maintenance run", "", {"flow"}),
     ("go [mode]", "Launch session", "go", {"go", "sesh", "session"}),
     ("stats [-p path]", "Usage + pipeline health", "st", {"st", "stats"}),
     ("mem [rm] <text>", "Add/remove working memory", "m", {"m", "mem"}),
@@ -186,6 +189,7 @@ Usage: hive <command> [args]
     status            Status at a glance                s
     reflect           Find patterns in logs             rf
     audit [-v]        Quality analysis                  a
+    flow              Guided maintenance run
     go [mode]         Launch session                    go
     stats [-p path]   Usage + pipeline health           st
     log [date]        View daily log                    l
@@ -348,6 +352,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "daemon":      ("keephive.commands.daemon", "cmd_daemon"),
     "daemon-loop": ("keephive.commands.daemon", "cmd_daemon_loop"),
     "improve":     ("keephive.commands.improve", "cmd_improve"),
+    "flow":        ("keephive.commands.flow", "cmd_flow"),
 }
 
 

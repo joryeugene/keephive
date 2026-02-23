@@ -10,8 +10,8 @@
 
 <table><tr>
 <td>
-  <h3>A knowledge sidecar for Claude Code</h3>
-  <p>It captures what you learn, verifies it stays true, and surfaces it when relevant.</p>
+  <h3>A knowledge sidecar for AI agents</h3>
+  <p>Claude Code gets the full hook stack; every MCP-aware agent can tap the same memory, log, and audit tools.</p>
 </td>
 <td align="center">
   <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/mascot.png" width="240" alt="keephive mascot" />
@@ -21,10 +21,13 @@
 ## TLDR
 
 1. **Install**: `curl -fsSL https://raw.githubusercontent.com/joryeugene/keephive/main/install.sh | bash`
-2. **Use Claude Code normally.** Seven hooks run automatically: they capture what you learn, inject it next session, and flag when facts go stale.
+2. **Connect your agent.** Claude Code discovers seven hooks automatically. Any MCP client can run `keephive mcp-serve` and call the same tools.
 3. **Look around**: `hive status` (`h s`), `hive log` (`h l`), `hive todo`
 4. **Visual overview**: `hive serve` (`h ws`) opens a browser dashboard at localhost:3847
 5. **Periodic cleanup**: `hive verify` (`h v`), `hive reflect` (`h rf`), `hive audit` (`h a`)
+
+> [!NOTE]
+> Not on Claude Code? Run `keephive mcp-serve`, point your MCP-compatible agent at the stdio endpoint, and you still get memory, recall, audit, and dashboard tooling.
 
 Everything else on this page is optional depth.
 
@@ -170,11 +173,13 @@ uv tool upgrade keephive   # manual alternative; run keephive setup after
 
 ## How it works
 
-keephive uses the three extension points Claude Code exposes:
+keephive ships two integration layers:
 
-1. **Hooks** fire on events (session start, conversation compact, user prompt). They capture insights and inject context without any agent action.
-2. **MCP server** gives Claude Code native tool access (`hive_remember`, `hive_recall`, etc.) so the agent can read and write memory directly.
-3. **Context injection** surfaces verified facts, behavioral rules, stale warnings, matching knowledge guides, open TODOs, and cross-project activity hints at the start of every session via the SessionStart hook's `additionalContext` field.
+1. **Agent-agnostic CLI + MCP server.** Every `hive` command is available over stdio via `keephive mcp-serve`, so any MCP-compatible agent can capture, recall, verify, and audit without touching the Claude stack.
+2. **Claude Code hook suite (batteries included).** When you use Claude Code, keephive plugs into its lifecycle hooks to automate the busywork. The hook layer relies on three Claude-specific extension points:
+   - **Hooks** fire on events (session start, conversation compact, user prompt) to capture insights and inject context automatically.
+   - **MCP server** gives Claude Code native tool access (`hive_remember`, `hive_recall`, etc.) so the agent can read and write memory directly.
+   - **Context injection** surfaces verified facts, behavioral rules, stale warnings, matching knowledge guides, open TODOs, and cross-project activity hints at the start of every session via the SessionStart hook's `additionalContext` field.
 
 ### The loop
 
@@ -190,6 +195,8 @@ keephive uses the three extension points Claude Code exposes:
 - **Correct**: Invalid facts get replaced with corrected versions. Valid facts get re-stamped. Uncertain facts get flagged for human review.
 
 ### Architecture
+
+The diagram below shows the Claude Code integration path; MCP-only clients reuse the same knowledge store and tools without the hook cycle.
 
 ```mermaid
 flowchart TD
@@ -271,6 +278,26 @@ flowchart TD
 | Stop             | Agent turn ends       | Increments turn counter, periodic micro-nudge          |
 | SessionEnd       | Session terminates    | Finalizes session stats with accurate end timestamp    |
 | TaskCompleted    | Task marked done      | Auto-logs DONE entry to daily log                      |
+
+### Use it with other MCP clients
+
+1. `keephive mcp-serve` — starts the stdio server. Leave it running (or supervise it via your agent's process manager).
+2. Add an MCP entry to your client. Most configs look like:
+
+   ```json
+   {
+     "mcpServers": {
+       "keephive": {
+         "command": "keephive",
+         "args": ["mcp-serve"]
+       }
+     }
+   }
+   ```
+
+3. Call the tools you need (`hive_recall`, `hive_status`, `hive_todo`, `hive_audit`, etc.). They match the CLI one-for-one, so scripts and agents can share the same workflows.
+
+If your agent exposes lifecycle hooks (session start, prompt submit, completion), map them to the same `hive` commands the Claude integration uses: call `hive remember`/`hive todo` to capture, `hive status` or `hive recall` before prompts, `hive verify` on a schedule. You get the same knowledge loop without depending on Claude Code internals.
 
 ---
 

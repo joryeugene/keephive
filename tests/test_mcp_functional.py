@@ -266,3 +266,33 @@ class TestMcpCrossToolWorkflow:
         hive_status()
         # After completing the only TODO, either no TODO section or 0 open
         # (depends on whether other TODOs exist from fixture)
+
+
+class TestHiveRecallBM25:
+    def test_recall_ranks_relevant_result_first(self, hive_env):
+        """BM25 ranking puts the most relevant result first."""
+        from keephive.storage import rank_recall
+
+        # rank_recall is deterministic and pure - no need for full MCP setup
+        entries = [
+            "- Django is a Python web framework for rapid development",
+            "- PostgreSQL uses MVCC for concurrent transactions",
+            "- Redis is an in-memory data structure store",
+        ]
+        ranked = rank_recall("PostgreSQL transactions", entries)
+        # PostgreSQL entry should rank first
+        assert "PostgreSQL" in ranked[0]
+
+    def test_rank_recall_empty_query_preserves_order(self, hive_env):
+        """rank_recall with empty query preserves original order."""
+        from keephive.storage import rank_recall
+
+        entries = ["first entry", "second entry", "third entry"]
+        result = rank_recall("", entries)
+        assert result == entries
+
+    def test_rank_recall_empty_entries(self, hive_env):
+        """rank_recall with empty list returns empty list."""
+        from keephive.storage import rank_recall
+
+        assert rank_recall("query", []) == []
