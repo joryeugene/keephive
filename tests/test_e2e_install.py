@@ -3,8 +3,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-
-from .terminal import Terminal
+from terminal import Terminal
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("HIVE_RUN_INSTALL_E2E") != "1",
