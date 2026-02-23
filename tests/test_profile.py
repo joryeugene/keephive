@@ -32,6 +32,7 @@ def profile_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     # Patch _claude_dir to use our temp dir
     monkeypatch.setattr("keephive.storage._claude_dir", lambda: claude_dir)
+    monkeypatch.setattr("keephive.storage._keephive_dir", lambda: claude_dir)
     # Clear HIVE_HOME so profiles are active
     monkeypatch.delenv("HIVE_HOME", raising=False)
     # Clear any existing profile file

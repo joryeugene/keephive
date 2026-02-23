@@ -153,14 +153,16 @@ def test_import_with_profile(transfer_env, tmp_path, monkeypatch):
     # Import into new profile
     claude_dir = tmp_path / ".claude"
     claude_dir.mkdir()
+    keephive_dir = tmp_path / ".keephive"
     monkeypatch.setattr("keephive.storage._claude_dir", lambda: claude_dir)
+    monkeypatch.setattr("keephive.storage._keephive_dir", lambda: keephive_dir)
     monkeypatch.delenv("HIVE_HOME", raising=False)
     monkeypatch.setattr("keephive.output.prompt_yn", lambda *a, **kw: True)
 
     cmd_import([out_path, "--profile", "imported"])
 
     # Verify profile directory was created with data
-    imported_dir = claude_dir / "hive-imported"
+    imported_dir = keephive_dir / "hive-imported"
     assert imported_dir.exists()
     assert (imported_dir / "working" / "memory.md").exists()
 

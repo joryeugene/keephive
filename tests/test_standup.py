@@ -188,6 +188,7 @@ class TestStandupDataGathering:
         monkeypatch.setattr(
             "subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError)
         )
+        monkeypatch.setenv("HIVE_DATE", "2026-01-21")
         make_daily(
             hive_env,
             3,

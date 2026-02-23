@@ -3044,10 +3044,10 @@ def test_dev_view_todos_log_before_knowledge_memory():
 
 
 def test_consolidated_views_exist():
-    """After consolidation, exactly 5 views exist: home, dev, know, stats, settings."""
+    """View registry stays in sync with expected navigation tabs."""
     from keephive.commands.serve import VIEWS
 
-    assert set(VIEWS.keys()) == {"home", "dev", "know", "stats", "settings"}
+    assert set(VIEWS.keys()) == {"home", "dev", "brain", "know", "stats", "settings"}
 
 
 # ---- Notes compact panel ----

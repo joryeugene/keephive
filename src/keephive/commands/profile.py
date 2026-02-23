@@ -13,6 +13,7 @@ from keephive.storage import (
     hive_dir,
     list_profiles,
     profile_dir,
+    profile_exists,
     set_active_profile,
 )
 
@@ -94,12 +95,12 @@ def _use_profile(name: str) -> None:
         console.print(f"[dim]Data: {hive_dir()}[/dim]")
         return
 
-    target = profile_dir(name)
-    if not target.exists():
+    if not profile_exists(name):
         console.print(f"[red]Profile '{name}' does not exist. Create it first:[/red]")
         console.print(f"  hive profile create {name}")
         sys.exit(1)
 
+    target = profile_dir(name)
     set_active_profile(name)
     console.print(f"[green]Switched to profile: {name}[/green]")
     console.print(f"[dim]Data: {hive_dir()}[/dim]")
@@ -116,11 +117,12 @@ def _create_profile(name: str, seed: bool = False) -> None:
         console.print("[red]Cannot create 'default' profile (it already exists)[/red]")
         sys.exit(1)
 
-    target = profile_dir(name)
-    if target.exists():
+    if profile_exists(name):
+        target = profile_dir(name)
         console.print(f"[yellow]Profile '{name}' already exists at {target}[/yellow]")
         return
 
+    target = profile_dir(name)
     # Create directory structure
     target.mkdir(parents=True, exist_ok=True)
     # Temporarily switch to new profile to use ensure_dirs

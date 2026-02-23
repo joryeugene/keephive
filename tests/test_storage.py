@@ -1389,60 +1389,85 @@ class TestActiveProfile:
 
     def test_no_profile_file(self, tmp_path, monkeypatch):
         monkeypatch.delenv("HIVE_HOME", raising=False)
-        from keephive.storage import _claude_dir, active_profile
+        keephive_dir = tmp_path / ".keephive"
+        claude_dir = tmp_path / ".claude"
+        monkeypatch.setattr("keephive.storage._keephive_dir", lambda: keephive_dir)
+        monkeypatch.setattr("keephive.storage._claude_dir", lambda: claude_dir)
+        import keephive.storage as storage
 
-        # Ensure no profile file
-        pf = _claude_dir() / ".hive-profile"
-        if pf.exists():
-            pf.unlink()
+        for base in (keephive_dir, claude_dir):
+            marker = base / ".hive-profile"
+            marker.unlink(missing_ok=True)
 
-        assert active_profile() is None
+        assert storage.active_profile() is None
 
     def test_empty_profile_file(self, tmp_path, monkeypatch):
         monkeypatch.delenv("HIVE_HOME", raising=False)
-        from keephive.storage import _claude_dir, active_profile
+        keephive_dir = tmp_path / ".keephive"
+        claude_dir = tmp_path / ".claude"
+        monkeypatch.setattr("keephive.storage._keephive_dir", lambda: keephive_dir)
+        monkeypatch.setattr("keephive.storage._claude_dir", lambda: claude_dir)
+        import keephive.storage as storage
 
-        pf = _claude_dir() / ".hive-profile"
-        pf.parent.mkdir(parents=True, exist_ok=True)
-        pf.write_text("")
+        marker = keephive_dir / ".hive-profile"
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text("")
 
-        result = active_profile()
+        result = storage.active_profile()
         assert result is None
 
 
 class TestSetActiveProfile:
     def test_set_and_read(self, tmp_path, monkeypatch):
         monkeypatch.delenv("HIVE_HOME", raising=False)
-        from keephive.storage import _claude_dir, set_active_profile
+        keephive_dir = tmp_path / ".keephive"
+        claude_dir = tmp_path / ".claude"
+        monkeypatch.setattr("keephive.storage._keephive_dir", lambda: keephive_dir)
+        monkeypatch.setattr("keephive.storage._claude_dir", lambda: claude_dir)
+        import keephive.storage as storage
 
-        pf = _claude_dir() / ".hive-profile"
+        pf = keephive_dir / ".hive-profile"
         pf.parent.mkdir(parents=True, exist_ok=True)
 
-        set_active_profile("work")
+        storage.set_active_profile("work")
         assert pf.read_text() == "work"
+        assert not (claude_dir / ".hive-profile").exists()
 
     def test_clear_profile(self, tmp_path, monkeypatch):
         monkeypatch.delenv("HIVE_HOME", raising=False)
-        from keephive.storage import _claude_dir, set_active_profile
+        keephive_dir = tmp_path / ".keephive"
+        claude_dir = tmp_path / ".claude"
+        monkeypatch.setattr("keephive.storage._keephive_dir", lambda: keephive_dir)
+        monkeypatch.setattr("keephive.storage._claude_dir", lambda: claude_dir)
+        import keephive.storage as storage
 
-        pf = _claude_dir() / ".hive-profile"
+        pf = keephive_dir / ".hive-profile"
         pf.parent.mkdir(parents=True, exist_ok=True)
         pf.write_text("work")
 
-        set_active_profile(None)
+        storage.set_active_profile(None)
         assert not pf.exists()
+        assert not (claude_dir / ".hive-profile").exists()
 
 
 class TestProfileDir:
-    def test_default_profile(self):
-        from keephive.storage import profile_dir
+    def test_default_profile(self, tmp_path, monkeypatch):
+        keephive_dir = tmp_path / ".keephive"
+        claude_dir = tmp_path / ".claude"
+        monkeypatch.setattr("keephive.storage._keephive_dir", lambda: keephive_dir)
+        monkeypatch.setattr("keephive.storage._claude_dir", lambda: claude_dir)
+        import keephive.storage as storage
 
-        assert profile_dir("default") == Path.home() / ".claude" / "hive"
+        assert storage.profile_dir("default") == keephive_dir / "hive"
 
-    def test_named_profile(self):
-        from keephive.storage import profile_dir
+    def test_named_profile(self, tmp_path, monkeypatch):
+        keephive_dir = tmp_path / ".keephive"
+        claude_dir = tmp_path / ".claude"
+        monkeypatch.setattr("keephive.storage._keephive_dir", lambda: keephive_dir)
+        monkeypatch.setattr("keephive.storage._claude_dir", lambda: claude_dir)
+        import keephive.storage as storage
 
-        assert profile_dir("work") == Path.home() / ".claude" / "hive-work"
+        assert storage.profile_dir("work") == keephive_dir / "hive-work"
 
 
 class TestListProfiles:
