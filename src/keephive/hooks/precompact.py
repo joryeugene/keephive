@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -91,6 +92,25 @@ def hook_precompact(args: list[str]) -> None:
     project_name = Path(cwd).name if cwd else ""
     if excerpts and not os.environ.get("HIVE_SKIP_LLM"):
         _llm_summary(excerpts, project_name=project_name)
+
+    # Fire soul-update in background after new session content is captured.
+    # PreCompact is the primary trigger for long sessions — soul-update has a
+    # 1-hour throttle inside _task_soul_update() to prevent redundant runs.
+    if excerpts:
+        try:
+            from keephive.storage import daemon_task_enabled
+
+            if daemon_task_enabled("soul-update"):
+                env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+                subprocess.Popen(
+                    [sys.executable, "-m", "keephive", "daemon", "run", "soul-update"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                    env=env,
+                )
+        except Exception:
+            pass
 
 
 def _find_transcript(input_data: dict) -> str | None:

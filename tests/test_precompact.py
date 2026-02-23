@@ -1279,3 +1279,126 @@ class TestAutoCloseTodos:
 
         assert "open_todos" in captured_prompt["text"]
         assert "Deploy the staging environment" in captured_prompt["text"]
+
+
+class TestPreCompactFiresSoulUpdate:
+    """hook_precompact spawns soul-update Popen when daemon task is enabled and insights captured."""
+
+    def test_popen_called_with_soul_update_when_enabled(self, hive_env, monkeypatch):
+        """hook_precompact spawns 'daemon run soul-update' subprocess when soul-update is enabled.
+
+        Bug caught: soul-update only fired at SessionEnd — long sessions never
+        updated SOUL.md. PreCompact is now the primary trigger for mid-session updates.
+        """
+        import io
+
+        from keephive.storage import daemon_config_file
+
+        # Enable soul-update in daemon.json
+        daemon_config_file().write_text(
+            json.dumps({"tasks": {"soul-update": {"enabled": True}}})
+        )
+
+        popen_calls: list[list[str]] = []
+
+        def mock_popen(cmd, **kwargs):
+            popen_calls.append(list(cmd))
+            from unittest.mock import MagicMock
+
+            return MagicMock()
+
+        monkeypatch.setattr("subprocess.Popen", mock_popen)
+
+        # Build transcript with user content that Layer 1 will extract
+        transcript = _make_transcript(
+            hive_env,
+            [
+                _user_msg("We decided to migrate the database from Postgres to SQLite for local dev."),
+                _asst_msg("That makes sense — SQLite removes the Docker dependency for local dev setup."),
+            ],
+        )
+        input_data = json.dumps(
+            {"trigger": "manual", "cwd": str(hive_env), "transcript_path": transcript}
+        )
+        monkeypatch.setattr("sys.stdin", io.StringIO(input_data))
+
+        from keephive.hooks.precompact import hook_precompact
+
+        hook_precompact([])
+
+        soul_update_calls = [c for c in popen_calls if "daemon" in c and "soul-update" in c]
+        assert soul_update_calls, (
+            f"Expected Popen call with 'daemon run soul-update', got: {popen_calls}"
+        )
+
+    def test_popen_not_called_when_soul_update_disabled(self, hive_env, monkeypatch):
+        """hook_precompact does NOT spawn soul-update when task is disabled."""
+        import io
+
+        from keephive.storage import daemon_config_file
+
+        daemon_config_file().write_text(
+            json.dumps({"tasks": {"soul-update": {"enabled": False}}})
+        )
+
+        popen_calls: list[list[str]] = []
+
+        def mock_popen(cmd, **kwargs):
+            popen_calls.append(list(cmd))
+            from unittest.mock import MagicMock
+
+            return MagicMock()
+
+        monkeypatch.setattr("subprocess.Popen", mock_popen)
+
+        transcript = _make_transcript(
+            hive_env,
+            [_user_msg("Decided to use TypeScript for all new services going forward.")],
+        )
+        input_data = json.dumps(
+            {"trigger": "manual", "cwd": str(hive_env), "transcript_path": transcript}
+        )
+        monkeypatch.setattr("sys.stdin", io.StringIO(input_data))
+
+        from keephive.hooks.precompact import hook_precompact
+
+        hook_precompact([])
+
+        soul_update_calls = [c for c in popen_calls if "daemon" in c and "soul-update" in c]
+        assert not soul_update_calls, "soul-update should NOT fire when disabled in daemon.json"
+
+    def test_popen_not_called_when_no_excerpts(self, hive_env, monkeypatch):
+        """hook_precompact does NOT spawn soul-update when no new content was extracted.
+
+        The gate condition prevents wasteful LLM calls when PreCompact runs
+        but finds no new content (e.g., hash-dedup already captured it).
+        """
+        import io
+
+        from keephive.storage import daemon_config_file
+
+        daemon_config_file().write_text(
+            json.dumps({"tasks": {"soul-update": {"enabled": True}}})
+        )
+
+        popen_calls: list[list[str]] = []
+
+        def mock_popen(cmd, **kwargs):
+            popen_calls.append(list(cmd))
+            from unittest.mock import MagicMock
+
+            return MagicMock()
+
+        monkeypatch.setattr("subprocess.Popen", mock_popen)
+
+        # Empty input — no transcript, no excerpts
+        monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"trigger": "manual"})))
+
+        from keephive.hooks.precompact import hook_precompact
+
+        hook_precompact([])
+
+        soul_update_calls = [c for c in popen_calls if "daemon" in c and "soul-update" in c]
+        assert not soul_update_calls, (
+            "soul-update should NOT fire when no excerpts were captured"
+        )

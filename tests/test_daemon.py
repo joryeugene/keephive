@@ -246,6 +246,62 @@ class TestSelfImproveThrottles:
         assert len(read_pending_improvements()) == 20
 
 
+class TestSoulUpdateThrottle:
+    """_task_soul_update() respects its 1-hour time throttle."""
+
+    def test_skips_when_run_within_1_hour(self, hive_env):
+        """_task_soul_update() exits immediately when last_run < 1 hour ago.
+
+        Bug caught: soul-update running multiple times per session when
+        PreCompact fires frequently — wastes LLM calls and produces noise.
+        """
+        from keephive.commands.daemon import _task_soul_update
+        from keephive.storage import read_daemon_state, write_daemon_state
+
+        # Set last_run to 30 minutes ago
+        thirty_min_ago = (datetime.now() - timedelta(minutes=30)).isoformat()
+        write_daemon_state({"soul-update": {"last_run": thirty_min_ago}})
+
+        _task_soul_update()
+
+        # last_run must NOT be updated — task was skipped by throttle
+        state = read_daemon_state()
+        assert state["soul-update"]["last_run"] == thirty_min_ago
+
+    def test_runs_when_older_than_1_hour(self, hive_env, monkeypatch):
+        """_task_soul_update() runs when last_run > 1 hour ago (throttle not triggered).
+
+        Confirms the 1-hour gate only blocks recent runs, not older ones.
+        """
+        from unittest.mock import MagicMock
+
+        from keephive.commands.daemon import _task_soul_update
+        from keephive.storage import append_to_daily, ensure_daily, write_daemon_state
+
+        # Set last_run to 2 hours ago
+        two_hours_ago = (datetime.now() - timedelta(hours=2)).isoformat()
+        write_daemon_state({"soul-update": {"last_run": two_hours_ago}})
+
+        # Write today's log so the empty-log early-exit doesn't trigger
+        ensure_daily()
+        append_to_daily("- FACT: test entry for throttle test")
+
+        # Mock run_claude_pipe to capture call without hitting real LLM
+        llm_called = []
+        mock_result = MagicMock()
+        mock_result.content = "# SOUL.md\n## Summary\nThrottle bypassed."
+
+        def mock_pipe(prompt, model_class, **kwargs):
+            llm_called.append(prompt)
+            return mock_result
+
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", mock_pipe)
+
+        _task_soul_update()
+
+        assert llm_called, "Expected LLM call — 1-hour throttle should not have blocked this"
+
+
 class TestSessionendFiresSoulUpdate:
     """sessionend fires a non-blocking subprocess for soul-update when enabled."""
 

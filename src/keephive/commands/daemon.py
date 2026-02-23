@@ -399,7 +399,17 @@ def _task_soul_update() -> None:
     """Read today's log. Update SOUL.md ## Summary + ## Session Patterns.
 
     Does exactly one thing: update SOUL.md. Self-improve is a separate process.
+    Throttled: max once per hour (PreCompact fires this mid-session; SessionEnd
+    fires it at exit — without throttle a long session would run it many times).
     """
+    # Throttle: max once per hour across all callers (PreCompact + SessionEnd)
+    state = read_daemon_state()
+    last_run_str = state.get("soul-update", {}).get("last_run")
+    if last_run_str:
+        last_run_dt = datetime.fromisoformat(last_run_str)
+        if (datetime.now() - last_run_dt) < timedelta(hours=1):
+            return
+
     from keephive.claude import ClaudePipeError, run_claude_pipe
     from keephive.clock import get_today
     from keephive.models import SoulUpdateResponse
