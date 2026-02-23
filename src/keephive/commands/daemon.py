@@ -138,7 +138,7 @@ def _status() -> None:
     table.add_row(
         "soul-update",
         f"✓ ran {_fmt_run(su_last)}" if su_last else "never run",
-        "hooks → fires on session end",
+        "PreCompact (if data) + SessionEnd",
     )
     table.add_row(
         "self-improve",

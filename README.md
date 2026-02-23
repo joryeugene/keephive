@@ -248,6 +248,7 @@ flowchart TD
         BRIEF["morning briefing"]
         IMPROVE[(".pending-improvements")]
         STALECK["stale-check scan"]
+        STANDUP["standup-draft"]
     end
 
     subgraph CC["Claude Code Data (~/.keephive/usage-data/)"]
@@ -268,7 +269,7 @@ flowchart TD
     START -->|reads| STORE
     PC --> LOG
     PC --> PENDING
-    PC -->|"soul-update (throttled 1h)"| SOUL
+    PC -->|"soul-update (if data, throttled 1h)"| SOUL
     PC -.->|LLM classify| LLM
     VRF -.->|LLM verify| LLM
     LOG -->|"hive rf · promote"| MEM
@@ -284,10 +285,12 @@ flowchart TD
     STCMD -.->|"session analytics"| CC
     STCMD -.->|"workflow analytics"| STORE
     SEND -.->|".stats.json"| STATS
+    SEND -.->|"soul-update + self-improve<br>(non-blocking, if enabled)"| SOUL
     DAEMON -->|reads/writes| STORE
     DAEMON --> BRIEF
     DAEMON --> IMPROVE
     DAEMON --> STALECK
+    DAEMON --> STANDUP
 
     classDef ccdata fill:#1a1a2e,stroke:#4a9eff,stroke-width:2px,color:#4a9eff
     class META,FACETS ccdata
