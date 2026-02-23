@@ -180,6 +180,30 @@ def test_render_fragment_stats(hive_env):
     assert "Pipeline Health" in html
 
 
+def test_render_brain_panel_empty_guidance():
+    from keephive.commands.serve import _render_brain_panel
+
+    data = {
+        "backend": {"backends": [], "preferred": "auto", "pending": 0},
+        "platforms": {"platforms": {}},
+        "pending_llm": [],
+        "memory": {"total": 0, "preview": []},
+        "rules": {"total": 0, "preview": []},
+        "todos": {"total": 0, "items": []},
+        "log": [],
+    }
+    html = _render_brain_panel(data)
+    assert "No platform telemetry yet" in html
+    assert "keephive setup --yes" in html
+
+
+def test_render_stats_platforms_panel_empty_hint():
+    from keephive.commands.serve import _render_stats_platforms_panel
+
+    html = _render_stats_platforms_panel({"platforms": {}})
+    assert "keephive setup --yes" in html
+
+
 def test_render_fragment_unknown():
     from keephive.commands.serve import render_fragment
 

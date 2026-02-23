@@ -15,8 +15,8 @@ from keephive.llm.exceptions import ClaudePipeError
 T = TypeVar("T", bound=BaseModel)
 
 _API_MODELS: dict[str, str] = {
-    "haiku": "claude-haiku-4-5-20251001",
-    "sonnet": "claude-sonnet-4-6",
+    "haiku": "claude-haiku-4.5",
+    "sonnet": "claude-sonnet-4.6",
 }
 
 

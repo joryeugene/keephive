@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -19,9 +19,11 @@ def telemetry_file(platform: str) -> Path:
     return _root() / platform / "events.jsonl"
 
 
-def append_event(platform: str, event: str, payload: dict | None = None, *, source: str = "hook") -> None:
+def append_event(
+    platform: str, event: str, payload: dict | None = None, *, source: str = "hook"
+) -> None:
     entry = {
-        "timestamp": datetime.utcnow().isoformat(timespec="seconds"),
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "platform": platform,
         "event": event,
         "source": source,
@@ -72,3 +74,30 @@ def platforms() -> Iterable[str]:
     if not root.exists():
         return []
     return [p.name for p in root.iterdir() if p.is_dir()]
+
+
+def summarize(platform: str) -> dict:
+    """Return basic telemetry stats for a platform."""
+    path = telemetry_file(platform)
+    total = 0
+    latest: dict | None = None
+    if not path.exists():
+        return {"platform": platform, "total": 0, "latest": None}
+
+    with path.open("r", encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            total += 1
+            latest = record
+
+    return {
+        "platform": platform,
+        "total": total,
+        "latest": latest,
+    }

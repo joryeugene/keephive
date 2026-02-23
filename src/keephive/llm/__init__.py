@@ -7,7 +7,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Dict, Iterable, Optional, Tuple, Type, TypeVar
+from typing import Callable, Dict, Iterable, Optional, Type, TypeVar
 
 from pydantic import BaseModel
 
@@ -126,9 +126,11 @@ def _resolve_backend(
     override: str | None = None,
     *,
     require_tools: bool = False,
+    attempted: set[str] | None = None,
 ) -> tuple[Backend, dict]:
     """Resolve the backend to use along with selection metadata."""
-    attempted: set[str] = set()
+    if attempted is None:
+        attempted = set()
 
     def _validate(candidate: Backend, source: str) -> tuple[Backend, dict] | None:
         available, info = candidate.detect()
@@ -195,50 +197,69 @@ def call_structured(
     backend_override: str | None = None,
 ) -> T:
     """Execute a structured LLM call via the selected backend."""
+    attempted: set[str] = set()
 
-    backend, meta = _resolve_backend(
-        override=backend_override,
-        require_tools=bool(tools),
-    )
-
-    meta.update(
-        {
-            "supports_structured": backend.supports_structured,
-            "supports_tools": backend.supports_tools,
-            "supports_streaming": backend.supports_streaming,
-        }
-    )
-
-    if tools and not backend.supports_tools:
-        raise CapabilityError(
-            f"{backend.name} backend does not support tool usage. "
-            "Choose a backend with tool support."
+    while True:
+        backend, meta = _resolve_backend(
+            override=backend_override,
+            require_tools=bool(tools),
+            attempted=attempted,
         )
 
-    try:
-        result = backend.call_structured(
-            prompt,
-            response_model,
-            model,
-            stdin_text,
-            tools,
-            max_turns,
-            timeout,
-            verbose,
+        meta.update(
+            {
+                "supports_structured": backend.supports_structured,
+                "supports_tools": backend.supports_tools,
+                "supports_streaming": backend.supports_streaming,
+            }
         )
-        meta["status"] = "ok"
-        _write_state(meta)
-        return result
-    except ClaudePipeError as exc:
-        meta["status"] = "error"
-        meta["error"] = str(exc)
-        _write_state(meta)
-        raise
+
+        if tools and not backend.supports_tools:
+            # This should have been caught by _resolve_backend, but double-check.
+            raise CapabilityError(
+                f"{backend.name} backend does not support tool usage. "
+                "Choose a backend with tool support."
+            )
+
+        try:
+            result = backend.call_structured(
+                prompt,
+                response_model,
+                model,
+                stdin_text,
+                tools,
+                max_turns,
+                timeout,
+                verbose,
+            )
+            meta["status"] = "ok"
+            _write_state(meta)
+            return result
+        except ClaudePipeError as exc:
+            meta["status"] = "error"
+            meta["error"] = str(exc)
+            _write_state(meta)
+
+            # If we are in auto-select mode (no explicit override or setting),
+            # try the next best backend.
+            is_auto = meta.get("source") == "auto"
+            if is_auto and backend.name != "none":
+                attempted.add(backend.name)
+                if verbose:
+                    import sys
+
+                    print(
+                        f"[keephive] Backend {backend.name} failed: {exc}. Retrying next...",
+                        file=sys.stderr,
+                    )
+                continue
+
+            raise
 
 
 # -- Provider registrations -------------------------------------------------
 
-from . import anthropic_cli, anthropic_api, gemini_api, none_backend, openai_api  # noqa: E402
+from . import anthropic_api, anthropic_cli, gemini_api, none_backend, openai_api  # noqa: E402
 
 register_backend(anthropic_cli.backend)
 register_backend(anthropic_api.backend)

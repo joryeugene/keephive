@@ -210,9 +210,7 @@ class ProposedEdit(BaseModel):
     action: str = Field(description="'edit' | 'prune' | 'merge'")
     target_type: str = Field(description="'skill' | 'task' | 'rule'")
     target_name: str = Field(description="Name/slug of the existing item to modify")
-    rationale: str = Field(
-        description="Evidence from logs: why this edit improves things"
-    )
+    rationale: str = Field(description="Evidence from logs: why this edit improves things")
     changes: str = Field(
         description=(
             "For edit: full updated content. "

@@ -171,7 +171,7 @@ class TestMigrationHelpers:
         monkeypatch.setenv("HOME", str(home))
         monkeypatch.delenv("HIVE_HOME", raising=False)
 
-        from keephive.storage import needs_migration, migrate_profile, profile_paths
+        from keephive.storage import migrate_profile, needs_migration, profile_paths
 
         assert needs_migration("default")
 

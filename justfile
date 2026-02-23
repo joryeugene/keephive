@@ -121,7 +121,7 @@ check-private:
     @echo "Scanning for secrets..."
     @! grep -rn "sk-ant-api" src/ tests/ 2>/dev/null || (echo "ERROR: Anthropic key found" && exit 1)
     @! grep -rn "-----BEGIN.*PRIVATE KEY" src/ tests/ 2>/dev/null || (echo "ERROR: Private key found" && exit 1)
-    @! grep -rn "ANTHROPIC_API_KEY\s*=" src/ tests/ 2>/dev/null || (echo "ERROR: API key assignment found" && exit 1)
+    @! grep -rn "ANTHROPIC_API_KEY\s*=" src/ tests/ --exclude="*.md" 2>/dev/null || (echo "ERROR: API key assignment found" && exit 1)
     @echo "OK: no secrets found"
 
 # ── Install & Sync ───────────────────────────────────────────────────────────

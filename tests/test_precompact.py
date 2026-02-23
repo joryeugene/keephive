@@ -1295,9 +1295,7 @@ class TestPreCompactFiresSoulUpdate:
         from keephive.storage import daemon_config_file
 
         # Enable soul-update in daemon.json
-        daemon_config_file().write_text(
-            json.dumps({"tasks": {"soul-update": {"enabled": True}}})
-        )
+        daemon_config_file().write_text(json.dumps({"tasks": {"soul-update": {"enabled": True}}}))
 
         popen_calls: list[list[str]] = []
 
@@ -1313,8 +1311,12 @@ class TestPreCompactFiresSoulUpdate:
         transcript = _make_transcript(
             hive_env,
             [
-                _user_msg("We decided to migrate the database from Postgres to SQLite for local dev."),
-                _asst_msg("That makes sense — SQLite removes the Docker dependency for local dev setup."),
+                _user_msg(
+                    "We decided to migrate the database from Postgres to SQLite for local dev."
+                ),
+                _asst_msg(
+                    "That makes sense — SQLite removes the Docker dependency for local dev setup."
+                ),
             ],
         )
         input_data = json.dumps(
@@ -1337,9 +1339,7 @@ class TestPreCompactFiresSoulUpdate:
 
         from keephive.storage import daemon_config_file
 
-        daemon_config_file().write_text(
-            json.dumps({"tasks": {"soul-update": {"enabled": False}}})
-        )
+        daemon_config_file().write_text(json.dumps({"tasks": {"soul-update": {"enabled": False}}}))
 
         popen_calls: list[list[str]] = []
 
@@ -1377,9 +1377,7 @@ class TestPreCompactFiresSoulUpdate:
 
         from keephive.storage import daemon_config_file
 
-        daemon_config_file().write_text(
-            json.dumps({"tasks": {"soul-update": {"enabled": True}}})
-        )
+        daemon_config_file().write_text(json.dumps({"tasks": {"soul-update": {"enabled": True}}}))
 
         popen_calls: list[list[str]] = []
 
@@ -1399,6 +1397,4 @@ class TestPreCompactFiresSoulUpdate:
         hook_precompact([])
 
         soul_update_calls = [c for c in popen_calls if "daemon" in c and "soul-update" in c]
-        assert not soul_update_calls, (
-            "soul-update should NOT fire when no excerpts were captured"
-        )
+        assert not soul_update_calls, "soul-update should NOT fire when no excerpts were captured"

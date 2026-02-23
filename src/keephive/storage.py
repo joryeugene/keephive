@@ -229,6 +229,12 @@ def profile_dir(name: str | None) -> Path:
     return new_path
 
 
+def profile_exists(name: str | None) -> bool:
+    """Return True if a profile directory exists in keephive or legacy paths."""
+    preferred, legacy = profile_paths(name)
+    return preferred.exists() or legacy.exists()
+
+
 def set_active_profile(name: str | None) -> None:
     """Set the active profile marker."""
     if name is None:
@@ -601,11 +607,13 @@ def append_dismissed_improvements(dismissed_items: list[dict]) -> None:
     existing = read_dismissed_improvements()
     now_iso = datetime.now().isoformat()
     for item in dismissed_items:
-        existing.append({
-            "type": item.get("type", "?"),
-            "name": item.get("name", item.get("rule", ""))[:80],
-            "dismissed_at": now_iso,
-        })
+        existing.append(
+            {
+                "type": item.get("type", "?"),
+                "name": item.get("name", item.get("rule", ""))[:80],
+                "dismissed_at": now_iso,
+            }
+        )
     # Rolling cap: keep most recent 100 dismissals
     existing = existing[-100:]
     path = dismissed_improvements_file()
@@ -2121,6 +2129,25 @@ def read_cc_sessions(days_back: int = 30) -> list[dict]:
     return result
 
 
+def find_project_root(start_path: str | Path) -> str:
+    """Find the project root by traversing up from start_path.
+
+    Looks for .git folder. Stops at home directory or root.
+    Returns original path if no root found.
+    """
+    path = Path(start_path).resolve()
+    home = Path.home().resolve()
+
+    curr = path
+    while curr != curr.parent:
+        if (curr / ".git").exists():
+            return str(curr)
+        if curr == home:
+            break
+        curr = curr.parent
+    return str(path)
+
+
 def read_live_sessions(
     active_dirs: list[str] | None = None,
     recency_minutes: int = 30,
@@ -2184,11 +2211,18 @@ def read_live_sessions(
         pass
 
     for cwd in dict.fromkeys(active_dirs):  # deduplicate: multiple PIDs same cwd = one dir scan
-        # Encode path: /Users/foo/bar -> -Users-foo-bar
-        encoded = cwd.replace("/", "-")
+        # Claude Code uses the project root for the encoded path.
+        # If the user is in a subdirectory, lsof reports the subdir, but
+        # the JSONL is stored under the root.
+        root = find_project_root(cwd)
+        encoded = root.replace("/", "-")
         proj_dir = projects_dir / encoded
         if not proj_dir.exists():
-            continue
+            # Fallback to direct encoding if no git root found or it didn't match
+            encoded_direct = cwd.replace("/", "-")
+            proj_dir = projects_dir / encoded_direct
+            if not proj_dir.exists():
+                continue
 
         # Sort by mtime descending so the active session (most-recently-modified file)
         # is processed first. active_dirs comes from lsof, so we have positive confirmation

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 # ---- _setup_hooks ----
@@ -160,6 +163,46 @@ class TestExtractCmds:
 
         result = _extract_cmds({"matcher": "*"})
         assert result == ""
+
+
+def test_codex_notify_fallback(tmp_path, monkeypatch):
+    """Codex notify hook should log telemetry even without keephive import."""
+    script_src = Path("src/keephive/data/templates/hooks/codex/notify.py")
+    script_path = tmp_path / "notify.py"
+    script_path.write_text(script_src.read_text(), encoding="utf-8")
+
+    # Stub keephive executable so the hook-stop command succeeds.
+    keephive_stub = tmp_path / "keephive"
+    keephive_stub.write_text(
+        "#!/usr/bin/env python3\nimport sys\nsys.exit(0)\n",
+        encoding="utf-8",
+    )
+    keephive_stub.chmod(0o755)
+
+    hive_home = tmp_path / "hive"
+    hive_home.mkdir()
+    monkeypatch.setenv("HIVE_HOME", str(hive_home))
+    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ.get('PATH', '')}")
+
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+
+    proc = subprocess.run(
+        [sys.executable, str(script_path)],
+        input='{"message":"hi"}',
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    assert proc.returncode == 0
+
+    events_path = hive_home.parent / "telemetry" / "codex" / "events.jsonl"
+    lines = events_path.read_text().strip().splitlines()
+    assert len(lines) == 1
+    data = json.loads(lines[0])
+    assert data["event"] == "notify"
+    assert data["payload"]["message"] == "hi"
 
 
 # ---- _seed_bundled_content ----

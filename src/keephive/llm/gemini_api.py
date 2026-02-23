@@ -17,8 +17,8 @@ T = TypeVar("T", bound=BaseModel)
 
 _BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 _MODEL_MAP = {
-    "haiku": "gemini-1.5-flash",
-    "sonnet": "gemini-1.5-pro",
+    "haiku": "gemini-3-flash",
+    "sonnet": "gemini-3.1-pro",
 }
 
 
@@ -86,8 +86,7 @@ def _call_structured(
         return response_model.model_validate(structured)
     except ValidationError as exc:
         raise ClaudePipeError(
-            f"Gemini response validation failed: {exc}\n"
-            f"Raw data: {json.dumps(structured)[:500]}"
+            f"Gemini response validation failed: {exc}\nRaw data: {json.dumps(structured)[:500]}"
         )
 
 

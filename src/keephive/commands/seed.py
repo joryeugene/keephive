@@ -78,10 +78,22 @@ def cmd_seed(args: list[str]) -> None:
     _seed_rules(entries)
     _seed_recall_stats(entries, rng)
     _seed_pending_rules()
+    _seed_soul()
 
     console.print(f"[green]Seeded {days} days of demo data[/green]")
     console.print(f"[dim]Data: {target}[/dim]")
     show_hint("hive s", "see seeded data")
+
+
+def _seed_soul() -> None:
+    """Write sample SOUL.md."""
+    from keephive.commands.setup import _SOUL_TEMPLATE
+    from keephive.storage import soul_file
+
+    sf = soul_file()
+    if not sf.exists():
+        sf.parent.mkdir(parents=True, exist_ok=True)
+        sf.write_text(_SOUL_TEMPLATE.format(project="demo-project"))
 
 
 def _seed_daily_logs(entries: dict, days: int, rng: random.Random) -> None:

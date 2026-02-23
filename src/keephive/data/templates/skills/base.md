@@ -1,3 +1,10 @@
+---
+name: keephive-helper
+title: Keephive Helper – {{platform_title}}
+description: Keep {{platform_title}} sessions synced with the keephive knowledge loop.
+version: 1
+---
+
 # Keephive Helper – {{platform_title}}
 
 ## What this skill does

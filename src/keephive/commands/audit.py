@@ -15,6 +15,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 from difflib import SequenceMatcher
+from pathlib import Path
 
 from keephive.clock import get_now, get_today
 from keephive.output import console, notify_sound, prompt_yn
@@ -885,8 +886,62 @@ def display_perspectives_only(vault_r, cleaner_r, strategist_r, score: int) -> N
 
 
 # ---------------------------------------------------------------------------
-# Save insights to daily log
+# Save insights to daily log & archive
 # ---------------------------------------------------------------------------
+
+
+def archive_audit_report(
+    score: int,
+    vault: dict,
+    cleaner: dict,
+    strategist: dict,
+    vault_r,
+    cleaner_r,
+    strategist_r,
+    synthesis,
+) -> "Path":
+    """Archive the full audit report to JSON in the archive directory."""
+    from keephive.storage import archive_dir
+
+    audits_dir = archive_dir() / "audits"
+    audits_dir.mkdir(parents=True, exist_ok=True)
+
+    now = get_now()
+    filename = now.strftime("%Y-%m-%d_%H%M%S.json")
+    path = audits_dir / filename
+
+    report = {
+        "timestamp": now.isoformat(),
+        "score": score,
+        "metrics": {
+            "vault": vault,
+            "cleaner": cleaner,
+            "strategist": strategist,
+        },
+        "perspectives": {
+            "vault": {
+                "analysis": vault_r.analysis,
+                "issues": vault_r.issues,
+            },
+            "cleaner": {
+                "analysis": cleaner_r.analysis,
+                "issues": cleaner_r.issues,
+            },
+            "strategist": {
+                "analysis": strategist_r.analysis,
+                "issues": strategist_r.issues,
+            },
+        },
+        "synthesis": {
+            "connection": synthesis.connection,
+            "tension": synthesis.tension,
+            "wild_card": synthesis.wild_card,
+            "plays": [{"issue": p.issue, "command": p.command} for p in synthesis.plays],
+        },
+    }
+
+    path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    return path
 
 
 def save_audit_insights(synthesis, score: int) -> int:
@@ -1027,13 +1082,25 @@ def cmd_audit(args: list[str]) -> None:
         verbose=verbose,
     )
 
-    # 5. Save insights to daily log
+    # 5. Save insights to daily log & archive
     count = save_audit_insights(synthesis, score)
+    try:
+        archive_path = archive_audit_report(
+            score, vault, cleaner, strategist, vault_r, cleaner_r, strategist_r, synthesis
+        )
+    except Exception as e:
+        console.print(f"  [warn]Archiving failed: {e}[/warn]")
+        archive_path = None
     notify_sound(True)
 
     # 6. Footer (after save so we have the count)
     if not verbose:
-        console.print(f"  [dim]Top action saved as TODO. {count} entries saved to daily log.[/dim]")
+        archive_msg = (
+            f" (Archived to {archive_path.name})" if archive_path else " (Archiving failed)"
+        )
+        console.print(
+            f"  [dim]Top action saved as TODO. {count} entries saved to daily log.{archive_msg}[/dim]"
+        )
         console.print("  [dim]hive a -v for full perspective analyses[/dim]")
         console.print()
 

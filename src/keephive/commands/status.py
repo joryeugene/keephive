@@ -659,9 +659,7 @@ def cmd_status(args: list[str]) -> None:
                     "supports_tools": backend.supports_tools,
                     "supports_structured": backend.supports_structured,
                 }
-                for backend, detected, reason in (
-                    (b, *b.detect()) for b in available_backends()
-                )
+                for backend, detected, reason in ((b, *b.detect()) for b in available_backends())
             ],
         }
 

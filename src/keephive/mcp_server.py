@@ -730,6 +730,7 @@ def hive_improve(action: str = "list", improvement_id: str = "") -> str:
         if not improvement_id:
             return "Error: improvement_id required for accept."
         from keephive.commands.improve import _apply_improvement
+
         pending = read_pending_improvements()
         match = next((i for i in pending if i.id == improvement_id), None)
         if not match:

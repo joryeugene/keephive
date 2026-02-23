@@ -6,7 +6,6 @@ import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable
 
 from keephive.storage import hive_dir
 

@@ -1159,6 +1159,26 @@ def _display_full(data: dict) -> None:
                 f"{proj['sessions']} sessions · {proj['days_active']}d active · last: {last}"
             )
 
+    # Platforms (Cross-agent telemetry)
+    try:
+        from keephive.telemetry import platforms, read_events
+
+        active_platforms = list(platforms())
+        if active_platforms:
+            console.print()
+            console.print("[dim]Platforms[/dim]")
+            for plat in active_platforms:
+                evs = read_events(plat)
+                # Filter for events from the last 7 days
+                import datetime
+
+                cutoff = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
+                week_evs = [e for e in evs if e["timestamp"] >= cutoff]
+                if week_evs:
+                    console.print(f"  {plat:<14} [bold]{len(week_evs)}[/bold] events this week")
+    except Exception:
+        pass
+
     # Pipeline actions: show last-run status for key maintenance commands
     console.print()
     console.print("[dim]Pipeline Actions[/dim]")
@@ -1196,19 +1216,19 @@ def _display_full(data: dict) -> None:
     try:
         import datetime
 
-        from keephive.storage import read_pending_improvements, soul_file
+        from keephive.storage import get_daemon_pid, read_pending_improvements, soul_file
 
         sf = soul_file()
         pending_count = len(read_pending_improvements())
         if sf.exists():
             mtime = sf.stat().st_mtime
             last_updated = datetime.datetime.fromtimestamp(mtime).strftime("%b %d %H:%M")
-            soul_line = f"  🐝 [dim]KingBee[/dim]  last updated {last_updated}"
+            daemon_pid = get_daemon_pid()
+            d_status = "[ok]running[/ok]" if daemon_pid else "[dim]offline[/dim]"
+            soul_line = f"  \u261b [dim]KingBee[/dim] {d_status} · last updated {last_updated}"
             if pending_count:
-                soul_line += (
-                    f"  ·  {pending_count} improvement{'s' if pending_count != 1 else ''}"
-                )
-                soul_line += "  [dim](hive improve review)[/dim]"
+                soul_line += f" · {pending_count} improvement{'s' if pending_count != 1 else ''}"
+                soul_line += " [dim](hive improve review)[/dim]"
             console.print()
             console.print(soul_line)
     except Exception:

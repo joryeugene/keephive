@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from pathlib import Path
 
 
 class TestPendingImprovementsFilePath:
@@ -144,10 +143,12 @@ class TestCmdImproveList:
         from keephive.commands.improve import cmd_improve
         from keephive.storage import append_pending_improvements
 
-        append_pending_improvements([
-            {"type": "skill", "name": "fast-git-summary", "rationale": "saves 2 min/day"},
-            {"type": "rule", "rule": "Capture rationale", "rationale": "missed 3 sessions"},
-        ])
+        append_pending_improvements(
+            [
+                {"type": "skill", "name": "fast-git-summary", "rationale": "saves 2 min/day"},
+                {"type": "rule", "rule": "Capture rationale", "rationale": "missed 3 sessions"},
+            ]
+        )
         cmd_improve(["list"])
         out = capsys.readouterr().out
         assert "SKILL" in out.upper() or "skill" in out.lower()
@@ -184,7 +185,7 @@ class TestApplyImprovement:
         Bug caught: task not written, wrong key structure, existing tasks overwritten.
         """
         from keephive.commands.improve import _apply_improvement
-        from keephive.storage import daemon_config_file, read_daemon_config
+        from keephive.storage import read_daemon_config
 
         item = {
             "type": "task",
@@ -195,9 +196,7 @@ class TestApplyImprovement:
         _apply_improvement(item)
 
         config = read_daemon_config()
-        assert "weekly-git-activity" in config.get("tasks", {}), (
-            "Task not found in daemon.json"
-        )
+        assert "weekly-git-activity" in config.get("tasks", {}), "Task not found in daemon.json"
         assert config["tasks"]["weekly-git-activity"]["day"] == "monday"
 
     def test_rule_queues_to_pending_rules(self, hive_env):
@@ -233,9 +232,9 @@ class TestDismissedImprovements:
         from keephive.storage import append_dismissed_improvements, read_dismissed_improvements
 
         before = datetime.now()
-        append_dismissed_improvements([
-            {"type": "skill", "name": "some-skill", "rationale": "nope"}
-        ])
+        append_dismissed_improvements(
+            [{"type": "skill", "name": "some-skill", "rationale": "nope"}]
+        )
         after = datetime.now()
 
         records = read_dismissed_improvements()
@@ -255,10 +254,7 @@ class TestDismissedImprovements:
 
         # Add 105 items in batches
         for batch in range(21):
-            items = [
-                {"type": "skill", "name": f"skill-{batch * 5 + i}"}
-                for i in range(5)
-            ]
+            items = [{"type": "skill", "name": f"skill-{batch * 5 + i}"} for i in range(5)]
             append_dismissed_improvements(items)
 
         records = read_dismissed_improvements()
@@ -295,10 +291,12 @@ class TestKingBeeStatusLine:
         from keephive.storage import append_pending_improvements, soul_file
 
         soul_file().write_text("# SOUL.md\n\n## Summary\nI am KingBee.\n")
-        append_pending_improvements([
-            {"type": "skill", "name": "x"},
-            {"type": "rule", "rule": "y"},
-        ])
+        append_pending_improvements(
+            [
+                {"type": "skill", "name": "x"},
+                {"type": "rule", "rule": "y"},
+            ]
+        )
 
         # Provide minimal non-empty days so _display_full() doesn't early-return
         _display_full({"days": {"2026-02-22": {}}})

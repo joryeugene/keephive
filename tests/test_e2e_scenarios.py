@@ -733,8 +733,13 @@ class TestDaemonCommands:
     def test_improve_list_with_seeded_item(self, term, save_terminal_output):
         """hive improve list shows pending item count when queue has items."""
         import json
-        item = {"type": "rule", "rule": "Always verify before claiming done",
-                "rationale": "Prevents premature completion claims", "proposed_at": "2026-02-22T10:00:00"}
+
+        item = {
+            "type": "rule",
+            "rule": "Always verify before claiming done",
+            "rationale": "Prevents premature completion claims",
+            "proposed_at": "2026-02-22T10:00:00",
+        }
         pending_path = term.hive_home / ".pending-improvements.json"
         pending_path.write_text(json.dumps([item]))
 

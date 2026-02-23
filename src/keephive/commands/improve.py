@@ -1,4 +1,5 @@
 """hive improve — review and apply KingBee's self-improvement proposals."""
+
 from __future__ import annotations
 
 import json
@@ -101,9 +102,7 @@ def _improve_review() -> None:
         if stale_count
         else ""
     )
-    console.print(
-        f"\n  🐝 [bold]KingBee Improvements[/bold] — {len(items)} pending{stale_note}\n"
-    )
+    console.print(f"\n  🐝 [bold]KingBee Improvements[/bold] — {len(items)} pending{stale_note}\n")
 
     remaining = []
     dismissed = []
@@ -134,9 +133,7 @@ def _improve_review() -> None:
             target_type = item.get("target_type", "")
             merge_with = item.get("merge_with")
             if action == "prune":
-                console.print(
-                    f"  ⚠️  PRUNE {target_type}: [bold]{target}[/bold] — will be deleted"
-                )
+                console.print(f"  ⚠️  PRUNE {target_type}: [bold]{target}[/bold] — will be deleted")
             elif action == "merge":
                 console.print(
                     f"  MERGE: [bold]{target}[/bold] + [bold]{merge_with}[/bold]"
@@ -146,9 +143,7 @@ def _improve_review() -> None:
                 console.print(f"  Result: {changes_preview}...")
             else:
                 changes_preview = item.get("changes", "")[:120].replace("\n", " ")
-                console.print(
-                    f"  Edit {target_type} [bold]{target}[/bold]: {changes_preview}..."
-                )
+                console.print(f"  Edit {target_type} [bold]{target}[/bold]: {changes_preview}...")
 
         from keephive.output import prompt_review_item
 
@@ -212,9 +207,7 @@ def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
         pending_rules = hive_dir() / ".pending-rules.md"
         with pending_rules.open("a") as f:
             f.write(f"- {rule_text} [auto:proposed-by-kingbee]\n")
-        console.print(
-            f"  [green]✓[/green] Rule queued → run [dim]hive rule review[/dim] to apply"
-        )
+        console.print("  [green]✓[/green] Rule queued → run [dim]hive rule review[/dim] to apply")
 
     elif item_type == "edit":
         action = item.get("action", "edit")
@@ -244,7 +237,7 @@ def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
                 with pending_rules.open("a") as f:
                     f.write(f"- REMOVE: {target} [auto:kingbee-prune]\n")
                 console.print(
-                    f"  [green]✓[/green] Rule removal queued → run [dim]hive rule review[/dim]"
+                    "  [green]✓[/green] Rule removal queued → run [dim]hive rule review[/dim]"
                 )
 
         elif action in ("edit", "merge"):

@@ -13,13 +13,15 @@ from typing import Type, TypeVar
 from pydantic import BaseModel
 
 from keephive.llm import call_structured
+from keephive.llm.anthropic_api import _call_structured as _run_via_api
+from keephive.llm.anthropic_cli import (
+    _call_structured as _run_via_subprocess,
+)
 from keephive.llm.anthropic_cli import (
     build_claude_command,
     build_claude_env,
     parse_claude_response,
-    _call_structured as _run_via_subprocess,
 )
-from keephive.llm.anthropic_api import _call_structured as _run_via_api
 from keephive.llm.exceptions import ClaudePipeError
 
 T = TypeVar("T", bound=BaseModel)

@@ -10,22 +10,24 @@ Usage: hive serve [port] [--hot]
 from __future__ import annotations
 
 import base64
-import os
 import hashlib
 import html as _html
 import json
+import os
 import re
 import sys
 import webbrowser
 from collections import Counter
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
 from keephive.llm import available_backends, get_backend_state
 from keephive.llm.pending import list_pending, pending_count
 from keephive.platforms import platform_specs, read_hook_manifest
-from keephive.skillpack import get_record as get_skill_record
-from keephive.telemetry import read_events, platforms as telemetry_platforms
 from keephive.settings import get_setting
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import parse_qs, urlparse
+from keephive.skillpack import get_record as get_skill_record
+from keephive.telemetry import read_events
 
 DEFAULT_PORT = 3847
 
@@ -528,26 +530,21 @@ mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 .source-bar-fill{height:100%;border-radius:2px;background:#1a3a5c}
 .source-pct{min-width:35px;text-align:right;font-size:12px;color:#8b949e}
 
-.brain-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:6px}
-.brain-platform-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
-.brain-card{background:#161b22;border:1px solid #262b33;border-radius:8px;padding:12px;min-height:120px}
-.brain-card-emphasis{border-color:#3fb950}
-.brain-card-compact{min-height:auto}
-.brain-card-header{font-weight:600;font-size:12px;color:#9be9a8;margin-bottom:6px;display:flex;align-items:center;gap:6px}
-.brain-card-body{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#c9d1d9}
-.brain-line{display:flex;align-items:center;gap:6px;justify-content:space-between}
+.card.brain-card{border-color:#262b33;min-height:140px}
+.card.brain-card.brain-card-emphasis{border-color:#3fb950}
+.card.brain-card .card-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.card.brain-card .card-body{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#c9d1d9}
+.brain-line{display:flex;align-items:center;gap:8px;justify-content:space-between}
 .brain-line .brain-text{flex:1;color:#c9d1d9}
 .brain-line .brain-detail{color:#6e7681;font-size:11px;white-space:nowrap}
-.brain-chip{display:inline-flex;align-items:center;justify-content:center;padding:1px 6px;border-radius:999px;font-size:10px;text-transform:uppercase;background:#21262d;color:#8b949e;border:1px solid #30363d}
+.brain-chip{display:inline-flex;align-items:center;justify-content:center;padding:2px 7px;border-radius:999px;font-size:10px;text-transform:uppercase;background:#21262d;color:#8b949e;border:1px solid #30363d;letter-spacing:.04em}
 .brain-chip-ok{background:#1f6feb;color:#fff;border-color:#388bfd}
 .brain-chip-warn{background:#b62324;color:#fff;border-color:#f85149}
 .brain-chip-dim{background:#1c2128;color:#6e7681;border-color:#2d333b}
 .brain-meta{font-size:11px;color:#8b949e}
 .brain-meta-warn{color:#fdaeb7}
-.brain-platform-grid .brain-card-body{gap:2px}
-.settings-grid{display:grid;grid-template-columns:2fr 1.2fr;gap:12px}
-@media(max-width:900px){.settings-grid{grid-template-columns:1fr}}
-.settings-col-right .card{margin-bottom:12px}
+.brain-empty{font-size:12px;color:#8b949e;margin:6px 0}
+.brain-hint{font-size:11px;color:#58a6ff;margin-top:4px}
 .platform-row{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px;color:#c9d1d9}
 .platform-title{font-weight:600;flex:1}
 .platform-meta{color:#8b949e;font-size:11px}
@@ -662,7 +659,11 @@ _JS = """
 
   // --- Helpers ---
   function escHtml(s){
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');
+    return String(s)
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;");
   }
   // All cards (flat list in DOM order)
   function _cards(){
@@ -1837,16 +1838,14 @@ def _render_soul_panel(data: dict) -> str:
         body = f'<div class="md">{render_md(soul)}</div>'
     else:
         body = (
-            '<div class="empty">'
-            "No SOUL.md yet. Run <code>hive setup</code> to meet KingBee."
-            "</div>"
+            '<div class="empty">No SOUL.md yet. Run <code>hive setup</code> to meet KingBee.</div>'
         )
     pending_hint = ""
     if pending_count:
         pending_hint = (
             f'<div class="kpi-row" style="margin-top:6px">'
             f'<span style="color:#f0883e">🐝 {pending_count} '
-            f'improvement{"s" if pending_count != 1 else ""} pending</span>'
+            f"improvement{'s' if pending_count != 1 else ''} pending</span>"
             f'<code style="margin-left:8px">hive improve review</code>'
             f"</div>"
         )
@@ -2851,7 +2850,9 @@ def _render_stats_panel(data: dict) -> str:
 def _render_stats_platforms_panel(data: dict) -> str:
     platforms = data.get("platforms", {}).get("platforms", {})
     if not platforms:
-        body = '<div class="empty">No platform telemetry yet</div>'
+        body = '<div class="empty">No platform telemetry yet</div>' + _cmd_hints(
+            ["keephive setup --yes", "hive doctor"]
+        )
     else:
         header = (
             "<tr>"
@@ -3895,6 +3896,40 @@ def _get_backend_overview() -> dict:
     }
 
 
+def _collect_claude_hook_meta(settings_path: Path) -> list[dict]:
+    if not settings_path.exists():
+        return []
+    try:
+        data = json.loads(settings_path.read_text())
+    except json.JSONDecodeError:
+        return []
+
+    hooks = data.get("hooks", {})
+    meta: list[dict] = []
+
+    def _iter_entries(entries: list) -> list[dict]:
+        for entry in entries:
+            if isinstance(entry, dict) and "hooks" in entry:
+                yield from entry.get("hooks", [])
+            elif isinstance(entry, dict):
+                yield entry
+
+    for event, entries in hooks.items():
+        for item in _iter_entries(entries):
+            command = item.get("command", "")
+            if isinstance(command, str) and "keephive" in command:
+                meta.append(
+                    {
+                        "name": f"{event}",
+                        "path": str(settings_path),
+                        "exists": True,
+                        "command": command,
+                    }
+                )
+
+    return meta
+
+
 def _get_platform_overview() -> dict:
     """Return platform detection, install, and telemetry state."""
     specs = platform_specs()
@@ -3902,21 +3937,26 @@ def _get_platform_overview() -> dict:
     data: dict[str, dict] = {}
     for slug, spec in specs.items():
         hook_entry = hook_manifest.get(slug, {})
-        scripts_meta = []
+        scripts_meta: list[dict] = []
         script_hashes = hook_entry.get("scripts", {})
-        for name, expected_hash in script_hashes.items():
-            target = spec.hooks_dir / name
-            exists = target.exists()
-            actual_hash = hashlib.sha256(target.read_bytes()).hexdigest() if exists else ""
-            scripts_meta.append(
-                {
-                    "name": name,
-                    "path": str(target),
-                    "exists": exists,
-                    "expected_hash": expected_hash,
-                    "actual_hash": actual_hash,
-                }
-            )
+
+        if slug == "claude":
+            scripts_meta = _collect_claude_hook_meta(spec.config_path)
+        else:
+            for name, expected_hash in script_hashes.items():
+                target = spec.hooks_dir / name
+                exists = target.exists()
+                actual_hash = hashlib.sha256(target.read_bytes()).hexdigest() if exists else ""
+                scripts_meta.append(
+                    {
+                        "name": name,
+                        "path": str(target),
+                        "exists": exists,
+                        "expected_hash": expected_hash,
+                        "actual_hash": actual_hash,
+                    }
+                )
+
         events = read_events(slug, limit=400)
         counts = Counter(e.get("event", "unknown") for e in events)
         recent = events[-6:]
@@ -3937,6 +3977,7 @@ def _get_platform_overview() -> dict:
                 "by_event": dict(counts),
                 "recent": recent,
             },
+            "hook_count": len(scripts_meta),
         }
     return {"platforms": data}
 
@@ -3945,7 +3986,6 @@ def _get_brain_data() -> dict:
     """Agent brain view: knowledge corpus, pending work, telemetry snapshot."""
     from keephive.storage import (
         get_meaningful_entries,
-        memory_file,
         open_todos,
         read_memory,
         read_rules,
@@ -3954,7 +3994,9 @@ def _get_brain_data() -> dict:
     memory_text = read_memory()
     mem_lines = [ln.strip() for ln in memory_text.splitlines() if ln.strip()]
     rules_text = read_rules()
-    rules_lines = [ln.strip() for ln in rules_text.splitlines() if ln.strip() and not ln.startswith("#")]
+    rules_lines = [
+        ln.strip() for ln in rules_text.splitlines() if ln.strip() and not ln.startswith("#")
+    ]
     todos = open_todos()
     latest_entries = get_meaningful_entries()[:6]
 
@@ -3964,8 +4006,7 @@ def _get_brain_data() -> dict:
         "todos": {
             "total": len(todos),
             "items": [
-                {"date": d, "time": ts, "text": text}
-                for d, ts, text in list(reversed(todos[-6:]))
+                {"date": d, "time": ts, "text": text} for d, ts, text in list(reversed(todos[-6:]))
             ],
         },
         "log": [{"text": line} for line in latest_entries],
@@ -4037,12 +4078,18 @@ def _render_settings_panel(data: dict) -> str:
         )
     backend_rows.append(
         f'<div class="brain-meta">Preferred: {_e(backend.get("preferred", "auto"))}'
-        + (f" · Override: {_e(backend.get('env_override', ''))}" if backend.get("env_override") else "")
+        + (
+            f" · Override: {_e(backend.get('env_override', ''))}"
+            if backend.get("env_override")
+            else ""
+        )
         + "</div>"
     )
     pending = backend.get("pending", 0)
     if pending:
-        backend_rows.append(f'<div class="brain-meta brain-meta-warn">{pending} queued LLM request(s)</div>')
+        backend_rows.append(
+            f'<div class="brain-meta brain-meta-warn">{pending} queued LLM request(s)</div>'
+        )
     backend_card = (
         '<div class="card" tabindex="0" role="region" aria-label="Backend status">'
         '<div class="card-header"><span class="card-title">LLM Backend</span></div>'
@@ -4065,7 +4112,11 @@ def _render_settings_panel(data: dict) -> str:
             f'<span class="platform-meta">events: {telemetry.get("total", 0)}</span>'
             "</div>"
         )
-    platform_body = "".join(platform_rows) if platform_rows else '<div class="empty">No platforms detected</div>'
+    platform_body = (
+        "".join(platform_rows)
+        if platform_rows
+        else '<div class="empty">No platforms detected</div>'
+    )
     platform_card = (
         '<div class="card" tabindex="0" role="region" aria-label="Platform integrations">'
         '<div class="card-header"><span class="card-title">Platform Integrations</span></div>'
@@ -4082,13 +4133,11 @@ def _render_settings_panel(data: dict) -> str:
         if mascot_uri
         else ""
     )
-    return (
-        f"{mascot_html}"
-        '<div class="settings-grid">'
-        f'<div class="settings-col">{settings_card}</div>'
-        f'<div class="settings-col settings-col-right">{backend_card}{platform_card}</div>'
-        "</div>"
-    )
+    rows = [
+        f'<div class="grid-row grid-cols-2">{settings_card}{backend_card}</div>',
+        f'<div class="grid-row grid-cols-1">{platform_card}</div>',
+    ]
+    return f"{mascot_html}" + "".join(rows)
 
 
 def _render_brain_panel(data: dict) -> str:
@@ -4100,125 +4149,195 @@ def _render_brain_panel(data: dict) -> str:
     todos = data.get("todos", {})
     log_entries = data.get("log", [])
 
-    def _list_block(title: str, items: list[str], limit: int = 8) -> str:
-        lines = items[:limit]
-        bullet_rows = "".join(f'<div class="brain-line">{_e(it)}</div>' for it in lines)
+    def _brain_card(
+        title: str,
+        body_html: str,
+        *,
+        meta: str | None = None,
+        aria: str | None = None,
+        accent: bool = False,
+    ) -> str:
+        classes = ["card", "brain-card"]
+        if accent:
+            classes.append("brain-card-emphasis")
+        meta_html = f'<span class="card-meta">{_e(meta)}</span>' if meta else ""
+        aria_label = _e(aria or title)
         return (
-            f'<div class="brain-card">'
-            f'<div class="brain-card-header">{_e(title)}</div>'
-            f'<div class="brain-card-body">{bullet_rows or '<div class="empty">None</div>'}</div>'
-            f"</div>"
+            f'<div class="{" ".join(classes)}" tabindex="0" role="region" aria-label="{aria_label}">'
+            f'<div class="card-header"><span class="card-title">{_e(title)}</span>{meta_html}</div>'
+            f'<div class="card-body">{body_html}</div>'
+            "</div>"
         )
 
-    memory_html = _list_block(f"Memory · {memory.get('total', 0)} lines", memory.get("preview", []))
-    rules_html = _list_block(f"Rules · {rules.get('total', 0)} entries", rules.get("preview", []))
+    def _list_lines(lines: list[str], empty_copy: str) -> str:
+        if not lines:
+            return f'<div class="brain-empty">{_e(empty_copy)}</div>'
+        return "".join(
+            f'<div class="brain-line"><span class="brain-text">{_e(line)}</span></div>'
+            for line in lines
+        )
 
-    todo_rows = ""
+    memory_card = _brain_card(
+        "Memory",
+        _list_lines(memory.get("preview", [])[:12], "No memory entries yet."),
+        meta=f"{memory.get('total', 0)} lines",
+        aria="Working memory summary",
+    )
+
+    rules_card = _brain_card(
+        "Rules",
+        _list_lines(rules.get("preview", [])[:8], "No rules captured yet."),
+        meta=f"{rules.get('total', 0)} entries",
+        aria="Behavior rules summary",
+    )
+
+    todo_rows: list[str] = []
     for item in todos.get("items", []):
-        todo_rows += (
+        label = f"{item.get('date', '')} {item.get('time', '')}".strip()
+        todo_rows.append(
             '<div class="brain-line">'
-            f'<span class="brain-chip">{_e(item.get("date", ""))} {_e(item.get("time", ""))}</span>'
+            f'<span class="brain-chip">{_e(label)}</span>'
             f'<span class="brain-text">{_e(item.get("text", ""))}</span>'
             "</div>"
         )
-    if not todo_rows:
-        todo_rows = '<div class="empty">No open TODOs</div>'
-    todos_html = (
-        '<div class="brain-card">'
-        f'<div class="brain-card-header">TODOs · {todos.get("total", 0)} open</div>'
-        f'<div class="brain-card-body">{todo_rows}</div>'
-        "</div>"
+    todos_body = "".join(todo_rows) or '<div class="brain-empty">No open TODOs</div>'
+    todos_card = _brain_card(
+        "TODOs",
+        todos_body,
+        meta=f"{todos.get('total', 0)} open",
+        aria="Active TODO list",
     )
 
-    log_rows = "".join(f'<div class="brain-line">{_e(entry.get("text", ""))}</div>' for entry in log_entries)
-    if not log_rows:
-        log_rows = '<div class="empty">No recent highlights</div>'
-    log_html = (
-        '<div class="brain-card">'
-        '<div class="brain-card-header">Recent Highlights</div>'
-        f'<div class="brain-card-body">{log_rows}</div>'
-        "</div>"
+    log_body = (
+        "".join(
+            f'<div class="brain-line"><span class="brain-text">{_e(entry.get("text", ""))}</span></div>'
+            for entry in log_entries
+        )
+        or '<div class="brain-empty">No recent highlights</div>'
     )
+    log_card = _brain_card("Recent Highlights", log_body, aria="Recent captured highlights")
 
-    backend_rows = ""
+    backend_rows: list[str] = []
     for item in backend.get("backends", []):
-        status = "●" if item["available"] else "○"
-        status_class = "brain-chip-ok" if item["available"] else "brain-chip-warn"
-        suffix = " tools" if item.get("supports_tools") else ""
-        backend_rows += (
+        available = item.get("available")
+        chip_class = "brain-chip-ok" if available else "brain-chip-warn"
+        suffix = " · tools" if item.get("supports_tools") else ""
+        backend_rows.append(
             '<div class="brain-line">'
-            f'<span class="brain-chip {status_class}">{status}</span>'
-            f'<span class="brain-text">{_e(item["name"])}{suffix}</span>'
-            f'<span class="brain-detail">{_e(item.get("reason", ""))}</span>'
+            f'<span class="brain-chip {chip_class}">{_e(item.get("name", ""))}</span>'
+            f'<span class="brain-text">{_e(item.get("reason", "")) or "available"}{suffix}</span>'
             "</div>"
         )
-    pending_count = backend.get("pending", 0)
-    backend_body = [
-        f'<div class="brain-card-body">{backend_rows}',
-        f'<div class="brain-meta">Preferred: {_e(backend.get("preferred", "auto"))}</div>',
-    ]
+    backend_rows.append(
+        f'<div class="brain-meta">Preferred: {_e(backend.get("preferred", "auto"))}</div>'
+    )
     env_override = backend.get("env_override")
     if env_override:
-        backend_body.append(f'<div class="brain-meta">Env override: {_e(env_override)}</div>')
+        backend_rows.append(f'<div class="brain-meta">Env override: {_e(env_override)}</div>')
+    pending_count = backend.get("pending", 0)
     if pending_count:
-        backend_body.append(f'<div class="brain-meta brain-meta-warn">{pending_count} queued task(s)</div>')
-    backend_body.append("</div>")
-    backend_html = (
-        '<div class="brain-card brain-card-emphasis">'
-        '<div class="brain-card-header">Backend</div>'
-        + "".join(backend_body)
-        + "</div>"
+        backend_rows.append(
+            f'<div class="brain-meta brain-meta-warn">{pending_count} queued LLM task(s)</div>'
+        )
+    backend_card = _brain_card(
+        "LLM Backend",
+        "".join(backend_rows),
+        accent=True,
+        aria="LLM backend overview",
     )
 
-    pending_rows = ""
-    for item in pending:
-        preview = item.get("prompt_preview", "")[:180]
+    pending_rows = "".join(
+        '<div class="brain-line">'
+        f'<span class="brain-chip brain-chip-warn">{_e(item.get("model", ""))}</span>'
+        f'<span class="brain-text">{_e(item.get("prompt_preview", "")[:160])}</span>'
+        "</div>"
+        for item in pending
+    )
+    if not pending_rows:
+        pending_rows = '<div class="brain-empty">Queue clear</div>'
+    else:
         pending_rows += (
+            '<div class="brain-meta">Re-run the command once a backend is available.</div>'
+        )
+    pending_card = _brain_card("Queued LLM Tasks", pending_rows, aria="Pending LLM work items")
+
+    summary_rows: list[str] = []
+    for slug, info in sorted(platforms.items()):
+        detected = info.get("detected")
+        chip = "brain-chip-ok" if detected else "brain-chip-dim"
+        telemetry = info.get("telemetry", {})
+        total = telemetry.get("total", 0)
+        summary_rows.append(
             '<div class="brain-line">'
-            f'<span class="brain-chip brain-chip-warn">{_e(item.get("model", ""))}</span>'
-            f'<span class="brain-text">{_e(preview)}</span>'
+            f'<span class="brain-chip {chip}">{_e(slug)}</span>'
+            f'<span class="brain-text">{_e(info.get("title", slug.title()))}</span>'
+            f'<span class="brain-detail">{total} event(s)</span>'
             "</div>"
         )
-    if not pending_rows:
-        pending_rows = '<div class="empty">Queue clear</div>'
-    pending_html = (
-        '<div class="brain-card">'
-        '<div class="brain-card-header">Queued LLM Tasks</div>'
-        f'<div class="brain-card-body">{pending_rows}</div>'
-        "</div>"
+    if not summary_rows:
+        summary_rows = [
+            '<div class="brain-empty">No platform telemetry yet.</div>',
+            _cmd_hints(["keephive setup --yes", "hive doctor"]),
+        ]
+    platform_summary_card = _brain_card(
+        "Platform Integrations",
+        "".join(summary_rows),
+        aria="Platform integration summary",
     )
 
-    platform_cards = ""
-    for slug, info in platforms.items():
-        status_chip = "brain-chip-ok" if info.get("detected") else "brain-chip-dim"
+    platform_detail_cards: list[str] = []
+    for slug, info in sorted(platforms.items()):
+        detected = info.get("detected")
+        chip = "brain-chip-ok" if detected else "brain-chip-dim"
         telemetry = info.get("telemetry", {})
         by_event = telemetry.get("by_event", {})
-        event_rows = "".join(
-            f'<span class="brain-chip">{_e(event)}</span><span class="brain-detail">{count}</span>'
-            for event, count in sorted(by_event.items(), key=lambda x: (-x[1], x[0]))
-        ) or '<div class="empty">No telemetry</div>'
-        platform_cards += (
-            '<div class="brain-card brain-card-compact">'
-            f'<div class="brain-card-header"><span class="brain-chip {status_chip}">{_e(slug)}</span>'
-            f'{_e(info.get("title", slug.title()))}</div>'
-            f'<div class="brain-card-body">{event_rows}'
-            f'<div class="brain-meta">Skill: {"✓" if info.get("skill_installed") else "×"}</div>'
-            f'<div class="brain-meta">Hooks: {len(info.get("hook_scripts", []))} file(s)</div>'
-            f'<div class="brain-meta">{_e(info.get("detection_reason", ""))}</div>'
-            "</div></div>"
+        recent_rows: list[str] = []
+        if by_event:
+            for event, count in sorted(by_event.items(), key=lambda x: (-x[1], x[0]))[:6]:
+                recent_rows.append(
+                    '<div class="brain-line">'
+                    f'<span class="brain-chip">{_e(event)}</span>'
+                    f'<span class="brain-detail">{count}</span>'
+                    "</div>"
+                )
+        else:
+            recent_rows.append('<div class="brain-empty">No telemetry yet.</div>')
+            if detected:
+                recent_rows.append(
+                    '<div class="brain-hint">Open a session in this agent to start streaming telemetry.</div>'
+                )
+        recent_rows.append(
+            f'<div class="brain-meta">Skill: {"✓" if info.get("skill_installed") else "×"} · Hooks: {len(info.get("hook_scripts", []))}</div>'
+        )
+        recent_rows.append(f'<div class="brain-meta">{_e(info.get("detection_reason", ""))}</div>')
+        platform_detail_cards.append(
+            _brain_card(
+                info.get("title", slug.title()),
+                "".join(recent_rows),
+                meta=slug,
+                aria=f"{slug} platform telemetry details",
+            )
         )
 
-    return (
-        '<div class="brain-grid">'
-        f"{backend_html}"
-        f"{memory_html}"
-        f"{rules_html}"
-        f"{todos_html}"
-        f"{pending_html}"
-        f"{log_html}"
-        f'<div class="brain-platform-grid">{platform_cards}</div>'
-        "</div>"
-    )
+    cards = [
+        backend_card,
+        memory_card,
+        rules_card,
+        todos_card,
+        pending_card,
+        log_card,
+        platform_summary_card,
+        *platform_detail_cards,
+    ]
+    if not cards:
+        return ""
+    rows: list[str] = []
+    chunk = 3
+    for idx in range(0, len(cards), chunk):
+        row_cards = cards[idx : idx + chunk]
+        cols = min(3, max(1, len(row_cards)))
+        rows.append(f'<div class="grid-row grid-cols-{cols}">{"".join(row_cards)}</div>')
+    return "".join(rows)
 
 
 # ---- Pipeline health panels ----
@@ -5579,7 +5698,7 @@ class _HiveHandler(BaseHTTPRequestHandler):
             else:
                 try:
                     from keephive.commands.profile import _validate_name
-                    from keephive.storage import profile_dir, set_active_profile
+                    from keephive.storage import profile_dir, profile_exists, set_active_profile
 
                     err = _validate_name(name)
                     if err:
@@ -5588,11 +5707,11 @@ class _HiveHandler(BaseHTTPRequestHandler):
                     elif name == "default":
                         set_active_profile(None)
                     else:
-                        target = profile_dir(name)
-                        if not target.exists():
+                        if not profile_exists(name):
                             ok = False
                             error = f"Profile '{name}' does not exist"
                         else:
+                            profile_dir(name)  # ensure directories and migrations
                             set_active_profile(name)
                 except Exception as exc:
                     ok = False
@@ -5659,7 +5778,7 @@ class _HiveHandler(BaseHTTPRequestHandler):
                     import shutil
 
                     from keephive.commands.profile import _validate_name
-                    from keephive.storage import active_profile, profile_dir
+                    from keephive.storage import active_profile, profile_exists, profile_paths
 
                     err = _validate_name(name)
                     if err:
@@ -5672,18 +5791,30 @@ class _HiveHandler(BaseHTTPRequestHandler):
                         ok = False
                         error = f"Cannot delete active profile '{name}'"
                     else:
-                        target = profile_dir(name)
-                        if not target.exists():
+                        if not profile_exists(name):
                             ok = False
                             error = f"Profile '{name}' does not exist"
                         else:
-                            shutil.rmtree(target)
+                            preferred, legacy = profile_paths(name)
+                            for target in (preferred, legacy):
+                                if not target.exists():
+                                    continue
+                                try:
+                                    if target.is_symlink():
+                                        target.unlink(missing_ok=True)
+                                    elif target.is_dir():
+                                        shutil.rmtree(target)
+                                    else:
+                                        target.unlink(missing_ok=True)
+                                except FileNotFoundError:
+                                    continue
                 except Exception as exc:
                     ok = False
                     error = str(exc)
 
         elif self.path == "/api/transfer/import":
             import base64
+
             b64 = (data.get("data") or "").strip()
             if not b64:
                 ok = False

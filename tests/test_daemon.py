@@ -14,8 +14,7 @@ from __future__ import annotations
 import io
 import json
 from datetime import datetime, timedelta
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 
 class TestDaemonFilePaths:
@@ -206,8 +205,8 @@ class TestSelfImproveThrottles:
         """
         from keephive.commands.daemon import _task_self_improve
         from keephive.storage import (
-            read_pending_improvements,
             read_daemon_state,
+            read_pending_improvements,
             write_daemon_state,
         )
 
@@ -313,9 +312,7 @@ class TestSessionendFiresSoulUpdate:
         from keephive.storage import daemon_config_file
 
         # Enable soul-update in daemon.json
-        daemon_config_file().write_text(
-            json.dumps({"tasks": {"soul-update": {"enabled": True}}})
-        )
+        daemon_config_file().write_text(json.dumps({"tasks": {"soul-update": {"enabled": True}}}))
 
         popen_calls: list[list[str]] = []
 
@@ -333,9 +330,7 @@ class TestSessionendFiresSoulUpdate:
         hook_sessionend([])
 
         # At least one Popen call should target daemon run soul-update
-        soul_update_calls = [
-            c for c in popen_calls if "daemon" in c and "soul-update" in c
-        ]
+        soul_update_calls = [c for c in popen_calls if "daemon" in c and "soul-update" in c]
         assert soul_update_calls, (
             f"Expected Popen call with 'daemon run soul-update', got: {popen_calls}"
         )
@@ -344,9 +339,7 @@ class TestSessionendFiresSoulUpdate:
         """hook_sessionend does NOT spawn soul-update when task is disabled."""
         from keephive.storage import daemon_config_file
 
-        daemon_config_file().write_text(
-            json.dumps({"tasks": {"soul-update": {"enabled": False}}})
-        )
+        daemon_config_file().write_text(json.dumps({"tasks": {"soul-update": {"enabled": False}}}))
 
         popen_calls: list[list[str]] = []
 
@@ -363,9 +356,5 @@ class TestSessionendFiresSoulUpdate:
 
         hook_sessionend([])
 
-        soul_update_calls = [
-            c for c in popen_calls if "daemon" in c and "soul-update" in c
-        ]
-        assert not soul_update_calls, (
-            "soul-update should NOT fire when disabled in daemon.json"
-        )
+        soul_update_calls = [c for c in popen_calls if "daemon" in c and "soul-update" in c]
+        assert not soul_update_calls, "soul-update should NOT fire when disabled in daemon.json"

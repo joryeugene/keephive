@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import re
 import shutil
@@ -11,7 +10,6 @@ from datetime import timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from keephive.llm import available_backends, get_backend_state
 from keephive.clock import get_today
 from keephive.health import (
     check_anthropic_memory,
@@ -27,10 +25,11 @@ from keephive.health import (
 from keephive.health import (
     get_installed_version as _get_installed_version,
 )
+from keephive.llm import available_backends, get_backend_state
 from keephive.output import console, notify_sound, prompt_yn, show_hint
 from keephive.platforms import platform_specs, read_hook_manifest
-from keephive.skillpack import get_record as get_skill_record
 from keephive.settings import get_setting
+from keephive.skillpack import get_record as get_skill_record
 from keephive.storage import (
     archive_dir,
     collect_todos,
@@ -46,6 +45,7 @@ from keephive.storage import (
     safe_read_text,
     working_dir,
 )
+from keephive.telemetry import summarize as summarize_telemetry
 
 
 def cmd_doctor(args: list[str]) -> None:
@@ -94,6 +94,7 @@ def cmd_doctor(args: list[str]) -> None:
     console.print("[bold]Agent Identity[/bold]")
     if check_soul():
         from keephive.storage import read_soul_summary
+
         soul = read_soul_summary()
         console.print(f"  [ok]OK[/ok] SOUL.md: {soul}")
     else:
@@ -102,6 +103,7 @@ def cmd_doctor(args: list[str]) -> None:
 
     if check_daemon():
         from keephive.storage import get_daemon_pid
+
         console.print(f"  [ok]OK[/ok] KingBee daemon running (PID {get_daemon_pid()})")
     else:
         console.print("  [err]OFFLINE[/err] KingBee daemon not running")
@@ -133,9 +135,7 @@ def cmd_doctor(args: list[str]) -> None:
     persistent_pref = get_setting("llm_backend") or "auto"
     env_override = os.environ.get("HIVE_LLM_BACKEND")
     if env_override:
-        console.print(
-            f"  Config: settings={persistent_pref}, env override={env_override}"
-        )
+        console.print(f"  Config: settings={persistent_pref}, env override={env_override}")
     else:
         console.print(f"  Config: settings={persistent_pref}")
 
@@ -220,11 +220,28 @@ def cmd_doctor(args: list[str]) -> None:
                     issues += 1
         else:
             console.print(
-                "    [warn]Hooks missing[/warn] run 'hive setup --platform "
-                f"{slug}' to install"
+                f"    [warn]Hooks missing[/warn] run 'hive setup --platform {slug}' to install"
             )
             if spec.detected:
                 issues += 1
+
+        telemetry_stats = summarize_telemetry(slug)
+        total_events = telemetry_stats.get("total", 0)
+        latest = telemetry_stats.get("latest")
+        if total_events:
+            latest_event = ""
+            if isinstance(latest, dict):
+                event_name = latest.get("event", "unknown")
+                ts = latest.get("timestamp", "recent")
+                latest_event = f" · latest {event_name} @ {ts}"
+            console.print(f"    [ok]Telemetry[/ok] {total_events} event(s){latest_event}")
+        else:
+            console.print("    [warn]Telemetry[/warn] no events captured yet")
+            if spec.detected:
+                console.print(
+                    f"      [dim]Tip:[/dim] open a session or run "
+                    f"'keephive setup --{slug}-hooks=yes' to seed data."
+                )
 
     # 3.7. Anthropic Memory
     console.print()
@@ -239,34 +256,64 @@ def cmd_doctor(args: list[str]) -> None:
     else:
         console.print("  [dim]Not detected (inactive or unknown)[/dim]")
 
+    # 3.8. Authentication
+    console.print()
+    console.print("[bold]Authentication[/bold]")
+    auth_checks = [
+        ("Gemini", Path.home() / ".gemini" / "auth.json"),
+        ("Codex", Path.home() / ".codex" / "auth.json"),
+    ]
+    for label, path in auth_checks:
+        if path.exists():
+            console.print(f"  [ok]OK[/ok] {label} auth detected at {path}")
+        else:
+            console.print(f"  [dim]SKIP[/dim] {label} auth not found (optional)")
+
     # 4. Hooks
     console.print()
     console.print("[bold]Hooks[/bold]")
-    settings = Path.home() / ".claude" / "settings.json"
-    if settings.exists():
-        try:
-            data = json.loads(settings.read_text())
-            hooks = data.get("hooks", {})
-            hooks_str = json.dumps(hooks)
+    for slug, spec in specs.items():
+        if not spec.detected:
+            continue
 
-            hook_checks = [
-                ("SessionStart", "hook-sessionstart"),
-                ("PreCompact", "hook-precompact"),
-                ("PostToolUse", "hook-posttooluse"),
-                ("UserPromptSubmit", "hook-userpromptsubmit"),
-            ]
-            for label, needle in hook_checks:
-                if needle in hooks_str or needle in hooks_str.lower():
-                    console.print(f"  [ok]OK[/ok] {label} hook")
+        settings_path = spec.config_path
+        if settings_path.exists():
+            try:
+                # Handle both JSON and plain text (for simple config checks)
+                content = settings_path.read_text()
+                hooks_str = content
+
+                if slug == "claude":
+                    hook_checks = [
+                        ("SessionStart", "hook-sessionstart"),
+                        ("PreCompact", "hook-precompact"),
+                        ("PostToolUse", "hook-posttooluse"),
+                        ("UserPromptSubmit", "hook-userpromptsubmit"),
+                    ]
+                elif slug == "gemini":
+                    hook_checks = [
+                        ("SessionStart", "session_start.py"),
+                        ("BeforeTool", "before_tool.py"),
+                        ("AfterModel", "after_model.py"),
+                    ]
                 else:
-                    console.print(f"  [err]MISSING[/err] {label} hook")
-                    issues += 1
-        except (json.JSONDecodeError, KeyError):
-            console.print("  [err]INVALID[/err] settings.json")
-            issues += 1
-    else:
-        console.print("  [err]MISSING[/err] settings.json")
-        issues += 1
+                    hook_checks = []
+
+                for label, needle in hook_checks:
+                    if needle in hooks_str or needle in hooks_str.lower():
+                        console.print(f"  [ok]OK[/ok] {spec.title} {label} hook")
+                    else:
+                        console.print(f"  [err]MISSING[/err] {spec.title} {label} hook")
+                        issues += 1
+            except Exception as e:
+                console.print(f"  [err]ERROR[/err] reading {spec.title} config: {e}")
+                issues += 1
+        else:
+            # Only count as issue for Claude since it's the primary platform
+            marker = "[err]MISSING[/err]" if slug == "claude" else "[dim]SKIP[/dim]"
+            console.print(f"  {marker} {spec.title} config: {settings_path}")
+            if slug == "claude":
+                issues += 1
 
     # 4.5. MCP registration + version drift
     console.print()

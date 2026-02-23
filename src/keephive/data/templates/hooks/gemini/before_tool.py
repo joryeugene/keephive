@@ -8,6 +8,11 @@ import os
 import shutil
 import subprocess
 import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+LOG_FILE = Path.home() / ".keephive" / ".hook-debug.log"
+LOG_MAX_BYTES = 64_000
 
 
 def _keephive_bin() -> str:
@@ -18,20 +23,85 @@ def _keephive_bin() -> str:
     return "keephive"
 
 
+def _cli_env(platform: str) -> dict[str, str]:
+    env = os.environ.copy()
+    env.setdefault("HIVE_PLATFORM", platform)
+    env["KEEPHIVE_TELEMETRY_SHIM"] = "1"
+    return env
+
+
+def _log_failure(platform: str, event: str, details: str) -> None:
+    try:
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        line = (
+            f"[{datetime.now(timezone.utc).isoformat()}] "
+            f"{platform}:{event} telemetry failed: {details}\n"
+        )
+        with LOG_FILE.open("a", encoding="utf-8") as fh:
+            fh.write(line)
+        if LOG_FILE.stat().st_size > LOG_MAX_BYTES:
+            data = LOG_FILE.read_text(encoding="utf-8")[-(LOG_MAX_BYTES // 2) :]
+            LOG_FILE.write_text(data, encoding="utf-8")
+    except Exception:
+        pass  # pragma: no cover
+
+
+def _append_event(event: str, payload: dict[str, object]) -> None:
+    platform = os.environ.get("HIVE_PLATFORM", "gemini").lower()
+    data = payload or {}
+    errors: list[str] = []
+
+    try:
+        extra = os.environ.get("KEEPHIVE_PYTHONPATH")
+        if extra:
+            for entry in extra.split(os.pathsep):
+                if entry and entry not in sys.path:
+                    sys.path.append(entry)
+        from keephive.telemetry import append_event as _append  # type: ignore
+
+        _append(platform, event, data, source="hook")
+        return
+    except Exception as exc:  # pragma: no cover
+        errors.append(f"import:{exc!r}")
+
+    try:
+        cmd = [
+            _keephive_bin(),
+            "telemetry",
+            "append",
+            "--platform",
+            platform,
+            "--event",
+            event,
+            "--source",
+            "hook",
+            "--stdin-payload",
+        ]
+        proc = subprocess.run(
+            cmd,
+            input=json.dumps(data),
+            text=True,
+            capture_output=True,
+            env=_cli_env(platform),
+        )
+        if proc.returncode == 0:
+            return
+        payload_err = proc.stderr.strip() or proc.stdout.strip() or f"exit {proc.returncode}"
+        errors.append(f"cli:{payload_err}")
+    except Exception as exc:  # pragma: no cover
+        errors.append(f"cli_exc:{exc!r}")
+
+    _log_failure(platform, event, "; ".join(errors))
+
+
 def main() -> None:
     raw = sys.stdin.read()
-    payload: dict[str, object]
     try:
         payload = json.loads(raw) if raw.strip() else {}
     except json.JSONDecodeError:
         payload = {"raw": raw}
 
-    try:
-        from keephive.telemetry import append_event
-
-        append_event("gemini", "before_tool", payload, source="hook")
-    except Exception:
-        pass
+    _append_event("before_tool", payload)
 
     cmd = [_keephive_bin(), "hook-userpromptsubmit"]
     env = os.environ.copy()

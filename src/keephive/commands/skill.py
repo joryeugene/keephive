@@ -8,8 +8,9 @@ from pathlib import Path
 
 from keephive import __version__
 from keephive.output import console
-from keephive.skillpack import manifest_path as auto_manifest_path, read_manifest, write_manifest
-from keephive.storage import guides_dir, hive_dir, today
+from keephive.skillpack import manifest_path as auto_manifest_path
+from keephive.skillpack import read_manifest, write_manifest
+from keephive.storage import guides_dir, today
 
 SKILL_MANIFEST = auto_manifest_path()
 

@@ -137,7 +137,9 @@ def parse_claude_response(raw_stdout: str, response_model: Type[T]) -> T:
     try:
         return response_model.model_validate(raw)
     except ValidationError as exc:
-        raise ClaudePipeError(f"Response validation failed: {exc}\nRaw data: {json.dumps(raw)[:500]}")
+        raise ClaudePipeError(
+            f"Response validation failed: {exc}\nRaw data: {json.dumps(raw)[:500]}"
+        )
 
 
 def _call_structured(

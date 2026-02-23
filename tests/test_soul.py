@@ -5,10 +5,6 @@ Covers: soul_file(), read_soul(), read_soul_summary(), and sessionstart injectio
 
 from __future__ import annotations
 
-import io
-import json
-from pathlib import Path
-
 
 class TestSoulFilePath:
     """soul_file() must live inside hive_dir()."""

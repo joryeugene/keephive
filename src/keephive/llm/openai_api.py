@@ -1,4 +1,4 @@
-"""OpenAI Responses API backend."""
+"""OpenAI Chat Completions API backend."""
 
 from __future__ import annotations
 
@@ -15,10 +15,10 @@ from keephive.llm.exceptions import ClaudePipeError
 
 T = TypeVar("T", bound=BaseModel)
 
-_ENDPOINT = "https://api.openai.com/v1/responses"
+_ENDPOINT = "https://api.openai.com/v1/chat/completions"
 _MODEL_MAP = {
-    "haiku": "gpt-4.1-mini",
-    "sonnet": "gpt-4.1",
+    "haiku": "gpt-5-mini",
+    "sonnet": "gpt-5.2",
 }
 
 
@@ -36,7 +36,7 @@ def _call_structured(
     if not api_key:
         raise ClaudePipeError("OPENAI_API_KEY not set.")
 
-    model_id = _MODEL_MAP.get(model, model or "gpt-4.1-mini")
+    model_id = _MODEL_MAP.get(model, model or "gpt-5-mini")
     text = prompt
     if stdin_text:
         text = f"{prompt}\n\n---\n\n{stdin_text}"
@@ -44,7 +44,7 @@ def _call_structured(
     schema = response_model.model_json_schema()
     payload = {
         "model": model_id,
-        "input": [{"role": "user", "content": [{"type": "text", "text": text}]}],
+        "messages": [{"role": "user", "content": text}],
         "response_format": {
             "type": "json_schema",
             "json_schema": {
@@ -79,14 +79,9 @@ def _call_structured(
 
     try:
         parsed = json.loads(raw)
-        output = parsed.get("output", [])
-        first = output[0]["content"][0]
-        if first["type"] == "output_text":
-            structured = json.loads(first["text"])
-        elif first["type"] == "json_schema":
-            structured = first["json"]
-        else:
-            raise KeyError("Unsupported content type")
+        choice = parsed.get("choices", [])[0]
+        content = choice["message"]["content"]
+        structured = json.loads(content)
     except (json.JSONDecodeError, KeyError, IndexError) as exc:
         raise ClaudePipeError(f"OpenAI response malformed: {exc}")
 
@@ -94,8 +89,7 @@ def _call_structured(
         return response_model.model_validate(structured)
     except ValidationError as exc:
         raise ClaudePipeError(
-            f"OpenAI response validation failed: {exc}\n"
-            f"Raw data: {json.dumps(structured)[:500]}"
+            f"OpenAI response validation failed: {exc}\nRaw data: {json.dumps(structured)[:500]}"
         )
 
 
@@ -113,5 +107,5 @@ backend = Backend(
     supports_streaming=True,
     call_structured=_call_structured,
     detect=_detect,
-    describe=lambda: "OpenAI Responses API (requires OPENAI_API_KEY).",
+    describe=lambda: "OpenAI Chat Completions API (requires OPENAI_API_KEY).",
 )

@@ -11,7 +11,14 @@ from datetime import date, timedelta
 
 from keephive.clock import get_today
 from keephive.output import console, copy_to_clipboard, notify_sound, prompt_yn
-from keephive.storage import collect_todos, daily_dir, daily_file, get_meaningful_entries, safe_read_text, today
+from keephive.storage import (
+    collect_todos,
+    daily_dir,
+    daily_file,
+    get_meaningful_entries,
+    safe_read_text,
+    today,
+)
 
 
 def _weekend_aware_cutoff() -> date:

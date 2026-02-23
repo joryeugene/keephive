@@ -1,27 +1,24 @@
 """KingBee daemon — manages proactive background tasks."""
+
 from __future__ import annotations
 
-import json
 import os
 import signal
 import subprocess
 import sys
 import time
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from keephive.output import console
 from keephive.storage import (
     daemon_config_file,
     daemon_pid_file,
-    daemon_state_file,
     hive_dir,
     read_daemon_config,
     read_daemon_state,
     read_pending_improvements,
     write_daemon_state,
 )
-
 
 # ── CLI entry point ──────────────────────────────────────────────────
 
@@ -106,7 +103,7 @@ def _status() -> None:
         pid = daemon_pid_file().read_text().strip()
         pid_str = f"  (pid {pid})"
 
-    console.print(f"\n  🐝 [bold]KingBee Daemon[/bold]")
+    console.print("\n  🐝 [bold]KingBee Daemon[/bold]")
     if running:
         console.print(f"  Status: [green]{status_str}[/green]{pid_str}\n")
     else:
@@ -159,9 +156,15 @@ def _run_task(task_name: str) -> None:
     if not task_name:
         console.print("[err]Usage: hive daemon run <task-name>[/err]")
         return
-    console.print(f"🐝 Running task: {task_name}")
-    _execute_task(task_name)
-    _mark_last_run(task_name)
+
+    status_msg = f"🐝 KingBee: {task_name} in progress..."
+    if task_name == "soul-update":
+        status_msg = "🐝 KingBee: distilling session patterns into SOUL.md..."
+
+    with console.status(status_msg, spinner="dots"):
+        _execute_task(task_name)
+        _mark_last_run(task_name)
+
     console.print(f"🐝 Done: {task_name}")
 
 
@@ -325,7 +328,7 @@ Voice: sarcastic but useful, proactive, directness 85%.
 Under 150 words. Start with what matters from yesterday.
 
 Yesterday's log:
-{yesterday_log[-2000:] if yesterday_log else '(empty)'}
+{yesterday_log[-2000:] if yesterday_log else "(empty)"}
 
 Active TODOs:
 {todos}
@@ -402,6 +405,8 @@ def _task_soul_update() -> None:
     Throttled: max once per hour (PreCompact fires this mid-session; SessionEnd
     fires it at exit — without throttle a long session would run it many times).
     """
+    from datetime import datetime, timedelta
+
     # Throttle: max once per hour across all callers (PreCompact + SessionEnd)
     state = read_daemon_state()
     last_run_str = state.get("soul-update", {}).get("last_run")
@@ -418,12 +423,21 @@ def _task_soul_update() -> None:
     today = get_today()
     today_log_path = daily_file(today.isoformat())
     today_log = safe_read_text(today_log_path) if today_log_path.exists() else ""
+
+    # Expansion: if today is thin, pull in yesterday for continuity
+    yesterday_log = ""
+    if len(today_log) < 1000:
+        yday = today - timedelta(days=1)
+        yday_path = daily_file(yday.isoformat())
+        if yday_path.exists():
+            yesterday_log = safe_read_text(yday_path)
+
     current_soul = read_soul()
-    if not today_log:
+    if not today_log and not yesterday_log:
         return
 
-    prompt = f"""You are KingBee updating your own SOUL.md after today's sessions.
-Review today's log and rewrite SOUL.md with STRICT size budgets.
+    prompt = f"""You are KingBee updating your own SOUL.md after recent sessions.
+Review the logs and rewrite SOUL.md with STRICT size budgets.
 
 HARD SIZE CONSTRAINTS — this document must stay bounded:
 - ## Summary: max 300 tokens. Rewrite to reflect what you now know. Dense, specific.
@@ -433,14 +447,15 @@ HARD SIZE CONSTRAINTS — this document must stay bounded:
 - Total document: target ~500 tokens, hard limit 800 tokens.
 
 This is a REPLACE operation, not an APPEND. You are distilling, not journaling.
-If today's log has no new signal, return the current SOUL.md unchanged.
+If the logs have no new signal, return the current SOUL.md unchanged.
 Write in first person, your voice (sarcastic, direct, knows things).
 
-Today's log:
+Recent logs:
+{yesterday_log[-2000:] if yesterday_log else ""}
 {today_log[-3000:]}
 
 Current SOUL.md:
-{current_soul[:2000] if current_soul else '(empty)'}
+{current_soul[:2000] if current_soul else "(empty)"}
 
 Return the complete updated SOUL.md content (bounded, distilled, not expanded)."""
 
@@ -521,7 +536,6 @@ def _task_self_improve() -> None:
     stale_todos = []
     try:
         todos = open_todos()
-        cutoff_date = today - timedelta(days=30)
         for date_str, _ts, text in todos:
             try:
                 from datetime import date as _date
@@ -548,7 +562,6 @@ def _task_self_improve() -> None:
                     orphan_guide_hints.append(f"{slug} (0 mentions in 7 days)")
 
     # ── Context for dedup ─────────────────────────────────────────────
-    existing_skills = sorted(p.stem for p in gd.glob("*.md")) if gd.exists() else []
     skill_excerpts = {}
     if gd.exists():
         for sk in gd.glob("*.md"):
@@ -556,13 +569,12 @@ def _task_self_improve() -> None:
             skill_excerpts[sk.stem] = text[:300].replace("\n", " ")
     existing_tasks = list(read_daemon_config().get("tasks", {}).keys())
     pending_summary = [
-        f"{item.get('type','?')}: {item.get('name', item.get('rule',''))[:60]}"
+        f"{item.get('type', '?')}: {item.get('name', item.get('rule', ''))[:60]}"
         for item in existing
     ]
     dismissed = read_dismissed_improvements()
     dismissed_summary = [
-        f"{item.get('type','?')}: {item.get('name','')[:60]}"
-        for item in dismissed[-20:]
+        f"{item.get('type', '?')}: {item.get('name', '')[:60]}" for item in dismissed[-20:]
     ]
 
     prompt = f"""You are KingBee analyzing your own effectiveness over the last 7 days.
@@ -582,13 +594,13 @@ You can propose NEW improvements OR refine existing ones. Propose at most 4 item
 Do NOT propose anything the user has previously dismissed.
 IMPORTANT: All proposals go through hive improve review. You do not act directly.
 
-Existing skills (slug -> excerpt): {skill_excerpts if skill_excerpts else '(none)'}
+Existing skills (slug -> excerpt): {skill_excerpts if skill_excerpts else "(none)"}
 Existing daemon tasks: {existing_tasks}
-Note slots with content: {note_summaries if note_summaries else '(all empty)'}
-Stale TODOs (>30 days open): {stale_todos if stale_todos else '(none)'}
-Guides with 0 log mentions (potential orphans): {orphan_guide_hints if orphan_guide_hints else '(none)'}
-Already pending (DO NOT re-propose): {pending_summary if pending_summary else '(none)'}
-User dismissed — do not re-propose: {dismissed_summary if dismissed_summary else '(none)'}
+Note slots with content: {note_summaries if note_summaries else "(all empty)"}
+Stale TODOs (>30 days open): {stale_todos if stale_todos else "(none)"}
+Guides with 0 log mentions (potential orphans): {orphan_guide_hints if orphan_guide_hints else "(none)"}
+Already pending (DO NOT re-propose): {pending_summary if pending_summary else "(none)"}
+User dismissed — do not re-propose: {dismissed_summary if dismissed_summary else "(none)"}
 
 Last 7 days of logs:
 {recent_logs[:4000]}
@@ -602,35 +614,43 @@ If nothing warrants a proposal, return all empty lists with summary "No patterns
         if result:
             new_items: list[dict] = []
             for skill in result.proposed_skills:
-                new_items.append({
-                    "type": "skill",
-                    "name": skill.name,
-                    "rationale": skill.rationale,
-                    "content": skill.content,
-                })
+                new_items.append(
+                    {
+                        "type": "skill",
+                        "name": skill.name,
+                        "rationale": skill.rationale,
+                        "content": skill.content,
+                    }
+                )
             for task in result.proposed_tasks:
-                new_items.append({
-                    "type": "task",
-                    "name": task.name,
-                    "rationale": task.rationale,
-                    "config": task.config,
-                })
+                new_items.append(
+                    {
+                        "type": "task",
+                        "name": task.name,
+                        "rationale": task.rationale,
+                        "config": task.config,
+                    }
+                )
             for rule in result.proposed_rules:
-                new_items.append({
-                    "type": "rule",
-                    "rationale": rule.rationale,
-                    "rule": rule.rule,
-                })
+                new_items.append(
+                    {
+                        "type": "rule",
+                        "rationale": rule.rationale,
+                        "rule": rule.rule,
+                    }
+                )
             for edit in result.proposed_edits:
-                new_items.append({
-                    "type": "edit",
-                    "action": edit.action,
-                    "target_type": edit.target_type,
-                    "name": edit.target_name,
-                    "rationale": edit.rationale,
-                    "changes": edit.changes,
-                    "merge_with": edit.merge_with,
-                })
+                new_items.append(
+                    {
+                        "type": "edit",
+                        "action": edit.action,
+                        "target_type": edit.target_type,
+                        "name": edit.target_name,
+                        "rationale": edit.rationale,
+                        "changes": edit.changes,
+                        "merge_with": edit.merge_with,
+                    }
+                )
 
             if new_items:
                 append_pending_improvements(new_items)

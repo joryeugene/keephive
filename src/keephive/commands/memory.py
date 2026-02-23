@@ -58,6 +58,7 @@ _FRICTION_ANNOTATION_RE = re.compile(r"^\[\d+ sessions?: [^\]]+\]\s*")
 def _count_pending_facts() -> int:
     """Return the number of pending facts in .pending-facts.md."""
     from keephive.storage import hive_dir
+
     path = hive_dir() / ".pending-facts.md"
     if not path.exists():
         return 0
@@ -67,6 +68,7 @@ def _count_pending_facts() -> int:
 def _count_pending_rules() -> int:
     """Return the number of pending rules in .pending-rules.md."""
     from keephive.storage import hive_dir
+
     path = hive_dir() / ".pending-rules.md"
     if not path.exists():
         return 0
