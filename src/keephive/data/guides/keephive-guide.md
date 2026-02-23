@@ -104,7 +104,7 @@ When Claude Code compacts a conversation, keephive's PreCompact hook:
 
 ### KingBee (Identity & Maintenance)
 
-The **KingBee** daemon manages a persistent identity for your agent in `~/.claude/hive/working/SOUL.md`.
+The **KingBee** daemon manages a persistent identity for your agent in `~/.keephive/hive/working/SOUL.md`.
 
 - **Agent Identity**: Manages a cross-project summary of specialized skills and patterns.
 - **Morning Briefing**: Your first session of the day receives a briefing of pending tasks.
@@ -162,14 +162,17 @@ MCP tools are preferred when available. Use CLI for: verify, reflect, edit, note
 
 ## Configuration
 
-| Variable              | Default          | Description                            |
-| --------------------- | ---------------- | -------------------------------------- |
-| `HIVE_HOME`           | `~/.claude/hive` | Data directory                         |
-| `HIVE_STALE_DAYS`     | `30`             | Days before a fact is flagged          |
-| `HIVE_CAPTURE_BUDGET` | `4000`           | Characters to extract from transcripts |
-| `HIVE_SKIP_LLM`       | (unset)          | Skip LLM calls in hooks (testing)      |
-| `KEEPHIVE_PLUGIN_DIR` | (auto)           | Override skill/plugin directory        |
-| `NO_COLOR`            | (unset)          | Disable terminal colors                |
+| Variable              | Default             | Description                                              |
+| --------------------- | ------------------- | -------------------------------------------------------- |
+| `HIVE_HOME`           | `~/.keephive/hive`  | Data directory                                           |
+| `HIVE_STALE_DAYS`     | `30`                | Days before a fact is flagged                            |
+| `HIVE_CAPTURE_BUDGET` | `4000`              | Characters to extract from transcripts                   |
+| `HIVE_SKIP_LLM`       | (unset)             | Skip LLM calls in hooks (testing only)                   |
+| `KEEPHIVE_PLUGIN_DIR` | (auto)              | Override skill/plugin directory                          |
+| `ANTHROPIC_API_KEY`   | (unset)             | Enables Anthropic API backend inside sessions            |
+| `OPENAI_API_KEY`      | (unset)             | Enables OpenAI backend fallback inside sessions          |
+| `GEMINI_API_KEY`      | (unset)             | Enables Gemini API backend fallback inside sessions      |
+| `NO_COLOR`            | (unset)             | Disable terminal colors                                  |
 
 ## Workflows
 
@@ -221,16 +224,14 @@ After finishing work:
 
 ### When to use each view
 
-| View   | Path      | Use when you need                        |
-| ------ | --------- | ---------------------------------------- |
-| All    | `/`       | Full picture of everything               |
-| Daily  | `/daily`  | Session work: log, TODOs, standup        |
-| Dev    | `/dev`    | Quick reference while coding             |
-| Simple | `/simple` | Minimal distraction                      |
-| Stats  | `/stats`  | Usage patterns, command breakdown        |
-| Know   | `/know`   | Deep-read knowledge guides               |
-| Mem    | `/mem`    | Review working memory and rules          |
-| Notes  | `/notes`  | Scratchpad with slot switching           |
+| View     | Path        | Use when you need                                        |
+| -------- | ----------- | -------------------------------------------------------- |
+| Home     | `/`         | Full picture: status, log, TODOs, knowledge, memory      |
+| Dev      | `/dev`      | Quick reference while coding                             |
+| Brain    | `/brain`    | High-density: working memory, rules, TODOs, telemetry    |
+| Know     | `/know`     | Deep-read knowledge guides                               |
+| Stats    | `/stats`    | Usage patterns, command breakdown                        |
+| Settings | `/settings` | Profile management, agent identity, daemon status        |
 
 ### Layout principle
 
@@ -289,15 +290,13 @@ No manual copy-paste. The feedback appears in Claude Code's context on the very 
 ### View layouts
 
 ```
-All (/)                 Daily (/daily)
+Home (/)                Brain (/brain)
 +------------------+    +------------------+
-| status  |   ps   |    | status  |   ps   |
+| status  |   ps   |    | memory  | rules  |
 +------------------+    +------------------+
-| log-home         |    | log (date nav)   |
+| log-home         |    | todos   | soul   |
 +------------------+    +------------------+
-| todos            |    | todos | recurring|
-+------------------+    +------------------+
-| notes-compact    |    | standup          |
+| todos            |    | platform telemetry|
 +------------------+    +------------------+
 | knowledge-limited|
 +------------------+    Dev (/dev)
@@ -310,15 +309,36 @@ Stats (/stats)          | status-brief     |
 | stats-commands   |    | facts            |
 +------------------+    +------------------+
                         | knowledge| memory|
-Simple (/simple)        +------------------+
+Settings (/settings)    +------------------+
 +------------------+
-| status-brief     |    Know / Mem / Notes
+| profiles         |    Know (/know)
 +------------------+    +------------------+
-| log     | todos  |    | status-brief     |
+| daemon status    |    | status-brief     |
 +------------------+    +------------------+
-                        | [content]        |
-                        +------------------+
+| soul preview     |    | knowledge guides |
++------------------+    +------------------+
 ```
+
+## Multi-Backend LLM Routing
+
+keephive uses a priority-ordered backend chain. All LLM commands (`hive a`, `hive v`, etc.)
+go through this layer automatically:
+
+| Priority | Backend         | When active                          |
+|----------|----------------|--------------------------------------|
+| 10       | `anthropic_cli` | `claude` binary on PATH (default)    |
+| 20       | `anthropic_api` | `ANTHROPIC_API_KEY` + inside session |
+| 25       | `gemini_api`    | `GEMINI_API_KEY` set                 |
+| 30       | `openai_api`    | `OPENAI_API_KEY` set                 |
+| 99       | `none`          | Always — offline mode                |
+
+**Failover**: If a backend fails with a generic `ClaudePipeError`, the router
+automatically tries the next backend (in auto mode). The `none` backend always runs
+last and raises `ClaudePipeError("No LLM backend available")` if reached.
+
+**Non-retriable errors**: A `BackendTimeoutError` (subprocess timed out) propagates
+immediately — no retry. A different model answering the same prompt would silently
+change behavior, which is not acceptable for verification or audit tasks.
 
 ## LLM Features and Costs
 

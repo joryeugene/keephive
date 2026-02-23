@@ -25,17 +25,17 @@ Tiers from most stable (top) to most ephemeral (bottom).
 | `just test`, `just serve`, `just lint`, `just check`       |
 | Edited by: user or Claude. Self-documenting via comments.  |
 +============================================================+
-| AGENT IDENTITY  ~/.claude/hive/working/SOUL.md             |
+| AGENT IDENTITY  ~/.keephive/hive/working/SOUL.md             |
 | Persistent cross-project identity. Managed by KingBee.     |
 | Specialized skills, strengths, weaknesses, personality.    |
 | Updated via soul-update task / PreCompact throttle.        |
 +============================================================+
-| WORKING MEMORY  ~/.claude/hive/working/memory.md           |
+| WORKING MEMORY  ~/.keephive/hive/working/memory.md           |
 | Verified cross-session facts. 30-90d TTL.                  |
 | "auth uses JWT 15min", "keephive v0.13.2 released"         |
 | Updated via hive_mem, verified by hive v                   |
 +============================================================+
-| RULES  ~/.claude/hive/rules.md                             |
+| RULES  ~/.keephive/hive/rules.md                             |
 | Behavioral nudges for Claude this session                  |
 | hive rule "text", rm, learn (from /insights), review       |
 +============================================================+
@@ -43,7 +43,7 @@ Tiers from most stable (top) to most ephemeral (bottom).
 | Rich structured docs per topic, injected by tag (or opt-in always) |
 | hive ke <name> to edit, hive k <name> to view              |
 +============================================================+
-| DAILY LOG  ~/.claude/hive/YYYY-MM-DD.md                    |
+| DAILY LOG  ~/.keephive/hive/YYYY-MM-DD.md                    |
 | Raw capture stream. FACT/TODO/DONE/DECISION/INSIGHT        |
 | hive r, precompact hook, hive t, hive td                   |
 +============================================================+

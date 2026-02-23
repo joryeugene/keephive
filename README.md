@@ -64,7 +64,7 @@ Keep your agent orientated across platforms. The new <code>hive serve /brain</co
 
 ```console
 $ hive
-keephive v0.15.0
+keephive v1.0.0
   ● hooks  ● mcp  ● data
 
   4 facts (4 ok) | 12 today | 8 yesterday | 2 guides | 48K
@@ -219,14 +219,35 @@ flowchart TD
         WORK -->|session ends| SEND["SessionEnd:<br>finalize stats"]
     end
 
+    subgraph LLM["LLM Routing (priority chain)"]
+        direction LR
+        ACLI["claude -p CLI<br>(priority 10, default)"]
+        AAPI["Anthropic API<br>(priority 20)"]
+        GAPI["Gemini API<br>(priority 25)"]
+        OAPI["OpenAI API<br>(priority 30)"]
+        NONE["none / offline<br>(priority 99)"]
+        ACLI -->|"timeout → non-retriable"| NONE
+        ACLI -->|"error in auto mode"| AAPI
+        AAPI -->|"error"| GAPI
+        GAPI -->|"error"| OAPI
+        OAPI -->|"error"| NONE
+    end
+
     subgraph STORE["Knowledge Store (~/.keephive/hive/)"]
         MEM[("Memory<br>30–90d TTL")]
+        SOUL[("SOUL.md<br>agent identity")]
         GUIDES[("Guides")]
         RULES[("Rules")]
         LOG[("Daily log")]
         TODOS[("TODOs")]
         PENDING[(".pending-facts")]
         STATS[(".stats.json<br>workflow analytics")]
+    end
+
+    subgraph DAEMON["KingBee Daemon (background)"]
+        BRIEF["morning briefing"]
+        IMPROVE[(".pending-improvements")]
+        STALECK["stale-check scan"]
     end
 
     subgraph CC["Claude Code Data (~/.keephive/usage-data/)"]
@@ -247,6 +268,9 @@ flowchart TD
     START -->|reads| STORE
     PC --> LOG
     PC --> PENDING
+    PC -->|"soul-update (throttled 1h)"| SOUL
+    PC -.->|LLM classify| LLM
+    VRF -.->|LLM verify| LLM
     LOG -->|"hive rf · promote"| MEM
     PENDING -->|"hive mem review"| MEM
     MEM -->|"hive v · re-stamp"| MEM
@@ -260,6 +284,10 @@ flowchart TD
     STCMD -.->|"session analytics"| CC
     STCMD -.->|"workflow analytics"| STORE
     SEND -.->|".stats.json"| STATS
+    DAEMON -->|reads/writes| STORE
+    DAEMON --> BRIEF
+    DAEMON --> IMPROVE
+    DAEMON --> STALECK
 
     classDef ccdata fill:#1a1a2e,stroke:#4a9eff,stroke-width:2px,color:#4a9eff
     class META,FACETS ccdata
@@ -363,18 +391,16 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 
 #### Dashboard
 
-`hive serve` launches a live web dashboard at localhost:3847 with 8 views:
+`hive serve` launches a live web dashboard at localhost:3847 with 6 views:
 
-| View   | Path      | Focus                                              |
-| ------ | --------- | -------------------------------------------------- |
-| All    | `/`       | Everything: status, log, TODOs, knowledge, memory, notes |
-| Daily  | `/daily`  | Active session: log with date nav, TODOs+recurring, standup |
-| Dev    | `/dev`    | Quick reference: TODOs+log, facts, knowledge+memory compact |
-| Simple | `/simple` | Minimal: status, log, TODOs                        |
-| Stats  | `/stats`  | Usage: sparkline, heatmap, streak, command breakdown |
-| Know   | `/know`   | Knowledge guides with markdown rendering            |
-| Mem    | `/mem`    | Working memory + rules                              |
-| Notes  | `/notes`  | Multi-slot scratchpad with switcher                 |
+| View     | Path        | Focus                                                      |
+| -------- | ----------- | ---------------------------------------------------------- |
+| Home     | `/`         | Full overview: status, log, TODOs, knowledge, memory       |
+| Dev      | `/dev`      | Quick reference: TODOs+log, facts, knowledge+memory compact |
+| Brain    | `/brain`    | High-density: working memory, rules, TODOs, platform telemetry |
+| Know     | `/know`     | Knowledge guides with markdown rendering                   |
+| Stats    | `/stats`    | Usage: sparkline, heatmap, streak, command breakdown       |
+| Settings | `/settings` | Profile management, agent identity, daemon status          |
 
 Auto-refresh (configurable interval), Cmd+K search, split-pane resizing, CRUD forms (remember, add TODO, mark done, append note), log type filters, and zero external dependencies.
 
@@ -499,13 +525,15 @@ All commands are also available as MCP tools for Claude Code to call directly:
 <details>
 <summary><b>Environment variables</b></summary>
 
-| Variable              | Default          | Description                            |
-| --------------------- | ---------------- | -------------------------------------- |
-| `HIVE_HOME`           | `~/.keephive/hive` | Data directory                         |
-| `HIVE_STALE_DAYS`     | `30`             | Days before a fact is flagged stale    |
-| `HIVE_CAPTURE_BUDGET` | `4000`           | Characters to extract from transcripts |
-| `ANTHROPIC_API_KEY`   | (unset)          | Enables LLM features inside Claude Code sessions. Never needed from a terminal. |
-| `NO_COLOR`            | (unset)          | Disable terminal colors                |
+| Variable              | Default            | Description                                                       |
+| --------------------- | ------------------ | ----------------------------------------------------------------- |
+| `HIVE_HOME`           | `~/.keephive/hive` | Data directory                                                    |
+| `HIVE_STALE_DAYS`     | `30`               | Days before a fact is flagged stale                               |
+| `HIVE_CAPTURE_BUDGET` | `4000`             | Characters to extract from transcripts                            |
+| `ANTHROPIC_API_KEY`   | (unset)            | Enables Anthropic API backend inside Claude Code sessions         |
+| `OPENAI_API_KEY`      | (unset)            | Enables OpenAI backend fallback inside Claude Code sessions       |
+| `GEMINI_API_KEY`      | (unset)            | Enables Gemini API backend fallback inside Claude Code sessions   |
+| `NO_COLOR`            | (unset)            | Disable terminal colors                                           |
 
 </details>
 
@@ -521,14 +549,21 @@ The API path exists for one specific case: running LLM commands (`hive a`, `hive
 <details>
 <summary><b>Billing tiers and LLM-powered commands</b></summary>
 
-### Two tiers
+### Multi-backend routing
 
-| Tier | When active | Cost |
-|------|-------------|------|
-| `claude -p` subprocess | Terminal or hooks (default, always) | Included with Pro/Max (counts against usage limits); consumes API tokens if on API billing |
-| Direct Anthropic API | Inside Claude Code + `ANTHROPIC_API_KEY` set | Paid — per-token API billing |
+keephive uses a priority-ordered backend chain. The first available backend wins:
 
-Hooks (PreCompact, etc.) run without the `CLAUDECODE` environment variable, so they always take the `claude -p` subprocess path regardless of whether `ANTHROPIC_API_KEY` is present in your shell.
+| Priority | Backend | When active | Cost |
+|----------|---------|-------------|------|
+| 10 | `claude -p` CLI | Terminal or hooks (default, always) | Included with Pro/Max; API tokens if on API billing |
+| 20 | Anthropic API | Inside Claude Code + `ANTHROPIC_API_KEY` | Paid — per-token |
+| 25 | Gemini API | `GEMINI_API_KEY` set | Paid — per-token |
+| 30 | OpenAI API | `OPENAI_API_KEY` set | Paid — per-token |
+| 99 | None (offline) | Always — last resort | Free, no LLM output |
+
+If a backend fails with a transient error, the router automatically tries the next one. **Timeouts are non-retriable** — a `BackendTimeoutError` propagates immediately rather than silently changing model behavior by switching to a different LLM.
+
+Hooks (PreCompact, etc.) run without the `CLAUDECODE` environment variable, so they always take the `claude -p` subprocess path regardless of whether any API key is present in your shell.
 
 ### LLM-powered commands
 

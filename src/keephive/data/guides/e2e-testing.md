@@ -187,7 +187,7 @@ term.type('python -m keephive r "FACT: something important"')
 ```
 
 ### HIVE_HOME Isolation
-Every `term` fixture creates a fresh hive directory in a temp path. Commands never touch `~/.claude/hive/`. But `active_profile()` always returns None in HIVE_HOME mode (bypasses profile system).
+Every `term` fixture creates a fresh hive directory in a temp path. Commands never touch `~/.keephive/hive/`. But `active_profile()` always returns None in HIVE_HOME mode (bypasses profile system).
 
 ### Prompt Interference
 The terminal driver uses a three-layer defense against starship prompt interference:

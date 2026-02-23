@@ -1,5 +1,51 @@
 # Changelog
 
+## v1.0.0
+
+### Features
+
+- **Cross-agent support (Gemini CLI, Codex CLI)**: `keephive setup` now detects Gemini and
+  Codex CLIs and installs lightweight hook shims that mirror the Claude lifecycle
+  (SessionStart, BeforeTool, AfterModel for Gemini; notify bridge for Codex). All three
+  agents write normalized telemetry under `~/.keephive/telemetry/<platform>/`. The `hive
+  serve /brain` view shows which agents are active and feeding data back.
+
+- **Multi-backend LLM routing** (`src/keephive/llm/`): New priority-ordered routing layer
+  selects backends automatically: claude-cli (priority 10) → anthropic-api (20) → gemini-api
+  (25) → openai-api (30) → none (99). Transient errors fall through to the next available
+  backend. `claude.py` is now a thin adapter over this layer.
+
+- **Profile storage migration**: All data migrates from `~/.claude/hive/` to
+  `~/.keephive/`. Legacy paths remain as compatibility symlinks. `HIVE_HOME` default
+  updated throughout.
+
+- **Dashboard masonry layout and Brain view**: CSS masonry replaces fixed-grid layouts.
+  `/brain` condenses working memory, rules, TODOs, and platform telemetry into a single
+  high-density panel. `/settings` adds profile management and daemon status.
+
+- **Keepbee mascot redesign**: Animated robot-bee rebuilt with component-based rendering
+  (body, arms, wings, antennae per frame). 10 frames, deterministic RNG, pixel-art style.
+  `make_pixel_bee.py` simplified from 524 to 322 lines.
+
+- **Dashboard data URI consolidation**: Shared `_load_data_uri(filename, mime)` replaces
+  duplicated `importlib.resources` + base64 encoding logic. `_get_favicon()` lazy-caches
+  the GIF favicon on first request.
+
+### Fixes
+
+- **BackendTimeoutError propagation**: Timeouts in the LLM routing layer now raise
+  `BackendTimeoutError` (a `ClaudePipeError` subclass) and are never retried. Previously,
+  a timeout from `claude -p` would silently fall through to the next backend if an API key
+  was present in the environment.
+
+- **Transfer import crash on corrupt archives**: `tarfile.open()` for non-gzip or corrupt
+  files now caught with `ReadError`/`CompressionError`/`OSError`, prints error and exits
+  cleanly instead of unhandled traceback.
+
+- **E2E profile delete test isolation**: `test_delete_active_profile` rewritten for correct
+  `HIVE_HOME` behavior. The `active_profile()` guard is bypassed in `HIVE_HOME` mode; unit
+  test covers it separately.
+
 ## v0.23.0
 
 ### Features
