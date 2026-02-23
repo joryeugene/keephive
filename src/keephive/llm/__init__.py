@@ -11,7 +11,12 @@ from typing import Callable, Dict, Iterable, Optional, Type, TypeVar
 
 from pydantic import BaseModel
 
-from keephive.llm.exceptions import BackendNotAvailable, BackendTimeoutError, CapabilityError, ClaudePipeError
+from keephive.llm.exceptions import (
+    BackendNotAvailable,
+    BackendTimeoutError,
+    CapabilityError,
+    ClaudePipeError,
+)
 from keephive.settings import read_settings
 from keephive.storage import hive_dir
 

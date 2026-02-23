@@ -100,7 +100,6 @@ def _use_profile(name: str) -> None:
         console.print(f"  hive profile create {name}")
         sys.exit(1)
 
-    target = profile_dir(name)
     set_active_profile(name)
     console.print(f"[green]Switched to profile: {name}[/green]")
     console.print(f"[dim]Data: {hive_dir()}[/dim]")

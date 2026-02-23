@@ -2872,8 +2872,10 @@ def _render_stats_panel(data: dict) -> str:
 
 def _render_stats_platforms_panel(data: dict) -> str:
     platforms = data.get("platforms", {})
-    if isinstance(platforms, dict) and "platforms" in platforms and isinstance(
-        platforms["platforms"], dict
+    if (
+        isinstance(platforms, dict)
+        and "platforms" in platforms
+        and isinstance(platforms["platforms"], dict)
     ):
         platforms = platforms["platforms"]
     if not platforms:
@@ -4159,7 +4161,7 @@ def _render_settings_panel(data: dict) -> str:
         f'<a href="https://github.com/joryeugene/keephive" target="_blank" rel="noopener">'
         f'<img src="{mascot_uri}" alt="keephive mascot" '
         f'style="width:180px;image-rendering:auto;opacity:.92;transition:opacity .15s" '
-        f'onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'.92\'">'
+        f"onmouseover=\"this.style.opacity='1'\" onmouseout=\"this.style.opacity='.92'\">"
         f"</a>"
         f"</div>"
         if mascot_uri
@@ -4358,8 +4360,7 @@ def _render_brain_panel(data: dict) -> str:
         ("brain-platform-summary", platform_summary_card),
     ]
     cards.extend(
-        (f"brain-platform-{idx}", card)
-        for idx, card in enumerate(platform_detail_cards, start=1)
+        (f"brain-platform-{idx}", card) for idx, card in enumerate(platform_detail_cards, start=1)
     )
     cards.extend(
         [
@@ -5024,7 +5025,6 @@ def _render_profiles_panel(data: dict) -> str:
     )
 
 
-
 def _get_transfer_data() -> dict:
     """Get transfer data (just active profile label)."""
     from keephive.storage import active_profile_label
@@ -5199,9 +5199,7 @@ def render_fragment(view_name: str, extra_params: dict | None = None) -> str:
                 for name in col
             )
             column_html.append(f'<div class="grid-col-stack">{panels_html}</div>')
-        parts.append(
-            f'<div class="grid-row grid-cols-{col_count}">{"".join(column_html)}</div>'
-        )
+        parts.append(f'<div class="grid-row grid-cols-{col_count}">{"".join(column_html)}</div>')
 
     def add_rows() -> None:
         for row in view_def.get("rows", []) or []:

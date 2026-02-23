@@ -1249,8 +1249,8 @@ def test_render_fragment_two_col_uses_grid_columns(hive_env):
     from keephive.commands.serve import render_fragment
 
     html = render_fragment("stats")  # stats view uses cols-based layout
-    assert 'grid-row grid-cols-2' in html
-    assert 'grid-col-stack' in html
+    assert "grid-row grid-cols-2" in html
+    assert "grid-col-stack" in html
     assert 'data-panel-id="stats"' in html
     assert 'data-panel-id="stats-pipeline"' in html
     assert 'data-panel-id="stats-commands"' in html
@@ -1844,9 +1844,9 @@ def test_dev_view_uses_knowledge_compact():
     panels = _flatten_view_panels(dev_view)
     assert "knowledge-compact" in panels, "Dev view should use knowledge-compact"
     assert len(dev_view.get("cols", [])) == 2, "Dev view should be a two-column layout"
-    assert panels.index("notes-compact") < panels.index(
-        "knowledge-compact"
-    ), "Notes should precede knowledge guides"
+    assert panels.index("notes-compact") < panels.index("knowledge-compact"), (
+        "Notes should precede knowledge guides"
+    )
 
 
 def test_know_view_has_tabbed_content():
@@ -3101,15 +3101,15 @@ def test_dev_view_todos_log_before_knowledge_memory():
 
     panels = _flatten_view_panels(VIEWS["dev"])
     assert panels[0] == "status-brief"
-    assert panels.index("todos-brief") < panels.index(
-        "knowledge-compact"
-    ), "Todos should precede knowledge guides"
-    assert panels.index("log-brief") < panels.index(
-        "knowledge-compact"
-    ), "Log snippet should appear before knowledge"
-    assert panels.index("notes-compact") < panels.index(
-        "knowledge-compact"
-    ), "Notes preview should sit above knowledge guides"
+    assert panels.index("todos-brief") < panels.index("knowledge-compact"), (
+        "Todos should precede knowledge guides"
+    )
+    assert panels.index("log-brief") < panels.index("knowledge-compact"), (
+        "Log snippet should appear before knowledge"
+    )
+    assert panels.index("notes-compact") < panels.index("knowledge-compact"), (
+        "Notes preview should sit above knowledge guides"
+    )
 
 
 def test_consolidated_views_exist():
@@ -3323,13 +3323,11 @@ def test_home_view_row_structure(hive_env):
     # Grid-row structure
     assert "grid-row" in html
     assert "data-panel-id" in html
-    assert 'grid-row grid-cols-2' in html
-    assert 'grid-col-stack' in html
-    first_grid = html.index('grid-row')
-    first_stack = html.index('grid-col-stack')
-    assert first_grid < first_stack, (
-        "Status/activity grid row should render before column stacks"
-    )
+    assert "grid-row grid-cols-2" in html
+    assert "grid-col-stack" in html
+    first_grid = html.index("grid-row")
+    first_stack = html.index("grid-col-stack")
+    assert first_grid < first_stack, "Status/activity grid row should render before column stacks"
     # No old split-pane markup
     assert "split-pane" not in html
     assert "split-divider" not in html

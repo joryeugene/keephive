@@ -34,9 +34,7 @@ def _call_structured(
     try:
         import anthropic
     except ImportError as exc:  # pragma: no cover - dependency guard
-        raise ClaudePipeError(
-            f"anthropic package not installed. Run: keephive setup\n({exc})"
-        )
+        raise ClaudePipeError(f"anthropic package not installed. Run: keephive setup\n({exc})")
 
     api_model = _API_MODELS.get(model, model)
     content = prompt
