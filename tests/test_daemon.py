@@ -5,7 +5,8 @@ Covers:
 - read_daemon_config(), daemon_task_enabled(), read_daemon_state(), write_daemon_state()
 - _is_task_due() scheduling logic (daily + weekly)
 - _mark_last_run() persistence
-- _task_self_improve() time throttle (7-day) and depth cap (20 items)
+- _task_self_improve() time throttle (1-day) and depth cap (20 items)
+- _enable_task() / _disable_task() via cmd_daemon enable/disable subcommands
 - sessionend fires non-blocking Popen when soul-update is enabled
 """
 
@@ -195,13 +196,13 @@ class TestIsTaskDue:
 
 
 class TestSelfImproveThrottles:
-    """_task_self_improve() respects its 7-day time throttle and 20-item depth cap."""
+    """_task_self_improve() respects its 1-day time throttle and 20-item depth cap."""
 
-    def test_skips_when_last_run_within_7_days(self, hive_env):
-        """_task_self_improve() exits immediately when last_run < 7 days ago.
+    def test_skips_when_last_run_within_1_day(self, hive_env):
+        """_task_self_improve() exits immediately when last_run < 1 day ago.
 
         No LLM call, no new proposals, queue stays empty.
-        Bug caught: self-improve running more than weekly (wasted LLM cost + noise).
+        Bug caught: self-improve running more than daily (wasted LLM cost + noise).
         """
         from keephive.commands.daemon import _task_self_improve
         from keephive.storage import (
@@ -210,9 +211,9 @@ class TestSelfImproveThrottles:
             write_daemon_state,
         )
 
-        # Set last_run to 1 day ago
-        one_day_ago = (datetime.now() - timedelta(days=1)).isoformat()
-        write_daemon_state({"self-improve": {"last_run": one_day_ago}})
+        # Set last_run to 12 hours ago (days_since == 0, which is < 1)
+        twelve_hours_ago = (datetime.now() - timedelta(hours=12)).isoformat()
+        write_daemon_state({"self-improve": {"last_run": twelve_hours_ago}})
 
         _task_self_improve()
 
@@ -220,7 +221,7 @@ class TestSelfImproveThrottles:
         assert read_pending_improvements() == []
         # last_run should still be the old value (not updated on skip)
         state = read_daemon_state()
-        assert state["self-improve"]["last_run"] == one_day_ago
+        assert state["self-improve"]["last_run"] == twelve_hours_ago
 
     def test_skips_when_queue_at_20_items(self, hive_env):
         """_task_self_improve() exits immediately when pending queue has >= 20 items.
@@ -243,6 +244,96 @@ class TestSelfImproveThrottles:
 
         # Queue must still be exactly 20 — no new items appended
         assert len(read_pending_improvements()) == 20
+
+
+class TestSelfImproveThrottleConstant:
+    """_SELF_IMPROVE_THROTTLE_DAYS is 1 — daily feedback loop, not weekly."""
+
+    def test_throttle_constant_is_one_day(self):
+        """_SELF_IMPROVE_THROTTLE_DAYS must be 1 (daily cadence).
+
+        Bug caught: constant reverted to 7 would silently miss weekly-active users
+        whose patterns emerge mid-week, defeating the self-evolving system goal.
+        """
+        from keephive.commands.daemon import _SELF_IMPROVE_THROTTLE_DAYS
+
+        assert _SELF_IMPROVE_THROTTLE_DAYS == 1
+
+
+class TestEnableDisableTask:
+    """cmd_daemon enable/disable subcommands toggle task enabled state."""
+
+    def test_enable_task_sets_enabled_true(self, hive_env):
+        """enable writes enabled=True for a disabled task.
+
+        Bug caught: enabling a task silently fails if JSON write path is wrong.
+        """
+        from keephive.commands.daemon import cmd_daemon
+        from keephive.storage import daemon_config_file, read_daemon_config
+
+        config = {"tasks": {"morning-briefing": {"enabled": False, "time": "07:00"}}}
+        daemon_config_file().write_text(json.dumps(config))
+
+        cmd_daemon(["enable", "morning-briefing"])
+
+        result = read_daemon_config()
+        assert result["tasks"]["morning-briefing"]["enabled"] is True
+
+    def test_disable_task_sets_enabled_false(self, hive_env):
+        """disable writes enabled=False for an enabled task.
+
+        Bug caught: disable path not wired, task stays enabled after command.
+        """
+        from keephive.commands.daemon import cmd_daemon
+        from keephive.storage import daemon_config_file, read_daemon_config
+
+        config = {"tasks": {"stale-check": {"enabled": True, "time": "09:00"}}}
+        daemon_config_file().write_text(json.dumps(config))
+
+        cmd_daemon(["disable", "stale-check"])
+
+        result = read_daemon_config()
+        assert result["tasks"]["stale-check"]["enabled"] is False
+
+    def test_enable_unknown_task_prints_error(self, hive_env, capsys):
+        """enable with unknown task name prints error and known tasks.
+
+        Bug caught: KeyError crash when task not in config.
+        """
+        from keephive.commands.daemon import cmd_daemon
+        from keephive.storage import daemon_config_file
+
+        config = {"tasks": {"soul-update": {"enabled": True}}}
+        daemon_config_file().write_text(json.dumps(config))
+
+        cmd_daemon(["enable", "nonexistent-task"])
+
+        out = capsys.readouterr().out
+        assert "Unknown task" in out
+        assert "soul-update" in out
+
+    def test_enable_no_task_name_prints_usage(self, capsys):
+        """enable with no task name argument prints usage hint.
+
+        Bug caught: IndexError on args[1] when subcommand called with no extra arg.
+        """
+        from keephive.commands.daemon import cmd_daemon
+
+        cmd_daemon(["enable"])
+
+        out = capsys.readouterr().out
+        assert "Usage" in out
+        assert "enable" in out
+
+    def test_disable_no_task_name_prints_usage(self, capsys):
+        """disable with no task name argument prints usage hint."""
+        from keephive.commands.daemon import cmd_daemon
+
+        cmd_daemon(["disable"])
+
+        out = capsys.readouterr().out
+        assert "Usage" in out
+        assert "disable" in out
 
 
 class TestSoulUpdateThrottle:
@@ -350,16 +441,16 @@ class TestRunTaskThrottle:
         )
 
     def test_run_task_self_improve_within_throttle_does_not_mark(self, monkeypatch, hive_env):
-        """_run_task self-improve within 7d throttle must NOT write last_run.
+        """_run_task self-improve within 1d throttle must NOT write last_run.
 
-        Bug caught: 7-day throttle was being reset on every manual run even when
+        Bug caught: throttle was being reset on every manual run even when
         self-improve returned early — pushing the next eligible run further out.
         """
         from keephive.commands.daemon import _run_task
         from keephive.storage import write_daemon_state
 
-        # Pre-set last_run to 3 days ago (inside 7d throttle)
-        state = {"self-improve": {"last_run": (datetime.now() - timedelta(days=3)).isoformat()}}
+        # Pre-set last_run to 6 hours ago (days_since == 0, inside 1d throttle)
+        state = {"self-improve": {"last_run": (datetime.now() - timedelta(hours=6)).isoformat()}}
         write_daemon_state(state)
 
         mark_calls: list[str] = []

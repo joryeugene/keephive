@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import json
 import os
 import signal
 import subprocess
 import sys
 import time
 from datetime import datetime, timedelta
+
+# Daily feedback loop is right for a self-evolving system (see Reflexion, Shinn et al. 2023).
+# The 7-day analysis *window* (for i in range(7)) is orthogonal — that's context depth, not cadence.
+_SELF_IMPROVE_THROTTLE_DAYS = 1
 
 from keephive.output import console
 from keephive.storage import (
@@ -24,13 +29,15 @@ from keephive.storage import (
 
 
 def cmd_daemon(args: list[str]) -> None:
-    """hive daemon [start|stop|status|run <task>|edit|log]"""
+    """hive daemon [start|stop|status|run <task>|enable <task>|disable <task>|edit|log]"""
     sub = args[0] if args else "status"
     dispatch = {
         "start": _start,
         "stop": _stop,
         "status": _status,
         "run": lambda: _run_task(args[1] if len(args) > 1 else ""),
+        "enable": lambda: _enable_task(args[1] if len(args) > 1 else ""),
+        "disable": lambda: _enable_task(args[1] if len(args) > 1 else "", enabled=False),
         "edit": _edit,
         "log": _log,
     }
@@ -39,7 +46,7 @@ def cmd_daemon(args: list[str]) -> None:
         fn()
     else:
         console.print(f"[err]Unknown subcommand: {sub}[/err]")
-        console.print("Usage: hive daemon [start|stop|status|run <task>|edit|log]")
+        console.print("Usage: hive daemon [start|stop|status|run <task>|enable <task>|disable <task>|edit|log]")
 
 
 # ── Start / Stop ─────────────────────────────────────────────────────
@@ -143,7 +150,7 @@ def _status() -> None:
     table.add_row(
         "self-improve",
         f"✓ ran {_fmt_run(si_last)}" if si_last else "never run",
-        f"weekly throttle  ({pending_count} pending)",
+        f"daily throttle  ({pending_count} pending)",
     )
     console.print(table)
     console.print(f"\n  log: {hive_dir() / 'daemon.log'}\n")
@@ -169,6 +176,26 @@ def _run_task(task_name: str) -> None:
         console.print(f"🐝 Done: {task_name}")
     else:
         console.print(f"🐝 {task_name}: skipped (throttled or no data)")
+
+
+# ── Enable / Disable tasks ───────────────────────────────────────────
+
+
+def _enable_task(task_name: str, enabled: bool = True) -> None:
+    if not task_name:
+        verb = "enable" if enabled else "disable"
+        console.print(f"[err]Usage: hive daemon {verb} <task-name>[/err]")
+        return
+    config = read_daemon_config()
+    tasks = config.get("tasks", {})
+    if task_name not in tasks:
+        console.print(f"[err]Unknown task: {task_name}[/err]")
+        console.print(f"  Known tasks: {', '.join(tasks)}")
+        return
+    tasks[task_name]["enabled"] = enabled
+    daemon_config_file().write_text(json.dumps(config, indent=2))
+    verb = "enabled" if enabled else "disabled"
+    console.print(f"🐝 {task_name}: {verb}")
 
 
 # ── Edit / Log ───────────────────────────────────────────────────────
@@ -483,7 +510,7 @@ Return the complete updated SOUL.md content (bounded, distilled, not expanded)."
 def _task_self_improve() -> bool:
     """Analyze patterns across recent sessions. Propose skills, tasks, and rules.
 
-    Time-throttled: max once per 7 days. Queue-depth-capped: stops at 20 pending.
+    Time-throttled: max once per day. Queue-depth-capped: stops at 20 pending.
     Appends to existing queue (never replaces). Deduplicates against existing pending.
 
     Returns True when LLM ran (with or without proposals), False when throttled/skipped.
@@ -503,14 +530,13 @@ def _task_self_improve() -> bool:
         safe_read_text,
     )
 
-    # ── Time throttle: max once per 7 days ───────────────────────────
+    # ── Time throttle: max once per day ──────────────────────────────
     state = read_daemon_state()
     last_run_str = state.get("self-improve", {}).get("last_run")
     if last_run_str:
         days_since = (datetime.now() - datetime.fromisoformat(last_run_str)).days
-        if days_since < 7:
-            _log_daemon(f"self-improve: skipped ({days_since}d since last run, threshold 7d)")
-            return False
+        if days_since < _SELF_IMPROVE_THROTTLE_DAYS:
+            return False  # silent — throttle skip is not a diagnostic event
 
     # ── Depth cap: don't pile on if user hasn't reviewed ─────────────
     existing = read_pending_improvements()
