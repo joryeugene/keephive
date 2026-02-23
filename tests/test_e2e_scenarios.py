@@ -744,7 +744,7 @@ class TestDaemonCommands:
         pending_path.write_text(json.dumps([item]))
 
         screen = term.type("python -m keephive improve list")
-        screen.has("pending")
+        screen.has("Pending")
         screen.has_any(["1", "rule", "KingBee"])
         screen.lacks("Traceback")
         save_terminal_output("daemon/improve_list_with_item", term)

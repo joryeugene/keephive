@@ -27,6 +27,7 @@ HELP: dict[str, str] = {
     "mem": "Usage: hive m [rm|review] <text>\n  Add or remove working memory facts\n  hive m <text>      Add fact to memory.md\n  hive m rm <pat>    Remove line matching pattern\n  hive m review      Review pending auto-captured facts",
     "flow": "Usage: hive flow [--skip-verify]\n  Guided maintenance flow: review pending facts, rules, improvements, then verify\n  --skip-verify  Skip the LLM verify stage",
     "improve": "Usage: hive improve [review|list|clear-stale]\n  Review or list KingBee self-improvement proposals",
+    "checkup": "Usage: hive checkup [--snapshot|--diff|--json]\n  Production health check: hooks, daemon, queues, soul, data integrity\n  --snapshot  Git-snapshot current hive state (before testing)\n  --diff      Show diff since last snapshot\n  --json      Machine-readable output",
     "daemon": "Usage: hive daemon [start|stop|status|run|edit|log]\n  Manage the KingBee background daemon\n  start/stop    Launch/kill daemon\n  status        Show daemon health and task schedule\n  run <task>    Trigger a specific task immediately (e.g. soul-update, self-improve)\n  edit          Open daemon config in $EDITOR\n  log           View daemon log",
     "rule": "Usage: hive rule [rm|review|learn] <text>  (alias: rl = rule learn)\n  Add or remove behavioral rules\n  hive rule <text>      Add rule\n  hive rule rm <pat>    Remove matching rule\n  hive rule review      Review pending rule suggestions\n  hive rule learn       Learn rules from /insights friction data\n  hive rule learn --dry-run   Preview without queuing\n  hive rl               Shortcut for 'hive rule learn'",
     "session": "Usage: hive go [mode|prompt]\n  Modes: todo, verify, learn, reflect\n  Or load a custom prompt from knowledge/prompts/",
@@ -82,6 +83,8 @@ _CANONICAL: dict[str, str] = {
     "daemon": "daemon",
     "improve": "improve",
     "flow": "flow",
+    "ck": "checkup",
+    "checkup": "checkup",
     "cfg": "config",
     "config": "config",
 }
@@ -102,6 +105,7 @@ _CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
     ("reflect", "Find patterns in logs", "rf", {"rf", "reflect"}),
     ("audit [-v]", "Quality analysis", "a", {"a", "audit"}),
     ("flow [--skip-verify]", "Guided maintenance run", "", {"flow"}),
+    ("checkup [--json]", "Production health check", "ck", {"checkup", "ck"}),
     ("go [mode]", "Launch session", "go", {"go", "sesh", "session"}),
     ("stats [-p path]", "Usage + pipeline health", "st", {"st", "stats"}),
     ("mem [rm] <text>", "Add/remove working memory", "m", {"m", "mem"}),
@@ -212,6 +216,7 @@ Usage: hive <command> [args]
         print("""
   Plumbing
     daemon [cmd]      KingBee background daemon
+    checkup [--json]  Production health check           ck
     improve review    Review self-improvement proposals
     todo repeat       Manage recurring tasks
     set [key] [val]   View/change settings
@@ -363,6 +368,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "daemon-loop": ("keephive.commands.daemon", "cmd_daemon_loop"),
     "improve": ("keephive.commands.improve", "cmd_improve"),
     "flow": ("keephive.commands.flow", "cmd_flow"),
+    "checkup": ("keephive.commands.checkup", "cmd_checkup"),
+    "ck": ("keephive.commands.checkup", "cmd_checkup"),
     "telemetry": ("keephive.commands.telemetry", "cmd_telemetry"),
 }
 

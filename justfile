@@ -139,6 +139,10 @@ sync:
 
 # ── Dashboard ────────────────────────────────────────────────────────────────
 
+# Production health check against real HIVE_HOME data
+checkup:
+    {{hivedev}} checkup
+
 # Live dashboard with hot reload
 serve:
     {{hivedev}} serve --hot
