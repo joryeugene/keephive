@@ -10,6 +10,7 @@ from datetime import timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
 
+from keephive.llm import available_backends, get_backend_state
 from keephive.clock import get_today
 from keephive.health import (
     check_anthropic_memory,
@@ -26,6 +27,7 @@ from keephive.health import (
     get_installed_version as _get_installed_version,
 )
 from keephive.output import console, notify_sound, prompt_yn, show_hint
+from keephive.settings import get_setting
 from keephive.storage import (
     archive_dir,
     collect_todos,
@@ -34,6 +36,8 @@ from keephive.storage import (
     guides_dir,
     hive_dir,
     memory_file,
+    needs_migration,
+    profile_paths,
     prompts_dir,
     rules_file,
     safe_read_text,
@@ -56,6 +60,13 @@ def cmd_doctor(args: list[str]) -> None:
         else:
             console.print(f"  [err]MISSING[/err] {short}")
             issues += 1
+
+    if needs_migration():
+        preferred, legacy = profile_paths()
+        console.print(
+            f"  [warn]Legacy data root detected:[/warn] {legacy}\n"
+            f"  [dim]Run 'hive setup' to migrate data to {preferred}[/dim]"
+        )
 
     # 2. Working memory
     console.print()
@@ -107,17 +118,45 @@ def cmd_doctor(args: list[str]) -> None:
     # 3.5. LLM backend
     console.print()
     console.print("[bold]LLM Backend[/bold]")
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        console.print("  [ok]OK[/ok] ANTHROPIC_API_KEY set (direct API, works everywhere)")
+    state = get_backend_state()
+    persistent_pref = get_setting("llm_backend") or "auto"
+    env_override = os.environ.get("HIVE_LLM_BACKEND")
+    if env_override:
+        console.print(
+            f"  Config: settings={persistent_pref}, env override={env_override}"
+        )
     else:
-        console.print("  [dim]No ANTHROPIC_API_KEY (using claude -p, terminal only)[/dim]")
-        if os.environ.get("CLAUDECODE"):
-            console.print(
-                "  [warn]WARN[/warn] Inside Claude Code without API key: LLM features disabled"
-            )
-            console.print(
-                "  [dim]  Set ANTHROPIC_API_KEY for audit, verify, standup, reflect[/dim]"
-            )
+        console.print(f"  Config: settings={persistent_pref}")
+
+    if state:
+        console.print(
+            f"  Last selection: [cyan]{state.get('selected', '?')}[/cyan] "
+            f"(source: {state.get('source', 'auto')}, reason: {state.get('reason', '')})"
+        )
+    else:
+        console.print("  [dim]No LLM command has run yet (state unknown).[/dim]")
+
+    healthy_backend_found = False
+    for backend in available_backends():
+        available, reason = backend.detect()
+        marker = "[ok]OK[/ok]" if available else "[warn]WARN[/warn]"
+        suffix = " (supports tools)" if backend.supports_tools else ""
+        console.print(f"  {marker} {backend.name}{suffix} — {reason or 'available'}")
+        if available and backend.name != "none":
+            healthy_backend_found = True
+
+    if not healthy_backend_found:
+        console.print(
+            "  [err]No operational backend detected.[/err] "
+            "Install the claude CLI or set GEMINI_API_KEY / OPENAI_API_KEY."
+        )
+        issues += 1
+
+    if os.environ.get("CLAUDECODE") and not os.environ.get("ANTHROPIC_API_KEY"):
+        console.print(
+            "  [warn]Inside Claude Code without ANTHROPIC_API_KEY: "
+            "LLM features disabled in-session."
+        )
 
     # 3.7. Anthropic Memory
     console.print()

@@ -27,7 +27,7 @@ ok()    { echo -e "  ${GREEN}OK${RESET} $*"; }
 warn()  { echo -e "  ${RED}!!${RESET} $*"; }
 dim()   { echo -e "  ${DIM}$*${RESET}"; }
 
-HIVE_DIR="${HIVE_HOME:-$HOME/.claude/hive}"
+HIVE_DIR="${HIVE_HOME:-$HOME/.keephive/hive}"
 OLD_HIVE="$HIVE_DIR/bin/hive"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd || echo "")"
 

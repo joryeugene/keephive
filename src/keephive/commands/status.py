@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -12,7 +13,9 @@ from rich.text import Text
 
 from keephive import __version__
 from keephive.clock import get_today
+from keephive.llm import available_backends, get_backend_state
 from keephive.output import console
+from keephive.settings import get_setting
 from keephive.storage import (
     NOTE_SLOT_COUNT,
     active_profile,
@@ -186,6 +189,17 @@ def _render_status() -> None:
     hooks_ok, mcp_ok, data_ok = health_summary()
     prof = active_profile()
 
+    llm_state = get_backend_state()
+    settings_pref = get_setting("llm_backend") or "auto"
+    env_override = os.environ.get("HIVE_LLM_BACKEND")
+    backend_rows: list[tuple] = []
+    healthy_backend_found = False
+    for backend in available_backends():
+        available, reason = backend.detect()
+        backend_rows.append((backend, available, reason))
+        if available and backend.name != "none":
+            healthy_backend_found = True
+
     # Knowledge health
     kh: dict = {}
     try:
@@ -266,6 +280,11 @@ def _render_status() -> None:
 
     # Collect warnings for Attention panel
     warnings: list[tuple[str, str]] = []
+
+    if not healthy_backend_found:
+        warnings.append(
+            ("\u26a0", "No operational LLM backend detected (configure claude CLI or API key)")
+        )
 
     if stale > 0:
         s = "s" if stale != 1 else ""
@@ -375,6 +394,23 @@ def _render_status() -> None:
 
     health_parts = [_dot(hooks_ok, "hooks"), _dot(mcp_ok, "mcp"), _dot(data_ok, "data")]
     console.print(f"{'  '.join(health_parts)}")
+
+    llm_table = Table(show_header=False, show_edge=False, box=None, padding=(0, 1))
+    llm_table.add_column(justify="left")
+    llm_table.add_column(justify="left")
+    llm_table.add_row("[dim]settings[/dim]", f"[cyan]{settings_pref}[/cyan]")
+    if env_override:
+        llm_table.add_row("[dim]env override[/dim]", env_override)
+    if llm_state:
+        sel = llm_state.get("selected", "?")
+        src = llm_state.get("source", "auto")
+        reason = llm_state.get("reason", "")
+        llm_table.add_row("[dim]selected[/dim]", f"{sel} [{src}] {reason}")
+    for backend, available, reason in backend_rows:
+        status = "[ok]\u25cf[/ok]" if available else "[dim]\u25cb[/dim]"
+        suffix = " [dim](tools)[/dim]" if backend.supports_tools else ""
+        llm_table.add_row(f"{status} {backend.name}{suffix}", reason or "")
+    console.print(Panel(llm_table, title="LLM Backend", border_style="dim", padding=(0, 1)))
 
     # ── Metrics Panel (always shown) ──────────────────────────────────
     total_facts = kh.get("total_facts", 0)
@@ -593,6 +629,24 @@ def cmd_status(args: list[str]) -> None:
         hooks_ok, mcp_ok, data_ok = health_summary()
         anthropic_mem = check_anthropic_memory()
 
+        llm_summary = {
+            "settings": get_setting("llm_backend") or "auto",
+            "env_override": os.environ.get("HIVE_LLM_BACKEND"),
+            "state": get_backend_state(),
+            "backends": [
+                {
+                    "name": backend.name,
+                    "available": detected,
+                    "reason": reason,
+                    "supports_tools": backend.supports_tools,
+                    "supports_structured": backend.supports_structured,
+                }
+                for backend, detected, reason in (
+                    (b, *b.detect()) for b in available_backends()
+                )
+            ],
+        }
+
         print(
             json.dumps(
                 {
@@ -609,6 +663,7 @@ def cmd_status(args: list[str]) -> None:
                     "mcp_ok": mcp_ok,
                     "data_ok": data_ok,
                     "anthropic_memory": anthropic_mem,
+                    "llm": llm_summary,
                 }
             )
         )

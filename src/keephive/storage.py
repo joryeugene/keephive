@@ -1,7 +1,8 @@
 """File I/O for keephive data: daily logs, memory.md, rules.md.
 
-All paths point to ~/.claude/hive/ by default. Same data files as the
-bash version, no migration needed.
+By default data now lives under ``~/.keephive/hive`` (or profile-specific
+subdirectories). Legacy installs that still use ``~/.claude/hive`` are
+automatically migrated and kept in sync via a compatibility layer.
 """
 
 from __future__ import annotations
@@ -118,40 +119,93 @@ def safe_read_text(path: Path) -> str:
 # ---- Profile support ----
 
 _PROFILE_FILE = ".hive-profile"
+_MIGRATION_LOG = ".migration"
 
 
 def _claude_dir() -> Path:
-    """The ~/.claude directory."""
+    """Legacy ~/.claude directory."""
     return Path.home() / ".claude"
 
 
-def active_profile() -> str | None:
-    """Return the active profile name, or None for default.
+def _keephive_dir() -> Path:
+    """Primary ~/.keephive directory."""
+    return Path.home() / ".keephive"
 
-    HIVE_HOME env var bypasses profiles entirely (for tests and backward compat).
-    Auto-heals stale profile files that reference deleted directories.
-    """
+
+def _profile_suffix(name: str | None) -> str:
+    return "hive" if name in (None, "default") else f"hive-{name}"
+
+
+def _profile_candidate_paths(name: str | None) -> list[Path]:
+    suffix = _profile_suffix(name)
+    return [
+        _keephive_dir() / suffix,
+        _claude_dir() / suffix,
+    ]
+
+
+def _migration_log_path() -> Path:
+    return _keephive_dir() / _MIGRATION_LOG
+
+
+def _record_migration(label: str, source: Path, target: Path, status: str) -> None:
+    try:
+        log_path = _migration_log_path()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as fh:
+            ts = datetime.now().isoformat(timespec="seconds")
+            fh.write(f"{ts} :: {label}: {status} ({source} -> {target})\n")
+    except Exception as exc:  # pragma: no cover - best effort logging
+        _debug_log(f"Failed to record migration entry: {exc}")
+
+
+def _profile_file_paths() -> list[Path]:
+    """Profile file search order: new location first, then legacy."""
+    return [
+        _keephive_dir() / _PROFILE_FILE,
+        _claude_dir() / _PROFILE_FILE,
+    ]
+
+
+def _write_profile_file(name: str | None) -> None:
+    """Persist profile marker in ~/.keephive and remove legacy marker."""
+    for path in _profile_file_paths():
+        if path.parent == _keephive_dir():
+            if name is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(name)
+        else:
+            path.unlink(missing_ok=True)
+
+
+def _normalize_profile_name(raw: str) -> str | None:
+    raw = raw.strip()
+    if not raw or raw == "default":
+        return None
+    return raw
+
+
+def active_profile() -> str | None:
+    """Return active profile name (None=default)."""
     if os.environ.get("HIVE_HOME"):
         return None
-    pf = _claude_dir() / _PROFILE_FILE
-    if pf.exists():
-        name = pf.read_text().strip()
-        if not name:
-            return None
-        # Validate the profile directory still exists on disk
-        if not (_claude_dir() / f"hive-{name}").is_dir():
-            pf.unlink(missing_ok=True)
-            return None
-        return name
+
+    for marker in _profile_file_paths():
+        if not marker.exists():
+            continue
+        name = _normalize_profile_name(marker.read_text())
+        candidates = _profile_candidate_paths(name)
+        if any(path.exists() for path in candidates):
+            if marker.parent != _keephive_dir():
+                _write_profile_file(name if name else "default")
+            return name
+        marker.unlink(missing_ok=True)
     return None
 
 
 def active_profile_label() -> str:
-    """Human-readable label for the active data target.
-
-    Used by destructive operations (seed, import) to show which profile
-    will be modified before the user commits to the action.
-    """
     env = os.environ.get("HIVE_HOME")
     if env:
         return f"HIVE_HOME={env}"
@@ -161,55 +215,109 @@ def active_profile_label() -> str:
     return "default profile"
 
 
-def set_active_profile(name: str | None) -> None:
-    """Set the active profile. None = default (removes profile file)."""
-    pf = _claude_dir() / _PROFILE_FILE
-    if name is None:
-        pf.unlink(missing_ok=True)
-    else:
-        pf.parent.mkdir(parents=True, exist_ok=True)
-        pf.write_text(name)
-
-
-def profile_dir(name: str) -> Path:
-    """Directory for a named profile. 'default' = ~/.claude/hive."""
+def profile_dir(name: str | None) -> Path:
+    """Return profile directory, preferring ~/.keephive."""
     if name == "default":
-        return _claude_dir() / "hive"
-    return _claude_dir() / f"hive-{name}"
+        name = None
+    new_path, legacy_path = _profile_candidate_paths(name)
+    if new_path.exists():
+        return new_path
+    if legacy_path.exists():
+        return legacy_path
+    new_path.parent.mkdir(parents=True, exist_ok=True)
+    new_path.mkdir(parents=True, exist_ok=True)
+    return new_path
+
+
+def set_active_profile(name: str | None) -> None:
+    """Set the active profile marker."""
+    if name is None:
+        _write_profile_file(None)
+    else:
+        _write_profile_file(name)
+
+
+def migrate_profile(name: str | None, *, create_symlink: bool = True) -> Path:
+    """Migrate profile data from ~/.claude to ~/.keephive."""
+    if name == "default":
+        name = None
+    target = _profile_candidate_paths(name)[0]
+    legacy = _profile_candidate_paths(name)[1]
+
+    label = name or "default"
+    if not legacy.exists():
+        _record_migration(label, legacy, target, "legacy_missing")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.mkdir(parents=True, exist_ok=True)
+        return target
+
+    if target.exists():
+        _record_migration(label, legacy, target, "already_present")
+        return target
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(legacy, target, dirs_exist_ok=True)
+    _record_migration(label, legacy, target, "copied")
+
+    if create_symlink and os.name != "nt" and not legacy.is_symlink():
+        backup = legacy.parent / f"{legacy.name}.legacy"
+        suffix = 1
+        while backup.exists():
+            suffix += 1
+            backup = legacy.parent / f"{legacy.name}.legacy{suffix}"
+        legacy.rename(backup)
+        try:
+            legacy.symlink_to(target)
+            _record_migration(label, legacy, target, "symlinked")
+        except OSError as exc:
+            _record_migration(label, legacy, target, f"symlink_failed:{exc}")
+            backup.rename(legacy)
+
+    return target
+
+
+def profile_paths(name: str | None = None) -> tuple[Path, Path]:
+    """Return (preferred, legacy) paths for a profile."""
+    if name == "default":
+        name = None
+    preferred, legacy = _profile_candidate_paths(name)
+    return preferred, legacy
+
+
+def needs_migration(name: str | None = None) -> bool:
+    """Return True if legacy data exists and preferred path is absent."""
+    preferred, legacy = profile_paths(name)
+    return legacy.exists() and not preferred.exists()
 
 
 def list_profiles() -> list[dict]:
-    """List all profiles. Returns [{name, path, active, fact_count}]."""
-    cd = _claude_dir()
+    """List all profiles with resolved paths."""
+    names: set[str] = set()
+    for base in (_keephive_dir(), _claude_dir()):
+        if not base.exists():
+            continue
+        for entry in base.iterdir():
+            if entry.is_dir():
+                if entry.name == "hive":
+                    names.add("default")
+                elif entry.name.startswith("hive-") and entry.name != "hive-":
+                    names.add(entry.name[5:])
+
+    if not names:
+        names.add("default")
+
     current = active_profile()
-    profiles = []
-
-    # Default profile always exists conceptually
-    default_dir = cd / "hive"
-    profiles.append(
-        {
-            "name": "default",
-            "path": str(default_dir),
-            "active": current is None,
-            "exists": default_dir.exists(),
-        }
-    )
-
-    # Named profiles: hive-<name> directories
-    if cd.exists():
-        for p in sorted(cd.iterdir()):
-            if p.is_dir() and p.name.startswith("hive-"):
-                name = p.name[5:]  # strip "hive-" prefix
-                if name:  # skip empty
-                    profiles.append(
-                        {
-                            "name": name,
-                            "path": str(p),
-                            "active": current == name,
-                            "exists": True,
-                        }
-                    )
-
+    profiles: list[dict] = []
+    for name in sorted(names):
+        path = profile_dir(name if name != "default" else None)
+        profiles.append(
+            {
+                "name": name,
+                "path": str(path),
+                "active": (current is None and name == "default") or (current == name),
+                "exists": path.exists(),
+            }
+        )
     return profiles
 
 
@@ -220,8 +328,8 @@ def hive_dir() -> Path:
         return Path(env).expanduser()
     prof = active_profile()
     if prof:
-        return _claude_dir() / f"hive-{prof}"
-    return _claude_dir() / "hive"
+        return profile_dir(prof)
+    return profile_dir(None)
 
 
 def working_dir() -> Path:

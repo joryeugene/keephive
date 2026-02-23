@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
@@ -10,8 +11,19 @@ from pathlib import Path
 from keephive import __version__
 from keephive.health import check_installed_deps, find_global_keephive
 from keephive.identity import render_default_memory, render_default_rules
-from keephive.output import console
-from keephive.storage import daemon_config_file, ensure_dirs, hive_dir, soul_file
+from keephive.output import console, prompt_yn
+from keephive.storage import (
+    active_profile,
+    daemon_config_file,
+    ensure_dirs,
+    hive_dir,
+    list_profiles,
+    migrate_profile,
+    needs_migration,
+    profile_paths,
+    set_active_profile,
+    soul_file,
+)
 
 
 _SOUL_TEMPLATE = """\
@@ -64,13 +76,64 @@ _DAEMON_DEFAULT_CONFIG = json.dumps(
 )
 
 
+def _parse_setup_args(args: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--yes", action="store_true", help="Assume 'yes' for prompts.")
+    parser.add_argument(
+        "--no-migrate", action="store_true", help="Skip migrating legacy ~/.claude data."
+    )
+    parser.add_argument("--skills", choices=["auto", "skip"], default="auto")
+    parser.add_argument("--claude-skill", choices=["auto", "yes", "no"], default="auto")
+    parser.add_argument("--gemini-skill", choices=["auto", "yes", "no"], default="auto")
+    parser.add_argument("--codex-skill", choices=["auto", "yes", "no"], default="auto")
+    parser.add_argument("--gemini-hooks", choices=["auto", "yes", "no"], default="auto")
+    parser.add_argument("--codex-hooks", choices=["auto", "yes", "no"], default="auto")
+    parser.add_argument("--uninstall", action="store_true")
+    parser.add_argument("command", nargs="?", help="Optional positional command (e.g. uninstall).")
+    return parser.parse_args(args)
+
+
+def _maybe_migrate(namespace: argparse.Namespace) -> None:
+    names_for_migration = [entry["name"] for entry in list_profiles() if needs_migration(entry["name"])]
+    if not names_for_migration:
+        return
+
+    console.print("  Legacy keephive data detected at [dim]~/.claude/hive[/dim].")
+    if namespace.no_migrate:
+        console.print("  [dim]Skipping migration (--no-migrate). Legacy path will remain in use.[/dim]")
+        return
+
+    migrate = namespace.yes
+    if not migrate:
+        migrate = prompt_yn("  Migrate data to ~/.keephive/?", default=True)
+
+    if not migrate:
+        console.print("  [dim]Migration skipped. keephive will continue using the legacy path.[/dim]")
+        return
+
+    console.print("  Migrating data to ~/.keephive/ ...")
+    for name in names_for_migration:
+        profile_key = None if name == "default" else name
+        preferred, legacy = profile_paths(profile_key)
+        target = migrate_profile(profile_key)
+        label = name or "default"
+        console.print(f"    [ok]✓[/ok] {label}: {legacy} → {target}")
+
+    # Refresh profile marker so it lives in ~/.keephive.
+    set_active_profile(active_profile())
+
+
 def cmd_setup(args: list[str]) -> None:
-    if args and args[0] == "uninstall":
+    ns = _parse_setup_args(args)
+    command = ns.command
+    if ns.uninstall or command == "uninstall":
         _uninstall()
         return
 
     console.print(f"[bold]keephive setup v{__version__}[/bold]")
     console.print()
+
+    _maybe_migrate(ns)
 
     # 1. Create directories
     console.print("  Creating directories...")
@@ -548,4 +611,6 @@ def _uninstall() -> None:
             console.print("  [warn]Could not clean settings.json[/warn]")
 
     console.print()
-    console.print("  To fully remove: rm -rf ~/.claude/hive")
+    console.print(
+        "  To fully remove: rm -rf ~/.keephive ~/.claude/hive (remove legacy symlink if present)"
+    )

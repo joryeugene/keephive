@@ -1,6 +1,6 @@
 """Persistent user settings for keephive.
 
-Settings file: ~/.claude/hive/.settings.json (hidden, peers with .stats.json).
+Settings file: ~/.keephive/hive/.settings.json (hidden, peers with .stats.json).
 """
 
 from __future__ import annotations
@@ -14,12 +14,14 @@ DEFAULTS: dict[str, bool | str | int] = {
     "sound": False,
     "sound_success": "Glass",
     "sound_error": "Basso",
+    "llm_backend": "",
 }
 
 DESCRIPTIONS: dict[str, str] = {
     "sound": "Audio notification after LLM commands",
     "sound_success": "Sound for successful completion",
     "sound_error": "Sound for errors",
+    "llm_backend": "Preferred LLM backend (blank = auto detect)",
 }
 
 BUILTIN_SOUNDS: list[str] = [

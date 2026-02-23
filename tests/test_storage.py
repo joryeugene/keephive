@@ -46,17 +46,13 @@ class TestHiveDir:
 
         assert hive_dir() == Path(str(hive_env))
 
-    def test_default_without_env(self, monkeypatch):
+    def test_default_without_env(self, tmp_path, monkeypatch):
         monkeypatch.delenv("HIVE_HOME", raising=False)
-        # Also ensure no profile file exists
-        from keephive.storage import _claude_dir, hive_dir
-
-        pf = _claude_dir() / ".hive-profile"
-        if pf.exists():
-            pf.unlink()
+        monkeypatch.setenv("HOME", str(tmp_path))
+        from keephive.storage import hive_dir
 
         result = hive_dir()
-        assert result == Path.home() / ".claude" / "hive"
+        assert result == tmp_path / ".keephive" / "hive"
 
 
 # ---- daily_file ----
@@ -159,6 +155,49 @@ class TestFileIO:
 
         rules_file().unlink()
         assert read_rules() == ""
+
+
+# ---- Migration helpers ----
+
+
+class TestMigrationHelpers:
+    def test_needs_migration_and_migrate_profile(self, tmp_path, monkeypatch):
+        home = tmp_path / "home"
+        home.mkdir()
+        legacy = home / ".claude" / "hive" / "working"
+        legacy.mkdir(parents=True)
+        (legacy / "memory.md").write_text("# legacy\n")
+
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.delenv("HIVE_HOME", raising=False)
+
+        from keephive.storage import needs_migration, migrate_profile, profile_paths
+
+        assert needs_migration("default")
+
+        target = migrate_profile(None, create_symlink=os.name != "nt")
+        preferred, legacy_path = profile_paths(None)
+        assert target == preferred
+        assert preferred.exists()
+        assert (preferred / "working" / "memory.md").read_text() == "# legacy\n"
+        assert not needs_migration("default")
+
+        if os.name == "nt":
+            assert legacy_path.exists()
+        else:
+            # Legacy path should now be a symlink pointing to preferred.
+            assert legacy_path.is_symlink()
+            assert legacy_path.resolve() == preferred
+
+    def test_needs_migration_false_when_no_legacy(self, tmp_path, monkeypatch):
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.delenv("HIVE_HOME", raising=False)
+
+        from keephive.storage import needs_migration
+
+        assert not needs_migration("default")
 
 
 # ---- backup_and_write ----

@@ -37,7 +37,7 @@ class TestDriverBasics:
         term.type("echo $MY_TEST_VAR").has("persistence_check")
 
     def test_hive_home_isolated(self, term):
-        """HIVE_HOME points to temp directory, not real ~/.claude/hive."""
+        """HIVE_HOME points to temp directory, not real ~/.keephive/hive."""
         screen = term.type("echo $HIVE_HOME")
         screen.has("hive")
         screen.lacks(".claude")

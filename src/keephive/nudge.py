@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 def _counter_path(name: str) -> Path:
-    """Path to counter file: ~/.claude/hive/.{name}-counter."""
+    """Path to counter file: ~/.keephive/hive/.{name}-counter (profile aware)."""
     from keephive.storage import hive_dir
 
     return hive_dir() / f".{name}-counter"
