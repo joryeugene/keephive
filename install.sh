@@ -4,15 +4,18 @@
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/joryeugene/keephive/main/install.sh | bash
+#   # or with arguments:
+#   curl ... | bash -s -- --branch daemon
 #   # or from local clone:
-#   ./install.sh
+#   ./install.sh [--branch name]
 #
 # What it does:
-#   1. Checks for uv (required)
-#   2. Installs keephive via uv tool install
-#   3. Backs up old bash hive CLI if present
-#   4. Runs keephive setup (creates dirs, configures hooks)
-#   5. Verifies the install
+#   1. Branch selection (defaults to main)
+#   2. Checks for uv (required)
+#   3. Installs keephive via uv tool install
+#   4. Backs up old bash hive CLI if present
+#   5. Runs keephive setup (creates dirs, configures hooks)
+#   6. Verifies the install
 
 set -euo pipefail
 
@@ -30,6 +33,86 @@ dim()   { echo -e "  ${DIM}$*${RESET}"; }
 HIVE_DIR="${HIVE_HOME:-$HOME/.keephive/hive}"
 OLD_HIVE="$HIVE_DIR/bin/hive"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd || echo "")"
+
+# -------------------------------------------------------------------
+# 0. Parse arguments & Branch Selection
+# -------------------------------------------------------------------
+INSTALL_BRANCH="main"
+AUTO_CONFIRM=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --branch)
+            INSTALL_BRANCH="$2"
+            shift 2
+            ;;
+        -y|--yes)
+            AUTO_CONFIRM=true
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+# If running interactively and not explicitly set via --branch, ask user
+if [ -t 0 ] && [ "$INSTALL_BRANCH" = "main" ] && [ "$AUTO_CONFIRM" = false ]; then
+    echo -e "${BOLD}Branch Selection${RESET}"
+    dim "Fetching available branches from GitHub..."
+    
+    # Fetch branches, filter out empties, and put main first if found
+    RAW_BRANCHES=$(curl -s https://api.github.com/repos/joryeugene/keephive/branches | grep '"name":' | sed -E 's/.*"name": "([^"]+)".*/\1/' || echo "main")
+    
+    if [ -n "$RAW_BRANCHES" ]; then
+        echo -n -e "  Available: "
+        FIRST=true
+        for b in $RAW_BRANCHES; do
+            if [ "$FIRST" = true ]; then echo -n -e "${GREEN}$b${RESET}"; FIRST=false; else echo -n ", $b"; fi
+        done
+        echo
+        
+        echo -n -e "  Install from branch [${GREEN}main${RESET}]: "
+        read -r USER_BRANCH
+        
+        if [ -z "$USER_BRANCH" ]; then
+            INSTALL_BRANCH="main"
+        else
+            # 1. Exact match
+            FOUND=false
+            for b in $RAW_BRANCHES; do
+                if [ "$b" = "$USER_BRANCH" ]; then
+                    INSTALL_BRANCH="$b"
+                    FOUND=true
+                    break
+                fi
+            done
+            
+            # 2. Prefix match (autocomplete feel)
+            if [ "$FOUND" = false ]; then
+                MATCHES=()
+                for b in $RAW_BRANCHES; do
+                    if [[ "$b" == "$USER_BRANCH"* ]]; then
+                        MATCHES+=("$b")
+                    fi
+                done
+                
+                if [ "${#MATCHES[@]}" -eq 1 ]; then
+                    INSTALL_BRANCH="${MATCHES[0]}"
+                    ok "resolved '$USER_BRANCH' to '${GREEN}$INSTALL_BRANCH${RESET}'"
+                elif [ "${#MATCHES[@]}" -gt 1 ]; then
+                    warn "ambiguous branch '$USER_BRANCH'. Matches: $(echo "${MATCHES[@]}" | tr ' ' ',')"
+                    echo -n "  Proceeding with default [main]..."
+                    INSTALL_BRANCH="main"
+                else
+                    warn "branch '$USER_BRANCH' not found. Trying anyway (might fail)..."
+                    INSTALL_BRANCH="$USER_BRANCH"
+                fi
+            fi
+        fi
+    fi
+    echo
+fi
 
 # -------------------------------------------------------------------
 # 1. Check prerequisites
@@ -64,19 +147,25 @@ fi
 # 3. Install keephive Python package
 # -------------------------------------------------------------------
 echo
-info "Installing keephive..."
+info "Installing keephive (branch: $INSTALL_BRANCH)..."
 
-# Determine install source: local repo or PyPI
-if [ -f "$REPO_DIR/pyproject.toml" ] && grep -q 'name = "keephive"' "$REPO_DIR/pyproject.toml" 2>/dev/null; then
-    # Installing from local clone
+# Determine install source
+# If a specific branch was requested (other than main), always use git source
+if [ "$INSTALL_BRANCH" != "main" ]; then
+    dim "source: git+https://github.com/joryeugene/keephive.git@$INSTALL_BRANCH"
+    uv tool install --force "keephive @ git+https://github.com/joryeugene/keephive.git@$INSTALL_BRANCH" 2>&1 | while read -r line; do
+        dim "$line"
+    done
+elif [ -f "$REPO_DIR/pyproject.toml" ] && grep -q 'name = "keephive"' "$REPO_DIR/pyproject.toml" 2>/dev/null; then
+    # Installing from local clone (default if branch is main)
     dim "source: $REPO_DIR"
     uv tool install --force "$REPO_DIR" 2>&1 | while read -r line; do
         dim "$line"
     done
 else
-    # Installing from PyPI (future) or git
-    dim "source: git+https://github.com/joryeugene/keephive.git"
-    uv tool install --force "keephive @ git+https://github.com/joryeugene/keephive.git" 2>&1 | while read -r line; do
+    # Installing from git main
+    dim "source: git+https://github.com/joryeugene/keephive.git@main"
+    uv tool install --force "keephive @ git+https://github.com/joryeugene/keephive.git@main" 2>&1 | while read -r line; do
         dim "$line"
     done
 fi

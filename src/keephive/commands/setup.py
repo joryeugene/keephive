@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -12,6 +13,8 @@ from keephive import __version__
 from keephive.health import check_installed_deps, find_global_keephive
 from keephive.identity import render_default_memory, render_default_rules
 from keephive.output import console, prompt_yn
+from keephive.platforms import platform_specs, record_hook_update
+from keephive.skillpack import get_record, record_deployment, render_platform_skill
 from keephive.storage import (
     active_profile,
     daemon_config_file,
@@ -159,22 +162,32 @@ def cmd_setup(args: list[str]) -> None:
     # 4. Seed bundled guides and prompts
     _seed_bundled_content()
 
-    # 5. Configure hooks
+    # 5. Install skills per platform
+    console.print()
+    console.print("  Installing keephive-helper skill...")
+    _deploy_skills(ns)
+
+    # 6. Install platform hooks
+    console.print()
+    console.print("  Installing platform hooks...")
+    _deploy_hooks(ns)
+
+    # 7. Configure Claude hooks
     console.print()
     console.print("  Configuring hooks...")
     _setup_hooks()
 
-    # 6. Register MCP server
+    # 8. Register MCP server
     console.print()
     console.print("  Registering MCP server...")
     _register_mcp()
 
-    # 7. Sync global install if stale
+    # 9. Sync global install if stale
     console.print()
     console.print("  Checking global install...")
     _sync_global_install()
 
-    # 8. Initialize KingBee: SOUL.md + daemon.json
+    # 10. Initialize KingBee: SOUL.md + daemon.json
     console.print()
     console.print("  🐝 Initializing KingBee...")
     sf = soul_file()
@@ -247,6 +260,192 @@ def _seed_bundled_content(quiet: bool = False, seed_only: bool = False) -> None:
             console.print(f"  [ok]OK[/ok] updated {updated} guide(s)/prompt(s)")
         else:
             console.print("  [dim]guides/prompts already present and up to date[/dim]")
+
+
+def _deploy_skills(namespace: argparse.Namespace) -> None:
+    """Install or refresh keephive-helper skills per platform."""
+    if namespace.skills == "skip" and all(
+        getattr(namespace, f"{slug}_skill") != "yes" for slug in ("claude", "gemini", "codex")
+    ):
+        console.print("  [dim]Skill deployment skipped (--skills=skip)[/dim]")
+        return
+
+    specs = platform_specs()
+    installed_any = False
+
+    for slug, meta in specs.items():
+        choice = getattr(namespace, f"{slug}_skill")
+        if choice == "no":
+            console.print(f"  [dim]{meta.title}: skipped (--{slug}-skill=no)[/dim]")
+            continue
+        if namespace.skills == "skip" and choice == "auto":
+            console.print(f"  [dim]{meta.title}: skipped (--skills=skip)[/dim]")
+            continue
+        should_install = False
+        if choice == "yes":
+            should_install = True
+        elif choice == "auto" and meta.detected:
+            should_install = True
+
+        if not should_install:
+            console.print(f"  [dim]{meta.title}: not detected ({meta.detection_reason})[/dim]")
+            continue
+
+        render = render_platform_skill(slug)
+        skill_path: Path = meta.skill_path
+        skill_path.parent.mkdir(parents=True, exist_ok=True)
+
+        existing = skill_path.read_text() if skill_path.exists() else ""
+        if existing == render.content:
+            console.print(f"  [dim]{meta.title}: skill up to date[/dim]")
+        else:
+            skill_path.write_text(render.content, encoding="utf-8")
+            console.print(f"  [ok]OK[/ok] {meta.title}: skill installed")
+            installed_any = True
+
+        record = get_record(slug)
+        if not record or record.get("hash") != render.hash or record.get("path") != str(skill_path):
+            record_deployment(render, skill_path)
+
+    if not installed_any:
+        console.print("  [dim]No skill updates required[/dim]")
+
+
+def _copy_hook_templates(platform: str, target_dir: Path) -> tuple[dict[str, str], bool]:
+    """Copy bundled hook templates for platform into target directory.
+
+    Returns (name->hash mapping, changed_flag).
+    """
+    from importlib import resources
+
+    records: dict[str, str] = {}
+    changed = False
+
+    try:
+        template_dir = resources.files("keephive.data").joinpath("templates", "hooks", platform)
+    except FileNotFoundError:
+        return records, False
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    for item in template_dir.iterdir():
+        if not item.is_file():
+            continue
+        content = item.read_text()
+        target = target_dir / item.name
+        current = target.read_text() if target.exists() else ""
+        if current != content:
+            target.write_text(content, encoding="utf-8")
+            os.chmod(target, 0o755)
+            changed = True
+        else:
+            # Ensure executable bit even if content unchanged
+            os.chmod(target, 0o755)
+        records[item.name] = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+    return records, changed
+
+
+def _configure_gemini_hooks(config_path: Path, script_dir: Path) -> bool:
+    mapping = {
+        "SessionStart": script_dir / "session_start.py",
+        "BeforeTool": script_dir / "before_tool.py",
+        "AfterModel": script_dir / "after_model.py",
+    }
+
+    data: dict = {}
+    changed = False
+    backup_path = None
+
+    if config_path.exists():
+        try:
+            data = json.loads(config_path.read_text())
+        except json.JSONDecodeError:
+            backup_path = config_path.with_suffix(config_path.suffix + ".keephive.bak")
+            if not backup_path.exists():
+                config_path.replace(backup_path)
+            data = {}
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    hooks = data.setdefault("hooks", {})
+
+    for event, script in mapping.items():
+        desired = [
+            {
+                "command": ["python3", str(script)],
+            }
+        ]
+        if hooks.get(event) != desired:
+            hooks[event] = desired
+            changed = True
+
+    if changed or not config_path.exists():
+        if config_path.exists() and backup_path is None:
+            backup_path = config_path.with_suffix(config_path.suffix + ".keephive.bak")
+            if not backup_path.exists():
+                shutil.copy(config_path, backup_path)
+        config_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return changed
+
+
+def _configure_codex_hooks(config_path: Path, script_dir: Path) -> bool:
+    notify_script = script_dir / "notify.py"
+    desired = "\n".join(
+        [
+            "# Generated by keephive setup",
+            "[notify]",
+            f'command = ["python3", "{notify_script}"]',
+            "",
+        ]
+    )
+
+    if config_path.exists():
+        current = config_path.read_text()
+        if current == desired:
+            return False
+        backup = config_path.with_suffix(config_path.suffix + ".keephive.bak")
+        if not backup.exists():
+            shutil.copy(config_path, backup)
+    else:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    config_path.write_text(desired, encoding="utf-8")
+    return True
+
+
+def _deploy_hooks(namespace: argparse.Namespace) -> None:
+    """Install or refresh platform hook shims."""
+    specs = platform_specs()
+
+    for slug in ("gemini", "codex"):
+        meta = specs[slug]
+        choice = getattr(namespace, f"{slug}_hooks")
+        if choice == "no":
+            console.print(f"  [dim]{meta.title}: hooks skipped (--{slug}-hooks=no)[/dim]")
+            continue
+        should_install = False
+        if choice == "yes":
+            should_install = True
+        elif choice == "auto" and meta.detected:
+            should_install = True
+
+        if not should_install:
+            console.print(f"  [dim]{meta.title}: not detected ({meta.detection_reason})[/dim]")
+            continue
+
+        scripts, scripts_changed = _copy_hook_templates(slug, meta.hooks_dir)
+        config_changed = False
+
+        if slug == "gemini":
+            config_changed = _configure_gemini_hooks(meta.config_path, meta.hooks_dir)
+        elif slug == "codex":
+            config_changed = _configure_codex_hooks(meta.config_path, meta.hooks_dir)
+
+        if scripts_changed or config_changed:
+            record_hook_update(slug, scripts, meta.config_path)
+            console.print(f"  [ok]OK[/ok] {meta.title}: hooks installed")
+        else:
+            console.print(f"  [dim]{meta.title}: hooks up to date[/dim]")
 
 
 def check_bundled_updates() -> int:

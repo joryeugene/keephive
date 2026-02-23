@@ -8,9 +8,10 @@ from pathlib import Path
 
 from keephive import __version__
 from keephive.output import console
+from keephive.skillpack import manifest_path as auto_manifest_path, read_manifest, write_manifest
 from keephive.storage import guides_dir, hive_dir, today
 
-SKILL_MANIFEST = hive_dir() / ".skill-manifest.json"
+SKILL_MANIFEST = auto_manifest_path()
 
 
 def _plugin_dir() -> Path:
@@ -44,17 +45,15 @@ def _ensure_plugin() -> None:
         )
 
     if not SKILL_MANIFEST.exists():
-        SKILL_MANIFEST.write_text("{}\n")
+        write_manifest({})
 
 
 def _read_manifest() -> dict:
-    if SKILL_MANIFEST.exists():
-        return json.loads(SKILL_MANIFEST.read_text())
-    return {}
+    return read_manifest()
 
 
 def _write_manifest(data: dict) -> None:
-    SKILL_MANIFEST.write_text(json.dumps(data, indent=2) + "\n")
+    write_manifest(data)
 
 
 def cmd_skill(args: list[str]) -> None:

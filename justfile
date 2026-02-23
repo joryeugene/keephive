@@ -15,6 +15,10 @@ test:
 test-e2e:
     uv run pytest -m terminal -v -o "addopts="
 
+# Run installer E2E tests (opt-in: requires network + uv install)
+test-install-e2e:
+    HIVE_RUN_INSTALL_E2E=1 uv run pytest tests/test_e2e_install.py -v -o "addopts="
+
 # Regenerate golden file baselines
 test-golden:
     uv run pytest -m terminal --update-golden -o "addopts="

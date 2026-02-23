@@ -10,11 +10,20 @@ Usage: hive serve [port] [--hot]
 from __future__ import annotations
 
 import base64
+import os
+import hashlib
 import html as _html
 import json
 import re
 import sys
 import webbrowser
+from collections import Counter
+from keephive.llm import available_backends, get_backend_state
+from keephive.llm.pending import list_pending, pending_count
+from keephive.platforms import platform_specs, read_hook_manifest
+from keephive.skillpack import get_record as get_skill_record
+from keephive.telemetry import read_events, platforms as telemetry_platforms
+from keephive.settings import get_setting
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -354,6 +363,9 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .stats-table td{padding:4px 8px;border-bottom:1px solid #21262d;color:#c9d1d9}
 .stats-table td:last-child{text-align:right;color:#58a6ff;font-weight:600}
 .mem-line{padding:3px 0;font-size:12px;border-bottom:1px solid #21262d;font-family:monospace;white-space:pre-wrap;word-break:break-word;color:#c9d1d9}
+.stats-platform-table td.ok{color:#3fb950}
+.stats-platform-table td.warn{color:#e3b341}
+
 .mem-line:last-child{border-bottom:none}
 .fact-item{padding:6px 10px;border-bottom:1px solid #21262d;font-size:12px;border-radius:4px;transition:background .15s}
 .fact-item:last-child{border-bottom:none}
@@ -515,8 +527,31 @@ mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 .source-bar-track{flex:1;background:#161b22;border-radius:2px;height:14px;overflow:hidden}
 .source-bar-fill{height:100%;border-radius:2px;background:#1a3a5c}
 .source-pct{min-width:35px;text-align:right;font-size:12px;color:#8b949e}
-"""
 
+.brain-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:6px}
+.brain-platform-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.brain-card{background:#161b22;border:1px solid #262b33;border-radius:8px;padding:12px;min-height:120px}
+.brain-card-emphasis{border-color:#3fb950}
+.brain-card-compact{min-height:auto}
+.brain-card-header{font-weight:600;font-size:12px;color:#9be9a8;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.brain-card-body{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#c9d1d9}
+.brain-line{display:flex;align-items:center;gap:6px;justify-content:space-between}
+.brain-line .brain-text{flex:1;color:#c9d1d9}
+.brain-line .brain-detail{color:#6e7681;font-size:11px;white-space:nowrap}
+.brain-chip{display:inline-flex;align-items:center;justify-content:center;padding:1px 6px;border-radius:999px;font-size:10px;text-transform:uppercase;background:#21262d;color:#8b949e;border:1px solid #30363d}
+.brain-chip-ok{background:#1f6feb;color:#fff;border-color:#388bfd}
+.brain-chip-warn{background:#b62324;color:#fff;border-color:#f85149}
+.brain-chip-dim{background:#1c2128;color:#6e7681;border-color:#2d333b}
+.brain-meta{font-size:11px;color:#8b949e}
+.brain-meta-warn{color:#fdaeb7}
+.brain-platform-grid .brain-card-body{gap:2px}
+.settings-grid{display:grid;grid-template-columns:2fr 1.2fr;gap:12px}
+@media(max-width:900px){.settings-grid{grid-template-columns:1fr}}
+.settings-col-right .card{margin-bottom:12px}
+.platform-row{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px;color:#c9d1d9}
+.platform-title{font-weight:600;flex:1}
+.platform-meta{color:#8b949e;font-size:11px}
+"""
 _JS = """
 (function(){
   var view=document.body.dataset.view||'home';
@@ -627,7 +662,7 @@ _JS = """
 
   // --- Helpers ---
   function escHtml(s){
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');
   }
   // All cards (flat list in DOM order)
   function _cards(){
@@ -1226,7 +1261,7 @@ _JS = """
   });
 
   // --- Keyboard navigation ---
-  var _VIEW_KEYS={h:'/',d:'/dev',k:'/know',s:'/stats',c:'/settings'};
+  var _VIEW_KEYS={h:'/',d:'/dev',b:'/brain',k:'/know',s:'/stats',c:'/settings'};
 
   function _clearG(){
     _gPending=false;
@@ -2813,6 +2848,47 @@ def _render_stats_panel(data: dict) -> str:
     )
 
 
+def _render_stats_platforms_panel(data: dict) -> str:
+    platforms = data.get("platforms", {}).get("platforms", {})
+    if not platforms:
+        body = '<div class="empty">No platform telemetry yet</div>'
+    else:
+        header = (
+            "<tr>"
+            "<th>Platform</th>"
+            "<th>Status</th>"
+            "<th>Telemetry events</th>"
+            "<th>Top event types</th>"
+            "</tr>"
+        )
+        rows = ""
+        for slug, info in platforms.items():
+            telemetry = info.get("telemetry", {})
+            total = telemetry.get("total", 0)
+            by_event = telemetry.get("by_event", {})
+            top = ", ".join(
+                f"{_e(evt)}:{cnt}"
+                for evt, cnt in sorted(by_event.items(), key=lambda x: (-x[1], x[0]))[:4]
+            )
+            status = "online" if info.get("detected") else "offline"
+            status_cls = "ok" if info.get("detected") else "warn"
+            rows += (
+                "<tr>"
+                f"<td>{_e(info.get('title', slug.title()))}</td>"
+                f'<td class="{status_cls}">{status}</td>'
+                f"<td>{total}</td>"
+                f"<td>{top or '—'}</td>"
+                "</tr>"
+            )
+        body = f'<table class="stats-table stats-platform-table">{header}{rows}</table>'
+    return (
+        '<div class="card" tabindex="0" role="region" aria-label="Platform telemetry">'
+        '<div class="card-header"><span class="card-title">Platforms</span></div>'
+        f'<div class="card-body">{body}</div>'
+        "</div>"
+    )
+
+
 def _render_stats_commands_panel(data: dict) -> str:
     """Command + tool breakdown as a standalone card."""
     commands = data.get("commands", [])
@@ -3787,11 +3863,120 @@ def _get_settings_data() -> dict:
         "defaults": DEFAULTS,
         "descriptions": DESCRIPTIONS,
         "builtin_sounds": BUILTIN_SOUNDS,
+        "backend": _get_backend_overview(),
+        "platforms": _get_platform_overview(),
+    }
+
+
+def _get_backend_overview() -> dict:
+    """Summarize backend selection, availability, and pending work."""
+    preferred = get_setting("llm_backend") or "auto"
+    env_override = os.environ.get("HIVE_LLM_BACKEND", "")
+    state = get_backend_state()
+    items: list[dict] = []
+    for backend in available_backends():
+        available, reason = backend.detect()
+        items.append(
+            {
+                "name": backend.name,
+                "available": available,
+                "reason": reason,
+                "supports_tools": backend.supports_tools,
+                "supports_structured": backend.supports_structured,
+                "supports_streaming": backend.supports_streaming,
+            }
+        )
+    return {
+        "preferred": preferred,
+        "env_override": env_override,
+        "state": state,
+        "backends": items,
+        "pending": pending_count(),
+    }
+
+
+def _get_platform_overview() -> dict:
+    """Return platform detection, install, and telemetry state."""
+    specs = platform_specs()
+    hook_manifest = read_hook_manifest()
+    data: dict[str, dict] = {}
+    for slug, spec in specs.items():
+        hook_entry = hook_manifest.get(slug, {})
+        scripts_meta = []
+        script_hashes = hook_entry.get("scripts", {})
+        for name, expected_hash in script_hashes.items():
+            target = spec.hooks_dir / name
+            exists = target.exists()
+            actual_hash = hashlib.sha256(target.read_bytes()).hexdigest() if exists else ""
+            scripts_meta.append(
+                {
+                    "name": name,
+                    "path": str(target),
+                    "exists": exists,
+                    "expected_hash": expected_hash,
+                    "actual_hash": actual_hash,
+                }
+            )
+        events = read_events(slug, limit=400)
+        counts = Counter(e.get("event", "unknown") for e in events)
+        recent = events[-6:]
+        skill_record = get_skill_record(slug) or {}
+        data[slug] = {
+            "slug": slug,
+            "title": spec.title,
+            "detected": spec.detected,
+            "detection_reason": spec.detection_reason,
+            "skill_path": str(spec.skill_path),
+            "skill_installed": spec.skill_path.exists(),
+            "skill_hash": skill_record.get("hash", ""),
+            "hooks_dir": str(spec.hooks_dir),
+            "hook_config": hook_entry.get("config_path", str(spec.config_path)),
+            "hook_scripts": scripts_meta,
+            "telemetry": {
+                "total": len(events),
+                "by_event": dict(counts),
+                "recent": recent,
+            },
+        }
+    return {"platforms": data}
+
+
+def _get_brain_data() -> dict:
+    """Agent brain view: knowledge corpus, pending work, telemetry snapshot."""
+    from keephive.storage import (
+        get_meaningful_entries,
+        memory_file,
+        open_todos,
+        read_memory,
+        read_rules,
+    )
+
+    memory_text = read_memory()
+    mem_lines = [ln.strip() for ln in memory_text.splitlines() if ln.strip()]
+    rules_text = read_rules()
+    rules_lines = [ln.strip() for ln in rules_text.splitlines() if ln.strip() and not ln.startswith("#")]
+    todos = open_todos()
+    latest_entries = get_meaningful_entries()[:6]
+
+    return {
+        "memory": {"total": len(mem_lines), "preview": mem_lines[:12]},
+        "rules": {"total": len(rules_lines), "preview": rules_lines[:8]},
+        "todos": {
+            "total": len(todos),
+            "items": [
+                {"date": d, "time": ts, "text": text}
+                for d, ts, text in list(reversed(todos[-6:]))
+            ],
+        },
+        "log": [{"text": line} for line in latest_entries],
+        "backend": _get_backend_overview(),
+        "platforms": _get_platform_overview(),
+        "pending_llm": list_pending(limit=6),
     }
 
 
 def _render_settings_panel(data: dict) -> str:
-    """Render settings with toggle switches for booleans, dropdowns for sounds."""
+    """Render settings with grouped layout (preferences + backend + platforms)."""
     settings = data["settings"]
     defaults = data["defaults"]
     descriptions = data["descriptions"]
@@ -3832,7 +4017,62 @@ def _render_settings_panel(data: dict) -> str:
             f"</div>"
         )
 
-    body = "\n".join(rows) if rows else '<div class="empty">No settings</div>'
+    settings_rows_html = "".join(rows) if rows else '<div class="empty">No settings</div>'
+    settings_card = (
+        '<div class="card" tabindex="0" role="region" aria-label="Settings toggles">'
+        '<div class="card-header"><span class="card-title">Preferences</span></div>'
+        f'<div class="card-body">{settings_rows_html}</div>'
+        "</div>"
+    )
+
+    backend = data.get("backend", {})
+    backend_rows: list[str] = []
+    for item in backend.get("backends", []):
+        status_chip = "brain-chip-ok" if item.get("available") else "brain-chip-warn"
+        backend_rows.append(
+            '<div class="brain-line">'
+            f'<span class="brain-chip {status_chip}">{_e(item.get("name", ""))}</span>'
+            f'<span class="brain-detail">{_e(item.get("reason", ""))}</span>'
+            "</div>"
+        )
+    backend_rows.append(
+        f'<div class="brain-meta">Preferred: {_e(backend.get("preferred", "auto"))}'
+        + (f" · Override: {_e(backend.get('env_override', ''))}" if backend.get("env_override") else "")
+        + "</div>"
+    )
+    pending = backend.get("pending", 0)
+    if pending:
+        backend_rows.append(f'<div class="brain-meta brain-meta-warn">{pending} queued LLM request(s)</div>')
+    backend_card = (
+        '<div class="card" tabindex="0" role="region" aria-label="Backend status">'
+        '<div class="card-header"><span class="card-title">LLM Backend</span></div>'
+        f'<div class="card-body">{"".join(backend_rows)}</div>'
+        "</div>"
+    )
+
+    platforms = data.get("platforms", {}).get("platforms", {})
+    platform_rows = []
+    for slug, info in platforms.items():
+        status_chip = "brain-chip-ok" if info.get("detected") else "brain-chip-dim"
+        hooks = info.get("hook_scripts", [])
+        telemetry = info.get("telemetry", {})
+        platform_rows.append(
+            '<div class="platform-row">'
+            f'<span class="brain-chip {status_chip}">{_e(slug)}</span>'
+            f'<span class="platform-title">{_e(info.get("title", slug.title()))}</span>'
+            f'<span class="platform-meta">skill: {"✓" if info.get("skill_installed") else "×"}</span>'
+            f'<span class="platform-meta">hooks: {len(hooks)}</span>'
+            f'<span class="platform-meta">events: {telemetry.get("total", 0)}</span>'
+            "</div>"
+        )
+    platform_body = "".join(platform_rows) if platform_rows else '<div class="empty">No platforms detected</div>'
+    platform_card = (
+        '<div class="card" tabindex="0" role="region" aria-label="Platform integrations">'
+        '<div class="card-header"><span class="card-title">Platform Integrations</span></div>'
+        f'<div class="card-body">{platform_body}</div>'
+        "</div>"
+    )
+
     mascot_uri = _mascot_data_uri()
     mascot_html = (
         f'<div style="text-align:center;margin-bottom:1rem">'
@@ -3844,10 +4084,140 @@ def _render_settings_panel(data: dict) -> str:
     )
     return (
         f"{mascot_html}"
-        f'<div class="card" tabindex="0" role="region" aria-label="Settings">'
-        f'<div class="card-header"><span class="card-title">Settings</span></div>'
-        f'<div class="card-body">{body}</div>'
-        f"</div>"
+        '<div class="settings-grid">'
+        f'<div class="settings-col">{settings_card}</div>'
+        f'<div class="settings-col settings-col-right">{backend_card}{platform_card}</div>'
+        "</div>"
+    )
+
+
+def _render_brain_panel(data: dict) -> str:
+    backend = data.get("backend", {})
+    platforms = data.get("platforms", {}).get("platforms", {})
+    pending = data.get("pending_llm", [])
+    memory = data.get("memory", {})
+    rules = data.get("rules", {})
+    todos = data.get("todos", {})
+    log_entries = data.get("log", [])
+
+    def _list_block(title: str, items: list[str], limit: int = 8) -> str:
+        lines = items[:limit]
+        bullet_rows = "".join(f'<div class="brain-line">{_e(it)}</div>' for it in lines)
+        return (
+            f'<div class="brain-card">'
+            f'<div class="brain-card-header">{_e(title)}</div>'
+            f'<div class="brain-card-body">{bullet_rows or '<div class="empty">None</div>'}</div>'
+            f"</div>"
+        )
+
+    memory_html = _list_block(f"Memory · {memory.get('total', 0)} lines", memory.get("preview", []))
+    rules_html = _list_block(f"Rules · {rules.get('total', 0)} entries", rules.get("preview", []))
+
+    todo_rows = ""
+    for item in todos.get("items", []):
+        todo_rows += (
+            '<div class="brain-line">'
+            f'<span class="brain-chip">{_e(item.get("date", ""))} {_e(item.get("time", ""))}</span>'
+            f'<span class="brain-text">{_e(item.get("text", ""))}</span>'
+            "</div>"
+        )
+    if not todo_rows:
+        todo_rows = '<div class="empty">No open TODOs</div>'
+    todos_html = (
+        '<div class="brain-card">'
+        f'<div class="brain-card-header">TODOs · {todos.get("total", 0)} open</div>'
+        f'<div class="brain-card-body">{todo_rows}</div>'
+        "</div>"
+    )
+
+    log_rows = "".join(f'<div class="brain-line">{_e(entry.get("text", ""))}</div>' for entry in log_entries)
+    if not log_rows:
+        log_rows = '<div class="empty">No recent highlights</div>'
+    log_html = (
+        '<div class="brain-card">'
+        '<div class="brain-card-header">Recent Highlights</div>'
+        f'<div class="brain-card-body">{log_rows}</div>'
+        "</div>"
+    )
+
+    backend_rows = ""
+    for item in backend.get("backends", []):
+        status = "●" if item["available"] else "○"
+        status_class = "brain-chip-ok" if item["available"] else "brain-chip-warn"
+        suffix = " tools" if item.get("supports_tools") else ""
+        backend_rows += (
+            '<div class="brain-line">'
+            f'<span class="brain-chip {status_class}">{status}</span>'
+            f'<span class="brain-text">{_e(item["name"])}{suffix}</span>'
+            f'<span class="brain-detail">{_e(item.get("reason", ""))}</span>'
+            "</div>"
+        )
+    pending_count = backend.get("pending", 0)
+    backend_body = [
+        f'<div class="brain-card-body">{backend_rows}',
+        f'<div class="brain-meta">Preferred: {_e(backend.get("preferred", "auto"))}</div>',
+    ]
+    env_override = backend.get("env_override")
+    if env_override:
+        backend_body.append(f'<div class="brain-meta">Env override: {_e(env_override)}</div>')
+    if pending_count:
+        backend_body.append(f'<div class="brain-meta brain-meta-warn">{pending_count} queued task(s)</div>')
+    backend_body.append("</div>")
+    backend_html = (
+        '<div class="brain-card brain-card-emphasis">'
+        '<div class="brain-card-header">Backend</div>'
+        + "".join(backend_body)
+        + "</div>"
+    )
+
+    pending_rows = ""
+    for item in pending:
+        preview = item.get("prompt_preview", "")[:180]
+        pending_rows += (
+            '<div class="brain-line">'
+            f'<span class="brain-chip brain-chip-warn">{_e(item.get("model", ""))}</span>'
+            f'<span class="brain-text">{_e(preview)}</span>'
+            "</div>"
+        )
+    if not pending_rows:
+        pending_rows = '<div class="empty">Queue clear</div>'
+    pending_html = (
+        '<div class="brain-card">'
+        '<div class="brain-card-header">Queued LLM Tasks</div>'
+        f'<div class="brain-card-body">{pending_rows}</div>'
+        "</div>"
+    )
+
+    platform_cards = ""
+    for slug, info in platforms.items():
+        status_chip = "brain-chip-ok" if info.get("detected") else "brain-chip-dim"
+        telemetry = info.get("telemetry", {})
+        by_event = telemetry.get("by_event", {})
+        event_rows = "".join(
+            f'<span class="brain-chip">{_e(event)}</span><span class="brain-detail">{count}</span>'
+            for event, count in sorted(by_event.items(), key=lambda x: (-x[1], x[0]))
+        ) or '<div class="empty">No telemetry</div>'
+        platform_cards += (
+            '<div class="brain-card brain-card-compact">'
+            f'<div class="brain-card-header"><span class="brain-chip {status_chip}">{_e(slug)}</span>'
+            f'{_e(info.get("title", slug.title()))}</div>'
+            f'<div class="brain-card-body">{event_rows}'
+            f'<div class="brain-meta">Skill: {"✓" if info.get("skill_installed") else "×"}</div>'
+            f'<div class="brain-meta">Hooks: {len(info.get("hook_scripts", []))} file(s)</div>'
+            f'<div class="brain-meta">{_e(info.get("detection_reason", ""))}</div>'
+            "</div></div>"
+        )
+
+    return (
+        '<div class="brain-grid">'
+        f"{backend_html}"
+        f"{memory_html}"
+        f"{rules_html}"
+        f"{todos_html}"
+        f"{pending_html}"
+        f"{log_html}"
+        f'<div class="brain-platform-grid">{platform_cards}</div>'
+        "</div>"
     )
 
 
@@ -4488,6 +4858,8 @@ PANELS: dict[str, tuple] = {
     "notes-compact": (_get_notes_data, _render_notes_compact_panel),
     "stats": (_get_stats_data, _render_stats_panel),
     "stats-commands": (_get_stats_data, _render_stats_commands_panel),
+    "brain": (_get_brain_data, _render_brain_panel),
+    "stats-platforms": (_get_platform_overview, _render_stats_platforms_panel),
     "ps": (_get_ps_data, _render_ps_panel),
     "facts": (_get_recent_facts_data, _render_recent_facts_panel),
     "standup": (_get_standup_data, _render_standup_panel),
@@ -4528,6 +4900,11 @@ VIEWS: dict[str, dict] = {
             ["knowledge-compact"],
         ],
     },
+    "brain": {
+        "path": "/brain",
+        "title": "Agent Brain",
+        "rows": [["brain"]],
+    },
     "know": {
         "path": "/know",
         "title": "Knowledge",
@@ -4541,6 +4918,7 @@ VIEWS: dict[str, dict] = {
             ["stats", "stats-commands"],  # Right column: Activity → What You Use
         ],
         "rows": [
+            ["stats-platforms"],
             ["stats-trends"],  # Full-width row below both columns
         ],
     },
@@ -5306,7 +5684,6 @@ class _HiveHandler(BaseHTTPRequestHandler):
 
         elif self.path == "/api/transfer/import":
             import base64
-
             b64 = (data.get("data") or "").strip()
             if not b64:
                 ok = False

@@ -26,6 +26,10 @@ class TestDriverBasics:
         """Basic: type echo, read output."""
         term.type("echo hello world").has("hello world")
 
+    def test_tty_detection(self, term):
+        """Terminal environment reports as a real TTY ([ -t 0 ])."""
+        term.type("[ -t 0 ] && echo 'IS_TTY' || echo 'NOT_TTY'").has("IS_TTY")
+
     def test_exit_code_zero(self, term):
         """Successful command returns clean output."""
         screen = term.type("python -m keephive --version")

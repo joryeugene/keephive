@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -27,6 +28,8 @@ from keephive.health import (
     get_installed_version as _get_installed_version,
 )
 from keephive.output import console, notify_sound, prompt_yn, show_hint
+from keephive.platforms import platform_specs, read_hook_manifest
+from keephive.skillpack import get_record as get_skill_record
 from keephive.settings import get_setting
 from keephive.storage import (
     archive_dir,
@@ -108,12 +111,20 @@ def cmd_doctor(args: list[str]) -> None:
     # 3. Dependencies
     console.print()
     console.print("[bold]Dependencies[/bold]")
-    for cmd in ["python3", "claude"]:
+    deps = [
+        ("python3", "[ok]OK[/ok]", "[err]MISSING[/err]"),
+        ("claude", "[ok]OK[/ok]", "[warn]OPTIONAL[/warn]"),
+        ("gemini", "[ok]OK[/ok]", "[dim]SKIP[/dim]"),
+        ("codex", "[ok]OK[/ok]", "[dim]SKIP[/dim]"),
+    ]
+    for cmd, ok_label, miss_label in deps:
         if shutil.which(cmd):
-            console.print(f"  [ok]OK[/ok] {cmd}")
+            console.print(f"  {ok_label} {cmd}")
         else:
-            console.print(f"  [err]MISSING[/err] {cmd}")
-            issues += 1
+            label = miss_label
+            console.print(f"  {label} {cmd}")
+            if cmd in {"python3"}:
+                issues += 1
 
     # 3.5. LLM backend
     console.print()
@@ -157,6 +168,63 @@ def cmd_doctor(args: list[str]) -> None:
             "  [warn]Inside Claude Code without ANTHROPIC_API_KEY: "
             "LLM features disabled in-session."
         )
+
+    # 3.6. Platform integrations (skills + hooks)
+    console.print()
+    console.print("[bold]Platform Integrations[/bold]")
+    specs = platform_specs()
+    hook_manifest = read_hook_manifest()
+    for slug, spec in specs.items():
+        status = "[ok]OK[/ok]" if spec.detected else "[dim]SKIP[/dim]"
+        console.print(f"  {status} {spec.title}: {spec.detection_reason}")
+
+        skill_path = spec.skill_path
+        skill_record = get_skill_record(slug)
+        if skill_path.exists():
+            console.print(f"    [ok]Skill[/ok] keephive-helper → {skill_path}")
+        else:
+            console.print("    [warn]Skill missing[/warn] keephive-helper not installed")
+            issues += 1 if spec.detected else 0
+        if skill_record:
+            console.print(
+                f"    [dim]Skill hash:[/dim] {skill_record.get('hash', '?')} "
+                f"(updated {skill_record.get('updated_at', 'unknown')})"
+            )
+
+        hook_entry = hook_manifest.get(slug)
+        if hook_entry:
+            scripts = hook_entry.get("scripts", {})
+            missing_scripts = []
+            for name, expected_hash in scripts.items():
+                target = spec.hooks_dir / name
+                if not target.exists():
+                    missing_scripts.append(name)
+                    continue
+                actual_hash = hashlib.sha256(target.read_bytes()).hexdigest()
+                if actual_hash != expected_hash:
+                    missing_scripts.append(f"{name}*")
+            if missing_scripts:
+                console.print(
+                    f"    [warn]Hooks drift[/warn] {', '.join(missing_scripts)} "
+                    f"(run 'hive setup --{slug}-hooks=yes')"
+                )
+                issues += 1
+            else:
+                console.print(f"    [ok]Hooks[/ok] scripts synced at {spec.hooks_dir}")
+
+            cfg = Path(hook_entry.get("config_path", ""))
+            if cfg:
+                state = "present" if cfg.exists() else "missing"
+                console.print(f"    [dim]Config:[/dim] {cfg} {state}")
+                if spec.detected and not cfg.exists():
+                    issues += 1
+        else:
+            console.print(
+                "    [warn]Hooks missing[/warn] run 'hive setup --platform "
+                f"{slug}' to install"
+            )
+            if spec.detected:
+                issues += 1
 
     # 3.7. Anthropic Memory
     console.print()

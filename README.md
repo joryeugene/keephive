@@ -57,6 +57,8 @@ After a few sessions, `hive` shows what your agent has learned:
   <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/cli-demo.gif" width="700" alt="keephive CLI demo" />
 </p>
 
+Keep your agent orientated across platforms. The new <code>hive serve /brain</code> view condenses working memory, rules, TODOs, and platform telemetry into a single high-density dashboard. It highlights the active backend, queued LLM work, and which agents (Claude, Gemini, Codex) are feeding data back into keephive.
+
 <details>
 <summary>Text output</summary>
 
@@ -114,6 +116,12 @@ From source:
 git clone https://github.com/joryeugene/keephive.git
 cd keephive && uv tool install . && keephive setup
 ```
+
+### Multi-agent setup
+
+- `keephive setup` detects Claude, Gemini, and Codex CLIs and installs the shared `keephive-helper` skill in each environment.
+- Gemini and Codex receive lightweight hook shims that mirror the Claude lifecycle so telemetry and captures stay in sync.
+- All data now lives under `~/.keephive/`; legacy `~/.claude/hive` installs are migrated with a compatibility symlink.
 
 ### Stay up to date
 
@@ -176,10 +184,10 @@ uv tool upgrade keephive   # manual alternative; run keephive setup after
 keephive ships two integration layers:
 
 1. **Agent-agnostic CLI + MCP server.** Every `hive` command is available over stdio via `keephive mcp-serve`, so any MCP-compatible agent can capture, recall, verify, and audit without touching the Claude stack.
-2. **Claude Code hook suite (batteries included).** When you use Claude Code, keephive plugs into its lifecycle hooks to automate the busywork. The hook layer relies on three Claude-specific extension points:
-   - **Hooks** fire on events (session start, conversation compact, user prompt) to capture insights and inject context automatically.
-   - **MCP server** gives Claude Code native tool access (`hive_remember`, `hive_recall`, etc.) so the agent can read and write memory directly.
-   - **Context injection** surfaces verified facts, behavioral rules, stale warnings, matching knowledge guides, open TODOs, and cross-project activity hints at the start of every session via the SessionStart hook's `additionalContext` field.
+2. **Agent hook suite (Claude, Gemini, Codex).** When a supported CLI is present, keephive installs the `keephive-helper` skill and hook shims so each agent follows the same capture→recall→verify loop. Claude keeps the rich lifecycle (SessionStart, PreCompact, etc.); Gemini receives SessionStart / BeforeTool / AfterModel Python shims; Codex gets a notify bridge. All hooks call the same `hive` commands and write normalized telemetry under `~/.keephive/telemetry/<platform>/`.
+   - **Hooks** fire on agent events (session start, tool runs, prompt submits) to capture insights and inject context automatically.
+   - **MCP server** exposes shared tools (`hive_remember`, `hive_recall`, etc.) so any MCP host can read and write memory directly.
+   - **Context injection** still surfaces verified facts, behavioral rules, stale warnings, matching guides, and TODOs at session start via each platform's hook output.
 
 ### The loop
 
@@ -211,7 +219,7 @@ flowchart TD
         WORK -->|session ends| SEND["SessionEnd:<br>finalize stats"]
     end
 
-    subgraph STORE["Knowledge Store (~/.claude/hive/)"]
+    subgraph STORE["Knowledge Store (~/.keephive/hive/)"]
         MEM[("Memory<br>30–90d TTL")]
         GUIDES[("Guides")]
         RULES[("Rules")]
@@ -221,7 +229,7 @@ flowchart TD
         STATS[(".stats.json<br>workflow analytics")]
     end
 
-    subgraph CC["Claude Code Data (~/.claude/usage-data/)"]
+    subgraph CC["Claude Code Data (~/.keephive/usage-data/)"]
         META[("session-meta/<br>msgs, tools, duration,<br>lines, tokens, commits")]
         FACETS[("facets/<br>outcome, friction,<br>satisfaction")]
     end
@@ -261,11 +269,11 @@ flowchart TD
 
 | Tier             | Path                                 | Purpose                           |
 | ---------------- | ------------------------------------ | --------------------------------- |
-| Working memory   | `~/.claude/hive/working/memory.md`   | Core facts, loaded every session  |
-| Rules            | `~/.claude/hive/working/rules.md`    | Behavioral rules for the agent    |
-| Knowledge guides | `~/.claude/hive/knowledge/guides/`   | Deep reference on specific topics |
-| Daily logs       | `~/.claude/hive/daily/YYYY-MM-DD.md` | Append-only session logs          |
-| Archive          | `~/.claude/hive/archive/`            | Old daily logs after gc           |
+| Working memory   | `~/.keephive/hive/working/memory.md`   | Core facts, loaded every session  |
+| Rules            | `~/.keephive/hive/working/rules.md`    | Behavioral rules for the agent    |
+| Knowledge guides | `~/.keephive/hive/knowledge/guides/`   | Deep reference on specific topics |
+| Daily logs       | `~/.keephive/hive/daily/YYYY-MM-DD.md` | Append-only session logs          |
+| Archive          | `~/.keephive/hive/archive/`            | Old daily logs after gc           |
 
 ### Hooks
 
@@ -493,7 +501,7 @@ All commands are also available as MCP tools for Claude Code to call directly:
 
 | Variable              | Default          | Description                            |
 | --------------------- | ---------------- | -------------------------------------- |
-| `HIVE_HOME`           | `~/.claude/hive` | Data directory                         |
+| `HIVE_HOME`           | `~/.keephive/hive` | Data directory                         |
 | `HIVE_STALE_DAYS`     | `30`             | Days before a fact is flagged stale    |
 | `HIVE_CAPTURE_BUDGET` | `4000`           | Characters to extract from transcripts |
 | `ANTHROPIC_API_KEY`   | (unset)          | Enables LLM features inside Claude Code sessions. Never needed from a terminal. |

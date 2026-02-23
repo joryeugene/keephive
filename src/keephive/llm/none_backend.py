@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from keephive.llm import Backend
 from keephive.llm.exceptions import ClaudePipeError
+from keephive.llm.pending import queue_request
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -22,9 +23,16 @@ def _call_structured(
     timeout: int,
     verbose: bool,
 ) -> T:
+    queue_request(
+        prompt,
+        model=model,
+        tools=tools,
+        stdin_text=stdin_text,
+        max_turns=max_turns,
+    )
     raise ClaudePipeError(
-        "No LLM backend available. Configure one via HIVE_LLM_BACKEND, "
-        "hive config llm-backend, or install the claude CLI."
+        "No LLM backend available. Request queued in ~/.keephive/pending/llm.jsonl. "
+        "Configure a backend via HIVE_LLM_BACKEND, hive config llm-backend, or install the claude CLI."
     )
 
 
