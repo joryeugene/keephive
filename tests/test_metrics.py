@@ -598,7 +598,7 @@ class TestServePanels:
 
         data = _get_capture_data()
         html = _render_capture_panel(data)
-        assert "Capture Mix" in html
+        assert "Capture Signals" in html
 
     def test_recalled_panel_renders(self, hive_env):
         _ = hive_env  # fixture for env isolation

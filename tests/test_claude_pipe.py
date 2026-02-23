@@ -411,100 +411,117 @@ class TestParseClaudeResponse:
 
 
 class TestRouting:
-    """Test two-tier routing in run_claude_pipe."""
+    """Test multi-backend priority routing in run_claude_pipe."""
 
-    def test_claudecode_without_api_key_fails_fast(self, monkeypatch):
-        """Inside Claude Code without API key: instant error, not 120s hang."""
-        monkeypatch.setenv("CLAUDECODE", "1")
-        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    def _fake_cli(self, called: list):
+        def _fn(*_a, **_kw):
+            called.append("cli")
+            return VerifyResponse(verdicts=[])
 
-        from keephive.claude import run_claude_pipe
+        return _fn
 
-        with pytest.raises(ClaudePipeError, match="ANTHROPIC_API_KEY"):
-            run_claude_pipe("test prompt", VerifyResponse)
+    def _fake_api(self, called: list):
+        def _fn(*_a, **_kw):
+            called.append("api")
+            return VerifyResponse(verdicts=[])
 
-    def test_claudecode_with_api_key_uses_api(self, monkeypatch):
-        """Inside Claude Code with API key: routes to API path."""
-        monkeypatch.setenv("CLAUDECODE", "1")
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
+        return _fn
 
-        mock_api = MagicMock()
-        monkeypatch.setattr(
-            "keephive.claude._run_via_api",
-            mock_api,
-        )
-        mock_api.return_value = VerifyResponse(verdicts=[])
+    def test_cli_backend_has_highest_priority(self, monkeypatch):
+        """anthropic_cli (priority 10) is tried first when available."""
+        import keephive.llm.anthropic_cli as cli_mod
 
-        from keephive.claude import run_claude_pipe
-
-        result = run_claude_pipe("test prompt", VerifyResponse)
-        assert result.verdicts == []
-        mock_api.assert_called_once()
-
-    def test_claudecode_with_api_key_and_tools_fails(self, monkeypatch):
-        """Inside CC with API key but tools requested: needs terminal."""
-        monkeypatch.setenv("CLAUDECODE", "1")
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
-
-        from keephive.claude import run_claude_pipe
-
-        with pytest.raises(ClaudePipeError, match="terminal"):
-            run_claude_pipe("test", VerifyResponse, tools=["Read", "Grep"])
-
-    def test_no_claudecode_no_api_key_uses_subprocess(self, monkeypatch):
-        """From terminal without API key: routes to subprocess path."""
-        monkeypatch.delenv("CLAUDECODE", raising=False)
-        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-
-        mock_sub = MagicMock()
-        monkeypatch.setattr(
-            "keephive.claude._run_via_subprocess",
-            mock_sub,
-        )
-        mock_sub.return_value = VerifyResponse(verdicts=[])
+        called: list = []
+        monkeypatch.setattr(cli_mod.backend, "detect", lambda: (True, "mocked"))
+        monkeypatch.setattr(cli_mod.backend, "call_structured", self._fake_cli(called))
 
         from keephive.claude import run_claude_pipe
 
         result = run_claude_pipe("test prompt", VerifyResponse)
         assert result.verdicts == []
-        mock_sub.assert_called_once()
+        assert called == ["cli"]
 
-    def test_api_key_terminal_uses_subprocess(self, monkeypatch):
-        """API key in env at terminal: still uses claude -p (free), never bills API."""
-        monkeypatch.delenv("CLAUDECODE", raising=False)
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
+    def test_api_backend_used_when_cli_unavailable(self, monkeypatch):
+        """When CLI unavailable, anthropic_api (priority 20) takes over."""
+        import keephive.llm.anthropic_api as api_mod
+        import keephive.llm.anthropic_cli as cli_mod
 
-        mock_sub = MagicMock()
-        monkeypatch.setattr("keephive.claude._run_via_subprocess", mock_sub)
-        mock_sub.return_value = VerifyResponse(verdicts=[])
+        called: list = []
+        monkeypatch.setattr(cli_mod.backend, "detect", lambda: (False, "cli unavailable"))
+        monkeypatch.setattr(api_mod.backend, "detect", lambda: (True, "api mocked"))
+        monkeypatch.setattr(api_mod.backend, "call_structured", self._fake_api(called))
 
         from keephive.claude import run_claude_pipe
 
         result = run_claude_pipe("test prompt", VerifyResponse)
         assert result.verdicts == []
-        mock_sub.assert_called_once()
+        assert called == ["api"]
 
-    def test_api_key_terminal_with_tools_uses_subprocess(self, monkeypatch):
-        """API key + tools + terminal: subprocess used (API key still ignored at terminal)."""
+    def test_claudecode_does_not_affect_routing(self, monkeypatch):
+        """CLAUDECODE env no longer changes routing; CLI is tried first regardless."""
+        import keephive.llm.anthropic_cli as cli_mod
+
+        monkeypatch.setenv("CLAUDECODE", "1")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
+        called: list = []
+        monkeypatch.setattr(cli_mod.backend, "detect", lambda: (True, "mocked"))
+        monkeypatch.setattr(cli_mod.backend, "call_structured", self._fake_cli(called))
+
+        from keephive.claude import run_claude_pipe
+
+        result = run_claude_pipe("test prompt", VerifyResponse)
+        assert result.verdicts == []
+        assert called == ["cli"]
+
+    def test_tools_route_to_cli_backend(self, monkeypatch):
+        """Tools are handled by the CLI backend (supports_tools=True, priority 10)."""
+        import keephive.llm.anthropic_cli as cli_mod
+
+        called: list = []
+        monkeypatch.setattr(cli_mod.backend, "detect", lambda: (True, "mocked"))
+        monkeypatch.setattr(cli_mod.backend, "call_structured", self._fake_cli(called))
+
+        from keephive.claude import run_claude_pipe
+
+        result = run_claude_pipe("test", VerifyResponse, tools=["Read", "Grep"])
+        assert result.verdicts == []
+        assert called == ["cli"]
+
+    def test_cli_preferred_over_api_at_terminal(self, monkeypatch):
+        """API key in env but CLI takes priority (free over paid)."""
+        import keephive.llm.anthropic_cli as cli_mod
+
         monkeypatch.delenv("CLAUDECODE", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
+        called: list = []
+        monkeypatch.setattr(cli_mod.backend, "detect", lambda: (True, "mocked"))
+        monkeypatch.setattr(cli_mod.backend, "call_structured", self._fake_cli(called))
 
-        mock_sub = MagicMock()
-        monkeypatch.setattr(
-            "keephive.claude._run_via_subprocess",
-            mock_sub,
-        )
-        mock_sub.return_value = VerifyResponse(verdicts=[])
+        from keephive.claude import run_claude_pipe
+
+        result = run_claude_pipe("test prompt", VerifyResponse)
+        assert result.verdicts == []
+        assert called == ["cli"]
+
+    def test_cli_preferred_for_tools_even_with_api_key(self, monkeypatch):
+        """Tools + API key at terminal: CLI still takes priority (priority 10 vs 20)."""
+        import keephive.llm.anthropic_cli as cli_mod
+
+        monkeypatch.delenv("CLAUDECODE", raising=False)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
+        called: list = []
+        monkeypatch.setattr(cli_mod.backend, "detect", lambda: (True, "mocked"))
+        monkeypatch.setattr(cli_mod.backend, "call_structured", self._fake_cli(called))
 
         from keephive.claude import run_claude_pipe
 
         result = run_claude_pipe("test", VerifyResponse, tools=["Read"])
         assert result.verdicts == []
-        mock_sub.assert_called_once()
+        assert called == ["cli"]
 
 
 class TestRunViaApi:
-    """Test the direct API path."""
+    """Test the direct Anthropic API path (_run_via_api = anthropic_api._call_structured)."""
 
     def test_api_timeout_raises(self, monkeypatch):
         """API timeout produces ClaudePipeError."""
@@ -521,14 +538,14 @@ class TestRunViaApi:
 
         from keephive.claude import _run_via_api
 
+        # New signature: (prompt, response_model, model, stdin_text, tools, max_turns, timeout, verbose)
         with pytest.raises(ClaudePipeError, match="timed out"):
-            _run_via_api("test", VerifyResponse, "haiku", None, 30, False)
+            _run_via_api("test", VerifyResponse, "haiku", None, None, None, 30, False)
 
     def test_api_extracts_tool_use_block(self, monkeypatch):
         """API response with tool_use block is correctly parsed."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
 
-        # Build a mock response with a tool_use content block
         mock_block = MagicMock()
         mock_block.type = "tool_use"
         mock_block.name = "structured_output"
@@ -546,7 +563,7 @@ class TestRunViaApi:
 
         from keephive.claude import _run_via_api
 
-        result = _run_via_api("test", VerifyResponse, "haiku", None, 30, False)
+        result = _run_via_api("test", VerifyResponse, "haiku", None, None, None, 30, False)
         assert len(result.verdicts) == 1
         assert result.verdicts[0].verdict.value == "VALID"
 
@@ -571,7 +588,7 @@ class TestRunViaApi:
         from keephive.claude import _run_via_api
 
         with pytest.raises(ClaudePipeError, match="no tool_use block"):
-            _run_via_api("test", VerifyResponse, "haiku", None, 30, False)
+            _run_via_api("test", VerifyResponse, "haiku", None, None, None, 30, False)
 
     def test_api_stdin_text_appended_to_prompt(self, monkeypatch):
         """stdin_text is appended to the prompt content for API calls."""
@@ -594,9 +611,8 @@ class TestRunViaApi:
 
         from keephive.claude import _run_via_api
 
-        _run_via_api("prompt here", VerifyResponse, "haiku", "extra context", 30, False)
+        _run_via_api("prompt here", VerifyResponse, "haiku", "extra context", None, None, 30, False)
 
-        # Verify the content includes both prompt and stdin_text
         call_args = mock_client.messages.create.call_args
         messages = call_args.kwargs["messages"]
         content = messages[0]["content"]
@@ -624,13 +640,13 @@ class TestRunViaApi:
 
         from keephive.claude import _run_via_api
 
-        _run_via_api("test", VerifyResponse, "sonnet", None, 30, False)
+        _run_via_api("test", VerifyResponse, "sonnet", None, None, None, 30, False)
 
         call_args = mock_client.messages.create.call_args
-        assert call_args.kwargs["model"] == "claude-sonnet-4-6"
+        assert call_args.kwargs["model"] == "claude-sonnet-4.6"
 
     def test_missing_anthropic_gives_setup_guidance(self, monkeypatch):
-        """Missing anthropic error tells user to run keephive setup."""
+        """Missing anthropic package error tells user to run keephive setup."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
         monkeypatch.delenv("CLAUDECODE", raising=False)
 
@@ -648,4 +664,4 @@ class TestRunViaApi:
         from keephive.claude import _run_via_api
 
         with pytest.raises(ClaudePipeError, match="keephive setup"):
-            _run_via_api("test", VerifyResponse, "haiku", None, 30, False)
+            _run_via_api("test", VerifyResponse, "haiku", None, None, None, 30, False)

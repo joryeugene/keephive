@@ -4156,8 +4156,11 @@ def _render_settings_panel(data: dict) -> str:
     mascot_uri = _mascot_data_uri()
     mascot_html = (
         f'<div style="text-align:center;margin-bottom:1rem">'
+        f'<a href="https://github.com/joryeugene/keephive" target="_blank" rel="noopener">'
         f'<img src="{mascot_uri}" alt="keephive mascot" '
-        f'style="width:180px;image-rendering:auto">'
+        f'style="width:180px;image-rendering:auto;opacity:.92;transition:opacity .15s" '
+        f'onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'.92\'">'
+        f"</a>"
         f"</div>"
         if mascot_uri
         else ""
