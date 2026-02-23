@@ -518,3 +518,132 @@ class TestSessionendFiresSoulUpdate:
 
         soul_update_calls = [c for c in popen_calls if "daemon" in c and "soul-update" in c]
         assert not soul_update_calls, "soul-update should NOT fire when disabled in daemon.json"
+
+
+class TestTickSkipBehavior:
+    """_tick only calls _mark_last_run when _execute_task returns True."""
+
+    def test_tick_does_not_mark_last_run_when_execute_returns_false(self, monkeypatch, hive_env):
+        """_tick must not call _mark_last_run when _execute_task returns False.
+
+        Bug caught: stale-check was being marked as 'completed' in daemon.log
+        even when it skipped (no memory.md), misleading the audit trail.
+        """
+        import json
+
+        from keephive.commands.daemon import _tick
+        from keephive.storage import daemon_config_file, hive_dir, write_daemon_state
+
+        # Configure stale-check as due (last_run far in the past)
+        config = {
+            "tasks": {
+                "stale-check": {
+                    "enabled": True,
+                    "time": "00:00",
+                }
+            }
+        }
+        daemon_config_file().write_text(json.dumps(config))
+        write_daemon_state({})  # no last_run → task is due
+
+        mark_calls: list[str] = []
+        monkeypatch.setattr("keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t))
+        # Force _execute_task to return False (simulates stale-check with no memory.md)
+        monkeypatch.setattr("keephive.commands.daemon._execute_task", lambda t: False)
+
+        _tick()
+
+        # _mark_last_run must NOT have been called
+        assert mark_calls == [], f"Expected no _mark_last_run calls, got: {mark_calls}"
+
+        # daemon.log must contain "skipped (no data)", NOT "completed"
+        log_text = (hive_dir() / "daemon.log").read_text()
+        assert "skipped (no data)" in log_text, f"Expected 'skipped (no data)' in log: {log_text}"
+        assert "completed: stale-check" not in log_text, f"Must not log 'completed' on skip: {log_text}"
+
+    def test_tick_marks_last_run_when_execute_returns_true(self, monkeypatch, hive_env):
+        """_tick calls _mark_last_run exactly once when _execute_task returns True.
+
+        Bug caught: if _tick had ignored return value in both directions, tasks that
+        returned True would also skip the state write — this confirms the happy path.
+        """
+        import json
+
+        from keephive.commands.daemon import _tick
+        from keephive.storage import daemon_config_file, hive_dir, write_daemon_state
+
+        config = {
+            "tasks": {
+                "stale-check": {
+                    "enabled": True,
+                    "time": "00:00",
+                }
+            }
+        }
+        daemon_config_file().write_text(json.dumps(config))
+        write_daemon_state({})
+
+        mark_calls: list[str] = []
+        monkeypatch.setattr("keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t))
+        monkeypatch.setattr("keephive.commands.daemon._execute_task", lambda t: True)
+
+        _tick()
+
+        assert mark_calls == ["stale-check"], f"Expected _mark_last_run('stale-check'), got: {mark_calls}"
+        log_text = (hive_dir() / "daemon.log").read_text()
+        assert "completed: stale-check" in log_text, f"Expected 'completed' in log: {log_text}"
+
+
+class TestSoulUpdateThrottleLog:
+    """soul-update throttle skip must write a diagnostic entry to daemon.log."""
+
+    def test_soul_update_throttle_writes_to_daemon_log(self, hive_env):
+        """soul-update throttled within 1h writes 'soul-update: throttled' to daemon.log.
+
+        Bug caught: silent throttle skips made the causal chain in daemon.log
+        unreadable — you couldn't tell if a task ran, was throttled, or simply
+        wasn't scheduled.
+        """
+        from keephive.commands.daemon import _task_soul_update
+        from keephive.storage import hive_dir, write_daemon_state
+
+        # Set last_run to 30 minutes ago (inside 1h throttle)
+        thirty_min_ago = (datetime.now() - timedelta(minutes=30)).isoformat()
+        write_daemon_state({"soul-update": {"last_run": thirty_min_ago}})
+
+        _task_soul_update()
+
+        log_text = (hive_dir() / "daemon.log").read_text()
+        assert "soul-update: throttled" in log_text, (
+            f"Expected 'soul-update: throttled' in daemon.log: {log_text}"
+        )
+        assert "30m" in log_text or "29m" in log_text, (
+            f"Expected elapsed minutes (~30m) in daemon.log: {log_text}"
+        )
+
+
+class TestSelfImproveThrottleLog:
+    """self-improve throttle skip must write a diagnostic entry to daemon.log."""
+
+    def test_self_improve_throttle_writes_to_daemon_log(self, hive_env):
+        """self-improve throttled within 1d writes 'self-improve: throttled' to daemon.log.
+
+        Bug caught: silent throttle skips left the log with no evidence of WHY
+        self-improve didn't run, making it impossible to debug scheduling issues.
+        """
+        from keephive.commands.daemon import _SELF_IMPROVE_THROTTLE_DAYS, _task_self_improve
+        from keephive.storage import hive_dir, write_daemon_state
+
+        # Set last_run to today (days_since == 0, inside 1d throttle)
+        now = datetime.now().isoformat()
+        write_daemon_state({"self-improve": {"last_run": now}})
+
+        _task_self_improve()
+
+        log_text = (hive_dir() / "daemon.log").read_text()
+        assert "self-improve: throttled" in log_text, (
+            f"Expected 'self-improve: throttled' in daemon.log: {log_text}"
+        )
+        assert f"threshold {_SELF_IMPROVE_THROTTLE_DAYS}d" in log_text, (
+            f"Expected threshold annotation in daemon.log: {log_text}"
+        )

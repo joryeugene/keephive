@@ -252,9 +252,12 @@ def _tick() -> None:
         if _is_task_due(task_name, task_config, state, now):
             _log_daemon(f"running task: {task_name}")
             try:
-                _execute_task(task_name)
-                _mark_last_run(task_name)
-                _log_daemon(f"completed: {task_name}")
+                did_work = _execute_task(task_name)
+                if did_work:
+                    _mark_last_run(task_name)
+                    _log_daemon(f"completed: {task_name}")
+                else:
+                    _log_daemon(f"skipped (no data): {task_name}")
             except Exception as e:
                 _log_daemon(f"task failed: {task_name}: {e}")
 
@@ -449,6 +452,8 @@ def _task_soul_update() -> bool:
     if last_run_str:
         last_run_dt = datetime.fromisoformat(last_run_str)
         if (datetime.now() - last_run_dt) < timedelta(hours=1):
+            mins = int((datetime.now() - last_run_dt).total_seconds() / 60)
+            _log_daemon(f"soul-update: throttled ({mins}m since last run, threshold 60m)")
             return False
 
     from keephive.claude import ClaudePipeError, run_claude_pipe
@@ -536,7 +541,8 @@ def _task_self_improve() -> bool:
     if last_run_str:
         days_since = (datetime.now() - datetime.fromisoformat(last_run_str)).days
         if days_since < _SELF_IMPROVE_THROTTLE_DAYS:
-            return False  # silent — throttle skip is not a diagnostic event
+            _log_daemon(f"self-improve: throttled ({days_since}d since last run, threshold {_SELF_IMPROVE_THROTTLE_DAYS}d)")
+            return False
 
     # ── Depth cap: don't pile on if user hasn't reviewed ─────────────
     existing = read_pending_improvements()
