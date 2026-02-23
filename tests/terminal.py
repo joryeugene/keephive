@@ -26,6 +26,11 @@ END_MARKER = "__HIVE_E2E_DONE__"
 POLL_INTERVAL = 0.05  # 50ms between screen checks
 DEFAULT_TIMEOUT = 10.0
 
+# Separate tmux server so test sessions never appear on the user's default socket.
+# '-L hive-test' routes all traffic to /tmp/tmux-UID/hive-test — invisible to the
+# user's own session list and never hit by their next-session/prev-session bindings.
+_TMUX = ["tmux", "-L", "hive-test"]
+
 
 class Screen:
     """The terminal screen after a command runs."""
@@ -148,7 +153,7 @@ class Terminal:
     def _start(self) -> None:
         """Create a detached tmux session."""
         cmd = [
-            "tmux",
+            *_TMUX,
             "new-session",
             "-d",
             "-s",
@@ -168,7 +173,7 @@ class Terminal:
 
         # Large scrollback so long output (100+ lines) is fully captured
         subprocess.run(
-            ["tmux", "set-option", "-t", self.session, "history-limit", "10000"],
+            [*_TMUX, "set-option", "-t", self.session, "history-limit", "10000"],
             capture_output=True,
         )
 
@@ -199,7 +204,7 @@ class Terminal:
         self._send("clear")
         time.sleep(0.1)
         subprocess.run(
-            ["tmux", "clear-history", "-t", self.session],
+            [*_TMUX, "clear-history", "-t", self.session],
             capture_output=True,
         )
 
@@ -213,7 +218,7 @@ class Terminal:
         self._send("clear")
         time.sleep(0.1)
         subprocess.run(
-            ["tmux", "clear-history", "-t", self.session],
+            [*_TMUX, "clear-history", "-t", self.session],
             capture_output=True,
         )
         # Send command bracketed by start/end markers
@@ -247,7 +252,7 @@ class Terminal:
     def send_char(self, char: str) -> None:
         """Send a single character (for y/n prompts). No Enter."""
         subprocess.run(
-            ["tmux", "send-keys", "-t", self.session, char],
+            [*_TMUX, "send-keys", "-t", self.session, char],
             capture_output=True,
             check=True,
         )
@@ -259,7 +264,7 @@ class Terminal:
         like C-c (Ctrl+C), C-d, Escape. Used to stop long-running commands.
         """
         subprocess.run(
-            ["tmux", "send-keys", "-t", self.session, keys],
+            [*_TMUX, "send-keys", "-t", self.session, keys],
             capture_output=True,
             check=True,
         )
@@ -324,7 +329,7 @@ class Terminal:
     def _send(self, text: str) -> None:
         """Send keystrokes + Enter to the tmux session."""
         subprocess.run(
-            ["tmux", "send-keys", "-t", self.session, text, "Enter"],
+            [*_TMUX, "send-keys", "-t", self.session, text, "Enter"],
             capture_output=True,
             check=True,
         )
@@ -336,7 +341,7 @@ class Terminal:
         This is essential for commands that produce more output than the
         pane height (e.g., seq 1 100 with a 40-row pane).
         """
-        cmd = ["tmux", "capture-pane", "-t", self.session, "-p", "-S", "-"]
+        cmd = [*_TMUX, "capture-pane", "-t", self.session, "-p", "-S", "-"]
         if ansi:
             cmd.append("-e")
         return subprocess.run(cmd, capture_output=True, text=True).stdout
@@ -381,7 +386,7 @@ class Terminal:
         """Kill the tmux session."""
         if self._alive:
             subprocess.run(
-                ["tmux", "kill-session", "-t", self.session],
+                [*_TMUX, "kill-session", "-t", self.session],
                 capture_output=True,
             )
             self._alive = False
