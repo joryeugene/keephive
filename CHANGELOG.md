@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.23.0
+
+### Features
+
+- **KingBee Daemon**: Background process (`hive daemon start`) that manages agent identity and automated maintenance.
+  - **Agent Identity (SOUL.md)**: Persistent cross-project summary of the agent's specialized skills, strengths, and evolving personality. Injected into every `SessionStart`.
+  - **Self-Improvement Loop**: Periodically scans daily logs to propose new skills, behavioral rules, or task optimizations. Proposals are queued for interactive review via `hive improve review`.
+  - **Morning Briefing**: Synthesized briefing of pending tasks and recent cross-project activity injected into the first session of each day.
+  - **Stale Check**: Automated background scan for facts that haven't been verified recently.
+- **Guided Maintenance Flow (`hive flow`)**: Orchestrated one-pass maintenance pass. Walks the user through Triage, Fact Review, Rule Review, Improvement Review, and a full Verification pass.
+- **Improvement Review (`hive improve`)**: Interactive TUI to accept, defer, or dismiss self-improvement proposals from KingBee. Supports Skill, Rule, Task, and Edit proposal types.
+- **BM25 Recall Ranking**: `hive_recall` MCP tool and `hive rc` CLI now use BM25-ranked relevance instead of simple recency weighting for multi-tier search results.
+- **Throttled `soul-update`**: PreCompact hook now triggers a throttled background `soul-update` (min 1h interval) to keep the agent's identity current without overhead.
+
+### Fixes
+
+- **PreCompact Soul Trigger**: Identity updates now fire during active work (via PreCompact) rather than only at `SessionEnd`, ensuring the "soul" stays fresh during long-running sessions.
+- **Soul Summary Extraction**: Improved regex and LLM patterns for extracting the "Agent Identity" summary from `SOUL.md` for injection.
+- **Daemon Resilience**: Atomic writes (tmp+rename), PID tracking, and 60s tick loop with daily/weekly task throttling.
+
+### Tests
+
+- 32 new tests covering KingBee daemon, identity injection, flow orchestration, and improvement review.
+- New: `tests/test_soul.py` (10 tests), `tests/test_daemon.py` (22 tests).
+
 ## Unreleased
 
 ### Features

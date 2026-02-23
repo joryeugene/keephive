@@ -271,12 +271,12 @@ flowchart TD
 
 | Hook             | Trigger               | What it does                                           |
 | ---------------- | --------------------- | ------------------------------------------------------ |
-| SessionStart     | New session           | Injects memory, rules, TODOs, stale warnings           |
-| PreCompact       | Conversation compacts | Extracts insights from transcript, writes to daily log with project attribution |
+| SessionStart     | New session           | Injects memory, rules, TODOs, stale warnings, Agent Identity |
+| PreCompact       | Conversation compacts | Extracts insights; triggers throttled `soul-update`    |
 | PostToolUse      | After Edit/Write      | Periodic nudge to record decisions                     |
 | UserPromptSubmit | User sends prompt     | Periodic nudge, UI queue injection                     |
 | Stop             | Agent turn ends       | Increments turn counter, periodic micro-nudge          |
-| SessionEnd       | Session terminates    | Finalizes session stats with accurate end timestamp    |
+| SessionEnd       | Session terminates    | Finalizes stats; triggers `soul-update` and `self-improve` |
 | TaskCompleted    | Task marked done      | Auto-logs DONE entry to daily log                      |
 
 ### Use it with other MCP clients
@@ -304,7 +304,7 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 ## Commands
 
 <details>
-<summary><b>Full command reference</b> (35 commands)</summary>
+<summary><b>Full command reference</b> (38 commands)</summary>
 
 | Command                 | Short             | What                                       |
 | ----------------------- | ----------------- | ------------------------------------------ |
@@ -315,7 +315,7 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 | `hive n todo`           | `hive 4 todo`     | Extract action items from a note slot      |
 | **Recall**              |                   |                                            |
 | `hive status`           | `hive` / `hive s` | Status overview                            |
-| `hive recall <query>`   | `hive rc <query>` | Search all tiers                           |
+| `hive recall <query>`   | `hive rc <query>` | Search all tiers (BM25 ranked)             |
 | `hive log [date]`       | `hive l`          | View daily log; `hive l summarize` for LLM summary |
 | `hive todo`             | `hive td`         | Open TODOs with ages                       |
 | `hive todo done <pat>`  |                   | Mark TODO complete                         |
@@ -329,14 +329,17 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 | `hive verify`           | `hive v`          | Check stale facts against codebase; auto-corrects |
 | `hive reflect`          | `hive rf`         | Pattern scan across daily logs             |
 | `hive audit`            | `hive a`          | Quality Pulse: 3 perspectives + synthesis  |
+| `hive flow`             |                   | **Guided maintenance flow**: one-pass review |
 | **Manage**              |                   |                                            |
 | `hive mem [rm] <text>`  | `hive m`          | Add/remove working memory facts            |
 | `hive rule [rm] <text>` |                   | Add/remove behavioral rules                |
 | `hive rule learn`       |                   | Learn rules from /insights friction data   |
 | `hive rule review`      |                   | Accept/reject pending rule suggestions     |
-| `hive edit <target>`    | `hive e`          | Edit memory, rules, todos, etc.            |
+| `hive improve review`   |                   | Review pending identity/skill improvements |
+| `hive edit <target>`    | `hive e`          | Edit memory, rules, soul, etc.             |
 | `hive skill`            | `hive sk`         | Manage skill plugins                       |
 | **Maintain**            |                   |                                            |
+| `hive daemon [start]`   |                   | **KingBee background daemon** (morning briefs, soul) |
 | `hive doctor`           | `hive dr`         | Health check                               |
 | `hive gc`               | `hive g`          | Archive old logs                           |
 | `hive setup`            |                   | Register hooks and MCP server              |
@@ -435,6 +438,32 @@ Custom prompts resolve by prefix, so `hive go pr-re` finds `pr-review-git-staged
 #### Standup
 
 `hive su` generates a standup summary from recent daily log activity and optionally includes GitHub PR data.
+
+#### KingBee (Daemon)
+
+`hive daemon start` launches a background process that manages persistent agent identity and automated maintenance.
+
+- **Agent Identity**: Manages `SOUL.md`, a cross-project summary of the agent's specialized skills, patterns, and evolving personality.
+- **Morning Briefing**: Your first session of the day receives a synthesized briefing of pending tasks and recent activity.
+- **Self-Improvement**: The daemon scans logs to propose new skills, behavioral rules, or task optimizations, queued for your review.
+- **Stale Check**: Automatically identifies facts that haven't been verified recently.
+
+#### Flow
+
+`hive flow` is a guided maintenance command that drains all pending queues in one pass. It walks you through:
+1. **Triage**: Overview of pending items.
+2. **Fact Review**: Graduate auto-captured insights to working memory.
+3. **Rule Review**: Accept or reject behavioral rule suggestions.
+4. **Improvement Review**: Review self-improvement proposals from KingBee.
+5. **Verify**: Run a full verification of stale facts against the codebase.
+
+#### Improve
+
+`hive improve review` opens an interactive TUI to review proposals from the KingBee daemon. Improvements can be:
+- **Skills**: New specialized capabilities or tool patterns.
+- **Rules**: Behavioral nudges to avoid recurring friction.
+- **Tasks**: Suggested optimizations for your daily workflow.
+- **Edits**: Direct improvements to knowledge guides or configuration.
 
 #### Stats
 

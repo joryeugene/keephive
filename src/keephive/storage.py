@@ -388,6 +388,17 @@ def daemon_pid_file() -> "Path":
     return hive_dir() / ".daemon.pid"
 
 
+def get_daemon_pid() -> int | None:
+    """Read the daemon PID from the PID file, if it exists."""
+    path = daemon_pid_file()
+    if not path.exists():
+        return None
+    try:
+        return int(path.read_text().strip())
+    except (ValueError, OSError):
+        return None
+
+
 def read_daemon_config() -> dict:
     path = daemon_config_file()
     if not path.exists():

@@ -15,10 +15,11 @@ A knowledge sidecar for Claude Code. Commands work as both `keephive <cmd>` and 
 | ---------------------- | ----------------- | ---------------------------------------------------------------- |
 | `hive status`          | `hive s`          | Status at a glance (stale warnings, recent entries, suggestions) |
 | `hive remember "fact"` | `hive r "fact"`   | Save to today's daily log                                        |
-| `hive recall <query>`  | `hive rc <query>` | Search all memory tiers (recency-weighted)                       |
+| `hive recall <query>`  | `hive rc <query>` | Search all memory tiers (BM25 relevance ranking)                 |
+| `hive flow`            |                   | **Guided maintenance flow**: drain all queues in one pass        |
 | `hive verify`          | `hive v`          | Check and fix stale facts against codebase                       |
 | `hive reflect`         | `hive rf`         | Scan daily logs for patterns                                     |
-| `hive edit [target]`   | `hive e [target]` | Quick-edit (memory, rules, claude, settings, local, note)        |
+| `hive edit [target]`   | `hive e [target]` | Quick-edit (memory, rules, claude, settings, local, soul)        |
 | `hive log`             | `hive l`          | View today's entries                                             |
 | `hive note`            | `hive n`          | Multi-slot scratchpad ($EDITOR, auto-copy)                       |
 | `hive todo`            |                   | List open TODOs with ages                                        |
@@ -30,6 +31,8 @@ A knowledge sidecar for Claude Code. Commands work as both `keephive <cmd>` and 
 | `hive standup`         |                   | Generate standup summary from recent activity                    |
 | `hive rule learn`      |                   | Learn rules from /insights friction data                         |
 | `hive rule review`     |                   | Accept/reject pending rule suggestions                           |
+| `hive improve review`  |                   | Review KingBee self-improvement proposals                        |
+| `hive daemon start`    |                   | Start background daemon (KingBee)                                |
 | `hive gc`              |                   | Archive old logs, rebuild index                                  |
 | `hive serve [port]`    | `hive ws`         | Live web dashboard (localhost:3847)                              |
 | `hive ui`              |                   | Show pending UI feedback queue                                   |
@@ -97,6 +100,16 @@ When Claude Code compacts a conversation, keephive's PreCompact hook:
 2. Extracts messages with budget distribution (50% user / 50% assistant)
 3. Pipes excerpts to `claude -p` for structured classification (DECISION/FACT/CORRECTION/TODO/INSIGHT)
 4. Writes classified insights to the daily log with project attribution (`[project:name]` tag)
+5. Triggers a throttled `soul-update` (min 1h) to refresh the agent's identity.
+
+### KingBee (Identity & Maintenance)
+
+The **KingBee** daemon manages a persistent identity for your agent in `~/.claude/hive/working/SOUL.md`.
+
+- **Agent Identity**: Manages a cross-project summary of specialized skills and patterns.
+- **Morning Briefing**: Your first session of the day receives a briefing of pending tasks.
+- **Self-Improvement**: Periodically scans logs to propose new skills, rules, or task optimizations.
+- **Stale Check**: Background scan for facts needing verification.
 
 ### Smart context injection
 
@@ -104,6 +117,7 @@ When a new session starts, keephive's SessionStart hook injects:
 
 - Working memory (core verified facts)
 - Behavioral rules
+- **Agent Identity** (summary from SOUL.md)
 - Stale fact warnings
 - Matching knowledge guides (by project name/tag, or opt-in `always: true` for universal guides)
 - Open TODOs and recent activity
@@ -193,11 +207,13 @@ After finishing work:
 
 ### Maintenance (CLI only)
 
+- `hive flow` to run a guided maintenance pass
 - `hive v` to verify stale facts against codebase
 - `hive rf` to find patterns in daily logs
 - `hive k edit <name>` to create a knowledge guide
 - `hive rule learn` to generate rules from /insights friction data
 - `hive rule review` to accept/reject queued rule suggestions
+- `hive improve review` to review self-improvement proposals
 
 ## Dashboard
 
@@ -320,11 +336,12 @@ The API path is taken only when INSIDE a Claude Code session (`CLAUDECODE` is se
 | `hive a` | 3× haiku + 1× sonnet | 4 calls — use intentionally |
 | `hive v` | sonnet + tools | Multi-turn — use intentionally |
 | `hive rf`, `hive su`, `hive l summarize` | haiku | Light |
+| `hive daemon run` | haiku / sonnet | Task-dependent |
 | PreCompact hook | haiku | Automatic, always free |
 
 ### Free commands
 
-`hive r`, `hive rc`, `hive s`, `hive todo`, `hive m`, `hive rule`, `hive rule learn`, `hive e`, `hive n`, `hive k`, `hive p`, `hive st`, `hive l`, `hive gc`, `hive sk`, `hive serve`, `hive ui`
+`hive r`, `hive rc`, `hive s`, `hive todo`, `hive m`, `hive rule`, `hive rule learn`, `hive e`, `hive n`, `hive k`, `hive p`, `hive st`, `hive l`, `hive gc`, `hive sk`, `hive serve`, `hive ui`, `hive flow` (excluding verify stage)
 
 ### Agent rule
 

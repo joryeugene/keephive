@@ -25,7 +25,12 @@ Tiers from most stable (top) to most ephemeral (bottom).
 | `just test`, `just serve`, `just lint`, `just check`       |
 | Edited by: user or Claude. Self-documenting via comments.  |
 +============================================================+
-| WORKING MEMORY  ~/.claude/hive/memory.md                   |
+| AGENT IDENTITY  ~/.claude/hive/working/SOUL.md             |
+| Persistent cross-project identity. Managed by KingBee.     |
+| Specialized skills, strengths, weaknesses, personality.    |
+| Updated via soul-update task / PreCompact throttle.        |
++============================================================+
+| WORKING MEMORY  ~/.claude/hive/working/memory.md           |
 | Verified cross-session facts. 30-90d TTL.                  |
 | "auth uses JWT 15min", "keephive v0.13.2 released"         |
 | Updated via hive_mem, verified by hive v                   |
@@ -60,6 +65,7 @@ Tiers from most stable (top) to most ephemeral (bottom).
 | Identified an action item | Daily log as TODO | `hive t "fix the thing"` |
 | Previous assumption was wrong | Daily log | `hive r "CORRECTION: ..."` |
 | Pattern worth remembering long-term | Working memory | `hive mem` |
+| Agent learned a new core skill | Agent Identity | Managed by KingBee |
 | Claude should behave differently | Rules | `hive rule "..."` |
 | Friction patterns from /insights | Pending rules | `hive rule learn` |
 | Rich structured doc for a topic | Knowledge guide | `hive ke <name>` |
@@ -69,22 +75,23 @@ Tiers from most stable (top) to most ephemeral (bottom).
 
 ## Hook Roles
 
-- **SessionStart**: Injects working memory, rules, matched knowledge guides,
-  stale warnings, open TODOs, and cross-project activity hints.
+- **SessionStart**: Injects working memory, rules, **Agent Identity**, matched knowledge guides,
+  stale warnings, open TODOs, and cross-project activity hints. Also triggers Morning Briefing.
 - **PreCompact**: Layer 1 deterministic scan + Layer 2 claude -p haiku.
-  Writes classified entries (FACT/DECISION/etc.) to daily log with project attribution.
-  TODO discipline: max 2 TODOs per compaction (user-requested only), speculative TODOs demoted to FACT.
+  Writes classified entries (FACT/DECISION/etc.) to daily log.
+  Triggers throttled `soul-update` (min 1h interval).
   Auto-close: passes open TODOs to LLM, writes DONE entries for resolved items.
 - **PostToolUse**: Counter-based nudge after Edit/Write to remind
   `hive_remember` of key changes.
 - **UserPromptSubmit**: Counter-based nudge, UI queue injection.
 - **Stop**: Increments turn counter. Periodic micro-nudge to capture wrap-up items.
-- **SessionEnd**: Finalizes session stats (accurate end timestamp, reason). Pure stats, no output.
+- **SessionEnd**: Finalizes session stats. Spawns `soul-update` and `self-improve` tasks.
 - **TaskCompleted**: Auto-logs DONE to daily log. Tracks task completion count in meta stats.
 
 ## Promotion Path (ephemeral to durable)
 
 - `daily log` + `hive rf` -> review patterns -> working memory or knowledge guide
+- `daily log` + KingBee `self-improve` -> proposed skills/rules -> `hive improve review` -> SOUL.md or rules.md
 - `daily log TODO` + `hive td` -> DONE in log -> archived
 - `working memory` + `hive v` -> verified facts -> updated date or auto-corrected
 - `knowledge guide` + `hive v` -> fact check -> stale facts flagged

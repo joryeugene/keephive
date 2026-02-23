@@ -13,6 +13,8 @@ from pathlib import Path
 from keephive.clock import get_today
 from keephive.health import (
     check_anthropic_memory,
+    check_daemon,
+    check_soul,
 )
 from keephive.health import (
     check_content_drift as _check_content_drift,
@@ -72,6 +74,25 @@ def cmd_doctor(args: list[str]) -> None:
         console.print(f"  [ok]OK[/ok] rules.md ({lines} lines)")
     else:
         console.print("  [warn]MISSING[/warn] rules.md (optional)")
+
+    # 2.5. Agent Identity (KingBee)
+    console.print()
+    console.print("[bold]Agent Identity[/bold]")
+    if check_soul():
+        from keephive.storage import read_soul_summary
+        soul = read_soul_summary()
+        console.print(f"  [ok]OK[/ok] SOUL.md: {soul}")
+    else:
+        console.print("  [warn]MISSING[/warn] SOUL.md")
+        issues += 1
+
+    if check_daemon():
+        from keephive.storage import get_daemon_pid
+        console.print(f"  [ok]OK[/ok] KingBee daemon running (PID {get_daemon_pid()})")
+    else:
+        console.print("  [err]OFFLINE[/err] KingBee daemon not running")
+        console.print("  [dim]  Run: hive daemon start[/dim]")
+        issues += 1
 
     # 3. Dependencies
     console.print()

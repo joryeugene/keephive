@@ -81,6 +81,9 @@ def hive_recall(query: str) -> str:
         if r["tier"] == "working":
             line = re.sub(r"^-\s*", "", line)
             line = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line)
+        if r["tier"] == "soul":
+            line = re.sub(r"^-\s*", "", line)
+
         date_str = f" {r.get('date', '')}" if r.get("date") else ""
         lines.append(f"[{r['score']:>3}] ({r['tier']}){date_str} {line}")
     return "\n".join(lines)
@@ -647,14 +650,104 @@ def hive_ps() -> str:
         _recent_projects,
         _render_text,
     )
-    from keephive.storage import read_stats
+    from keephive.storage import read_soul_summary, read_stats
 
     cwd = str(_Path.cwd())
     stats = read_stats()
     session_dirs = _get_active_session_dirs()
     projects = _recent_projects(stats, cwd)
     git = _git_info(cwd)
-    return _render_text(cwd, projects, git, session_dirs)
+
+    soul = read_soul_summary()
+    prefix = ""
+    if soul:
+        prefix = f"🐝 KingBee: {soul}\n\n"
+
+    return prefix + _render_text(cwd, projects, git, session_dirs)
+
+
+@mcp.tool()
+def hive_daemon(action: str = "status", task: str = "") -> str:
+    """Manage the KingBee background daemon and its tasks.
+
+    action: status | start | stop | run
+    task: (for action='run') soul-update | self-improve | morning-briefing | stale-check | standup-draft
+    """
+    _track_mcp("daemon")
+    from keephive.commands.daemon import (
+        _get_daemon_status_text,
+        _run_task_immediately,
+        start_daemon,
+        stop_daemon,
+    )
+
+    if action == "status":
+        return _get_daemon_status_text()
+    elif action == "start":
+        start_daemon()
+        return "KingBee daemon started."
+    elif action == "stop":
+        stop_daemon()
+        return "KingBee daemon stopped."
+    elif action == "run":
+        if not task:
+            return "Error: task name required for run action."
+        success, msg = _run_task_immediately(task)
+        return msg
+    return f"Unknown action: {action}"
+
+
+@mcp.tool()
+def hive_improve(action: str = "list", improvement_id: str = "") -> str:
+    """Review and apply KingBee self-improvement proposals.
+
+    action: list | accept | dismiss
+    improvement_id: The ID of the improvement (from 'list')
+    """
+    _track_mcp("improve")
+    from keephive.storage import (
+        dismiss_improvement,
+        read_dismissed_improvements,
+        read_pending_improvements,
+    )
+
+    if action == "list":
+        pending = read_pending_improvements()
+        dismissed = read_dismissed_improvements()
+        if not pending:
+            res = ["No pending improvements."]
+            if dismissed:
+                res.append(f"({len(dismissed)} previously dismissed)")
+            return "\n".join(res)
+
+        lines = [f"{len(pending)} pending improvement(s):"]
+        for imp in pending:
+            lines.append(f"  [{imp.id}] ({imp.type}) {imp.title}")
+            lines.append(f"      {imp.reason}")
+        return "\n".join(lines)
+
+    elif action == "accept":
+        if not improvement_id:
+            return "Error: improvement_id required for accept."
+        from keephive.commands.improve import _apply_improvement
+        pending = read_pending_improvements()
+        match = next((i for i in pending if i.id == improvement_id), None)
+        if not match:
+            return f"Improvement not found: {improvement_id}"
+        success, msg = _apply_improvement(match)
+        return msg
+
+    elif action == "dismiss":
+        if not improvement_id:
+            return "Error: improvement_id required for dismiss."
+        pending = read_pending_improvements()
+        match = next((i for i in pending if i.id == improvement_id), None)
+        if not match:
+            return f"Improvement not found: {improvement_id}"
+        dismiss_improvement(match)
+        return f"Dismissed: {match.title}"
+
+    return f"Unknown action: {action}"
 
 
 def main() -> None:

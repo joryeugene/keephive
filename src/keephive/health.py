@@ -162,6 +162,27 @@ def check_data() -> bool:
     return hive_dir().exists() and memory_file().exists()
 
 
+def check_soul() -> bool:
+    """Check if agent identity (SOUL.md) exists."""
+    from keephive.storage import soul_file
+    return soul_file().exists()
+
+
+def check_daemon() -> bool:
+    """Check if KingBee background daemon is running."""
+    from keephive.storage import get_daemon_pid
+    pid = get_daemon_pid()
+    if not pid:
+        return False
+    # Check if process exists and is keephive
+    import os
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
 def check_anthropic_memory() -> str:
     """Detect if Anthropic official memory is active.
 

@@ -15,7 +15,7 @@ HELP: dict[str, str] = {
     "verify": "Usage: hive v [--check] [--json] [--verbose]\n  Verify facts against codebase using LLM\n  --check  Quick stale count, exit code 1 if stale\n  --verbose  Show raw LLM output",
     "reflect": "Usage: hive rf [scan|analyze|apply|draft <topic>|insights]\n  scan       Quick log scan (no AI)\n  analyze    Pattern detection with AI (~20s)\n  apply      Review and graduate analysis to memory\n  draft      Draft a knowledge guide from logs\n  insights   Session quality patterns from /insights data (no AI)",
     "log": "Usage: hive l [date|summarize] [--watch|-w] [--interval N]\n  View daily log. Date: today, yesterday, N (days ago), YYYY-MM-DD\n  summarize  AI summary of today's entries (3-5 bullets)\n  --watch/-w      Live refresh when log changes\n  --interval N    Seconds between checks (default 2)",
-    "edit": "Usage: hive e [target]\n  Targets: memory, rules, claude, settings, local, today, note\n  No args: show available targets",
+    "edit": "Usage: hive e [target]\n  Targets: memory, rules, soul, settings, local, today, note\n  No args: show available targets",
     "todo": "Usage: hive todo [done <pat>] [repeat [freq] [text]] [--watch|-w] [--interval N]\n  todo         List open TODOs\n  todo done X  Mark TODO matching X complete\n  todo repeat  List/add recurring tasks\n  --watch/-w      Live refresh when TODOs change\n  --interval N    Seconds between checks (default 2)",
     "note": 'Usage: hive n [show|copy|clear|list|<slot>|<template>]\n  n          Open active slot in $EDITOR\n  n.3        Switch to slot 3, open editor (1-9, 0=10)\n  4          Open slot 4 in $EDITOR (bare-digit shorthand)\n  n show     Print content\n  n copy     Copy to clipboard\n  n clear    Archive and clear\n  n list     Show all slots\n  n <N> todo  Extract TODOs from slot N and add to daily log\n  4 "text"   Append text to slot 4 without opening editor',
     "knowledge": "Usage: hive k [name|edit <name>|rm <name>]\n  k           List all guides and prompts\n  k <name>    View guide (prefix match)\n  k edit X    Create/edit guide\n  k rm X      Remove guide",
@@ -26,6 +26,8 @@ HELP: dict[str, str] = {
     "stats": "Usage: hive st [-p <project>] [date]\n  Usage statistics. Date: today, N (days ago), YYYY-MM-DD",
     "mem": "Usage: hive m [rm|review] <text>\n  Add or remove working memory facts\n  hive m <text>      Add fact to memory.md\n  hive m rm <pat>    Remove line matching pattern\n  hive m review      Review pending auto-captured facts",
     "flow": "Usage: hive flow [--skip-verify]\n  Guided maintenance flow: review pending facts, rules, improvements, then verify\n  --skip-verify  Skip the LLM verify stage",
+    "improve": "Usage: hive improve [review|list|clear-stale]\n  Review or list KingBee self-improvement proposals",
+    "daemon": "Usage: hive daemon [start|stop|status|run|edit|log]\n  Manage the KingBee background daemon\n  start/stop    Launch/kill daemon\n  status        Show daemon health and task schedule\n  run <task>    Trigger a specific task immediately (e.g. soul-update, self-improve)\n  edit          Open daemon config in $EDITOR\n  log           View daemon log",
     "rule": "Usage: hive rule [rm|review|learn] <text>  (alias: rl = rule learn)\n  Add or remove behavioral rules\n  hive rule <text>      Add rule\n  hive rule rm <pat>    Remove matching rule\n  hive rule review      Review pending rule suggestions\n  hive rule learn       Learn rules from /insights friction data\n  hive rule learn --dry-run   Preview without queuing\n  hive rl               Shortcut for 'hive rule learn'",
     "session": "Usage: hive go [mode|prompt]\n  Modes: todo, verify, learn, reflect\n  Or load a custom prompt from knowledge/prompts/",
     "skill": "Usage: hive sk [publish <name>|unpublish <name>|sync|find <q>]\n  Manage skill plugins",
@@ -205,6 +207,8 @@ Usage: hive <command> [args]
     if show_all:
         print("""
   Plumbing
+    daemon [cmd]      KingBee background daemon
+    improve review    Review self-improvement proposals
     todo repeat       Manage recurring tasks
     set [key] [val]   View/change settings
     sound-test        Play notification sound
