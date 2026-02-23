@@ -364,6 +364,18 @@ def cmd_doctor(args: list[str]) -> None:
     else:
         console.print("  [warn]No daily log yet[/warn]")
 
+    # 5.5. Unexpected files in hive root
+    console.print()
+    console.print("[bold]Hive Root[/bold]")
+    unexpected = _check_unexpected_hive_entries(hd)
+    if unexpected:
+        console.print(f"  [warn]WARN[/warn] {len(unexpected)} unexpected file(s) in hive root:")
+        for name in sorted(unexpected):
+            console.print(f"    [dim]{name}[/dim]  — review and remove if stale")
+        issues += 1
+    else:
+        console.print("  [ok]OK[/ok] No unexpected files in hive root")
+
     # 6. Data quality
     console.print()
     console.print("[bold]Data Quality[/bold]")
@@ -446,6 +458,41 @@ def _data_quality_checks() -> tuple[int, list[str]]:
             findings.append(f"{len(corrections)} hygiene correction(s)")
 
     return extra_issues, findings
+
+
+_EXPECTED_HIVE_ENTRIES = {
+    "memory.md",
+    "SOUL.md",
+    "TODO.md",
+    "rules.md",
+    "daily",
+    "knowledge",
+    "working",
+    "archive",
+    ".stats.json",
+    ".pending-facts.md",
+    ".pending-rules.md",
+    ".pending-improvements.jsonl",
+    ".dismissed-improvements.jsonl",
+    ".daemon-config.json",
+    ".daemon-state.json",
+    ".daemon.pid",
+    "daemon.json",
+    "daemon.log",
+    "telemetry",
+    ".prompt-counter",
+    ".tool-counter",
+    ".stop-counter",
+}
+
+
+def _check_unexpected_hive_entries(hd: Path) -> list[str]:
+    """Return names of top-level hive dir entries not in the expected set."""
+    unexpected = []
+    for entry in hd.iterdir():
+        if entry.name not in _EXPECTED_HIVE_ENTRIES:
+            unexpected.append(entry.name)
+    return unexpected
 
 
 def _detect_duplicates_deterministic(ot: list[tuple[str, str, str]]) -> None:

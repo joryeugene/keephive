@@ -482,6 +482,20 @@ Custom prompts resolve by prefix, so `hive go pr-re` finds `pr-review-git-staged
 - **Self-Improvement**: The daemon scans logs to propose new skills, behavioral rules, or task optimizations, queued for your review.
 - **Stale Check**: Automatically identifies facts that haven't been verified recently.
 
+**Task triggers and opt-in status:**
+
+| Task | Trigger | Default | Enable via |
+|------|---------|---------|-----------|
+| `soul-update` | PreCompact hook (throttled 1h) | auto (hook) | — |
+| `self-improve` | Hook-triggered (7d throttle) | auto (hook) | — |
+| `morning-briefing` | Daily tick | disabled | `hive daemon edit` |
+| `stale-check` | Weekly tick | disabled | `hive daemon edit` |
+| `standup-draft` | Weekly tick | disabled | `hive daemon edit` |
+
+`soul-update` fires automatically via the PreCompact hook when a session context compacts. It is throttled to at most once per hour across all callers. `hive daemon run soul-update` forces a manual run outside the hook lifecycle.
+
+Optional tasks (`morning-briefing`, `stale-check`, `standup-draft`) are disabled by default. Enable them with `hive daemon edit`, which opens the daemon config YAML in `$EDITOR`.
+
 #### Flow
 
 `hive flow` is a guided maintenance command that drains all pending queues in one pass. It walks you through:
