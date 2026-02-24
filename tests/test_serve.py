@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import io
 import json
+import queue
 import threading
 import time
 from http.client import HTTPConnection
@@ -3790,3 +3792,353 @@ class TestAvgDurationCap:
             hive_env,
         )
         assert result == 495.0
+
+
+# ---- SSE infrastructure tests ----
+
+
+def _drain_queue(q: queue.Queue) -> list:
+    """Drain all items from a Queue without blocking."""
+    items = []
+    while True:
+        try:
+            items.append(q.get_nowait())
+        except queue.Empty:
+            break
+    return items
+
+
+import pytest
+
+
+@pytest.fixture
+def clean_sse_state():
+    """Reset module-level SSE client list and hash cache for test isolation."""
+    from keephive.commands import serve as _serve
+
+    orig_clients = list(_serve._sse_clients)
+    orig_hashes = dict(_serve._panel_hashes)
+    _serve._sse_clients.clear()
+    _serve._panel_hashes.clear()
+    yield _serve
+    _serve._sse_clients.clear()
+    _serve._sse_clients.extend(orig_clients)
+    _serve._panel_hashes.clear()
+    _serve._panel_hashes.update(orig_hashes)
+
+
+@pytest.fixture
+def sse_server(hive_env):
+    """Start a live _ThreadedHTTPServer on an OS-assigned free port for SSE tests."""
+    import os
+
+    os.environ["HIVE_HOME"] = str(hive_env)
+
+    from keephive.commands.serve import _HiveHandler, _ThreadedHTTPServer
+
+    handler = type("TestSSEHandler", (_HiveHandler,), {"server_port": 0})
+    srv = _ThreadedHTTPServer(("127.0.0.1", 0), handler)
+    port = srv.server_address[1]
+    handler.server_port = port
+
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+
+    yield ("127.0.0.1", port)
+
+    srv.shutdown()
+    srv.server_close()
+
+
+class TestViewPanels:
+    """Unit tests for _view_panels panel enumeration."""
+
+    def test_known_view_returns_all_panels(self):
+        """_view_panels returns every panel registered in the view definition."""
+        from keephive.commands.serve import VIEWS, _view_panels
+
+        panels = _view_panels("home")
+        home_def = VIEWS["home"]
+        expected: set[str] = set()
+        for col in home_def.get("cols", []) or []:
+            expected.update(col)
+        for row in home_def.get("rows", []) or []:
+            expected.update(row)
+        assert set(panels) == expected
+
+    def test_unknown_view_returns_empty_list(self):
+        """_view_panels returns [] for a name not in VIEWS."""
+        from keephive.commands.serve import _view_panels
+
+        assert _view_panels("nonexistent") == []
+        assert _view_panels("") == []
+
+    def test_home_and_dev_panels_are_disjoint(self):
+        """Home and dev views share no panels (ensures view-scoped broadcast is meaningful)."""
+        from keephive.commands.serve import _view_panels
+
+        assert set(_view_panels("home")).isdisjoint(set(_view_panels("dev")))
+
+
+class TestSendSseEvent:
+    """Unit tests for _send_sse_event wire framing and flush behavior."""
+
+    def test_send_sse_event_format(self):
+        """Event bytes are framed as: event: TYPE\\ndata: JSON\\n\\n"""
+        from keephive.commands.serve import _send_sse_event
+
+        buf = io.BytesIO()
+        buf.flush = lambda: None  # BytesIO.flush is a no-op; satisfy type checker
+        _send_sse_event(buf, "panel-update", {"panel": "status", "html": "<div/>"})
+        output = buf.getvalue()
+
+        assert output.startswith(b"event: panel-update\n")
+        assert b"\ndata: " in output
+        assert output.endswith(b"\n\n")
+
+        # The JSON payload must round-trip correctly
+        data_line = next(ln for ln in output.decode().splitlines() if ln.startswith("data:"))
+        payload = json.loads(data_line[len("data:") :].strip())
+        assert payload == {"panel": "status", "html": "<div/>"}
+
+    def test_send_sse_event_flushes(self):
+        """wfile.flush() is called after writing (required for HTTP streaming)."""
+        from keephive.commands.serve import _send_sse_event
+
+        flush_count: list[int] = []
+        buf = io.BytesIO()
+        buf.flush = lambda: flush_count.append(1)  # type: ignore[method-assign]
+        _send_sse_event(buf, "test-event", {"key": "value"})
+        assert flush_count == [1], "flush() must be called exactly once per SSE event"
+
+
+class TestBroadcastPanelUpdates:
+    """Unit tests for _broadcast_panel_updates hash deduplication and view routing."""
+
+    def test_broadcast_sends_changed_panel(self, hive_env, clean_sse_state):
+        """Client queue receives events when no hashes exist yet (first broadcast)."""
+        q: queue.Queue = queue.Queue()
+        clean_sse_state._sse_clients.append(("home", q))
+
+        from keephive.commands.serve import _broadcast_panel_updates
+
+        _broadcast_panel_updates()
+        assert not q.empty(), "Client queue must receive updates when hashes are absent"
+
+    def test_broadcast_skips_unchanged_panel(self, hive_env, clean_sse_state):
+        """Client queue stays empty on a second broadcast when content is identical."""
+        q: queue.Queue = queue.Queue()
+        clean_sse_state._sse_clients.append(("home", q))
+
+        from keephive.commands.serve import _broadcast_panel_updates
+
+        # First call populates the hash cache
+        _broadcast_panel_updates()
+        _drain_queue(q)  # discard initial events
+
+        # Second call with unchanged hive_env data must not produce anything
+        _broadcast_panel_updates()
+        assert q.empty(), "No events should be dispatched when panel HTML is unchanged"
+
+    def test_broadcast_view_scoped(self, hive_env, clean_sse_state):
+        """Each client only receives panels that belong to its subscribed view."""
+        home_q: queue.Queue = queue.Queue()
+        dev_q: queue.Queue = queue.Queue()
+        clean_sse_state._sse_clients.append(("home", home_q))
+        clean_sse_state._sse_clients.append(("dev", dev_q))
+
+        from keephive.commands.serve import _broadcast_panel_updates, _view_panels
+
+        _broadcast_panel_updates()
+
+        home_received = {e["panel"] for e in _drain_queue(home_q)}
+        dev_received = {e["panel"] for e in _drain_queue(dev_q)}
+        home_view = set(_view_panels("home"))
+        dev_view = set(_view_panels("dev"))
+
+        assert home_received <= home_view, (
+            f"Home client received off-view panels: {home_received - home_view}"
+        )
+        assert dev_received <= dev_view, (
+            f"Dev client received off-view panels: {dev_received - dev_view}"
+        )
+        # Home and dev views are disjoint, so no cross-contamination is possible
+        assert home_received.isdisjoint(dev_received), "Cross-view panel contamination detected"
+
+    def test_broadcast_multiple_clients(self, hive_env, clean_sse_state):
+        """Two clients subscribed to the same view both receive every update."""
+        q1: queue.Queue = queue.Queue()
+        q2: queue.Queue = queue.Queue()
+        clean_sse_state._sse_clients.append(("home", q1))
+        clean_sse_state._sse_clients.append(("home", q2))
+
+        from keephive.commands.serve import _broadcast_panel_updates
+
+        _broadcast_panel_updates()
+
+        panels1 = {e["panel"] for e in _drain_queue(q1)}
+        panels2 = {e["panel"] for e in _drain_queue(q2)}
+        assert panels1 == panels2, "Both clients must receive identical panel updates"
+        assert panels1, "At least one panel update must be dispatched"
+
+
+class TestSseEndpointLive:
+    """Integration tests for the /api/events SSE endpoint with a real threaded server."""
+
+    def test_api_events_content_type(self, sse_server):
+        """GET /api/events returns Content-Type: text/event-stream."""
+        host, port = sse_server
+        conn = HTTPConnection(host, port, timeout=5)
+        conn.request("GET", "/api/events?view=home")
+        resp = conn.getresponse()
+        content_type = resp.getheader("Content-Type", "")
+        conn.close()
+        assert "text/event-stream" in content_type
+
+    def test_api_events_initial_snapshot(self, sse_server):
+        """First bytes from /api/events are panel-update events (initial snapshot)."""
+        host, port = sse_server
+        conn = HTTPConnection(host, port, timeout=10)
+        conn.request("GET", "/api/events?view=home")
+        resp = conn.getresponse()
+
+        # Read until the first complete SSE event (terminated by blank line)
+        data = b""
+        while b"\n\n" not in data:
+            chunk = resp.read(1)
+            if not chunk:
+                break
+            data += chunk
+            if len(data) > 65536:  # safety valve against infinite reads
+                break
+        conn.close()
+
+        assert b"event: panel-update\n" in data, (
+            "Initial snapshot must start with panel-update events"
+        )
+        assert b"data:" in data
+
+    def test_api_events_sends_heartbeat(self, hive_env, monkeypatch):
+        """After queue.Empty, ': heartbeat\\n\\n' is written to keep the connection alive."""
+        import os
+        import queue as _q
+
+        os.environ["HIVE_HOME"] = str(hive_env)
+
+        # Replace serve.queue with a module shim whose Queue immediately raises Empty.
+        # The handler does `q: queue.Queue = queue.Queue()` so patching the module
+        # attribute makes every new Queue() return our fast-empty variant.
+        class _InstantEmptyQueue:
+            def __init__(self) -> None:
+                pass
+
+            def get(self, timeout: float | None = None) -> None:
+                raise _q.Empty()
+
+            def put(self, item: object) -> None:
+                pass
+
+        import keephive.commands.serve as _serve
+
+        class _MockQueueMod:
+            Queue = _InstantEmptyQueue
+            Empty = _q.Empty
+
+        monkeypatch.setattr(_serve, "queue", _MockQueueMod())
+
+        from keephive.commands.serve import _HiveHandler, _ThreadedHTTPServer
+
+        handler = type("HBHandler", (_HiveHandler,), {"server_port": 0})
+        srv = _ThreadedHTTPServer(("127.0.0.1", 0), handler)
+        port = srv.server_address[1]
+        handler.server_port = port
+
+        t = threading.Thread(target=srv.serve_forever, daemon=True)
+        t.start()
+
+        try:
+            conn = HTTPConnection("127.0.0.1", port, timeout=5)
+            conn.request("GET", "/api/events?view=home")
+            resp = conn.getresponse()
+
+            # Read until we see the heartbeat comment (arrives quickly with fast queue)
+            data = b""
+            deadline = time.time() + 4
+            while time.time() < deadline:
+                try:
+                    chunk = resp.read(1)
+                except Exception:
+                    break
+                if not chunk:
+                    break
+                data += chunk
+                if b": heartbeat\n\n" in data:
+                    break
+        finally:
+            conn.close()
+            srv.shutdown()
+            srv.server_close()
+
+        assert b": heartbeat\n\n" in data, (
+            "Heartbeat comment must be written to wfile after queue.Empty timeout"
+        )
+
+    def test_api_events_client_cleanup_on_disconnect(self, hive_env, clean_sse_state):
+        """Handler removes client from _sse_clients when the socket write fails.
+
+        This mirrors the do_GET handler loop directly, using a broken-pipe mock
+        instead of a real socket.  Real socket-level disconnect tests are fragile
+        because macOS may buffer thousands of writes before surfacing ECONNRESET.
+        """
+        import os
+
+        os.environ["HIVE_HOME"] = str(hive_env)
+
+        # A file-like object that immediately raises BrokenPipeError on write,
+        # simulating what happens when the client TCP connection is torn down.
+        class _BrokenFile:
+            def write(self, data: bytes) -> None:
+                raise BrokenPipeError("simulated client disconnect")
+
+            def flush(self) -> None:
+                raise BrokenPipeError("simulated client disconnect")
+
+        _serve = clean_sse_state
+        q: queue.Queue = queue.Queue()
+        _serve._sse_clients.append(("home", q))
+
+        def _run_handler_loop() -> None:
+            """Exact replica of the do_GET SSE queue-wait loop from serve.py."""
+            from keephive.commands.serve import _send_sse_event, _sse_clients, _sse_lock
+
+            broken_wfile = _BrokenFile()
+            try:
+                while True:
+                    try:
+                        event = q.get(timeout=15)
+                        _send_sse_event(broken_wfile, "panel-update", event)
+                    except queue.Empty:
+                        broken_wfile.write(b": heartbeat\n\n")
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
+            finally:
+                with _sse_lock:
+                    _sse_clients[:] = [(v, c) for v, c in _sse_clients if c is not q]
+
+        t = threading.Thread(target=_run_handler_loop, daemon=True)
+        t.start()
+
+        # Put a sentinel to wake the handler — the first write attempt fails
+        time.sleep(0.05)
+        q.put({"panel": "status", "html": "<div/>"})
+
+        # Handler cleans up within milliseconds after the BrokenPipeError
+        deadline = time.time() + 2
+        while time.time() < deadline:
+            if not any(c is q for _, c in _serve._sse_clients):
+                break
+            time.sleep(0.02)
+
+        assert not any(c is q for _, c in _serve._sse_clients), (
+            "Handler must remove its queue from _sse_clients when write raises BrokenPipeError"
+        )
