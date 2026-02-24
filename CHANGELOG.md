@@ -47,6 +47,15 @@
 - **`remove_wander_seed(index)` in storage**: New function for indexed seed removal
   via dashboard or API.
 
+- **SSE real-time dashboard**: Replaced client-side polling with Server-Sent Events.
+  A `_file_watcher_thread` polls `HIVE_HOME` mtimes every 0.5s; when files change,
+  `_broadcast_panel_updates` re-renders only panels whose HTML hash changed and pushes
+  targeted `panel-update` events. The browser swaps only the affected `[data-panel-id]`
+  element, eliminating the full-view flicker of the old `setInterval` approach. Multiple
+  tabs subscribe independently and update in sync. The nav refresh-interval selector is
+  removed; the status indicator shows `live` / `reconnecting…` instead. Zero new deps:
+  `queue`, `socketserver`, `threading`, `time` are all stdlib.
+
 ### Fixes
 
 - **Anthropic API model IDs**: `anthropic_api.py` used dotted model names

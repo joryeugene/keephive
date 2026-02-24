@@ -1,7 +1,11 @@
 """hive serve: live web dashboard for keephive data.
 
 Serves a local web dashboard at localhost:3847 (default).
-Views: / (home), /dev, /know (tabbed: guides/memory/notes), /stats
+Views: / (home), /dev, /brain, /play, /know, /stats, /settings
+
+Live updates via Server-Sent Events: a file-watcher thread polls HIVE_HOME mtimes
+every 0.5s, re-renders changed panels (md5 hash compare), and pushes panel-update
+events to all connected browser tabs. No polling on the client side.
 
 Usage: hive serve [port] [--hot]
        --hot   Watch source files, restart server on change
@@ -14,8 +18,12 @@ import hashlib
 import html as _html
 import json
 import os
+import queue
 import re
+import socketserver
 import sys
+import threading
+import time
 import webbrowser
 from collections import Counter
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -205,9 +213,7 @@ nav{background:#161b22;border-bottom:1px solid #30363d;padding:0 16px;display:fl
 .nav-tab{color:#8b949e;text-decoration:none;padding:10px 10px;border-bottom:2px solid transparent;font-size:12px;white-space:nowrap;transition:color .1s}
 .nav-tab:hover{color:#c9d1d9}.nav-tab.active{color:#f0f6fc;border-bottom-color:#58a6ff;font-weight:600}
 .nav-right{margin-left:auto;display:flex;align-items:center;gap:8px;padding-left:12px}
-.refresh-label{color:#8b949e;font-size:12px}
-select.refresh-select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:3px 8px;border-radius:4px;font-size:12px;cursor:pointer}
-#refresh-ts{color:#6e7681;font-size:11px;min-width:88px;text-align:right}
+#refresh-ts{color:#6e7681;font-size:11px;min-width:60px;text-align:right}
 #search-input{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:3px 8px;border-radius:4px;font-size:12px;width:140px;outline:none}
 #search-input:focus{border-color:#58a6ff}
 #search-input::placeholder{color:#6e7681}
@@ -253,7 +259,7 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .gauge-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
 .gauge-label{font-size:11px;color:#8b949e;width:110px;text-align:right;flex-shrink:0}
 .gauge-track{flex:1;height:6px;border-radius:3px;background:#21262d}
-.gauge-fill{height:100%;border-radius:3px;transition:width .3s ease}
+.gauge-fill{height:100%;border-radius:3px;background:#3fb950;transition:width .3s ease}
 .gauge-pct{font-size:11px;color:#8b949e;width:36px;text-align:right;flex-shrink:0}
 .sparkline-unicode{font-family:monospace;font-size:14px;letter-spacing:1px;color:#58a6ff}
 .sparkline-axis{display:flex;justify-content:space-between;font-size:9px;color:#484f58;margin-top:1px}
@@ -412,7 +418,7 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .search-line{color:#c9d1d9;word-break:break-word}
 .sparkline-wrap{padding:4px 12px 0;border-bottom:1px solid #21262d}
 .sparkline{display:flex;align-items:flex-end;gap:2px;height:56px;padding:4px 0 0}
-.spark-bar{flex:1;border-radius:2px 2px 0 0;min-height:2px;cursor:default;transition:opacity .15s}
+.spark-bar{flex:1;border-radius:2px 2px 0 0;min-height:2px;background:#30363d;cursor:default;transition:opacity .15s}
 .spark-bar:hover{opacity:.65}
 .spark-bar.today{background:#3fb950}
 .spark-bar.weekend{background:hsl(265,30%,42%)}
@@ -591,10 +597,7 @@ mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 _JS = """
 (function(){
   var view=document.body.dataset.view||'home';
-  var iv=null;
-  var tsIv=null;
   var lastSuccess=Date.now();
-  var lastInterval=10;
   var logDate=null;
   var _focusIdx=-1;
   var _innerMode=false;
@@ -779,8 +782,7 @@ _JS = """
     var el=document.getElementById('refresh-ts');
     if(!el)return;
     var age=Math.floor((Date.now()-lastSuccess)/1000);
-    if(lastInterval>0&&age>lastInterval*2){el.style.color='#e3b341';}
-    else{el.style.color='#6e7681';}
+    el.style.color='#6e7681';
     el.textContent=age<60?'updated '+age+'s ago':'updated '+Math.floor(age/60)+'m ago';
   }
 
@@ -906,23 +908,43 @@ _JS = """
         if(el){el.style.color='#f85149';el.textContent='\u25cf offline';}
       });
   }
-  function setIv(s){
-    lastInterval=s;
-    if(iv)clearInterval(iv);
-    if(s>0)iv=setInterval(refresh,s*1000);
-  }
-  var sel=document.getElementById('refresh-select');
-  var saved=parseInt(localStorage.getItem('hive-refresh')||'10',10);
-  if(sel){
-    sel.value=String(saved);
-    sel.addEventListener('change',function(){
-      var s=parseInt(this.value,10);
-      localStorage.setItem('hive-refresh',String(s));
-      setIv(s);
+  // --- SSE live updates ---
+  var _sse=null;
+  function _connectSSE(){
+    if(_sse){_sse.close();_sse=null;}
+    _sse=new EventSource('/api/events?view='+view);
+    _sse.addEventListener('panel-update',function(e){
+      var d=JSON.parse(e.data);
+      var mc=document.getElementById('main-content');
+      if(!mc)return;
+      // Skip if user is typing in the target panel
+      var ae=document.activeElement;
+      var el=mc.querySelector('[data-panel-id="'+d.panel+'"]');
+      if(!el)return;
+      if(ae&&el.contains(ae)&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'))return;
+      // Save + restore scroll for this panel
+      var lists=el.querySelectorAll('.session-list,.log-list,.todo-list');
+      var scrolls={};
+      lists.forEach(function(l){scrolls[l.className.split(' ')[0]]=l.scrollTop;});
+      // Swap panel content
+      var inner=el.querySelector('.grid-panel')||el;
+      inner.innerHTML=d.html;
+      // Restore scroll
+      el.querySelectorAll('.session-list,.log-list,.todo-list').forEach(function(l){
+        if(scrolls[l.className.split(' ')[0]])l.scrollTop=scrolls[l.className.split(' ')[0]];
+      });
     });
+    _sse.onerror=function(){
+      var el=document.getElementById('refresh-ts');
+      if(el){el.style.color='#e3b341';el.textContent='reconnecting\u2026';}
+    };
+    _sse.onopen=function(){
+      lastSuccess=Date.now();
+      var el=document.getElementById('refresh-ts');
+      if(el){el.style.color='#6e7681';el.textContent='live';}
+    };
   }
-  setIv(saved);
-  tsIv=setInterval(updateTs,1000);
+  _connectSSE();
 
   // --- Log date navigation ---
   window.loadLog=function(dateStr){
@@ -5110,6 +5132,14 @@ def _get_wander_data() -> dict:
         return {"docs": [], "seeds": [], "sparkline": []}
 
 
+_SOURCE_LABELS: dict[str, str] = {
+    "user-queued": "manual",
+    "cross-pollination": "cross-poll",
+    "recurring-topic": "recurring",
+    "stale-todo": "stale todo",
+}
+
+
 def _render_wander_list_panel(data: dict) -> str:
     docs = data.get("docs", [])
     if not docs:
@@ -5136,8 +5166,14 @@ def _render_wander_list_panel(data: dict) -> str:
         date_time = f"{date_str} {time_str}".strip() if time_str else date_str
 
         source = doc.get("seed_source", "")
+        source_display = _SOURCE_LABELS.get(source) or source
         source_class = "badge-" + source.replace(" ", "-").lower() if source else "badge-secondary"
-        source_badge = f'<span class="badge {source_class}">{_e(source)}</span>' if source else ""
+        source_badge = (
+            f'<span class="badge {source_class}" title="Seed source: {_e(source)}">'
+            f"{_e(source_display)}</span>"
+            if source
+            else ""
+        )
         web_badge = (
             '<span class="badge badge-info" title="Used web search">web</span>'
             if doc.get("used_web_search")
@@ -5262,12 +5298,13 @@ def _render_wander_stats_panel(data: dict) -> str:
         max_c = max(cnt for _, cnt, _ in spark) or 1
         bars = ""
         labels = ""
-        for label, count, _iso in spark:
+        for i, (label, count, _iso) in enumerate(spark):
             h = max(2, round(count / max_c * 52)) if count else 2
             extra_bg = "" if count else ";background:#161b22"
             bars += f'<div class="spark-bar" style="height:{h}px{extra_bg}" title="{_e(label)}: {count}"></div>'
             # Show label only for first and last entries to avoid crowding
-            labels += f"<span>{label[:3]}</span>"
+            lbl_text = label[:3] if (i == 0 or i == len(spark) - 1) else ""
+            labels += f"<span>{lbl_text}</span>"
         sparkline_html = (
             f'<div class="sparkline-wrap" style="border-bottom:none;padding:4px 0 0">'
             f'<div class="sparkline">{bars}</div>'
@@ -5281,7 +5318,7 @@ def _render_wander_stats_panel(data: dict) -> str:
         source_rows += (
             f'<div class="gauge-row">'
             f'<span class="gauge-label">{_e(src)}</span>'
-            f'<div class="gauge-bar"><div class="gauge-fill" style="width:{pct}%"></div></div>'
+            f'<div class="gauge-track"><div class="gauge-fill" style="width:{pct}%"></div></div>'
             f'<span class="gauge-value">{cnt}</span>'
             f"</div>"
         )
@@ -5544,15 +5581,7 @@ def render_page(view_name: str, port: int) -> str:
   {nav_tabs}
   <div class="nav-right">
     <input id="search-input" type="text" placeholder="search memory\u2026" autocomplete="off" role="searchbox" aria-label="Search memory">
-    <span class="refresh-label">refresh</span>
-    <select class="refresh-select" id="refresh-select">
-      <option value="5">5s</option>
-      <option value="10" selected>10s</option>
-      <option value="30">30s</option>
-      <option value="60">60s</option>
-      <option value="0">off</option>
-    </select>
-    <span id="refresh-ts">just now</span>
+    <span id="refresh-ts">connecting\u2026</span>
   </div>
 </nav>
 <main>
@@ -5628,6 +5657,95 @@ def render_page(view_name: str, port: int) -> str:
 </html>"""
 
 
+# ---- SSE live-update infrastructure ----
+
+_sse_clients: list[tuple[str, queue.Queue]] = []  # (view_name, queue)
+_sse_lock = threading.Lock()
+_panel_hashes: dict[str, str] = {}  # panel_name -> md5 of last-sent HTML
+
+
+def _view_panels(view_name: str) -> list[str]:
+    """Extract all panel names from a VIEWS entry (cols + rows)."""
+    view_def = VIEWS.get(view_name, {})
+    panels = []
+    for col in view_def.get("cols", []) or []:
+        panels.extend(col)
+    for row in view_def.get("rows", []) or []:
+        panels.extend(row)
+    return panels
+
+
+def _send_sse_event(wfile, event_type: str, data: dict) -> None:
+    """Write a single SSE event to a socket."""
+    payload = json.dumps(data)
+    msg = f"event: {event_type}\ndata: {payload}\n\n".encode()
+    wfile.write(msg)
+    wfile.flush()
+
+
+def _broadcast_panel_updates() -> None:
+    """Re-render panels for all connected SSE clients, pushing only changed ones."""
+    with _sse_lock:
+        clients = list(_sse_clients)
+    if not clients:
+        return
+    # Collect only panels needed by connected views
+    needed: set[str] = set()
+    for view_name, _ in clients:
+        needed.update(_view_panels(view_name))
+    # Render outside the lock (may be slow; doesn't touch shared state)
+    rendered: dict[str, tuple[str, str]] = {}  # panel -> (html, md5)
+    for panel in needed:
+        html = _render_panel_safe(panel)
+        rendered[panel] = (html, hashlib.md5(html.encode()).hexdigest())
+    # Compare hashes and dispatch under lock so /api/events handler can't race
+    with _sse_lock:
+        changed: dict[str, str] = {}
+        for panel, (html, h) in rendered.items():
+            if _panel_hashes.get(panel) != h:
+                _panel_hashes[panel] = h
+                changed[panel] = html
+        if not changed:
+            return
+        for view_name, q in clients:
+            view_panel_set = set(_view_panels(view_name))
+            for panel, html in changed.items():
+                if panel in view_panel_set:
+                    q.put({"panel": panel, "html": html})
+
+
+def _file_watcher_thread() -> None:
+    """Background daemon: polls HIVE_HOME mtimes every 0.5s, broadcasts on change."""
+    from keephive import storage
+
+    hive_home = str(storage.hive_dir())
+    snapshots: dict[str, float] = {}
+    while True:
+        changed = False
+        try:
+            for root, _, files in os.walk(hive_home):
+                for fname in files:
+                    path = os.path.join(root, fname)
+                    try:
+                        mtime = os.stat(path).st_mtime
+                        if snapshots.get(path) != mtime:
+                            snapshots[path] = mtime
+                            changed = True
+                    except OSError:
+                        pass
+        except Exception:
+            pass
+        if changed:
+            _broadcast_panel_updates()
+        time.sleep(0.5)
+
+
+class _ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
+    """HTTPServer that handles each connection in a separate thread (required for SSE)."""
+
+    daemon_threads = True
+
+
 # ---- HTTP handler ----
 
 
@@ -5678,6 +5796,48 @@ class _HiveHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            return
+
+        if path == "/api/events":
+            qs = parse_qs(parsed.query)
+            view_name = qs.get("view", ["home"])[0]
+            if view_name not in VIEWS:
+                view_name = "home"
+            q: queue.Queue = queue.Queue()
+            # Render initial snapshot BEFORE registering so the broadcaster never
+            # sees this client with un-initialized hashes (prepare-then-register).
+            initial: list[tuple[str, str]] = []
+            for panel in _view_panels(view_name):
+                html = _render_panel_safe(panel)
+                initial.append((panel, html))
+            # Atomically record hashes + register client so broadcaster sees a
+            # consistent state (no window where client is listed but hash is absent).
+            with _sse_lock:
+                for panel, html in initial:
+                    _panel_hashes[panel] = hashlib.md5(html.encode()).hexdigest()
+                _sse_clients.append((view_name, q))
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self._cors()
+            self.end_headers()
+            # Send initial snapshot to client
+            for panel, html in initial:
+                _send_sse_event(self.wfile, "panel-update", {"panel": panel, "html": html})
+            try:
+                while True:
+                    try:
+                        event = q.get(timeout=15)
+                        _send_sse_event(self.wfile, "panel-update", event)
+                    except queue.Empty:
+                        self.wfile.write(b": heartbeat\n\n")
+                        self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
+            finally:
+                with _sse_lock:
+                    _sse_clients[:] = [(v, c) for v, c in _sse_clients if c is not q]
             return
 
         if path == "/api/search":
@@ -6354,10 +6514,13 @@ def cmd_serve(args: list[str]) -> None:
     _HiveHandler.project_name = os.path.basename(os.getcwd())
 
     try:
-        httpd = HTTPServer(("localhost", port), _HiveHandler)
+        httpd = _ThreadedHTTPServer(("localhost", port), _HiveHandler)
     except OSError as exc:
         print(f"Could not start server on port {port}: {exc}", file=sys.stderr)
         return
+
+    watcher = threading.Thread(target=_file_watcher_thread, daemon=True)
+    watcher.start()
 
     url = f"http://localhost:{port}"
     if os.environ.get("HIVE_SERVE_WORKER"):
