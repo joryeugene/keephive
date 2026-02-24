@@ -259,7 +259,7 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .gauge-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
 .gauge-label{font-size:11px;color:#8b949e;width:110px;text-align:right;flex-shrink:0}
 .gauge-track{flex:1;height:6px;border-radius:3px;background:#21262d}
-.gauge-fill{height:100%;border-radius:3px;transition:width .3s ease}
+.gauge-fill{height:100%;border-radius:3px;background:#3fb950;transition:width .3s ease}
 .gauge-pct{font-size:11px;color:#8b949e;width:36px;text-align:right;flex-shrink:0}
 .sparkline-unicode{font-family:monospace;font-size:14px;letter-spacing:1px;color:#58a6ff}
 .sparkline-axis{display:flex;justify-content:space-between;font-size:9px;color:#484f58;margin-top:1px}
@@ -418,7 +418,7 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .search-line{color:#c9d1d9;word-break:break-word}
 .sparkline-wrap{padding:4px 12px 0;border-bottom:1px solid #21262d}
 .sparkline{display:flex;align-items:flex-end;gap:2px;height:56px;padding:4px 0 0}
-.spark-bar{flex:1;border-radius:2px 2px 0 0;min-height:2px;cursor:default;transition:opacity .15s}
+.spark-bar{flex:1;border-radius:2px 2px 0 0;min-height:2px;background:#30363d;cursor:default;transition:opacity .15s}
 .spark-bar:hover{opacity:.65}
 .spark-bar.today{background:#3fb950}
 .spark-bar.weekend{background:hsl(265,30%,42%)}
@@ -5132,6 +5132,14 @@ def _get_wander_data() -> dict:
         return {"docs": [], "seeds": [], "sparkline": []}
 
 
+_SOURCE_LABELS: dict[str, str] = {
+    "user-queued": "manual",
+    "cross-pollination": "cross-poll",
+    "recurring-topic": "recurring",
+    "stale-todo": "stale todo",
+}
+
+
 def _render_wander_list_panel(data: dict) -> str:
     docs = data.get("docs", [])
     if not docs:
@@ -5158,8 +5166,14 @@ def _render_wander_list_panel(data: dict) -> str:
         date_time = f"{date_str} {time_str}".strip() if time_str else date_str
 
         source = doc.get("seed_source", "")
+        source_display = _SOURCE_LABELS.get(source) or source
         source_class = "badge-" + source.replace(" ", "-").lower() if source else "badge-secondary"
-        source_badge = f'<span class="badge {source_class}">{_e(source)}</span>' if source else ""
+        source_badge = (
+            f'<span class="badge {source_class}" title="Seed source: {_e(source)}">'
+            f"{_e(source_display)}</span>"
+            if source
+            else ""
+        )
         web_badge = (
             '<span class="badge badge-info" title="Used web search">web</span>'
             if doc.get("used_web_search")
@@ -5284,12 +5298,13 @@ def _render_wander_stats_panel(data: dict) -> str:
         max_c = max(cnt for _, cnt, _ in spark) or 1
         bars = ""
         labels = ""
-        for label, count, _iso in spark:
+        for i, (label, count, _iso) in enumerate(spark):
             h = max(2, round(count / max_c * 52)) if count else 2
             extra_bg = "" if count else ";background:#161b22"
             bars += f'<div class="spark-bar" style="height:{h}px{extra_bg}" title="{_e(label)}: {count}"></div>'
             # Show label only for first and last entries to avoid crowding
-            labels += f"<span>{label[:3]}</span>"
+            lbl_text = label[:3] if (i == 0 or i == len(spark) - 1) else ""
+            labels += f"<span>{lbl_text}</span>"
         sparkline_html = (
             f'<div class="sparkline-wrap" style="border-bottom:none;padding:4px 0 0">'
             f'<div class="sparkline">{bars}</div>'
@@ -5303,7 +5318,7 @@ def _render_wander_stats_panel(data: dict) -> str:
         source_rows += (
             f'<div class="gauge-row">'
             f'<span class="gauge-label">{_e(src)}</span>'
-            f'<div class="gauge-bar"><div class="gauge-fill" style="width:{pct}%"></div></div>'
+            f'<div class="gauge-track"><div class="gauge-fill" style="width:{pct}%"></div></div>'
             f'<span class="gauge-value">{cnt}</span>'
             f"</div>"
         )
