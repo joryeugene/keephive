@@ -6,12 +6,10 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write_daily(hive_env: Path, days_ago: int, content: str) -> None:
     """Write a daily log file for testing recurring-topic detection."""
@@ -22,9 +20,7 @@ def _write_daily(hive_env: Path, days_ago: int, content: str) -> None:
 
 
 def _write_seeds(hive_env: Path, seeds: list[str]) -> None:
-    (hive_env / ".wander-seeds.json").write_text(
-        json.dumps(seeds, indent=2), encoding="utf-8"
-    )
+    (hive_env / ".wander-seeds.json").write_text(json.dumps(seeds, indent=2), encoding="utf-8")
 
 
 def _write_todo(hive_env: Path, content: str) -> None:
@@ -49,6 +45,7 @@ def _write_memory(hive_env: Path, content: str) -> None:
 # ---------------------------------------------------------------------------
 # Seed selection
 # ---------------------------------------------------------------------------
+
 
 class TestSeedSelection:
     def test_user_queued_priority(self, hive_env):
@@ -89,7 +86,9 @@ class TestSeedSelection:
         # Write 5 daily logs all mentioning "daemon"
         word = "daemon"
         for i in range(5):
-            _write_daily(hive_env, i, f"# Log\n\nThe {word} task ran correctly. {word} daemon check.\n")
+            _write_daily(
+                hive_env, i, f"# Log\n\nThe {word} task ran correctly. {word} daemon check.\n"
+            )
 
         from keephive.commands.wander import select_wander_seed
 
@@ -128,8 +127,7 @@ class TestSeedSelection:
         # All logs only contain STOPWORDS
         for i in range(5):
             _write_daily(
-                hive_env, i,
-                "# Log\n\nThis hive just will have been with that what they\n"
+                hive_env, i, "# Log\n\nThis hive just will have been with that what they\n"
             )
 
         from keephive.commands.wander import select_wander_seed
@@ -178,6 +176,7 @@ class TestSeedSelection:
 # ---------------------------------------------------------------------------
 # Wander storage round-trips
 # ---------------------------------------------------------------------------
+
 
 class TestWanderStorage:
     def test_write_then_list_roundtrip(self, hive_env):
@@ -294,6 +293,7 @@ class TestWanderStorage:
 # ---------------------------------------------------------------------------
 # Daemon task
 # ---------------------------------------------------------------------------
+
 
 class TestWanderTask:
     def test_returns_false_when_no_seed(self, hive_env, monkeypatch):

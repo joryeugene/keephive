@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.1.0
+
+### Features
+
+- **Wander task (`hive wander`, `/play` view)**: KingBee gains unstructured free-thinking
+  time. The daemon picks a seed (user-queued > cross-pollination > recurring-topic >
+  stale-todo), runs a WebSearch-enabled free-thinking pass, and writes a wander document
+  with thinking, memory connections, a hypothesis, and an open question. Surfaced at
+  `/play` in the dashboard with card layout, 30-day sparkline, and seed queue management.
+  Enable with `hive daemon enable wander`.
+
+- **`/play` dashboard view**: Card-based wander log with thinking excerpts, memory
+  connections, source badges, hypothesis callouts, and seed chip queue (add + remove).
+
+- **`remove_wander_seed(index)` in storage**: New function for indexed seed removal
+  via dashboard or API.
+
+### Fixes
+
+- **Anthropic API model IDs**: `anthropic_api.py` used dotted model names
+  (`claude-haiku-4.5`, `claude-sonnet-4.6`) which returned 404 from the API. Fixed to
+  hyphens (`claude-haiku-4-5`, `claude-sonnet-4-6`).
+
+- **`/play` nav position**: Moved from after `/settings` to after `/brain` in the nav
+  tab order (VIEWS dict insertion order).
+
 ## v1.0.0
 
 ### Features

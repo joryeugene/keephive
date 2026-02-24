@@ -12,11 +12,33 @@ from datetime import date
 
 from keephive.output import console
 
-STOPWORDS = frozenset({
-    "hive", "just", "that", "this", "with", "have", "from", "will",
-    "make", "need", "more", "some", "been", "your", "they", "when",
-    "what", "here", "there", "which", "about", "would", "could",
-})
+STOPWORDS = frozenset(
+    {
+        "hive",
+        "just",
+        "that",
+        "this",
+        "with",
+        "have",
+        "from",
+        "will",
+        "make",
+        "need",
+        "more",
+        "some",
+        "been",
+        "your",
+        "they",
+        "when",
+        "what",
+        "here",
+        "there",
+        "which",
+        "about",
+        "would",
+        "could",
+    }
+)
 
 
 def select_wander_seed(today: date) -> tuple[str, str] | tuple[None, None]:
@@ -53,9 +75,13 @@ def select_wander_seed(today: date) -> tuple[str, str] | tuple[None, None]:
         shuffled = list(mem_lines)
         rng.shuffle(shuffled)
         for i, line_a in enumerate(shuffled):
-            words_a = {w.lower() for w in re.findall(r"[a-z]+", line_a.lower()) if len(w) > 3} - STOPWORDS
-            for line_b in shuffled[i + 1:]:
-                words_b = {w.lower() for w in re.findall(r"[a-z]+", line_b.lower()) if len(w) > 3} - STOPWORDS
+            words_a = {
+                w.lower() for w in re.findall(r"[a-z]+", line_a.lower()) if len(w) > 3
+            } - STOPWORDS
+            for line_b in shuffled[i + 1 :]:
+                words_b = {
+                    w.lower() for w in re.findall(r"[a-z]+", line_b.lower()) if len(w) > 3
+                } - STOPWORDS
                 if words_a and words_b and not words_a.intersection(words_b):
                     seed = f"{line_a[:80].strip()} / {line_b[:80].strip()}"
                     return seed, "cross-pollination"
@@ -69,9 +95,7 @@ def select_wander_seed(today: date) -> tuple[str, str] | tuple[None, None]:
         for log_path in log_files:
             try:
                 text = log_path.read_text(encoding="utf-8", errors="replace").lower()
-                words_in_file = {
-                    w for w in re.findall(r"[a-z]{4,}", text) if w not in STOPWORDS
-                }
+                words_in_file = {w for w in re.findall(r"[a-z]{4,}", text) if w not in STOPWORDS}
                 for w in words_in_file:
                     word_file_counts[w] += 1
                 for w in re.findall(r"[a-z]{4,}", text):
@@ -81,8 +105,7 @@ def select_wander_seed(today: date) -> tuple[str, str] | tuple[None, None]:
                 continue
 
         candidates = [
-            w for w, count in word_file_counts.items()
-            if count >= 3 and word_total_counts[w] >= 3
+            w for w, count in word_file_counts.items() if count >= 3 and word_total_counts[w] >= 3
         ]
         if candidates:
             rng = random.Random(today.isoformat() + "recurring")
@@ -103,9 +126,18 @@ def select_wander_seed(today: date) -> tuple[str, str] | tuple[None, None]:
     return None, None
 
 
+_WANDER_SUB_ALIASES: dict[str, str] = {
+    "l": "list",
+    "s": "show",
+    "r": "run",
+    "sd": "seed",
+}
+
+
 def cmd_wander(args: list[str]) -> None:
     """hive wander [list|show [slug]|seed <text>|run]"""
     sub = args[0] if args else "list"
+    sub = _WANDER_SUB_ALIASES.get(sub, sub)
 
     if sub == "list":
         _list_wander()
@@ -202,6 +234,4 @@ def _run_wander() -> None:
     if result:
         console.print("[ok]Wander complete.[/ok] Run [b]hive wander show[/b] to read it.")
     else:
-        console.print(
-            "[dim]No output.[/dim] Check daemon.log or ensure there's a seed available."
-        )
+        console.print("[dim]No output.[/dim] Check daemon.log or ensure there's a seed available.")

@@ -657,7 +657,9 @@ def cmd_status(args: list[str]) -> None:
             "settings": get_setting("llm_backend") or "auto",
             "env_override": os.environ.get("HIVE_LLM_BACKEND"),
             "state": _llm_state,
-            "last_error": _llm_state.get("error") if _llm_state and _llm_state.get("status") == "error" else None,
+            "last_error": _llm_state.get("error")
+            if _llm_state and _llm_state.get("status") == "error"
+            else None,
             "backends": [
                 {
                     "name": backend.name,

@@ -47,10 +47,14 @@ def cmd_daemon(args: list[str]) -> None:
         "stop": _stop,
         "status": _status,
         "run": lambda: _run_task(args[1] if len(args) > 1 else ""),
+        "r": lambda: _run_task(args[1] if len(args) > 1 else ""),
         "enable": lambda: _enable_task(args[1] if len(args) > 1 else ""),
+        "en": lambda: _enable_task(args[1] if len(args) > 1 else ""),
         "disable": lambda: _enable_task(args[1] if len(args) > 1 else "", enabled=False),
+        "dis": lambda: _enable_task(args[1] if len(args) > 1 else "", enabled=False),
         "edit": _edit,
         "log": _log,
+        "l": _log,
     }
     fn = dispatch.get(sub)
     if fn:
@@ -497,9 +501,7 @@ def _task_soul_update() -> bool:
         return False
 
     wander_docs = list_wander_docs(limit=7)
-    wander_bullets = "\n".join(
-        f"- {d['hypothesis']}" for d in wander_docs if d.get("hypothesis")
-    )
+    wander_bullets = "\n".join(f"- {d['hypothesis']}" for d in wander_docs if d.get("hypothesis"))
 
     prompt = f"""You are KingBee updating your own SOUL.md after recent sessions.
 Review the logs and rewrite SOUL.md with STRICT size budgets.
@@ -843,7 +845,7 @@ used_web_search: true if you used WebSearch, false otherwise"""
             max_turns=3,
             timeout=300,
             allowed_dirs=[str(hive_dir())],
-            restrict_mcp=False,
+            restrict_mcp=True,  # WebSearch is built-in, not MCP
         )
         if result:
             path = write_wander_doc(result.model_dump(), seed)

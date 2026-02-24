@@ -1441,7 +1441,9 @@ class TestClearTrigger:
         monkeypatch.setattr(
             "sys.stdin",
             io.StringIO(
-                json.dumps({"trigger": "clear", "session_id": "sess-clear-llm", "cwd": str(hive_env)})
+                json.dumps(
+                    {"trigger": "clear", "session_id": "sess-clear-llm", "cwd": str(hive_env)}
+                )
             ),
         )
 

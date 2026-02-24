@@ -110,9 +110,7 @@ class TestSubagentStopRegistration:
         assert "SubagentStop" in hooks
 
         cmds = " ".join(
-            h.get("command", "")
-            for entry in hooks["SubagentStop"]
-            for h in entry.get("hooks", [])
+            h.get("command", "") for entry in hooks["SubagentStop"] for h in entry.get("hooks", [])
         )
         assert "hook-subagent-stop" in cmds
 

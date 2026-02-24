@@ -25,9 +25,18 @@ from keephive.storage import (
     recent_daily_files,
 )
 
+_REFLECT_SUB_ALIASES: dict[str, str] = {
+    "sc": "scan",
+    "an": "analyze",
+    "ap": "apply",
+    "i": "insights",
+    "d": "draft",
+}
+
 
 def cmd_reflect(args: list[str]) -> None:
     subcmd = args[0] if args else ""
+    subcmd = _REFLECT_SUB_ALIASES.get(subcmd, subcmd)
 
     if subcmd == "analyze":
         _reflect_analyze(args[1:])

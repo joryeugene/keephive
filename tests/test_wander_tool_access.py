@@ -62,7 +62,7 @@ class TestBuildCommandToolAccess:
         idx = cmd.index("--add-dir")
         assert cmd[idx + 1] == "/home/user/hive"
         # Second --add-dir
-        remaining = cmd[idx + 2:]
+        remaining = cmd[idx + 2 :]
         assert "--add-dir" in remaining
         assert "/tmp/scratch" in remaining
 

@@ -55,11 +55,11 @@ HELP: dict[str, str] = {
     "import": "Usage: hive import <path.tar.gz> [--profile name]\n  Import data from archive\n  --profile name  Create new profile and import there",
     "telemetry": "Usage: hive telemetry\n  Show usage telemetry (session counts, token usage)",
     "wander": (
-        "Usage: hive wander [list|show [slug]|seed <text>|run]\n"
-        "  list        Recent wander documents\n"
-        "  show [slug] Show a specific wander doc (default: most recent)\n"
-        "  seed <text> Queue a topic for the next wander run\n"
-        "  run         Trigger wander immediately\n"
+        "Usage: hive wander [list|show [slug]|seed <text>|run]  (alias: w, wr)\n"
+        "  list (l)    Recent wander documents\n"
+        "  show (s)    Show a specific wander doc (default: most recent)\n"
+        "  seed (sd)   Queue a topic for the next wander run\n"
+        "  run (r)     Trigger wander immediately\n"
         "  KingBee's free-thinking log. Runs daily at 14:00 when enabled.\n"
         "  Enable: hive daemon enable wander\n"
     ),
@@ -108,6 +108,12 @@ _CANONICAL: dict[str, str] = {
     "config": "config",
     "wander": "wander",
     "wr": "wander",
+    "w": "wander",
+    "im": "improve",
+    "dm": "daemon",
+    "fw": "flow",
+    "mr": "mem",
+    "rr": "rule",
 }
 
 # Command families: (display_label, description, shorthand, tracked_aliases)
@@ -125,18 +131,19 @@ _CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
     ("prompt [name]", "Prompt templates", "p", {"p", "prompt", "pe"}),
     ("reflect", "Find patterns in logs", "rf", {"rf", "reflect"}),
     ("audit [-v]", "Quality analysis", "a", {"a", "audit"}),
-    ("flow [--skip-verify]", "Guided maintenance run", "", {"flow"}),
+    ("flow [--skip-verify]", "Guided maintenance run", "fw", {"flow", "fw"}),
     ("checkup [--json]", "Production health check", "ck", {"checkup", "ck"}),
-    ("daemon [run|status|enable|disable]", "KingBee background daemon", "", {"daemon"}),
-    ("wander [list|seed|run]", "Agent free-thinking log", "wr", {"wander", "wr"}),
+    ("daemon [run|status|enable|disable]", "KingBee background daemon", "dm", {"daemon", "dm"}),
+    ("wander [list|seed|run]", "Agent free-thinking log", "w", {"wander", "wr", "w"}),
+    ("improve [review]", "Review self-improvement proposals", "im", {"improve", "im"}),
     ("go [mode]", "Launch session", "go", {"go", "sesh", "session"}),
     ("stats [-p path]", "Usage + pipeline health", "st", {"st", "stats"}),
-    ("mem [rm] <text>", "Add/remove working memory", "m", {"m", "mem"}),
+    ("mem [rm] <text>", "Add/remove working memory", "m", {"m", "mem", "mr"}),
     ("serve [port]", "Live web dashboard", "ws", {"ws", "serve"}),
     ("doctor", "Check setup + find duplicates", "dr", {"dr", "doctor"}),
     ("standup", "Generate standup summary", "su", {"su", "standup"}),
     ("gc", "Archive old logs", "g", {"g", "gc"}),
-    ("rule [learn|review]", "Add/remove/learn rules", "rl", {"rule", "rl"}),
+    ("rule [learn|review]", "Add/remove/learn rules", "rl", {"rule", "rl", "rr"}),
     ("set [key] [val]", "View/change settings", "", {"set"}),
     ("config llm-backend", "Manage LLM backend selection", "", {"config", "cfg"}),
     ("skill", "Manage skill plugins", "sk", {"sk", "skill"}),
@@ -222,7 +229,8 @@ Usage: hive <command> [args]
     status            Status at a glance                s
     reflect           Find patterns in logs             rf
     audit [-v]        Quality analysis                  a
-    flow              Guided maintenance run
+    flow              Guided maintenance run             fw
+    wander [list|run] Agent free-thinking log           w
     go [mode]         Launch session                    go
     stats [-p path]   Usage + pipeline health           st
     log [date]        View daily log                    l
@@ -238,9 +246,9 @@ Usage: hive <command> [args]
     if show_all:
         print("""
   Plumbing
-    daemon [cmd]      KingBee background daemon
+    daemon [cmd]      KingBee background daemon         dm
     checkup [--json]  Production health check           ck
-    improve review    Review self-improvement proposals
+    improve [review]  Review self-improvement proposals  im
     todo repeat       Manage recurring tasks
     set [key] [val]   View/change settings
     sound-test        Play notification sound
@@ -335,8 +343,10 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "dc": ("keephive.commands.note", "cmd_note_copy"),
     "m": ("keephive.commands.memory", "cmd_mem"),
     "mem": ("keephive.commands.memory", "cmd_mem"),
+    "mr": ("keephive.commands.memory", "cmd_mem_review"),
     "rule": ("keephive.commands.memory", "cmd_rule"),
     "rl": ("keephive.commands.memory", "cmd_rule_learn"),
+    "rr": ("keephive.commands.memory", "cmd_rule_review"),
     "to": ("keephive.commands.todo", "cmd_todo"),
     "td": ("keephive.commands.todo", "cmd_td"),
     "todo": ("keephive.commands.todo", "cmd_todo"),
@@ -389,14 +399,18 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "hook-taskcompleted": ("keephive.hooks.taskcompleted", "hook_taskcompleted"),
     "hook-subagent-stop": ("keephive.hooks.subagent_stop", "hook_subagent_stop"),
     "daemon": ("keephive.commands.daemon", "cmd_daemon"),
+    "dm": ("keephive.commands.daemon", "cmd_daemon"),
     "daemon-loop": ("keephive.commands.daemon", "cmd_daemon_loop"),
     "improve": ("keephive.commands.improve", "cmd_improve"),
+    "im": ("keephive.commands.improve", "cmd_improve"),
     "flow": ("keephive.commands.flow", "cmd_flow"),
+    "fw": ("keephive.commands.flow", "cmd_flow"),
     "checkup": ("keephive.commands.checkup", "cmd_checkup"),
     "ck": ("keephive.commands.checkup", "cmd_checkup"),
     "telemetry": ("keephive.commands.telemetry", "cmd_telemetry"),
     "wander": ("keephive.commands.wander", "cmd_wander"),
     "wr": ("keephive.commands.wander", "cmd_wander"),
+    "w": ("keephive.commands.wander", "cmd_wander"),
 }
 
 

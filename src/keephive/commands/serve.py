@@ -567,6 +567,26 @@ mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 .platform-row{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px;color:#c9d1d9}
 .platform-title{font-weight:600;flex:1}
 .platform-meta{color:#8b949e;font-size:11px}
+.wander-card{border:1px solid #30363d;border-radius:6px;padding:12px;margin-bottom:8px}
+.wander-card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px}
+.wander-title{font-weight:600;color:#c9d1d9;font-size:13px}
+.wander-meta{display:flex;gap:6px;align-items:center;flex-shrink:0;font-size:11px;color:#8b949e}
+.wander-thinking{font-size:12px;color:#484f58;font-style:italic;margin-bottom:8px}
+.wander-connections{font-size:12px;color:#8b949e;margin:0 0 8px 0;padding-left:16px}
+.wander-hypothesis{background:#1a2332;border-left:3px solid #58a6ff;padding:6px 10px;border-radius:0 4px 4px 0;font-size:13px;color:#c9d1d9;margin-bottom:6px}
+.wander-question{font-size:12px;color:#8b949e;font-style:italic}
+.badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:500}
+.badge-info{background:#1a2e44;color:#58a6ff}
+.badge-secondary{background:#21262d;color:#8b949e}
+.badge-user-queued{background:#1a3a2a;color:#3fb950}
+.badge-cross-pollination{background:#1a2632;color:#58a6ff}
+.badge-recurring-topic{background:#2a2a1a;color:#e3b341}
+.badge-stale-todo{background:#2a1a1a;color:#f85149}
+.chip{display:inline-flex;align-items:center;gap:4px;background:#21262d;border:1px solid #30363d;border-radius:999px;padding:2px 8px;font-size:11px;color:#c9d1d9;margin:2px}
+.chip-num{color:#484f58;font-size:10px;margin-right:2px}
+.chip-remove{border:none;background:none;color:#484f58;cursor:pointer;padding:0 2px;font-size:12px;line-height:1}
+.chip-remove:hover{color:#f85149}
+.chip-row{display:flex;flex-wrap:wrap;gap:2px}
 """
 _JS = """
 (function(){
@@ -5062,13 +5082,32 @@ def _render_transfer_panel(data: dict) -> str:
 
 def _get_wander_data() -> dict:
     try:
+        from datetime import timedelta
+
+        from keephive.clock import get_today
         from keephive.storage import get_wander_seeds, list_wander_docs
 
-        docs = list_wander_docs(limit=20)
+        all_docs = list_wander_docs(limit=100)
+        docs = all_docs[:20]
         seeds = get_wander_seeds()
-        return {"docs": docs, "seeds": seeds}
+
+        # 30-day sparkline: (label, count, iso_date) per day
+        date_counts: dict[str, int] = {}
+        for doc in all_docs:
+            raw = doc.get("date", "")
+            if len(raw) == 8:
+                iso = f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
+                date_counts[iso] = date_counts.get(iso, 0) + 1
+        today = get_today()
+        spark = []
+        for i in range(29, -1, -1):
+            d = today - timedelta(days=i)
+            iso = d.isoformat()
+            spark.append((d.strftime("%b %d"), date_counts.get(iso, 0), iso))
+
+        return {"docs": docs, "seeds": seeds, "sparkline": spark}
     except Exception:
-        return {"docs": [], "seeds": []}
+        return {"docs": [], "seeds": [], "sparkline": []}
 
 
 def _render_wander_list_panel(data: dict) -> str:
@@ -5076,7 +5115,7 @@ def _render_wander_list_panel(data: dict) -> str:
     if not docs:
         empty = (
             '<div class="empty">No wander docs yet.<br>'
-            'Run <code>hive daemon enable wander</code> to start.</div>'
+            "Run <code>hive daemon enable wander</code> to start.</div>"
         )
         return (
             f'<div class="card" tabindex="0" role="region" aria-label="Wander log">'
@@ -5086,40 +5125,64 @@ def _render_wander_list_panel(data: dict) -> str:
             f"</div>"
         )
 
-    rows = ""
-    for i, doc in enumerate(docs):
-        date_str = doc.get("date", "")
-        if len(date_str) == 8:
-            date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
+    cards = ""
+    for doc in docs:
+        date_raw = doc.get("date", "")
+        date_str = (
+            f"{date_raw[:4]}-{date_raw[4:6]}-{date_raw[6:]}" if len(date_raw) == 8 else date_raw
+        )
+        ts_raw = doc.get("timestamp", "")
+        time_str = f"{ts_raw[:2]}:{ts_raw[2:4]}" if len(ts_raw) >= 4 else ""
+        date_time = f"{date_str} {time_str}".strip() if time_str else date_str
+
         source = doc.get("seed_source", "")
-        hypothesis = doc.get("hypothesis", "")
-        question = doc.get("question", "")
+        source_class = "badge-" + source.replace(" ", "-").lower() if source else "badge-secondary"
+        source_badge = f'<span class="badge {source_class}">{_e(source)}</span>' if source else ""
         web_badge = (
-            '<span class="badge badge-info" title="Used web search">web</span> '
+            '<span class="badge badge-info" title="Used web search">web</span>'
             if doc.get("used_web_search")
             else ""
         )
-        is_open = "open" if i == 0 else ""
-        rows += (
-            f'<details class="wander-item" {is_open}>'
-            f"<summary>"
-            f'<span class="wander-date">{_e(date_str)}</span> '
-            f"{web_badge}"
-            f'<span class="wander-source badge badge-secondary">{_e(source)}</span>'
-            f"</summary>"
-            f'<div class="wander-body">'
+
+        seed = doc.get("seed", "")
+        thinking = doc.get("thinking", "")
+        connections = doc.get("connections", [])
+        hypothesis = doc.get("hypothesis", "")
+        question = doc.get("question", "")
+
+        thinking_html = f'<div class="wander-thinking">{_e(thinking)}</div>' if thinking else ""
+
+        conn_items = "".join(
+            f"<li><strong>{_e(c['fragment'])}</strong> &rarr; {_e(c['explanation'])}</li>"
+            for c in connections
         )
-        if hypothesis:
-            rows += f'<div class="wander-hyp">{_e(hypothesis)}</div>'
-        if question:
-            rows += f'<div class="wander-q dim">Q: {_e(question)}</div>'
-        rows += "</div></details>"
+        connections_html = f'<ul class="wander-connections">{conn_items}</ul>' if conn_items else ""
+
+        hypothesis_html = (
+            f'<div class="wander-hypothesis">{_e(hypothesis)}</div>' if hypothesis else ""
+        )
+        question_html = (
+            f'<div class="wander-question">&#10067; {_e(question)}</div>' if question else ""
+        )
+
+        cards += (
+            f'<div class="wander-card">'
+            f'<div class="wander-card-head">'
+            f'<span class="wander-title">{_e(seed)}</span>'
+            f'<span class="wander-meta">{_e(date_time)} {web_badge} {source_badge}</span>'
+            f"</div>"
+            f"{thinking_html}"
+            f"{connections_html}"
+            f"{hypothesis_html}"
+            f"{question_html}"
+            f"</div>"
+        )
 
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Wander log">'
         f'<div class="card-header"><span class="card-title">Wander Log</span>'
         f'<span class="card-meta">{len(docs)}</span></div>'
-        f'<div class="card-body">{rows}</div>'
+        f'<div class="card-body">{cards}</div>'
         f"</div>"
     )
 
@@ -5129,8 +5192,14 @@ def _render_wander_seed_panel(data: dict) -> str:
     queued_count = len(seeds)
 
     chips = ""
-    for seed in seeds:
-        chips += f'<span class="chip">{_e(seed)}</span>'
+    for i, seed in enumerate(seeds):
+        chips += (
+            f'<span class="chip">'
+            f'<span class="chip-num">{i + 1}</span>'
+            f"{_e(seed)}"
+            f'<button onclick="removeWanderSeed({i})" class="chip-remove" title="Remove">&#x00D7;</button>'
+            f"</span>"
+        )
     if not chips:
         chips = '<span class="dim">No seeds queued</span>'
 
@@ -5155,6 +5224,12 @@ def _render_wander_seed_panel(data: dict) -> str:
         "if(d.ok){document.getElementById('wander-seed-input').value='';location.reload();}"
         "});"
         "return false;}"
+        "function removeWanderSeed(idx){"
+        "fetch('/api/wander/seed/remove',{method:'POST',"
+        "headers:{'Content-Type':'application/json'},"
+        "body:JSON.stringify({index:idx})})"
+        ".then(function(r){return r.json();})"
+        ".then(function(d){if(d.ok)location.reload();});}"
         "</script>"
     )
 
@@ -5171,6 +5246,7 @@ def _render_wander_seed_panel(data: dict) -> str:
 
 def _render_wander_stats_panel(data: dict) -> str:
     docs = data.get("docs", [])
+    spark = data.get("sparkline", [])  # list of (label, count, iso_date)
     total = len(docs)
     source_counts: dict[str, int] = {}
     web_count = 0
@@ -5179,6 +5255,25 @@ def _render_wander_stats_panel(data: dict) -> str:
         source_counts[src] = source_counts.get(src, 0) + 1
         if doc.get("used_web_search"):
             web_count += 1
+
+    # 30-day sparkline using the same spark-bar CSS as the stats panel
+    sparkline_html = ""
+    if spark:
+        max_c = max(cnt for _, cnt, _ in spark) or 1
+        bars = ""
+        labels = ""
+        for label, count, _iso in spark:
+            h = max(2, round(count / max_c * 52)) if count else 2
+            extra_bg = "" if count else ";background:#161b22"
+            bars += f'<div class="spark-bar" style="height:{h}px{extra_bg}" title="{_e(label)}: {count}"></div>'
+            # Show label only for first and last entries to avoid crowding
+            labels += f"<span>{label[:3]}</span>"
+        sparkline_html = (
+            f'<div class="sparkline-wrap" style="border-bottom:none;padding:4px 0 0">'
+            f'<div class="sparkline">{bars}</div>'
+            f'<div class="spark-labels">{labels}</div>'
+            f"</div>"
+        )
 
     source_rows = ""
     for src, cnt in sorted(source_counts.items(), key=lambda x: -x[1]):
@@ -5209,24 +5304,27 @@ def _render_wander_stats_panel(data: dict) -> str:
                 pass
 
     web_note = (
-        f'<div class="dim" style="margin-top:6px">'
-        f"Web search used: {web_count}/{total} sessions</div>"
+        f'<div class="dim" style="margin-top:6px">Web search: {web_count}/{total} sessions</div>'
         if total
         else ""
     )
-    hints = _cmd_hints(
-        ['hive wander seed "your topic"', "hive daemon enable wander"]
+
+    last_note_html = f" &middot; {_e(last_note)}" if last_note else ""
+    summary = (
+        f'<div class="dim" style="margin:6px 0">'
+        f"{total} doc{'s' if total != 1 else ''}"
+        f"{last_note_html}"
+        f"</div>"
     )
 
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Wander stats">'
         f'<div class="card-header"><span class="card-title">Wander Stats</span></div>'
         f'<div class="card-body">'
-        f'<div class="stat-number">{total} wander document{"s" if total != 1 else ""} total</div>'
-        f"<div style='margin-top:8px'>{source_rows}</div>"
-        f'<div class="dim" style="margin-top:6px">{_e(last_note)}</div>'
+        f"{sparkline_html}"
+        f"{summary}"
+        f"<div style='margin-top:4px'>{source_rows}</div>"
         f"{web_note}"
-        f"{hints}"
         f"</div></div>"
     )
 
@@ -5298,6 +5396,14 @@ VIEWS: dict[str, dict] = {
         "title": "Agent Brain",
         "rows": [["brain"]],
     },
+    "play": {
+        "path": "/play",
+        "title": "Play",
+        "cols": [
+            ["wander-list"],
+            ["wander-seed", "wander-stats"],
+        ],
+    },
     "know": {
         "path": "/know",
         "title": "Knowledge",
@@ -5318,14 +5424,6 @@ VIEWS: dict[str, dict] = {
         "cols": [
             ["settings"],
             ["profiles", "transfer"],
-        ],
-    },
-    "play": {
-        "path": "/play",
-        "title": "Play",
-        "cols": [
-            ["wander-list"],
-            ["wander-seed", "wander-stats"],
         ],
     },
 }
@@ -6083,6 +6181,18 @@ class _HiveHandler(BaseHTTPRequestHandler):
                 except Exception as exc:
                     ok = False
                     error = str(exc)
+
+        elif self.path == "/api/wander/seed/remove":
+            index = int((data.get("index") if data.get("index") is not None else -1))
+            try:
+                from keephive.storage import remove_wander_seed
+
+                ok = remove_wander_seed(index)
+                if not ok:
+                    error = f"index {index} out of range"
+            except Exception as exc:
+                ok = False
+                error = str(exc)
 
         elif self.path == "/api/transfer/import":
             import base64

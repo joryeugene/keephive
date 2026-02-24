@@ -728,7 +728,11 @@ def write_wander_doc(doc_dict: dict, seed: str) -> Path:
 
     conn_lines = ""
     for c in connections:
-        frag = c.get("memory_fragment", "") if isinstance(c, dict) else getattr(c, "memory_fragment", "")
+        frag = (
+            c.get("memory_fragment", "")
+            if isinstance(c, dict)
+            else getattr(c, "memory_fragment", "")
+        )
         conn_text = c.get("connection", "") if isinstance(c, dict) else getattr(c, "connection", "")
         conn_lines += f"- **{frag}**: {conn_text}\n"
 
@@ -752,14 +756,15 @@ def write_wander_doc(doc_dict: dict, seed: str) -> Path:
 def list_wander_docs(limit: int = 20) -> list[dict]:
     """Return wander doc summaries, newest first.
 
-    Each dict: filename, date (YYYYMMDD), seed, seed_source,
-    hypothesis, question, used_web_search.
+    Each dict: filename, date (YYYYMMDD), timestamp (HHmmss), seed, seed_source,
+    hypothesis, question, used_web_search, thinking, connections.
     """
     d = wander_dir()
     if not d.exists():
         return []
 
     _wander_name_re = re.compile(r"^\d{8}-\d{6}-.+\.md$")
+    _connection_re = re.compile(r"^- \*\*(.+?)\*\*: (.+)")
     results: list[dict] = []
     candidates = [p for p in sorted(d.glob("*.md"), reverse=True) if _wander_name_re.match(p.name)]
     for path in candidates[:limit]:
@@ -771,16 +776,18 @@ def list_wander_docs(limit: int = 20) -> list[dict]:
         hypothesis = ""
         question = ""
         used_web_search = False
+        thinking = ""
+        connections: list[dict] = []
 
         # Parse title: "# Wander: <seed>"
         for line in lines:
             if line.startswith("# Wander: "):
-                seed = line[len("# Wander: "):].strip()
+                seed = line[len("# Wander: ") :].strip()
                 break
 
         for line in lines:
             if line.startswith("**Seed source:**"):
-                seed_source = line[len("**Seed source:**"):].strip()
+                seed_source = line[len("**Seed source:**") :].strip()
             elif line.startswith("**Web search:**"):
                 used_web_search = "yes" in line.lower()
 
@@ -804,18 +811,55 @@ def list_wander_docs(limit: int = 20) -> list[dict]:
                 question = line.strip()
                 break
 
-        # Date from filename: YYYYMMDD-HHmmss-...
-        date_str = path.name[:8]
+        # Thinking: first paragraph after "## Thinking", up to 200 chars
+        in_thinking = False
+        thinking_parts: list[str] = []
+        for line in lines:
+            if line.strip() == "## Thinking":
+                in_thinking = True
+                continue
+            if in_thinking:
+                if line.startswith("## "):
+                    break
+                if not line.strip() and thinking_parts:
+                    break
+                if line.strip():
+                    thinking_parts.append(line.strip())
+        if thinking_parts:
+            raw = " ".join(thinking_parts)
+            thinking = raw[:200] + ("..." if len(raw) > 200 else "")
 
-        results.append({
-            "filename": path.name,
-            "date": date_str,
-            "seed": seed,
-            "seed_source": seed_source,
-            "hypothesis": hypothesis,
-            "question": question,
-            "used_web_search": used_web_search,
-        })
+        # Connections: "- **fragment**: explanation" bullets between ## Connections and next ##
+        in_conn = False
+        for line in lines:
+            if line.strip() == "## Connections":
+                in_conn = True
+                continue
+            if in_conn:
+                if line.startswith("## "):
+                    break
+                m = _connection_re.match(line)
+                if m:
+                    connections.append({"fragment": m.group(1), "explanation": m.group(2)})
+
+        # Date and timestamp from filename: YYYYMMDD-HHmmss-...
+        date_str = path.name[:8]
+        timestamp = path.name[9:15]
+
+        results.append(
+            {
+                "filename": path.name,
+                "date": date_str,
+                "timestamp": timestamp,
+                "seed": seed,
+                "seed_source": seed_source,
+                "hypothesis": hypothesis,
+                "question": question,
+                "used_web_search": used_web_search,
+                "thinking": thinking,
+                "connections": connections,
+            }
+        )
 
     return results
 
@@ -865,6 +909,17 @@ def pop_wander_seed() -> str | None:
     tmp.write_text(json.dumps(seeds, indent=2), encoding="utf-8")
     os.replace(str(tmp), str(path))
     return seed
+
+
+def remove_wander_seed(index: int) -> bool:
+    """Remove seed at given index from .wander-seeds.json. Returns True on success."""
+    seeds = get_wander_seeds()
+    if 0 <= index < len(seeds):
+        seeds.pop(index)
+        path = hive_dir() / ".wander-seeds.json"
+        path.write_text(json.dumps(seeds, indent=2) + "\n", encoding="utf-8")
+        return True
+    return False
 
 
 def stale_days() -> int:

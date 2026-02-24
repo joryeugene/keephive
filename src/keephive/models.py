@@ -239,9 +239,7 @@ class WanderConnection(BaseModel):
     memory_fragment: str = Field(
         description="Exact quote or close paraphrase of the memory/fact this connects to"
     )
-    connection: str = Field(
-        description="How the seed topic relates to or reframes this fragment"
-    )
+    connection: str = Field(description="How the seed topic relates to or reframes this fragment")
 
 
 class WanderDocument(BaseModel):

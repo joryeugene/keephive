@@ -202,6 +202,8 @@ keephive ships two integration layers:
 - **Verify**: Facts carry `[verified:YYYY-MM-DD]` timestamps. After 30 days (configurable), they are flagged stale. `hive v` checks them against the codebase with LLM analysis and tool access.
 - **Correct**: Invalid facts get replaced with corrected versions. Valid facts get re-stamped. Uncertain facts get flagged for human review.
 
+Full architecture: see [Architecture](#architecture) below.
+
 ### Architecture
 
 The diagram below shows the Claude Code integration path; MCP-only clients reuse the same knowledge store and tools without the hook cycle.
@@ -249,6 +251,7 @@ flowchart TD
         IMPROVE[(".pending-improvements")]
         STALECK["stale-check scan"]
         STANDUP["standup-draft"]
+        WANDER["wander exploration"]
     end
 
     subgraph CC["Claude Code Data (~/.keephive/usage-data/)"]
@@ -290,6 +293,7 @@ flowchart TD
     DAEMON --> IMPROVE
     DAEMON --> STALECK
     DAEMON --> STANDUP
+    DAEMON --> WANDER
 
     classDef ccdata fill:#1a1a2e,stroke:#4a9eff,stroke-width:2px,color:#4a9eff
     class META,FACETS ccdata
@@ -317,6 +321,8 @@ flowchart TD
 | SessionEnd       | Session terminates    | Finalizes session stats with accurate end timestamp        |
 | TaskCompleted    | Task marked done      | Auto-logs DONE entry to daily log                      |
 
+See [the loop](#the-loop) above.
+
 ### Use it with other MCP clients
 
 1. `keephive mcp-serve` — starts the stdio server. Leave it running (or supervise it via your agent's process manager).
@@ -342,7 +348,7 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 ## Commands
 
 <details>
-<summary><b>Full command reference</b> (38 commands)</summary>
+<summary><b>Full command reference</b> (42 commands)</summary>
 
 | Command                 | Short             | What                                       |
 | ----------------------- | ----------------- | ------------------------------------------ |
@@ -385,6 +391,11 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 | **Dashboard**           |                   |                                            |
 | `hive serve [port]`     | `hive ws`         | Live web dashboard (localhost:3847)        |
 | `hive ui`               |                   | Show / manage UI feedback queue            |
+| **Explore**             |                   |                                            |
+| `hive wander`           |                   | List free-thinking logs                    |
+| `hive wander seed <txt>`|                   | Queue a seed for next wander run           |
+| `hive wander show`      |                   | View most recent wander doc                |
+| `hive wander run`       |                   | Run wander task manually                   |
 
 </details>
 
@@ -393,13 +404,14 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 
 #### Dashboard
 
-`hive serve` launches a live web dashboard at localhost:3847 with 6 views:
+`hive serve` launches a live web dashboard at localhost:3847 with 7 views. See [Commands](#commands) for the full command list.
 
 | View     | Path        | Focus                                                      |
 | -------- | ----------- | ---------------------------------------------------------- |
 | Home     | `/`         | Full overview: status, log, TODOs, knowledge, memory       |
 | Dev      | `/dev`      | Quick reference: TODOs+log, facts, knowledge+memory compact |
 | Brain    | `/brain`    | High-density: working memory, rules, TODOs, platform telemetry |
+| Wander   | `/play`     | Free-thinking logs, seed queue, hypothesis archive         |
 | Know     | `/know`     | Knowledge guides with markdown rendering                   |
 | Stats    | `/stats`    | Usage: sparkline, heatmap, streak, command breakdown       |
 | Settings | `/settings` | Profile management, agent identity, daemon status          |
@@ -493,6 +505,11 @@ Custom prompts resolve by prefix, so `hive go pr-re` finds `pr-review-git-staged
 | `morning-briefing` | Daily tick | disabled | `hive daemon edit` |
 | `stale-check` | Weekly tick | disabled | `hive daemon edit` |
 | `standup-draft` | Weekly tick | disabled | `hive daemon edit` |
+| `wander` | Daily tick (14:00) | disabled | `hive daemon enable wander` |
+
+Wander selects a seed (user-queued → cross-pollination → recurring-topic → stale-todo), runs a free-thinking pass, and writes a doc surfaced at `/play`.
+
+See [CLAUDE.md](CLAUDE.md#daemon-task-architecture) for daemon task contracts.
 
 `soul-update` fires automatically via the PreCompact hook when a session context compacts. It is throttled to at most once per hour across all callers. `hive daemon run soul-update` forces a manual run outside the hook lifecycle.
 
@@ -644,7 +661,9 @@ uv run pytest -m llm -v -o "addopts="  # LLM E2E tests (slow, real API calls)
 uv run pytest -x                       # stop on first failure
 ```
 
-See [CLAUDE.md](CLAUDE.md) for architecture details.
+See [CLAUDE.md](CLAUDE.md) for architecture details,
+[.claude/CLAUDE.md](.claude/CLAUDE.md) for release workflow and pre-flight checklist,
+and [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ## License
 

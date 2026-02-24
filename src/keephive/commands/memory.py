@@ -276,6 +276,11 @@ def cmd_rule(args: list[str]) -> None:
     console.print("[dim]Backup: rules.md.bak[/dim]")
 
 
+def cmd_rule_review(args: list[str]) -> None:
+    """hive rr — shortcut for 'hive rule review'."""
+    _rule_review()
+
+
 def _rule_review() -> None:
     """Review and accept/reject pending rule suggestions from .pending-rules.md."""
     from keephive.storage import hive_dir
