@@ -281,12 +281,14 @@ def test_render_page_all_views_linked(hive_env):
         assert path in page, f"Missing link to {path}"
 
 
-def test_render_page_contains_refresh_js(hive_env):
+def test_render_page_contains_sse_js(hive_env):
     from keephive.commands.serve import render_page
 
     page = render_page("home", 3847)
     assert "api/fragment" in page
-    assert "refresh-select" in page
+    assert "api/events" in page
+    assert "_connectSSE" in page
+    assert "refresh-select" not in page
 
 
 # ---- HTTP server integration tests ----
