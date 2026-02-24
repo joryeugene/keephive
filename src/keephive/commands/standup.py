@@ -455,7 +455,9 @@ def cmd_standup(args: list[str]) -> None:
         console.print()
 
     # LLM mode vs deterministic
-    if os.environ.get("HIVE_SKIP_LLM"):
+    import sys
+
+    if os.environ.get("HIVE_SKIP_LLM") or not sys.stdin.isatty():
         standup_text = _display_deterministic(data)
     elif not prompt_yn("  Format with LLM?"):
         console.print("  [dim]Skipped.[/dim]")

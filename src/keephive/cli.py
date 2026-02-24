@@ -63,6 +63,7 @@ HELP: dict[str, str] = {
         "  KingBee's free-thinking log. Runs daily at 14:00 when enabled.\n"
         "  Enable: hive daemon enable wander\n"
     ),
+    "swarm": "Usage: hive swarm <tasks-file> [--dry-run]  (alias: sw)\n  Parse a markdown task list and spawn an agent team.\n  Task format:\n    - [tag] Description → file/hint\n  --dry-run   Print the prompt without launching\n  Example: hive swarm todo.md",
 }
 
 # Map aliases to canonical names for help lookup
@@ -109,6 +110,7 @@ _CANONICAL: dict[str, str] = {
     "wander": "wander",
     "wr": "wander",
     "w": "wander",
+    "sw": "swarm",
     "im": "improve",
     "dm": "daemon",
     "fw": "flow",
@@ -135,6 +137,7 @@ _CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
     ("checkup [--json]", "Production health check", "ck", {"checkup", "ck"}),
     ("daemon [run|status|enable|disable]", "KingBee background daemon", "dm", {"daemon", "dm"}),
     ("wander [list|seed|run]", "Agent free-thinking log", "w", {"wander", "wr", "w"}),
+    ("swarm <tasks-file>", "Spawn agent team from task list", "sw", {"swarm", "sw"}),
     ("improve [review]", "Review self-improvement proposals", "im", {"improve", "im"}),
     ("go [mode]", "Launch session", "go", {"go", "sesh", "session"}),
     ("stats [-p path]", "Usage + pipeline health", "st", {"st", "stats"}),
@@ -231,6 +234,7 @@ Usage: hive <command> [args]
     audit [-v]        Quality analysis                  a
     flow              Guided maintenance run             fw
     wander [list|run] Agent free-thinking log           w
+    swarm <tasks>     Spawn agent team from list        sw
     go [mode]         Launch session                    go
     stats [-p path]   Usage + pipeline health           st
     log [date]        View daily log                    l
@@ -411,6 +415,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "wander": ("keephive.commands.wander", "cmd_wander"),
     "wr": ("keephive.commands.wander", "cmd_wander"),
     "w": ("keephive.commands.wander", "cmd_wander"),
+    "swarm": ("keephive.commands.swarm", "cmd_swarm"),
+    "sw": ("keephive.commands.swarm", "cmd_swarm"),
 }
 
 

@@ -227,11 +227,12 @@ def _add_seed(text: str) -> None:
 
 def _run_wander() -> None:
     """Trigger wander task immediately."""
-    from keephive.commands.daemon import _task_wander
+    from keephive.commands.daemon import _mark_last_run, _task_wander
 
     console.print("[dim]Running wander task...[/dim]")
     result = _task_wander()
     if result:
+        _mark_last_run("wander")
         console.print("[ok]Wander complete.[/ok] Run [b]hive wander show[/b] to read it.")
     else:
         console.print("[dim]No output.[/dim] Check daemon.log or ensure there's a seed available.")
