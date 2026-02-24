@@ -60,8 +60,10 @@ Prefer `just <recipe>` over raw commands. See `just --list` or the `justfile` fo
 - `hooks/stop.py`: Stop hook. Increments turn counter per session, periodic micro-nudge (interval 8) to capture decisions or mark TODOs done.
 - `hooks/sessionend.py`: SessionEnd hook. Finalizes session stats with accurate end timestamp. No stdout.
 - `hooks/taskcompleted.py`: TaskCompleted hook. Auto-logs DONE entry to daily log when a task is marked complete.
-- `commands/serve.py`: Live web dashboard (HTTP server, 8 views, markdown rendering, auto-refresh, `/ui-feedback` POST endpoint). Zero external deps.
+- `commands/serve.py`: Live web dashboard (HTTP server, 6 views, markdown rendering, auto-refresh, `/ui-feedback` POST endpoint). Zero external deps.
 - `commands/ui.py`: UI feedback queue CLI (`hive ui`/`ui-install`/`ui-clear`/`ui log`) + bookmarklet source as `javascript:` URL. `hive ui log` scans daily logs newest-first for persisted `[UI Feedback]` entries (last 30 days).
+- `commands/daemon.py`: KingBee background daemon. `hive daemon [start|stop|status|run|edit|log|enable|disable]`. Manages soul-update, self-improve, morning-briefing, stale-check, standup-draft tasks. Enable/disable toggles per-task via daemon.json. `hive daemon log` tails daemon.log.
+- `commands/checkup.py`: `hive checkup` / `hive ck`. 6-stage read-only health monitor: hook pipeline, daemon task freshness, queue depths, SOUL.md age, JSON integrity, magic number audit. `--snapshot`/`--diff` use git-in-hive-dir. `--json` for scripting. No LLM calls.
 
 ## Session Data Architecture
 
@@ -150,7 +152,7 @@ def delete_first_todo(*args, **kwargs):
 
 keephive has three test tiers. Each answers different questions.
 
-### Tier 1: Unit/Integration (1373 tests, <35s)
+### Tier 1: Unit/Integration (~2100 tests, <55s)
 
 ```bash
 just test                           # all tests
@@ -161,7 +163,7 @@ Fast, isolated, mocked. Uses `hive_env` fixture (temp dir + `HIVE_HOME`). Tests 
 
 **Use for:** Pure logic, parsing, storage operations, model validation, error paths, edge cases where you control all inputs.
 
-### Tier 2: Terminal E2E (64 tests, ~65s, requires tmux)
+### Tier 2: Terminal E2E (~210 tests, ~6min, requires tmux)
 
 ```bash
 just test-e2e                                                      # run all

@@ -36,3 +36,6 @@ pytest-out.txt
 # hive serve runtime artifacts
 server.pid
 server_output.log
+
+# hive export backups (generated locally, not committed)
+*.tar.gz

@@ -173,6 +173,12 @@ demo-gif: demo-seed
     gifsicle --optimize=3 --lossy=80 --colors=128 assets/cli-demo.gif -o assets/cli-demo.gif
     @ls -lh assets/cli-demo.gif
 
+# Record F1 maintenance flow demo GIF (requires vhs: brew install charmbracelet/tap/vhs)
+demo-f1: demo-seed
+    HIVE_HOME="$HOME/.claude/hive-demo" vhs assets/demo-f1.tape
+    gifsicle --optimize=3 --lossy=80 --colors=128 assets/cli-demo-f1.gif -o assets/cli-demo-f1.gif
+    @ls -lh assets/cli-demo-f1.gif
+
 # Take dashboard screenshots (requires shot-scraper: uv tool install shot-scraper)
 demo-screenshots: demo-seed
     #!/usr/bin/env bash
@@ -186,16 +192,17 @@ demo-screenshots: demo-seed
         curl -sf http://localhost:13847/ > /dev/null && break || sleep 0.5
     done
     # Capture screenshots
-    shot-scraper http://localhost:13847/ -o assets/dashboard-home.png --width 1200 --height 900
+    shot-scraper http://localhost:13847/brain -o assets/dashboard-brain.png --width 1200 --height 900
     shot-scraper http://localhost:13847/stats -o assets/dashboard-stats.png --width 1200 --height 900
-    shot-scraper http://localhost:13847/know -o assets/dashboard-knowledge.png --width 1200 --height 900
+    shot-scraper http://localhost:13847/know  -o assets/dashboard-knowledge.png --width 1200 --height 900
+    shot-scraper http://localhost:13847/      -o assets/dashboard-home.png --width 1200 --height 900
     # Cleanup
     kill $SERVER_PID 2>/dev/null || true
     @echo "Screenshots captured:"
     @ls -lh assets/dashboard-*.png
 
 # Regenerate all demo assets (GIF + screenshots)
-demo-assets: demo-gif demo-screenshots
+demo-assets: demo-gif demo-f1 demo-screenshots
     @echo "All demo assets regenerated from demo profile"
 
 # ── Release ───────────────────────────────────────────────────────────────────

@@ -44,7 +44,7 @@ Everything else on this page is optional depth.
 > You never type a full name. Two keystrokes for the command, a few more for the target.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-home.png" width="800" alt="keephive dashboard" />
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-brain.png" width="800" alt="keephive brain dashboard — working memory, rules, TODOs, platform telemetry" />
 </p>
 
 <p align="center">
@@ -54,7 +54,7 @@ Everything else on this page is optional depth.
 After a few sessions, `hive` shows what your agent has learned:
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/cli-demo.gif" width="700" alt="keephive CLI demo" />
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/cli-demo.gif" width="700" alt="keephive CLI demo — remember, recall, todo, log, knowledge, stats" />
 </p>
 
 Keep your agent orientated across platforms. The new <code>hive serve /brain</code> view condenses working memory, rules, TODOs, and platform telemetry into a single high-density dashboard. It highlights the active backend, queued LLM work, and which agents (Claude, Gemini, Codex) are feeding data back into keephive.
@@ -285,7 +285,6 @@ flowchart TD
     STCMD -.->|"session analytics"| CC
     STCMD -.->|"workflow analytics"| STORE
     SEND -.->|".stats.json"| STATS
-    SEND -.->|"soul-update + self-improve<br>(non-blocking, if enabled)"| SOUL
     DAEMON -->|reads/writes| STORE
     DAEMON --> BRIEF
     DAEMON --> IMPROVE
@@ -315,7 +314,7 @@ flowchart TD
 | PostToolUse      | After Edit/Write      | Periodic nudge to record decisions                     |
 | UserPromptSubmit | User sends prompt     | Periodic nudge, UI queue injection                     |
 | Stop             | Agent turn ends       | Increments turn counter, periodic micro-nudge          |
-| SessionEnd       | Session terminates    | Finalizes stats; triggers `soul-update` and `self-improve` |
+| SessionEnd       | Session terminates    | Finalizes session stats with accurate end timestamp        |
 | TaskCompleted    | Task marked done      | Auto-logs DONE entry to daily log                      |
 
 ### Use it with other MCP clients
@@ -408,10 +407,10 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 Auto-refresh (configurable interval), Cmd+K search, split-pane resizing, CRUD forms (remember, add TODO, mark done, append note), log type filters, and zero external dependencies.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-stats.png" width="700" alt="keephive stats view" />
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-stats.png" width="700" alt="keephive stats view — sparkline, heatmap, streak, command breakdown" />
 </p>
 <p align="center">
-  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-knowledge.png" width="700" alt="keephive knowledge view" />
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-knowledge.png" width="700" alt="keephive knowledge view — guides and prompt templates" />
 </p>
 
 **UI feedback loop**: `hive ui-install` generates a bookmarklet and copies it to your clipboard. Paste it as a bookmark URL, then click it on any page to capture an element selector and a note. The feedback is POSTed to the dashboard server, queued in `.ui-queue`, and automatically injected into your next Claude Code prompt via the UserPromptSubmit hook. No copy-paste required.
@@ -497,7 +496,24 @@ Custom prompts resolve by prefix, so `hive go pr-re` finds `pr-review-git-staged
 
 `soul-update` fires automatically via the PreCompact hook when a session context compacts. It is throttled to at most once per hour across all callers. `hive daemon run soul-update` forces a manual run outside the hook lifecycle.
 
-Optional tasks (`morning-briefing`, `stale-check`, `standup-draft`) are disabled by default. Enable them with `hive daemon edit`, which opens the daemon config YAML in `$EDITOR`.
+Optional tasks (`morning-briefing`, `stale-check`, `standup-draft`) are disabled by default. Enable them with the `enable` subcommand or `hive daemon edit` to open the config directly:
+
+```bash
+hive daemon enable morning-briefing   # activate off-by-default tasks
+hive daemon disable standup-draft
+hive daemon log                        # tail last 50 lines of daemon.log
+```
+
+#### Checkup
+
+`hive checkup` (alias: `hive ck`) is a 6-stage read-only health report. No LLM calls, no writes. Runs in under a second.
+
+```bash
+hive checkup               # full 6-stage report: hooks, daemon, queues, SOUL.md, JSON, magic numbers
+hive checkup --snapshot    # git-snapshot hive state (before/after testing)
+hive checkup --diff        # show what changed since last snapshot
+hive checkup --json        # structured output for scripting/CI
+```
 
 #### Flow
 
@@ -508,6 +524,11 @@ Optional tasks (`morning-briefing`, `stale-check`, `standup-draft`) are disabled
 4. **Improvement Review**: Review self-improvement proposals from KingBee.
 5. **Verify**: Run a full verification of stale facts against the codebase.
 
+```bash
+hive flow                  # full guided pass including LLM verify
+hive flow --skip-verify    # skip LLM verify stage (faster for routine queue drains)
+```
+
 #### Improve
 
 `hive improve review` opens an interactive TUI to review proposals from the KingBee daemon. Improvements can be:
@@ -515,6 +536,12 @@ Optional tasks (`morning-briefing`, `stale-check`, `standup-draft`) are disabled
 - **Rules**: Behavioral nudges to avoid recurring friction.
 - **Tasks**: Suggested optimizations for your daily workflow.
 - **Edits**: Direct improvements to knowledge guides or configuration.
+
+```bash
+hive improve review        # interactive accept/defer/dismiss
+hive improve list           # show pending proposals with age
+hive improve clear-stale    # remove proposals older than 30 days
+```
 
 #### Stats
 

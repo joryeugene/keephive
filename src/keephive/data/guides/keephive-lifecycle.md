@@ -69,6 +69,9 @@ Tiers from most stable (top) to most ephemeral (bottom).
 | Claude should behave differently | Rules | `hive rule "..."` |
 | Friction patterns from /insights | Pending rules | `hive rule learn` |
 | Rich structured doc for a topic | Knowledge guide | `hive ke <name>` |
+| Agent needs background maintenance | KingBee daemon   | `hive daemon start`    |
+| Checking production system health  | Health check     | `hive checkup`         |
+| Review KingBee's proposed changes  | Improve queue    | `hive improve review`  |
 | Universal style/tool preference | Global CLAUDE.md | Edit manually |
 | Project-specific invariant | Project CLAUDE.md | Edit manually |
 | Repeatable dev command | justfile | `just <recipe>` |
@@ -85,13 +88,14 @@ Tiers from most stable (top) to most ephemeral (bottom).
   `hive_remember` of key changes.
 - **UserPromptSubmit**: Counter-based nudge, UI queue injection.
 - **Stop**: Increments turn counter. Periodic micro-nudge to capture wrap-up items.
-- **SessionEnd**: Finalizes session stats. Spawns `soul-update` and `self-improve` tasks.
+- **SessionEnd**: Finalizes session stats with accurate end timestamp. No stdout.
 - **TaskCompleted**: Auto-logs DONE to daily log. Tracks task completion count in meta stats.
 
 ## Promotion Path (ephemeral to durable)
 
 - `daily log` + `hive rf` -> review patterns -> working memory or knowledge guide
 - `daily log` + KingBee `self-improve` -> proposed skills/rules -> `hive improve review` -> SOUL.md or rules.md
+- KingBee `soul-update` → SOUL.md → SessionStart → `## Agent Identity` in context
 - `daily log TODO` + `hive td` -> DONE in log -> archived
 - `working memory` + `hive v` -> verified facts -> updated date or auto-corrected
 - `knowledge guide` + `hive v` -> fact check -> stale facts flagged

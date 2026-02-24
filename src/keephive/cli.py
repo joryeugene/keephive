@@ -18,7 +18,7 @@ HELP: dict[str, str] = {
     "edit": "Usage: hive e [target]\n  Targets: memory, rules, soul, settings, local, today, note\n  No args: show available targets",
     "todo": "Usage: hive todo [done <pat>] [repeat [freq] [text]] [--watch|-w] [--interval N]\n  todo         List open TODOs\n  todo done X  Mark TODO matching X complete\n  todo repeat  List/add recurring tasks\n  --watch/-w      Live refresh when TODOs change\n  --interval N    Seconds between checks (default 2)",
     "note": 'Usage: hive n [show|copy|clear|list|<slot>|<template>]\n  n          Open active slot in $EDITOR\n  n.3        Switch to slot 3, open editor (1-9, 0=10)\n  4          Open slot 4 in $EDITOR (bare-digit shorthand)\n  n show     Print content\n  n copy     Copy to clipboard\n  n clear    Archive and clear\n  n list     Show all slots\n  n <N> todo  Extract TODOs from slot N and add to daily log\n  4 "text"   Append text to slot 4 without opening editor',
-    "knowledge": "Usage: hive k [name|edit <name>|rm <name>]\n  k           List all guides and prompts\n  k <name>    View guide (prefix match)\n  k edit X    Create/edit guide\n  k rm X      Remove guide",
+    "knowledge": "Usage: hive k [name|edit <name>|rm <name>]\n  k           List all guides and prompts\n  k <name>    View guide (prefix match)\n  k edit X    Create/edit guide\n  k rm X      Remove guide\n  Frontmatter: tags, projects, always (always: true injects into every session)",
     "audit": "Usage: hive a [-v] [--json]\n  Quality Pulse: 3-perspective LLM analysis + synthesis\n  -v      Show full perspective essays\n  --json  Machine-readable output",
     "doctor": "Usage: hive dr\n  Health check: hooks, MCP, deps, data integrity\n  Uses LLM for semantic TODO dedup (deterministic fallback if unavailable)",
     "gc": "Usage: hive gc [--dry-run]\n  Archive daily logs older than 30 days\n  --dry-run  Show what would be archived without doing it",
@@ -28,7 +28,16 @@ HELP: dict[str, str] = {
     "flow": "Usage: hive flow [--skip-verify]\n  Guided maintenance flow: review pending facts, rules, improvements, then verify\n  --skip-verify  Skip the LLM verify stage",
     "improve": "Usage: hive improve [review|list|clear-stale]\n  Review or list KingBee self-improvement proposals",
     "checkup": "Usage: hive checkup [--snapshot|--diff|--json]\n  Production health check: hooks, daemon, queues, soul, data integrity\n  --snapshot  Git-snapshot current hive state (before testing)\n  --diff      Show diff since last snapshot\n  --json      Machine-readable output",
-    "daemon": "Usage: hive daemon [start|stop|status|run|edit|log]\n  Manage the KingBee background daemon\n  start/stop    Launch/kill daemon\n  status        Show daemon health and task schedule\n  run <task>    Trigger a specific task immediately (e.g. soul-update, self-improve)\n  edit          Open daemon config in $EDITOR\n  log           View daemon log",
+    "daemon": (
+        "Usage: hive daemon [start|stop|status|run|edit|log|enable|disable]\n"
+        "  Manage the KingBee background daemon\n"
+        "  start/stop           Launch/kill daemon process\n"
+        "  status               Show task schedule and last-run times\n"
+        "  run <task>           Trigger immediately (soul-update, self-improve, ...)\n"
+        "  enable/disable <task>  Toggle scheduled execution\n"
+        "  edit                 Open daemon.json in $EDITOR\n"
+        "  log                  View last 50 lines of daemon.log"
+    ),
     "rule": "Usage: hive rule [rm|review|learn] <text>  (alias: rl = rule learn)\n  Add or remove behavioral rules\n  hive rule <text>      Add rule\n  hive rule rm <pat>    Remove matching rule\n  hive rule review      Review pending rule suggestions\n  hive rule learn       Learn rules from /insights friction data\n  hive rule learn --dry-run   Preview without queuing\n  hive rl               Shortcut for 'hive rule learn'",
     "session": "Usage: hive go [mode|prompt]\n  Modes: todo, verify, learn, reflect\n  Or load a custom prompt from knowledge/prompts/",
     "skill": "Usage: hive sk [publish <name>|unpublish <name>|sync|find <q>]\n  Manage skill plugins",
@@ -44,6 +53,7 @@ HELP: dict[str, str] = {
     "seed": "Usage: hive seed [--days N] [--force]\n  Seed current profile with realistic demo data\n  --days N   Number of days of history (default 45)\n  --force    Overwrite existing data without prompt",
     "export": "Usage: hive export [output_path]\n  Export current profile data as tar.gz archive\n  Default: ./hive-{profile}-YYYYMMDD.tar.gz",
     "import": "Usage: hive import <path.tar.gz> [--profile name]\n  Import data from archive\n  --profile name  Create new profile and import there",
+    "telemetry": "Usage: hive telemetry\n  Show usage telemetry (session counts, token usage)",
 }
 
 # Map aliases to canonical names for help lookup
@@ -106,6 +116,7 @@ _CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
     ("audit [-v]", "Quality analysis", "a", {"a", "audit"}),
     ("flow [--skip-verify]", "Guided maintenance run", "", {"flow"}),
     ("checkup [--json]", "Production health check", "ck", {"checkup", "ck"}),
+    ("daemon [run|status|enable|disable]", "KingBee background daemon", "", {"daemon"}),
     ("go [mode]", "Launch session", "go", {"go", "sesh", "session"}),
     ("stats [-p path]", "Usage + pipeline health", "st", {"st", "stats"}),
     ("mem [rm] <text>", "Add/remove working memory", "m", {"m", "mem"}),

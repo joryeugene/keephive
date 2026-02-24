@@ -95,29 +95,27 @@ class TestDaemonLifecycle:
         screen.has("Feb 22")
 
     def test_daemon_run_self_improve_throttle_respected(self, term):
-        """Self-improve run within 7-day throttle window outputs 'skipped' message and logs it."""
-        # Seed state with a last_run from today (0 days since last run < 7 day threshold)
+        """Self-improve run within 1-day throttle window outputs 'skipped' — no daemon.log entry."""
+        # Seed state with a last_run from today (0 days since last run < 1 day threshold)
         state = {"self-improve": {"last_run": datetime.now().isoformat()}}
         (term.hive_home / ".daemon-state.json").write_text(json.dumps(state))
         screen = term.type("python -m keephive daemon run self-improve")
         screen.has("skipped")
-        # daemon.log must also record the throttle skip with a diagnostic message
-        log_text = term.read_file("daemon.log")
-        assert "self-improve: throttled" in log_text, (
-            f"Expected 'self-improve: throttled' in daemon.log: {log_text}"
+        # Throttle skips are silent — daemon.log is NOT written (no noise for expected events)
+        assert not (term.hive_home / "daemon.log").exists(), (
+            "daemon.log should not exist: throttle skips are silent by design"
         )
 
     def test_daemon_run_soul_update_throttle_respected(self, term):
-        """Soul-update run within 1-hour throttle window outputs 'skipped' message and logs it."""
+        """Soul-update run within 1-hour throttle window outputs 'skipped' — no daemon.log entry."""
         # Seed state with last_run just now (within 1 hour throttle)
         state = {"soul-update": {"last_run": datetime.now().isoformat()}}
         (term.hive_home / ".daemon-state.json").write_text(json.dumps(state))
         screen = term.type("python -m keephive daemon run soul-update")
         screen.has("skipped")
-        # daemon.log must also record the throttle skip with a diagnostic message
-        log_text = term.read_file("daemon.log")
-        assert "soul-update: throttled" in log_text, (
-            f"Expected 'soul-update: throttled' in daemon.log: {log_text}"
+        # Throttle skips are silent — daemon.log is NOT written (no noise for expected events)
+        assert not (term.hive_home / "daemon.log").exists(), (
+            "daemon.log should not exist: throttle skips are silent by design"
         )
 
     def test_daemon_run_unknown_task(self, term):

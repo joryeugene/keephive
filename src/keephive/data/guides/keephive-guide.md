@@ -33,6 +33,17 @@ A knowledge sidecar for Claude Code. Commands work as both `keephive <cmd>` and 
 | `hive rule review`     |                   | Accept/reject pending rule suggestions                           |
 | `hive improve review`  |                   | Review KingBee self-improvement proposals                        |
 | `hive daemon start`    |                   | Start background daemon (KingBee)                                |
+| `hive daemon status`   |                   | Show task schedule and last-run times                            |
+| `hive daemon run <task>` |                 | Trigger task immediately (soul-update, self-improve)             |
+| `hive daemon enable <task>` |              | Toggle scheduled execution on                                    |
+| `hive daemon disable <task>` |             | Toggle scheduled execution off                                   |
+| `hive daemon log`      |                   | View last 50 lines of daemon.log                                 |
+| `hive checkup`         | `hive ck`         | Production health check (hooks, daemon, queues, SOUL.md)         |
+| `hive checkup --snapshot` |                | Git-snapshot hive state for before/after diffing                 |
+| `hive checkup --diff`  |                   | Show what changed since last snapshot                            |
+| `hive checkup --json`  |                   | Machine-readable health report                                   |
+| `hive improve list`    |                   | List pending KingBee proposals with age                          |
+| `hive improve clear-stale` |               | Remove proposals older than 30 days                              |
 | `hive gc`              |                   | Archive old logs, rebuild index                                  |
 | `hive serve [port]`    | `hive ws`         | Live web dashboard (localhost:3847)                              |
 | `hive ui`              |                   | Show pending UI feedback queue                                   |
@@ -49,6 +60,20 @@ A knowledge sidecar for Claude Code. Commands work as both `keephive <cmd>` and 
 | `hive prompt`                | `hive p`         | List prompt templates                     |
 | `hive prompt <name>`         | `hive p <name>`  | Output prompt to stdout (prefix matching) |
 | `hive prompt edit <name>`    | `hive pe <name>` | Create/edit a prompt                      |
+
+#### Guide Frontmatter
+
+Guides support YAML frontmatter to control injection:
+
+```yaml
+---
+tags: [keephive, testing]      # Match by project tag
+projects: [my-project-path]    # Match by cwd path
+always: true                   # Inject into EVERY session (universal guides)
+---
+```
+
+`always: true` is for universal principles (like `agent-principles`). Omit for project-specific guides.
 
 ### Sessions
 
@@ -104,12 +129,25 @@ When Claude Code compacts a conversation, keephive's PreCompact hook:
 
 ### KingBee (Identity & Maintenance)
 
-The **KingBee** daemon manages a persistent identity for your agent in `~/.keephive/hive/working/SOUL.md`.
+KingBee manages a persistent agent identity (`SOUL.md`) and five background tasks.
 
-- **Agent Identity**: Manages a cross-project summary of specialized skills and patterns.
-- **Morning Briefing**: Your first session of the day receives a briefing of pending tasks.
-- **Self-Improvement**: Periodically scans logs to propose new skills, rules, or task optimizations.
-- **Stale Check**: Background scan for facts needing verification.
+**SOUL.md** lives at `~/.keephive/hive/working/SOUL.md`. Distilled from session logs,
+injected as `## Agent Identity` (~300 tokens) in every new session. Replaced (not appended)
+on each update. Trigger manually: `hive daemon run soul-update`. Check age: `hive checkup`.
+
+**Task schedule** (`daemon.json`):
+
+| Task              | Default | Trigger             | Throttle  |
+|-------------------|---------|---------------------|-----------|
+| soul-update       | on      | PreCompact / manual | 1h        |
+| self-improve      | on      | daily / manual      | 1 day     |
+| morning-briefing  | off     | 07:00               | daily     |
+| stale-check       | off     | Monday 08:00        | weekly    |
+| standup-draft     | off     | 17:00               | daily     |
+
+`hive daemon enable morning-briefing` to activate any off-by-default task.
+`hive daemon log` to inspect background task activity.
+`hive checkup` for a full 6-stage health report (hook pipeline, daemon freshness, queue depths, SOUL.md age, JSON integrity, magic numbers).
 
 ### Smart context injection
 
