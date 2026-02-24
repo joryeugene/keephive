@@ -410,7 +410,9 @@ class TestRunTaskThrottle:
         write_daemon_state(state)
 
         mark_calls: list[str] = []
-        monkeypatch.setattr("keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t))
+        monkeypatch.setattr(
+            "keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t)
+        )
 
         _run_task("soul-update")  # should throttle — _task_soul_update returns False
 
@@ -430,7 +432,9 @@ class TestRunTaskThrottle:
         write_daemon_state(state)
 
         mark_calls: list[str] = []
-        monkeypatch.setattr("keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t))
+        monkeypatch.setattr(
+            "keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t)
+        )
         # Simulate work done without needing real log files or LLM
         monkeypatch.setattr("keephive.commands.daemon._task_soul_update", lambda: True)
 
@@ -454,7 +458,9 @@ class TestRunTaskThrottle:
         write_daemon_state(state)
 
         mark_calls: list[str] = []
-        monkeypatch.setattr("keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t))
+        monkeypatch.setattr(
+            "keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t)
+        )
 
         _run_task("self-improve")  # should throttle — _task_self_improve returns False
 
@@ -547,7 +553,9 @@ class TestTickSkipBehavior:
         write_daemon_state({})  # no last_run → task is due
 
         mark_calls: list[str] = []
-        monkeypatch.setattr("keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t))
+        monkeypatch.setattr(
+            "keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t)
+        )
         # Force _execute_task to return False (simulates stale-check with no memory.md)
         monkeypatch.setattr("keephive.commands.daemon._execute_task", lambda t: False)
 
@@ -559,7 +567,9 @@ class TestTickSkipBehavior:
         # daemon.log must contain "skipped (no data)", NOT "completed"
         log_text = (hive_dir() / "daemon.log").read_text()
         assert "skipped (no data)" in log_text, f"Expected 'skipped (no data)' in log: {log_text}"
-        assert "completed: stale-check" not in log_text, f"Must not log 'completed' on skip: {log_text}"
+        assert "completed: stale-check" not in log_text, (
+            f"Must not log 'completed' on skip: {log_text}"
+        )
 
     def test_tick_marks_last_run_when_execute_returns_true(self, monkeypatch, hive_env):
         """_tick calls _mark_last_run exactly once when _execute_task returns True.
@@ -584,13 +594,110 @@ class TestTickSkipBehavior:
         write_daemon_state({})
 
         mark_calls: list[str] = []
-        monkeypatch.setattr("keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t))
+        monkeypatch.setattr(
+            "keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t)
+        )
         monkeypatch.setattr("keephive.commands.daemon._execute_task", lambda t: True)
 
         _tick()
 
-        assert mark_calls == ["stale-check"], f"Expected _mark_last_run('stale-check'), got: {mark_calls}"
+        assert mark_calls == ["stale-check"], (
+            f"Expected _mark_last_run('stale-check'), got: {mark_calls}"
+        )
         log_text = (hive_dir() / "daemon.log").read_text()
         assert "completed: stale-check" in log_text, f"Expected 'completed' in log: {log_text}"
 
 
+class TestTaskReturnValues:
+    """Daemon task functions return False on LLM error, True only when work was done."""
+
+    def test_morning_briefing_returns_false_on_llm_error(self, hive_env, monkeypatch):
+        """_task_morning_briefing() returns False when ClaudePipeError is raised.
+
+        Bug caught: task always returned True even on timeout, marking itself
+        done and preventing retry until the next scheduled slot (tomorrow 07:00).
+        """
+        from keephive.claude import ClaudePipeError
+        from keephive.commands.daemon import _task_morning_briefing
+        from keephive.storage import append_to_daily, ensure_daily
+
+        ensure_daily()
+        append_to_daily("- FACT: morning briefing test entry")
+
+        monkeypatch.setattr(
+            "keephive.claude.run_claude_pipe",
+            lambda *a, **kw: (_ for _ in ()).throw(ClaudePipeError("timed out")),
+        )
+
+        result = _task_morning_briefing()
+
+        assert result is False, "morning-briefing must return False on LLM error"
+
+    def test_stale_check_returns_false_on_llm_error(self, hive_env, monkeypatch):
+        """_task_stale_check() returns False when ClaudePipeError is raised.
+
+        Bug caught: stale-check marked itself done on error, skipping
+        the next scheduled slot even though no check was performed.
+        """
+        from keephive.claude import ClaudePipeError
+        from keephive.commands.daemon import _task_stale_check
+        from keephive.storage import hive_dir
+
+        (hive_dir() / "memory.md").write_text(
+            "# Working Memory\n\n- Some fact to check [verified:2020-01-01]\n"
+        )
+
+        monkeypatch.setattr(
+            "keephive.claude.run_claude_pipe",
+            lambda *a, **kw: (_ for _ in ()).throw(ClaudePipeError("timed out")),
+        )
+
+        result = _task_stale_check()
+
+        assert result is False, "stale-check must return False on LLM error"
+
+    def test_standup_draft_returns_false_on_gather_exception(self, hive_env, monkeypatch):
+        """_task_standup_draft() returns False when _gather_raw_data raises.
+
+        Bug caught: previously returned True regardless of exception — task
+        would mark itself done with empty daily log on any failure.
+        """
+        from keephive.commands.daemon import _task_standup_draft
+
+        monkeypatch.setattr(
+            "keephive.commands.standup._gather_raw_data",
+            lambda: (_ for _ in ()).throw(RuntimeError("no git")),
+        )
+
+        result = _task_standup_draft()
+
+        assert result is False, "standup-draft must return False on exception"
+
+    def test_standup_draft_returns_true_when_content_written(self, hive_env, monkeypatch):
+        """_task_standup_draft() returns True and writes to daily log when LLM produces content.
+
+        Confirms the happy path: real content → appended to log → True returned.
+        """
+        from keephive.commands.daemon import _task_standup_draft
+        from keephive.storage import daily_file, ensure_daily
+
+        ensure_daily()
+
+        fake_data = {
+            "recent_done": [],
+            "open_todos": [],
+            "merged_prs": [],
+            "closed_prs": [],
+            "open_prs": [],
+        }
+        fake_content = "**Done:** Fixed daemon return values\n**Next:** Write tests"
+
+        monkeypatch.setattr("keephive.commands.standup._gather_raw_data", lambda: fake_data)
+        monkeypatch.setattr("keephive.commands.standup._display_llm", lambda d: fake_content)
+
+        result = _task_standup_draft()
+
+        assert result is True, "standup-draft must return True when content was written"
+        log = daily_file().read_text()
+        assert "standup draft" in log, "Daily log must contain standup draft header"
+        assert "Fixed daemon return values" in log, "Daily log must contain standup content"

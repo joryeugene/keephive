@@ -15,7 +15,6 @@ from datetime import datetime, timedelta
 
 import pytest
 
-
 # ============================================================
 #  Category 1: hive flow — guided maintenance workflow
 # ============================================================
@@ -166,7 +165,9 @@ class TestSoulIdentity:
         )
         output = term.read_file(".hook-test-out.json")
         assert "Traceback" not in output
-        assert any(k in output for k in ["additionalContext", "hookEventName", "hookSpecificOutput"])
+        assert any(
+            k in output for k in ["additionalContext", "hookEventName", "hookSpecificOutput"]
+        )
 
     def test_soul_injected_via_sessionstart(self, term):
         """Pre-written SOUL.md appears verbatim in sessionstart additionalContext."""
@@ -286,15 +287,13 @@ class TestHookDebugLog:
         """Hook debug log entries use ISO timestamp format [YYYY-MM-DDTHH:MM:SS]."""
         term.type("echo '{}' | python -m keephive hook-precompact")
         log_content = term.read_file(".hook-debug.log")
-        assert re.search(
-            r"\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\]", log_content
-        ), f"Expected ISO timestamp in log, got:\n{log_content}"
+        assert re.search(r"\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\]", log_content), (
+            f"Expected ISO timestamp in log, got:\n{log_content}"
+        )
 
     def test_hook_debug_log_trigger_captured(self, term):
         """Hook debug log captures the trigger field from hook input."""
-        term.type(
-            'echo \'{"trigger":"manual"}\' | python -m keephive hook-precompact'
-        )
+        term.type('echo \'{"trigger":"manual"}\' | python -m keephive hook-precompact')
         log_content = term.read_file(".hook-debug.log")
         assert "trigger=manual" in log_content, (
             f"Expected 'trigger=manual' in log, got:\n{log_content}"

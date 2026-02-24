@@ -14,8 +14,8 @@ from datetime import datetime, timedelta
 # The 7-day analysis *window* (for i in range(7)) is orthogonal — that's context depth, not cadence.
 _SELF_IMPROVE_THROTTLE_DAYS = 1
 
-from keephive.output import console
-from keephive.storage import (
+from keephive.output import console  # noqa: E402
+from keephive.storage import (  # noqa: E402
     daemon_config_file,
     daemon_pid_file,
     hive_dir,
@@ -46,7 +46,9 @@ def cmd_daemon(args: list[str]) -> None:
         fn()
     else:
         console.print(f"[err]Unknown subcommand: {sub}[/err]")
-        console.print("Usage: hive daemon [start|stop|status|run <task>|enable <task>|disable <task>|edit|log]")
+        console.print(
+            "Usage: hive daemon [start|stop|status|run <task>|enable <task>|disable <task>|edit|log]"
+        )
 
 
 # ── Start / Stop ─────────────────────────────────────────────────────
@@ -382,6 +384,7 @@ No markdown headers."""
             append_to_daily(entry)
     except ClaudePipeError as e:
         _log_daemon(f"morning-briefing failed: {e}")
+        return False
     return True
 
 
@@ -412,26 +415,29 @@ Memory:
             append_to_daily(entry)
     except ClaudePipeError as e:
         _log_daemon(f"stale-check failed: {e}")
+        return False
     return True
 
 
 def _task_standup_draft() -> bool:
-    """Read recent logs. Write standup draft to today's log."""
+    """Read recent logs. Write LLM standup draft to today's log."""
     from keephive.clock import get_now
     from keephive.storage import append_to_daily
 
     try:
-        from keephive.commands.standup import _display_deterministic, _gather_raw_data
+        from keephive.commands.standup import _display_llm, _gather_raw_data
 
         data = _gather_raw_data()
-        content = _display_deterministic(data)
+        content = _display_llm(data)
         if content and content.strip():
             ts = get_now().strftime("%H:%M")
             entry = f"\n[🐝 KingBee {ts}] standup draft\n{content}\n"
             append_to_daily(entry)
+            return True
+        return False
     except Exception as e:
         _log_daemon(f"standup-draft failed: {e}")
-    return True
+        return False
 
 
 def _task_soul_update() -> bool:

@@ -28,18 +28,18 @@ from keephive.storage import (
 )
 
 # ── Thresholds (match what the codebase actually uses) ──────────────
-_TIMEOUT_WARN_RATE = 0.10       # > 10% Layer 2 timeouts → warning
-_SOUL_STALE_DAYS = 7            # SOUL.md > 7 days old → warning
-_SOUL_WARN_DAYS = 2             # soul-update not run in > 2 days → warning
-_QUEUE_WARN_DEPTH = 10          # any queue > 10 items → warning
-_HOOK_LOG_DAYS = 30             # analyse last N days of hook log
-_LAYER2_TIMEOUT_S = 120         # configured Layer 2 timeout
-_SELF_IMPROVE_THROTTLE_D = 7    # self-improve weekly throttle
-_SOUL_UPDATE_THROTTLE_H = 1     # soul-update hourly throttle
-_FACT_STALE_D = 30              # fact staleness threshold
-_DECISION_STALE_D = 90          # decision staleness threshold
-_NUDGE_PROMPT = 5               # nudge every N prompt-submits
-_NUDGE_STOP = 8                 # nudge every N stop-hook calls
+_TIMEOUT_WARN_RATE = 0.10  # > 10% Layer 2 timeouts → warning
+_SOUL_STALE_DAYS = 7  # SOUL.md > 7 days old → warning
+_SOUL_WARN_DAYS = 2  # soul-update not run in > 2 days → warning
+_QUEUE_WARN_DEPTH = 10  # any queue > 10 items → warning
+_HOOK_LOG_DAYS = 30  # analyse last N days of hook log
+_LAYER2_TIMEOUT_S = 120  # configured Layer 2 timeout
+_SELF_IMPROVE_THROTTLE_D = 7  # self-improve weekly throttle
+_SOUL_UPDATE_THROTTLE_H = 1  # soul-update hourly throttle
+_FACT_STALE_D = 30  # fact staleness threshold
+_DECISION_STALE_D = 90  # decision staleness threshold
+_NUDGE_PROMPT = 5  # nudge every N prompt-submits
+_NUDGE_STOP = 8  # nudge every N stop-hook calls
 
 
 # ── Entry point ──────────────────────────────────────────────────────
@@ -153,7 +153,9 @@ def _print_stage1(data: dict, warnings: list[str]) -> None:
     calls = data["calls"]
     if calls == 0:
         console.print(f"    [dim]No calls in the last {_HOOK_LOG_DAYS} days[/dim]")
-        warnings.append(f"No precompact calls in {_HOOK_LOG_DAYS} days — hooks may not be registered")
+        warnings.append(
+            f"No precompact calls in {_HOOK_LOG_DAYS} days — hooks may not be registered"
+        )
         return
 
     success_rate = data["successes"] / calls if calls else 0
@@ -242,7 +244,9 @@ def _print_stage2(data: dict, warnings: list[str]) -> None:
     # Check soul-update freshness
     su = tasks.get("soul-update", {})
     if su.get("days_ago", -1) == -1:
-        console.print("    [dim]soul-update has never run — run 'hive daemon run soul-update'[/dim]")
+        console.print(
+            "    [dim]soul-update has never run — run 'hive daemon run soul-update'[/dim]"
+        )
     elif su.get("days_ago", 0) > _SOUL_WARN_DAYS:
         w = f"soul-update last ran {su['days_ago']}d ago (expected daily)"
         warnings.append(w)
@@ -388,18 +392,10 @@ def _print_stage6(daemon_data: dict) -> None:
     )
 
     console.print(f"    Layer 2 timeout:         {_LAYER2_TIMEOUT_S}s")
-    console.print(
-        f"    Self-improve throttle:   {_SELF_IMPROVE_THROTTLE_D}d  ({si_since})"
-    )
-    console.print(
-        f"    Soul-update throttle:    {_SOUL_UPDATE_THROTTLE_H}h   ({su_since})"
-    )
-    console.print(
-        f"    Fact/Decision staleness: {_FACT_STALE_D}d / {_DECISION_STALE_D}d"
-    )
-    console.print(
-        f"    Nudge intervals:         prompt={_NUDGE_PROMPT} stop={_NUDGE_STOP}"
-    )
+    console.print(f"    Self-improve throttle:   {_SELF_IMPROVE_THROTTLE_D}d  ({si_since})")
+    console.print(f"    Soul-update throttle:    {_SOUL_UPDATE_THROTTLE_H}h   ({su_since})")
+    console.print(f"    Fact/Decision staleness: {_FACT_STALE_D}d / {_DECISION_STALE_D}d")
+    console.print(f"    Nudge intervals:         prompt={_NUDGE_PROMPT} stop={_NUDGE_STOP}")
 
 
 # ── JSON report ──────────────────────────────────────────────────────
@@ -517,7 +513,7 @@ def _snapshot() -> None:
         text=True,
     )
     if result.returncode == 0:
-        console.print(f"  [green]✓ Snapshot committed[/green]")
+        console.print("  [green]✓ Snapshot committed[/green]")
         console.print("  Run 'hive checkup --diff' after testing to see mutations.")
     else:
         console.print(f"[err]git commit failed: {result.stderr.strip()}[/err]")

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import shutil
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -500,6 +500,48 @@ class TestLifecycleBestPath:
         assert tiers_found >= 2, (
             f"Expected results from >= 2 tiers, found {tiers_found}. Output:\n{out_recall[:500]}"
         )
+
+
+class TestSoulUpdateLLM:
+    def test_soul_update_writes_valid_soul_md(self, llm_hive_env, save_e2e_output):
+        """soul-update writes SOUL.md with ## Summary after real LLM call.
+
+        Bug caught: the LLM prompt → Pydantic → file write chain was never
+        verified in tests. Throttle tests exist but content was always mocked.
+        """
+        _skip_if_no_claude()
+
+        today_str = date.today().isoformat()
+        (llm_hive_env / "daily" / f"{today_str}.md").write_text(
+            f"# Daily Log: {today_str}\n\n"
+            "- [10:00:00] FACT: keephive uses run_claude_pipe for all LLM calls\n"
+            "- [10:05:00] DECISION: Use Pydantic models for all LLM responses\n"
+            "- [10:10:00] INSIGHT: Throttling prevents LLM call spam in daemon tasks\n"
+            "- [10:15:00] DONE: Fix soul-update end-to-end verification gap\n"
+        )
+
+        # Clear throttle by setting last_run to 2 hours ago
+        from keephive.storage import write_daemon_state
+
+        two_hours_ago = (datetime.now() - timedelta(hours=2)).isoformat()
+        write_daemon_state({"soul-update": {"last_run": two_hours_ago}})
+
+        from keephive.commands.daemon import _task_soul_update
+
+        did_work = _task_soul_update()
+
+        soul_path = llm_hive_env / "SOUL.md"
+        soul_content = soul_path.read_text() if soul_path.exists() else ""
+        save_e2e_output(
+            "soul_update_writes",
+            soul_content,
+            {"expected": "SOUL.md written with ## Summary section and >100 chars"},
+        )
+
+        assert did_work is True, "soul-update returned False — check daemon.log for error"
+        assert soul_path.exists(), "SOUL.md not created"
+        assert len(soul_content) > 100, f"SOUL.md too short ({len(soul_content)} chars)"
+        assert "## Summary" in soul_content, "SOUL.md missing ## Summary section"
 
 
 class TestLifecycleWorstPath:
