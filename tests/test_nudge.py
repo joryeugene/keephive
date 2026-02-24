@@ -426,3 +426,78 @@ class TestHookIntegration:
         )
         assert r.returncode == 0
         assert r.stdout.strip() == ""
+
+
+class TestRecencyGate:
+    """Recency memory prevents the same nudge category from firing too often."""
+
+    def test_read_recency_returns_empty_when_file_missing(self, hive_env):
+        """read_recency returns {} when no counter file exists."""
+        from keephive.nudge import read_recency
+
+        result = read_recency("prompt", "sess-abc")
+        assert result == {}
+
+    def test_read_recency_resets_on_session_change(self, hive_env):
+        """read_recency returns {} when session_id doesn't match stored session."""
+        from keephive.nudge import record_surfaced, read_recency
+
+        record_surfaced("prompt", "stale", 5, "session-old")
+        result = read_recency("prompt", "session-new")
+        assert result == {}
+
+    def test_record_and_read_roundtrip(self, hive_env):
+        """record_surfaced writes; read_recency reads back same data."""
+        from keephive.nudge import record_surfaced, read_recency
+
+        record_surfaced("prompt", "stale", 10, "sess-xyz")
+        result = read_recency("prompt", "sess-xyz")
+        assert result == {"stale": 10}
+
+    def test_lifecycle_nudge_skips_recently_surfaced_category(self, hive_env, monkeypatch):
+        """If stale category was surfaced 5 prompts ago (< threshold 15), skip it."""
+        from keephive.nudge import _lifecycle_nudge, record_surfaced
+        from keephive.storage import hive_dir
+
+        # Create a stale fact
+        memory = hive_dir() / "memory.md"
+        memory.write_text("- FACT: old fact [verified:2020-01-01]\n")
+
+        # Record that "stale" was surfaced at count=5
+        record_surfaced("prompt", "stale", 5, "sess-test")
+
+        # At count=8, delta is 3 (< 15 threshold) — should skip stale, fall to priority 5
+        result = _lifecycle_nudge("prompt", "prompt", 8, "sess-test")
+        # Should NOT contain stale-facts message, should be the fallback
+        assert "unverified" not in result
+        assert "hive_recall" in result or "hive_remember" in result or "hive" in result
+
+    def test_lifecycle_nudge_allows_category_after_threshold(self, hive_env, monkeypatch):
+        """If stale category was surfaced 20 prompts ago (>= threshold 15), allow it."""
+        from keephive.nudge import _lifecycle_nudge, record_surfaced
+        from keephive.storage import hive_dir
+
+        # Create a stale fact
+        memory = hive_dir() / "memory.md"
+        memory.write_text("- FACT: old fact [verified:2020-01-01]\n")
+
+        # Record that "stale" was surfaced at count=1
+        record_surfaced("prompt", "stale", 1, "sess-test2")
+
+        # At count=20, delta is 19 (>= 15 threshold) — should fire stale nudge
+        result = _lifecycle_nudge("prompt", "prompt", 20, "sess-test2")
+        assert "unverified" in result
+
+    def test_fallback_never_suppressed(self, hive_env):
+        """Priority 5 fallback always fires even when all actionable cats were recently surfaced."""
+        from keephive.nudge import _lifecycle_nudge, record_surfaced
+
+        # Record all 4 actionable categories as recently surfaced (count=100, current=102)
+        for cat in ["todos", "stale", "pending", "logs"]:
+            record_surfaced("prompt", cat, 100, "sess-fallback")
+
+        # No stale facts, no todos, no pending — only priority 5 available
+        result = _lifecycle_nudge("prompt", "prompt", 102, "sess-fallback")
+        # Priority 5 always fires — should be a capture/recall reminder
+        assert result  # never empty
+        assert any(kw in result for kw in ["hive_recall", "hive_remember", "Working on"])

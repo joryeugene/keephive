@@ -58,7 +58,7 @@ def hook_stop(_args: list[str]) -> None:
 
         fire, count = should_nudge("stop", session_id)
         if fire:
-            nudge_text = get_stop_nudge(count)
+            nudge_text = get_stop_nudge(count, session_id=session_id)
             output = build_nudge_output(nudge_text, event_name="Stop")
             sys.stdout.write(output)
     except Exception as e:

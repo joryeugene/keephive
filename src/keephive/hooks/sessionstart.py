@@ -140,6 +140,66 @@ def _active_draft_hint() -> str:
     return f'slot {slot} · "{preview}" ({words} words)'
 
 
+def extract_style_hint(days: int = 7) -> str:
+    """Compute a one-line writing style hint from recent daily log entries.
+
+    Returns "[style: ~N chars/entry; dominant: CAT/CAT; active themes: x, y]"
+    or "" if insufficient data or any error.
+    """
+    import re
+    from collections import Counter
+    from datetime import timedelta
+    try:
+        from keephive.commands.wander import STOPWORDS
+    except ImportError:
+        STOPWORDS = frozenset()
+
+    try:
+        today = get_today()
+        cat_re = re.compile(
+            r"^- \[\d{2}:\d{2}:\d{2}\]\s*(FACT|DECISION|INSIGHT|TODO|CORRECTION):\s*(.*)"
+        )
+        lengths: list[int] = []
+        category_counts: Counter[str] = Counter()
+        word_counts: Counter[str] = Counter()
+
+        for days_ago in range(days):
+            day_str = (today - timedelta(days=days_ago)).isoformat()
+            df = daily_file(day_str)
+            if not df.exists():
+                continue
+            try:
+                content = safe_read_text(df)
+            except OSError:
+                continue
+            for line in content.splitlines():
+                m = cat_re.match(line)
+                if not m:
+                    continue
+                cat, text = m.group(1), m.group(2).strip()
+                category_counts[cat] += 1
+                lengths.append(len(text))
+                for word in re.findall(r"[a-z]{4,}", text.lower()):
+                    if word not in STOPWORDS:
+                        word_counts[word] += 1
+
+        if len(lengths) < 5:
+            return ""
+
+        avg_len = sum(lengths) // len(lengths)
+        top_cats = [cat for cat, _ in category_counts.most_common(2)]
+        cats_str = "/".join(top_cats) if top_cats else "mixed"
+        themes = [w for w, c in word_counts.most_common(10) if c >= 2][:3]
+
+        parts = [f"~{avg_len} chars/entry", f"dominant: {cats_str}"]
+        if themes:
+            parts.append(f"active themes: {', '.join(themes)}")
+        return f"[style: {'; '.join(parts)}]"
+
+    except Exception:
+        return ""
+
+
 def build_context(cwd: str, project_name: str) -> str:
     """Build the context string injected into Claude Code.
 
@@ -173,6 +233,11 @@ def build_context(cwd: str, project_name: str) -> str:
             parts.append("\n".join(lines[start_idx:]))
         else:
             parts.append(rules)
+
+    # 2b. Style hint (deterministic, never crashes)
+    style_hint = extract_style_hint()
+    if style_hint:
+        parts.append(style_hint)
 
     # 3. Stale fact warning (critical, always inject)
     stale = count_stale_facts()

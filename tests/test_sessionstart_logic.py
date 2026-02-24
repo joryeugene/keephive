@@ -501,3 +501,106 @@ class TestCrossProjectHint:
 
         result = _cross_project_hint("beta")
         assert "alpha (2 insights)" in result
+
+
+# ---- extract_style_hint ----
+
+
+class TestExtractStyleHint:
+    """extract_style_hint() computes a writing style hint from recent daily logs."""
+
+    def test_returns_empty_when_no_logs(self, hive_env):
+        """Returns '' when no daily log files exist."""
+        from keephive.hooks.sessionstart import extract_style_hint
+
+        result = extract_style_hint()
+        assert result == ""
+
+    def test_returns_empty_with_fewer_than_5_entries(self, hive_env):
+        """Returns '' with only 3 categorized entries (< 5 threshold)."""
+        make_daily(
+            hive_env,
+            days_ago=0,
+            entries=[
+                "- [10:00:00] FACT: keephive uses Python for implementation",
+                "- [10:01:00] DECISION: chose uv over pip for package management",
+                "- [10:02:00] INSIGHT: tests run faster with fixtures",
+            ],
+        )
+
+        from keephive.hooks.sessionstart import extract_style_hint
+
+        result = extract_style_hint()
+        assert result == ""
+
+    def test_returns_hint_with_sufficient_entries(self, hive_env):
+        """Returns a style hint string with 5+ categorized entries."""
+        make_daily(
+            hive_env,
+            days_ago=0,
+            entries=[
+                "- [10:00:00] FACT: keephive uses Python for implementation",
+                "- [10:01:00] DECISION: chose uv over pip for package management",
+                "- [10:02:00] INSIGHT: tests run faster with fixtures isolation",
+                "- [10:03:00] TODO: implement recency gate for nudge system",
+                "- [10:04:00] FACT: storage module handles all file operations",
+            ],
+        )
+
+        from keephive.hooks.sessionstart import extract_style_hint
+
+        result = extract_style_hint()
+        assert result.startswith("[style:")
+        assert "chars/entry" in result
+        assert "dominant:" in result
+
+    def test_dominant_category_reflects_actual_distribution(self, hive_env):
+        """DECISION-heavy logs produce 'DECISION' as dominant category."""
+        make_daily(
+            hive_env,
+            days_ago=0,
+            entries=[
+                "- [10:00:00] DECISION: chose Python for keephive implementation",
+                "- [10:01:00] DECISION: chose uv over pip for package management",
+                "- [10:02:00] DECISION: chose sqlite for local storage backend",
+                "- [10:03:00] DECISION: chose pydantic for data validation layer",
+                "- [10:04:00] FACT: storage module handles all file operations",
+            ],
+        )
+
+        from keephive.hooks.sessionstart import extract_style_hint
+
+        result = extract_style_hint()
+        assert "DECISION" in result
+
+    def test_never_crashes_on_malformed_log(self, hive_env):
+        """Returns '' (not an exception) when daily file contains binary garbage."""
+        from keephive.clock import get_today
+        from keephive.storage import daily_file
+
+        today = get_today()
+        df = daily_file(today.isoformat())
+        df.parent.mkdir(parents=True, exist_ok=True)
+        df.write_bytes(b"\xff\xfe\x00\x01 garbage binary data \x80\x90")
+
+        from keephive.hooks.sessionstart import extract_style_hint
+
+        result = extract_style_hint()
+        assert isinstance(result, str)  # never raises
+
+    def test_avg_length_appears_in_output(self, hive_env):
+        """Average entry length is computed and appears in the hint."""
+        # Create 5 entries each ~50 chars of text
+        entries = [
+            "- [10:00:00] FACT: " + ("x" * 50),
+            "- [10:01:00] FACT: " + ("y" * 50),
+            "- [10:02:00] FACT: " + ("z" * 50),
+            "- [10:03:00] FACT: " + ("a" * 50),
+            "- [10:04:00] FACT: " + ("b" * 50),
+        ]
+        make_daily(hive_env, days_ago=0, entries=entries)
+
+        from keephive.hooks.sessionstart import extract_style_hint
+
+        result = extract_style_hint()
+        assert "~50 chars/entry" in result

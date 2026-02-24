@@ -98,7 +98,7 @@ def hook_userpromptsubmit(args: list[str]) -> None:
 
         fire, count = should_nudge("prompt", session_id)
         if fire:
-            nudge_text = get_prompt_nudge(count)
+            nudge_text = get_prompt_nudge(count, session_id=session_id)
             output = build_nudge_output(nudge_text, event_name="UserPromptSubmit")
             sys.stdout.write(output)
             sys.stdout.flush()

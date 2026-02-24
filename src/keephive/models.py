@@ -267,3 +267,20 @@ class WanderDocument(BaseModel):
         default=False,
         description="True if web search was used during this wander",
     )
+
+
+# ---- SubagentStop ----
+
+
+class SubagentExtractionResponse(BaseModel):
+    captured: str = Field(
+        default="",
+        description=(
+            "One sentence capturing the key decision, finding, or output. "
+            "Empty string if nothing is worth surfacing."
+        ),
+    )
+    decision: str = Field(
+        default="",
+        description="The most important choice made. Empty string if none.",
+    )

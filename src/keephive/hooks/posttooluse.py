@@ -52,7 +52,7 @@ def hook_posttooluse(_args: list[str]) -> None:
 
         fire, count = should_nudge("tool", session_id)
         if fire:
-            nudge_text = get_tool_nudge(count)
+            nudge_text = get_tool_nudge(count, session_id=session_id)
             output = build_nudge_output(nudge_text, event_name="PostToolUse")
             sys.stdout.write(output)
     except Exception as e:

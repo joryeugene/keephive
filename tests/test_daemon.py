@@ -701,3 +701,102 @@ class TestTaskReturnValues:
         log = daily_file().read_text()
         assert "standup draft" in log, "Daily log must contain standup draft header"
         assert "Fixed daemon return values" in log, "Daily log must contain standup content"
+
+
+class TestVoiceDisciplineConstant:
+    """_VOICE_DISCIPLINE constant is defined and injected into all daemon prompts."""
+
+    def test_constant_exists_and_is_nonempty(self):
+        """_VOICE_DISCIPLINE is importable and non-empty."""
+        from keephive.commands.daemon import _VOICE_DISCIPLINE
+
+        assert _VOICE_DISCIPLINE
+        assert len(_VOICE_DISCIPLINE.strip()) > 20
+
+    def test_constant_contains_no_opener_constraint(self):
+        """Constant includes the opener constraint."""
+        from keephive.commands.daemon import _VOICE_DISCIPLINE
+
+        assert "Here is" in _VOICE_DISCIPLINE
+
+    def test_constant_injected_in_morning_briefing(self, hive_env, monkeypatch):
+        """_VOICE_DISCIPLINE text appears in the morning_briefing prompt."""
+        from keephive.commands.daemon import _VOICE_DISCIPLINE, _task_morning_briefing
+
+        captured_prompts = []
+
+        def fake_pipe(prompt, *args, **kwargs):
+            captured_prompts.append(prompt)
+            return None
+
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", fake_pipe)
+        _task_morning_briefing()
+
+        assert captured_prompts, "Expected run_claude_pipe to be called"
+        assert _VOICE_DISCIPLINE.strip() in captured_prompts[0]
+
+    def test_constant_injected_in_stale_check(self, hive_env, monkeypatch):
+        """_VOICE_DISCIPLINE text appears in the stale_check prompt."""
+        from keephive.commands.daemon import _VOICE_DISCIPLINE, _task_stale_check
+
+        captured_prompts = []
+
+        def fake_pipe(prompt, *args, **kwargs):
+            captured_prompts.append(prompt)
+            return None
+
+        # Create memory.md so stale_check doesn't return early
+        memory_path = hive_env / "memory.md"
+        memory_path.write_text("- FACT: test fact [verified:2020-01-01]\n")
+
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", fake_pipe)
+        _task_stale_check()
+
+        assert captured_prompts, "Expected run_claude_pipe to be called"
+        assert _VOICE_DISCIPLINE.strip() in captured_prompts[0]
+
+    def test_constant_injected_in_soul_update(self, hive_env, monkeypatch):
+        """_VOICE_DISCIPLINE text appears in the soul_update prompt."""
+        from keephive.commands.daemon import _VOICE_DISCIPLINE, _task_soul_update
+
+        captured_prompts = []
+
+        def fake_pipe(prompt, *args, **kwargs):
+            captured_prompts.append(prompt)
+            return None
+
+        # Create today's log so soul_update doesn't return early
+        from keephive.clock import get_today
+        from keephive.storage import daily_file
+
+        today = get_today()
+        df = daily_file(today.isoformat())
+        df.parent.mkdir(parents=True, exist_ok=True)
+        df.write_text("- [10:00:00] FACT: test fact today\n" * 5)
+
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", fake_pipe)
+        _task_soul_update()
+
+        assert captured_prompts, "Expected run_claude_pipe to be called"
+        assert _VOICE_DISCIPLINE.strip() in captured_prompts[0]
+
+    def test_constant_injected_in_wander(self, hive_env, monkeypatch):
+        """_VOICE_DISCIPLINE text appears in the wander prompt."""
+        from keephive.commands.daemon import _VOICE_DISCIPLINE, _task_wander
+        from keephive.commands.wander import select_wander_seed
+
+        captured_prompts = []
+
+        def fake_pipe(prompt, *args, **kwargs):
+            captured_prompts.append(prompt)
+            return None
+
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", fake_pipe)
+        monkeypatch.setattr(
+            "keephive.commands.wander.select_wander_seed",
+            lambda *a, **kw: ("test seed", "user-queued"),
+        )
+        _task_wander()
+
+        assert captured_prompts, "Expected run_claude_pipe to be called"
+        assert _VOICE_DISCIPLINE.strip() in captured_prompts[0]

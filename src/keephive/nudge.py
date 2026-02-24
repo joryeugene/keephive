@@ -13,6 +13,8 @@ import json
 import os
 from pathlib import Path
 
+_RECENCY_THRESHOLD = 15
+
 
 def _counter_path(name: str) -> Path:
     """Path to counter file: ~/.keephive/hive/.{name}-counter (profile aware)."""
@@ -43,6 +45,36 @@ def write_counter(name: str, count: int, session_id: str) -> None:
     path = _counter_path(name)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"count": count, "session_id": session_id}))
+
+
+def read_recency(name: str, session_id: str) -> dict[str, int]:
+    """Return last_surfaced dict, scoped to current session. Empty dict on any error or session change."""
+    path = _counter_path(name)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+        if data.get("session_id", "") != session_id:
+            return {}
+        return data.get("last_surfaced", {})
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def record_surfaced(name: str, category: str, count: int, session_id: str) -> None:
+    """Write last_surfaced[category] = count into counter file. No-op on error."""
+    path = _counter_path(name)
+    try:
+        data = json.loads(path.read_text()) if path.exists() else {}
+        if data.get("session_id", "") != session_id:
+            data = {"count": data.get("count", 0), "session_id": session_id}
+        ls = data.get("last_surfaced", {})
+        ls[category] = count
+        data["last_surfaced"] = ls
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data))
+    except (json.JSONDecodeError, OSError):
+        pass
 
 
 def should_nudge(name: str, session_id: str) -> tuple[bool, int]:
@@ -102,7 +134,12 @@ def _unreflected_log_count() -> int:
 # ---- Lifecycle-aware nudge state machine ----
 
 
-def _lifecycle_nudge(context: str = "prompt") -> str:
+def _lifecycle_nudge(
+    context: str = "prompt",
+    counter_name: str = "prompt",
+    count: int = 0,
+    session_id: str = "",
+) -> str:
     """Return the most actionable nudge based on current hive state.
 
     Priority order (highest first):
@@ -110,37 +147,59 @@ def _lifecycle_nudge(context: str = "prompt") -> str:
     2. Stale facts needing verification
     3. Pending facts needing review
     4. Daily logs accumulated (7+) needing reflection
-    5. Context-specific capture/recall reminder
+    5. Context-specific capture/recall reminder (NEVER gated)
     """
     try:
         from keephive.storage import count_stale_facts, open_todos
 
+        recency = read_recency(counter_name, session_id)
+
         # Priority 1: Specific TODO nudge
         todos = open_todos()
         if todos:
-            _, _, text = todos[0]
-            short = text[:60] + "..." if len(text) > 60 else text
-            return f'Open TODO: "{short}" - resolved? `hive td`'
+            cat = "todos"
+            last = recency.get(cat, 0)
+            if last == 0 or count - last >= _RECENCY_THRESHOLD:
+                _, _, text = todos[0]
+                short = text[:60] + "..." if len(text) > 60 else text
+                result = f'Open TODO: "{short}" - resolved? `hive td`'
+                record_surfaced(counter_name, cat, count, session_id)
+                return result
 
         # Priority 2: Stale facts
         stale = count_stale_facts()
         if stale > 0:
-            return f"{stale} fact(s) unverified 30+ days. Run: hive v"
+            cat = "stale"
+            last = recency.get(cat, 0)
+            if last == 0 or count - last >= _RECENCY_THRESHOLD:
+                result = f"{stale} fact(s) unverified 30+ days. Run: hive v"
+                record_surfaced(counter_name, cat, count, session_id)
+                return result
 
         # Priority 3: Pending facts
         pending = _pending_facts_count()
         if pending > 0:
-            return f"{pending} fact(s) pending review. Run: hive mem review"
+            cat = "pending"
+            last = recency.get(cat, 0)
+            if last == 0 or count - last >= _RECENCY_THRESHOLD:
+                result = f"{pending} fact(s) pending review. Run: hive mem review"
+                record_surfaced(counter_name, cat, count, session_id)
+                return result
 
         # Priority 4: Daily logs need reflection
         log_count = _unreflected_log_count()
         if log_count >= 7:
-            return f"{log_count} daily logs since last reflect. Run: hive rf"
+            cat = "logs"
+            last = recency.get(cat, 0)
+            if last == 0 or count - last >= _RECENCY_THRESHOLD:
+                result = f"{log_count} daily logs since last reflect. Run: hive rf"
+                record_surfaced(counter_name, cat, count, session_id)
+                return result
 
     except Exception:
         pass
 
-    # Priority 5: Context-specific capture/recall
+    # Priority 5: Context-specific capture/recall (NEVER gated)
     if context == "tool":
         return "Made changes worth remembering? hive_remember('DECISION: chose X because Y')"
     elif context == "stop":
@@ -149,19 +208,19 @@ def _lifecycle_nudge(context: str = "prompt") -> str:
         return "Working on something new? hive_recall(topic) for previous context."
 
 
-def get_prompt_nudge(count: int) -> str:
+def get_prompt_nudge(count: int, session_id: str = "") -> str:
     """Get the nudge text for a UserPromptSubmit nudge."""
-    return _lifecycle_nudge("prompt")
+    return _lifecycle_nudge("prompt", "prompt", count, session_id)
 
 
-def get_tool_nudge(count: int) -> str:
+def get_tool_nudge(count: int, session_id: str = "") -> str:
     """Get the nudge text for a PostToolUse nudge."""
-    return _lifecycle_nudge("tool")
+    return _lifecycle_nudge("tool", "tool", count, session_id)
 
 
-def get_stop_nudge(count: int) -> str:
+def get_stop_nudge(count: int, session_id: str = "") -> str:
     """Get the nudge text for a Stop hook nudge."""
-    return _lifecycle_nudge("stop")
+    return _lifecycle_nudge("stop", "stop", count, session_id)
 
 
 def _stop_nudge_interval() -> int:

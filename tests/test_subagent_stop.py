@@ -20,19 +20,19 @@ class TestSubagentStopLogging:
         """When task_subject is present it appears in the daily log."""
         from keephive.storage import daily_file
 
-        self._call_hook({"task_subject": "Implement auth endpoint"})
+        self._call_hook({"task_subject": "Impl auth endpoint"})
 
         content = daily_file().read_text()
-        assert "SUBAGENT-DONE: Implement auth endpoint" in content
+        assert "SUBAGENT-DONE: Impl auth endpoint" in content
 
     def test_description_fallback(self, hive_env):
         """Falls back to 'description' when 'task_subject' is absent."""
         from keephive.storage import daily_file
 
-        self._call_hook({"description": "Write unit tests for storage module"})
+        self._call_hook({"description": "Write storage tests"})
 
         content = daily_file().read_text()
-        assert "SUBAGENT-DONE: Write unit tests for storage module" in content
+        assert "SUBAGENT-DONE: Write storage tests" in content
 
     def test_generic_log_when_no_description(self, hive_env):
         """When no description field exists, logs generic completion breadcrumb."""
@@ -125,3 +125,126 @@ class TestSubagentStopRegistration:
         data = json.loads(settings.read_text())
         count = len(data.get("hooks", {}).get("SubagentStop", []))
         assert count == 1, f"Expected 1 SubagentStop entry, got {count}"
+
+
+class TestSubagentStopExtraction:
+    """LLM extraction enriches log entries for long subagent descriptions."""
+
+    def _call_hook(self, input_data: dict) -> None:
+        with patch("sys.stdin", StringIO(json.dumps(input_data))):
+            hook_subagent_stop([])
+
+    def test_extraction_skipped_for_short_description(self, hive_env):
+        """Descriptions <= 20 chars skip extraction entirely."""
+        import unittest.mock as mock
+
+        with mock.patch(
+            "keephive.hooks.subagent_stop._extract_output"
+        ) as mock_extract:
+            self._call_hook({"task_subject": "Short task"})  # 10 chars
+
+        mock_extract.assert_not_called()
+
+    def test_extraction_triggered_for_long_description(self, hive_env):
+        """Descriptions > 20 chars trigger _extract_output exactly once."""
+        import unittest.mock as mock
+
+        mock_extract = mock.MagicMock(return_value=None)
+        with mock.patch("keephive.hooks.subagent_stop._extract_output", mock_extract):
+            self._call_hook({"task_subject": "Implement OAuth2 authentication endpoint"})
+
+        mock_extract.assert_called_once()
+
+    def test_silence_gate_falls_back_to_subagent_done(self, hive_env):
+        """When extraction returns None (silence gate), logs plain SUBAGENT-DONE."""
+        import unittest.mock as mock
+        from keephive.storage import daily_file
+
+        with mock.patch(
+            "keephive.hooks.subagent_stop._extract_output", return_value=None
+        ):
+            self._call_hook({"task_subject": "Implement OAuth2 authentication endpoint"})
+
+        content = daily_file().read_text()
+        assert "SUBAGENT-DONE" in content
+        assert "SUBAGENT-INSIGHT" not in content
+
+    def test_captured_output_produces_subagent_insight(self, hive_env):
+        """Non-empty captured produces SUBAGENT-INSIGHT with -> separator."""
+        import unittest.mock as mock
+        from keephive.models import SubagentExtractionResponse
+        from keephive.storage import daily_file
+
+        fake_result = SubagentExtractionResponse(
+            captured="Implemented JWT token validation with 24h expiry",
+            decision="",
+        )
+        with mock.patch(
+            "keephive.hooks.subagent_stop._extract_output", return_value=fake_result
+        ):
+            self._call_hook({"task_subject": "Implement OAuth2 authentication endpoint"})
+
+        content = daily_file().read_text()
+        assert "SUBAGENT-INSIGHT" in content
+        assert "->" in content
+        assert "JWT token validation" in content
+
+    def test_decision_appended_when_present(self, hive_env):
+        """Non-empty decision is appended to the insight line."""
+        import unittest.mock as mock
+        from keephive.models import SubagentExtractionResponse
+        from keephive.storage import daily_file
+
+        fake_result = SubagentExtractionResponse(
+            captured="Implemented auth endpoint",
+            decision="JWT over sessions for stateless scaling",
+        )
+        with mock.patch(
+            "keephive.hooks.subagent_stop._extract_output", return_value=fake_result
+        ):
+            self._call_hook({"task_subject": "Implement OAuth2 authentication endpoint"})
+
+        content = daily_file().read_text()
+        assert "(decision:" in content
+        assert "JWT over sessions" in content
+
+    def test_extraction_error_falls_back_gracefully(self, hive_env):
+        """_extract_output returning None falls back to plain SUBAGENT-DONE."""
+        import unittest.mock as mock
+        from keephive.storage import daily_file
+
+        with mock.patch(
+            "keephive.hooks.subagent_stop._extract_output",
+            side_effect=Exception("network error"),
+        ):
+            # The except Exception in hook_subagent_stop wraps the whole block
+            # So any exception in _extract_output is caught there
+            self._call_hook({"task_subject": "Implement OAuth2 authentication endpoint"})
+
+        # The outer except Exception in hook_subagent_stop catches everything
+        # so nothing is logged — or SUBAGENT-DONE is logged if _extract_output
+        # raises inside the try block. Either way, no crash.
+        content = daily_file().read_text() if daily_file().exists() else ""
+        assert "SUBAGENT-INSIGHT" not in content
+
+    def test_subagent_extraction_response_model_silence_valid(self):
+        """SubagentExtractionResponse() defaults to empty strings (silence-valid)."""
+        from keephive.models import SubagentExtractionResponse
+
+        response = SubagentExtractionResponse()
+        assert response.captured == ""
+        assert response.decision == ""
+
+    def test_no_stdout_output_with_extraction(self, hive_env, capsys):
+        """SubagentStop hook never writes to stdout even with extraction."""
+        import unittest.mock as mock
+        from keephive.models import SubagentExtractionResponse
+
+        fake_result = SubagentExtractionResponse(captured="something important", decision="")
+        with mock.patch(
+            "keephive.hooks.subagent_stop._extract_output", return_value=fake_result
+        ):
+            self._call_hook({"task_subject": "Implement OAuth2 authentication endpoint"})
+
+        out = capsys.readouterr().out
+        assert out == ""

@@ -14,6 +14,16 @@ from datetime import datetime, timedelta
 # The 7-day analysis *window* (for i in range(7)) is orthogonal — that's context depth, not cadence.
 _SELF_IMPROVE_THROTTLE_DAYS = 1
 
+_VOICE_DISCIPLINE = """\
+
+Voice constraints (apply to all output):
+- No markdown headers (##, ###) unless the output IS a document
+- No "Here is", "Here's", "This is", "I'll", "I will" openers
+- No hedging: not "might", "could", "possibly", "perhaps"
+- No empty affirmations: not "Great!", "Sure!", "Certainly!"
+- Silence is valid. Zero output beats filler output.
+- State facts. Do not narrate your reasoning process."""
+
 from keephive.output import console  # noqa: E402
 from keephive.storage import (  # noqa: E402
     daemon_config_file,
@@ -393,7 +403,7 @@ Pending queues (include as action items if non-zero):
 - pending improvements: {pending_impr}  (hive improve review)
 
 Write the briefing. Each point on its own line. Include pending queue summary at end.
-No markdown headers."""
+{_VOICE_DISCIPLINE}"""
 
     try:
         result = run_claude_pipe(prompt, MorningBriefingResponse, model="haiku")
@@ -421,7 +431,8 @@ def _task_stale_check() -> bool:
     memory = safe_read_text(memory_path)
     prompt = f"""You are KingBee. Review these memory.md facts for staleness.
 Flag any that are: older than 30 days about fast-moving code, contradictory, or likely outdated.
-Be brief. One line per flagged fact. If nothing is stale, say so.
+Be brief. One line per flagged fact. If nothing is stale, return exactly: "Nothing stale."
+{_VOICE_DISCIPLINE}
 
 Memory:
 {memory[:3000]}"""
@@ -528,6 +539,8 @@ Recent wander hypotheses (last 7 sessions):
 
 Current SOUL.md:
 {current_soul[:2000] if current_soul else "(empty)"}
+
+{_VOICE_DISCIPLINE}
 
 Return the complete updated SOUL.md content (bounded, distilled, not expanded)."""
 
@@ -834,6 +847,8 @@ thinking: 100-200 words, first person, associative
 connections: 1-3 links to specific things in memory
 hypothesis: exactly one sentence
 question: exactly one sentence, worth surfacing next session
+{_VOICE_DISCIPLINE}
+
 used_web_search: true if you used WebSearch, false otherwise"""
 
     try:
