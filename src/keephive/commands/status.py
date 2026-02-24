@@ -412,8 +412,13 @@ def _render_status() -> None:
         sel = llm_state.get("selected", "?")
         src = llm_state.get("source", "auto")
         reason = llm_state.get("reason", "")
-        llm_table.add_row("[dim]selected[/dim]", f"{sel} [{src}] {reason}")
+        llm_table.add_row("[dim]selected[/dim]", f"{sel} ({src}) {reason}")
+        if llm_state.get("status") == "error":
+            err = llm_state.get("error", "unknown error")
+            llm_table.add_row("[warn]last error[/warn]", err)
     for backend, available, reason in backend_rows:
+        if backend.name == "none":
+            continue
         status = "[ok]\u25cf[/ok]" if available else "[dim]\u25cb[/dim]"
         suffix = " [dim](tools)[/dim]" if backend.supports_tools else ""
         llm_table.add_row(f"{status} {backend.name}{suffix}", reason or "")
@@ -647,10 +652,12 @@ def cmd_status(args: list[str]) -> None:
         hooks_ok, mcp_ok, data_ok = health_summary()
         anthropic_mem = check_anthropic_memory()
 
+        _llm_state = get_backend_state()
         llm_summary = {
             "settings": get_setting("llm_backend") or "auto",
             "env_override": os.environ.get("HIVE_LLM_BACKEND"),
-            "state": get_backend_state(),
+            "state": _llm_state,
+            "last_error": _llm_state.get("error") if _llm_state and _llm_state.get("status") == "error" else None,
             "backends": [
                 {
                     "name": backend.name,
@@ -660,6 +667,7 @@ def cmd_status(args: list[str]) -> None:
                     "supports_structured": backend.supports_structured,
                 }
                 for backend, detected, reason in ((b, *b.detect()) for b in available_backends())
+                if backend.name != "none"
             ],
         }
 

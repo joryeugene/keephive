@@ -24,7 +24,7 @@ def _make_fake(called: list, label: str):
     return _fn
 
 
-def test_routing_cli_backend_first(monkeypatch):
+def test_routing_cli_backend_first(monkeypatch, hive_env):
     """anthropic_cli (priority 10) is always tried first when available."""
     import keephive.llm.anthropic_cli as cli_mod
 
@@ -36,7 +36,7 @@ def test_routing_cli_backend_first(monkeypatch):
     assert called == ["cli"]
 
 
-def test_routing_api_fallback_when_cli_unavailable(monkeypatch):
+def test_routing_api_fallback_when_cli_unavailable(monkeypatch, hive_env):
     """When CLI unavailable, anthropic_api (priority 20) is used."""
     import keephive.llm.anthropic_api as api_mod
     import keephive.llm.anthropic_cli as cli_mod
@@ -50,7 +50,7 @@ def test_routing_api_fallback_when_cli_unavailable(monkeypatch):
     assert called == ["api"]
 
 
-def test_routing_claudecode_does_not_affect_priority(monkeypatch):
+def test_routing_claudecode_does_not_affect_priority(monkeypatch, hive_env):
     """CLAUDECODE env var no longer changes routing; CLI is still tried first."""
     import keephive.llm.anthropic_cli as cli_mod
 
@@ -65,7 +65,7 @@ def test_routing_claudecode_does_not_affect_priority(monkeypatch):
     assert called == ["cli"]
 
 
-def test_routing_no_available_backend_raises(monkeypatch):
+def test_routing_no_available_backend_raises(monkeypatch, hive_env):
     """When all real backends fail, none backend raises ClaudePipeError."""
     import keephive.llm.anthropic_api as api_mod
     import keephive.llm.anthropic_cli as cli_mod
@@ -81,7 +81,7 @@ def test_routing_no_available_backend_raises(monkeypatch):
         run_claude_pipe("test", VerifyResponse)
 
 
-def test_routing_tools_use_cli_backend(monkeypatch):
+def test_routing_tools_use_cli_backend(monkeypatch, hive_env):
     """Tool requests are routed to CLI backend (supports_tools=True, priority 10)."""
     import keephive.llm.anthropic_cli as cli_mod
 

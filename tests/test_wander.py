@@ -31,6 +31,17 @@ def _write_todo(hive_env: Path, content: str) -> None:
     (hive_env / "TODO.md").write_text(content, encoding="utf-8")
 
 
+def _write_daily_with_todo(hive_env: Path, days_ago: int, todo_text: str) -> None:
+    """Write a daily log containing a hive-tracked TODO entry (real format)."""
+    d = date(2026, 2, 23) - timedelta(days=days_ago)
+    daily_dir = hive_env / "daily"
+    daily_dir.mkdir(exist_ok=True)
+    (daily_dir / f"{d.isoformat()}.md").write_text(
+        f"# Log {d.isoformat()}\n\n- [10:00:00] TODO: {todo_text}\n",
+        encoding="utf-8",
+    )
+
+
 def _write_memory(hive_env: Path, content: str) -> None:
     (hive_env / "working" / "memory.md").write_text(content, encoding="utf-8")
 
@@ -89,10 +100,10 @@ class TestSeedSelection:
         assert len(seed) >= 4
 
     def test_stale_todo_fallback(self, hive_env):
-        """A TODO older than 7 days is returned when no other seeds exist."""
+        """A TODO from 8 days ago in daily logs is returned as stale seed."""
         _write_memory(hive_env, "# Working Memory\n")
-        # No daily logs → no cross-pollination, no recurring-topic
-        _write_todo(hive_env, "- [ ] [8d 10:00] Refactor authentication module\n")
+        # Single daily log with a TODO — no recurring-topic (only 1 log), no cross-pollination
+        _write_daily_with_todo(hive_env, 8, "Refactor authentication module")
 
         from keephive.commands.wander import select_wander_seed
 
@@ -142,11 +153,11 @@ class TestSeedSelection:
         _, source = select_wander_seed(date(2026, 2, 23))
         assert source == "user-queued"
 
-    def test_stale_todo_requires_age_marker(self, hive_env):
-        """TODOs without an age marker are not returned (we can't confirm they're stale)."""
+    def test_todo_md_file_not_used_as_seed_source(self, hive_env):
+        """TODOs written only to TODO.md (outside hive tracking) are not returned."""
         _write_memory(hive_env, "# Working Memory\n")
-        # TODO with no age marker
-        _write_todo(hive_env, "- [ ] Some task without an age marker\n")
+        # Write a manual TODO.md — open_todos() reads daily logs, not TODO.md directly
+        _write_todo(hive_env, "- [ ] Some manually-managed task\n")
 
         from keephive.commands.wander import select_wander_seed
 
@@ -154,9 +165,9 @@ class TestSeedSelection:
         assert source != "stale-todo"
 
     def test_todo_not_returned_when_younger_than_7_days(self, hive_env):
-        """TODOs with [3d ...] age are not stale enough to seed wander."""
+        """A TODO from 3 days ago in daily logs is not stale enough to seed wander."""
         _write_memory(hive_env, "# Working Memory\n")
-        _write_todo(hive_env, "- [ ] [3d 08:00] Recent task that should not trigger\n")
+        _write_daily_with_todo(hive_env, 3, "Recent task that should not trigger")
 
         from keephive.commands.wander import select_wander_seed
 

@@ -3906,6 +3906,8 @@ def _get_backend_overview() -> dict:
     state = get_backend_state()
     items: list[dict] = []
     for backend in available_backends():
+        if backend.name == "none":
+            continue
         available, reason = backend.detect()
         items.append(
             {
@@ -5213,7 +5215,7 @@ def _render_wander_stats_panel(data: dict) -> str:
         else ""
     )
     hints = _cmd_hints(
-        ["hive wander seed &quot;your topic&quot;", "hive daemon enable wander"]
+        ['hive wander seed "your topic"', "hive daemon enable wander"]
     )
 
     return (

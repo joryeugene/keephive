@@ -759,8 +759,10 @@ def list_wander_docs(limit: int = 20) -> list[dict]:
     if not d.exists():
         return []
 
+    _wander_name_re = re.compile(r"^\d{8}-\d{6}-.+\.md$")
     results: list[dict] = []
-    for path in sorted(d.glob("*.md"), reverse=True)[:limit]:
+    candidates = [p for p in sorted(d.glob("*.md"), reverse=True) if _wander_name_re.match(p.name)]
+    for path in candidates[:limit]:
         text = path.read_text(encoding="utf-8", errors="replace")
         lines = text.splitlines()
 

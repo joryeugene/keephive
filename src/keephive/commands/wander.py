@@ -31,7 +31,7 @@ def select_wander_seed(today: date) -> tuple[str, str] | tuple[None, None]:
     """
     from keephive.storage import (
         daily_dir,
-        hive_dir,
+        open_todos,
         pop_wander_seed,
         read_memory,
     )
@@ -89,26 +89,16 @@ def select_wander_seed(today: date) -> tuple[str, str] | tuple[None, None]:
             candidates.sort()
             return rng.choice(candidates), "recurring-topic"
 
-    # 4. Stale TODO — oldest open TODO older than 7 days (detected by age marker)
-    todo_path = hive_dir() / "TODO.md"
-    if todo_path.exists():
-        try:
-            text = todo_path.read_text(encoding="utf-8", errors="replace")
-            for line in text.splitlines():
-                if not line.strip().startswith("- [ ]"):
-                    continue
-                # Look for age marker like [3d 14:22] or similar timestamp info
-                # Use the line itself as seed since we can't parse creation date easily
-                content = re.sub(r"\[.*?\]", "", line).lstrip("- [ ]").strip()
-                if content and len(content) > 5:
-                    # Simple heuristic: if it has a timestamp marker suggesting age
-                    age_match = re.search(r"\[(\d+)d[\s\]]", line)
-                    if age_match:
-                        days_old = int(age_match.group(1))
-                        if days_old >= 7:
-                            return content[:120], "stale-todo"
-        except OSError:
-            pass
+    # 4. Stale TODO — oldest open TODO older than 7 days (from daily log creation dates)
+    todos = open_todos()  # returns [(date_str "YYYY-MM-DD", time_str, text)]
+    if todos:
+        stale = [
+            (date_str, text)
+            for date_str, _, text in sorted(todos)
+            if text and (today - date.fromisoformat(date_str)).days >= 7
+        ]
+        if stale:
+            return stale[0][1][:120], "stale-todo"
 
     return None, None
 

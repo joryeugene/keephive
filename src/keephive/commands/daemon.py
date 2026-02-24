@@ -827,6 +827,7 @@ used_web_search: true if you used WebSearch, false otherwise"""
             model="haiku",
             tools=["WebSearch"],
             max_turns=3,
+            timeout=300,
             allowed_dirs=[str(hive_dir())],
             restrict_mcp=False,
         )
