@@ -287,8 +287,12 @@ class TestParseClaudeResponse:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("CLAUDECODE", raising=False)
 
-        # Ensure anthropic_cli backend is selected even when claude CLI is not on PATH
-        monkeypatch.setattr("keephive.llm.anthropic_cli._detect", lambda: (True, "mocked for test"))
+        # Ensure anthropic_cli backend is selected even when claude CLI is not on PATH.
+        # Must patch backend.detect (the slot on the registered instance) not _detect
+        # (the module-level function reference captured at import time).
+        import keephive.llm.anthropic_cli as _cli
+
+        monkeypatch.setattr(_cli.backend, "detect", lambda: (True, "mocked for test"))
 
         def fake_run(*_a, **_kw):
             raise subprocess.TimeoutExpired(cmd="claude", timeout=30)
@@ -320,8 +324,12 @@ class TestParseClaudeResponse:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
-        # Ensure anthropic_cli backend is selected even when claude CLI is not on PATH
-        monkeypatch.setattr("keephive.llm.anthropic_cli._detect", lambda: (True, "mocked for test"))
+        # Ensure anthropic_cli backend is selected even when claude CLI is not on PATH.
+        # Must patch backend.detect (the slot on the registered instance) not _detect
+        # (the module-level function reference captured at import time).
+        import keephive.llm.anthropic_cli as _cli
+
+        monkeypatch.setattr(_cli.backend, "detect", lambda: (True, "mocked for test"))
 
         def fake_run(*_a, **_kw):
             return subprocess.CompletedProcess(
