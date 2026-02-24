@@ -25,6 +25,17 @@ from keephive.storage import (  # noqa: E402
     write_daemon_state,
 )
 
+# Default config entries for tasks that may not exist in older daemon.json files.
+# Used by _enable_task to auto-register a task on first enable.
+_TASK_DEFAULTS: dict[str, dict] = {
+    "morning-briefing": {"enabled": False, "time": "07:00"},
+    "stale-check": {"enabled": False, "day": "monday", "time": "08:00"},
+    "standup-draft": {"enabled": False, "time": "17:00"},
+    "soul-update": {"enabled": False},
+    "self-improve": {"enabled": False},
+    "wander": {"enabled": False, "time": "14:00"},
+}
+
 # ── CLI entry point ──────────────────────────────────────────────────
 
 
@@ -189,11 +200,14 @@ def _enable_task(task_name: str, enabled: bool = True) -> None:
         console.print(f"[err]Usage: hive daemon {verb} <task-name>[/err]")
         return
     config = read_daemon_config()
-    tasks = config.get("tasks", {})
+    tasks = config.setdefault("tasks", {})
     if task_name not in tasks:
-        console.print(f"[err]Unknown task: {task_name}[/err]")
-        console.print(f"  Known tasks: {', '.join(tasks)}")
-        return
+        if task_name not in _TASK_DEFAULTS:
+            console.print(f"[err]Unknown task: {task_name}[/err]")
+            console.print(f"  Known tasks: {', '.join(sorted(_TASK_DEFAULTS))}")
+            return
+        # Auto-register task with default config (handles upgrade from older daemon.json)
+        tasks[task_name] = dict(_TASK_DEFAULTS[task_name])
     tasks[task_name]["enabled"] = enabled
     daemon_config_file().write_text(json.dumps(config, indent=2))
     verb = "enabled" if enabled else "disabled"
