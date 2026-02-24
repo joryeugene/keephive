@@ -37,6 +37,8 @@ def run_claude_pipe(
     timeout: int = 120,
     verbose: bool = False,
     backend_override: str | None = None,
+    allowed_dirs: list[str] | None = None,
+    restrict_mcp: bool = True,
 ) -> T:
     """Proxy to the backend-agnostic LLM router.
 
@@ -54,6 +56,8 @@ def run_claude_pipe(
         timeout=timeout,
         verbose=verbose,
         backend_override=backend_override,
+        allowed_dirs=allowed_dirs,
+        restrict_mcp=restrict_mcp,
     )
 
 

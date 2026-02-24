@@ -70,6 +70,7 @@ Tiers from most stable (top) to most ephemeral (bottom).
 | Friction patterns from /insights | Pending rules | `hive rule learn` |
 | Rich structured doc for a topic | Knowledge guide | `hive ke <name>` |
 | Agent needs background maintenance | KingBee daemon   | `hive daemon start`    |
+| Agent needs creative/exploratory time | Wander mode   | `hive daemon enable wander` |
 | Checking production system health  | Health check     | `hive checkup`         |
 | Review KingBee's proposed changes  | Improve queue    | `hive improve review`  |
 | Universal style/tool preference | Global CLAUDE.md | Edit manually |

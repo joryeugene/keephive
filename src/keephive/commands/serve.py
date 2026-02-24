@@ -1281,7 +1281,7 @@ _JS = """
   });
 
   // --- Keyboard navigation ---
-  var _VIEW_KEYS={h:'/',d:'/dev',b:'/brain',k:'/know',s:'/stats',c:'/settings'};
+  var _VIEW_KEYS={h:'/',d:'/dev',b:'/brain',k:'/know',s:'/stats',c:'/settings',p:'/play'};
 
   function _clearG(){
     _gPending=false;
@@ -5055,6 +5055,180 @@ def _render_transfer_panel(data: dict) -> str:
     )
 
 
+# ---- Wander panel data + renderers ----
+
+
+def _get_wander_data() -> dict:
+    try:
+        from keephive.storage import get_wander_seeds, list_wander_docs
+
+        docs = list_wander_docs(limit=20)
+        seeds = get_wander_seeds()
+        return {"docs": docs, "seeds": seeds}
+    except Exception:
+        return {"docs": [], "seeds": []}
+
+
+def _render_wander_list_panel(data: dict) -> str:
+    docs = data.get("docs", [])
+    if not docs:
+        empty = (
+            '<div class="empty">No wander docs yet.<br>'
+            'Run <code>hive daemon enable wander</code> to start.</div>'
+        )
+        return (
+            f'<div class="card" tabindex="0" role="region" aria-label="Wander log">'
+            f'<div class="card-header"><span class="card-title">Wander Log</span>'
+            f'<span class="card-meta">0</span></div>'
+            f'<div class="card-body">{empty}</div>'
+            f"</div>"
+        )
+
+    rows = ""
+    for i, doc in enumerate(docs):
+        date_str = doc.get("date", "")
+        if len(date_str) == 8:
+            date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
+        source = doc.get("seed_source", "")
+        hypothesis = doc.get("hypothesis", "")
+        question = doc.get("question", "")
+        web_badge = (
+            '<span class="badge badge-info" title="Used web search">web</span> '
+            if doc.get("used_web_search")
+            else ""
+        )
+        is_open = "open" if i == 0 else ""
+        rows += (
+            f'<details class="wander-item" {is_open}>'
+            f"<summary>"
+            f'<span class="wander-date">{_e(date_str)}</span> '
+            f"{web_badge}"
+            f'<span class="wander-source badge badge-secondary">{_e(source)}</span>'
+            f"</summary>"
+            f'<div class="wander-body">'
+        )
+        if hypothesis:
+            rows += f'<div class="wander-hyp">{_e(hypothesis)}</div>'
+        if question:
+            rows += f'<div class="wander-q dim">Q: {_e(question)}</div>'
+        rows += "</div></details>"
+
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Wander log">'
+        f'<div class="card-header"><span class="card-title">Wander Log</span>'
+        f'<span class="card-meta">{len(docs)}</span></div>'
+        f'<div class="card-body">{rows}</div>'
+        f"</div>"
+    )
+
+
+def _render_wander_seed_panel(data: dict) -> str:
+    seeds = data.get("seeds", [])
+    queued_count = len(seeds)
+
+    chips = ""
+    for seed in seeds:
+        chips += f'<span class="chip">{_e(seed)}</span>'
+    if not chips:
+        chips = '<span class="dim">No seeds queued</span>'
+
+    form_html = (
+        '<form id="wander-seed-form" onsubmit="return submitWanderSeed(event)">'
+        '<div class="input-row">'
+        '<input type="text" id="wander-seed-input" placeholder="add seed..."'
+        ' style="flex:1;margin-right:8px">'
+        '<button type="submit" class="btn btn-sm">&#x2192; add</button>'
+        "</div>"
+        "</form>"
+        "<script>"
+        "function submitWanderSeed(e){"
+        "e.preventDefault();"
+        "var t=document.getElementById('wander-seed-input').value.trim();"
+        "if(!t)return false;"
+        "fetch('/api/wander/seed',{method:'POST',"
+        "headers:{'Content-Type':'application/json'},"
+        "body:JSON.stringify({text:t})})"
+        ".then(function(r){return r.json();})"
+        ".then(function(d){"
+        "if(d.ok){document.getElementById('wander-seed-input').value='';location.reload();}"
+        "});"
+        "return false;}"
+        "</script>"
+    )
+
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Seed queue">'
+        f'<div class="card-header"><span class="card-title">Seed Queue</span>'
+        f'<span class="card-meta">{queued_count} queued</span></div>'
+        f'<div class="card-body">'
+        f'<div class="chip-row" style="margin-bottom:12px">{chips}</div>'
+        f"{form_html}"
+        f"</div></div>"
+    )
+
+
+def _render_wander_stats_panel(data: dict) -> str:
+    docs = data.get("docs", [])
+    total = len(docs)
+    source_counts: dict[str, int] = {}
+    web_count = 0
+    for doc in docs:
+        src = doc.get("seed_source", "unknown")
+        source_counts[src] = source_counts.get(src, 0) + 1
+        if doc.get("used_web_search"):
+            web_count += 1
+
+    source_rows = ""
+    for src, cnt in sorted(source_counts.items(), key=lambda x: -x[1]):
+        pct = int(cnt / max(total, 1) * 100)
+        source_rows += (
+            f'<div class="gauge-row">'
+            f'<span class="gauge-label">{_e(src)}</span>'
+            f'<div class="gauge-bar"><div class="gauge-fill" style="width:{pct}%"></div></div>'
+            f'<span class="gauge-value">{cnt}</span>'
+            f"</div>"
+        )
+    if not source_rows:
+        source_rows = '<div class="dim">No data</div>'
+
+    last_note = ""
+    if docs:
+        last_date = docs[0].get("date", "")
+        if len(last_date) == 8:
+            from datetime import date as _date
+
+            from keephive.clock import get_today
+
+            try:
+                d = _date.fromisoformat(f"{last_date[:4]}-{last_date[4:6]}-{last_date[6:]}")
+                days_ago = (get_today() - d).days
+                last_note = f"Last wander: {days_ago} day{'s' if days_ago != 1 else ''} ago"
+            except Exception:
+                pass
+
+    web_note = (
+        f'<div class="dim" style="margin-top:6px">'
+        f"Web search used: {web_count}/{total} sessions</div>"
+        if total
+        else ""
+    )
+    hints = _cmd_hints(
+        ["hive wander seed &quot;your topic&quot;", "hive daemon enable wander"]
+    )
+
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Wander stats">'
+        f'<div class="card-header"><span class="card-title">Wander Stats</span></div>'
+        f'<div class="card-body">'
+        f'<div class="stat-number">{total} wander document{"s" if total != 1 else ""} total</div>'
+        f"<div style='margin-top:8px'>{source_rows}</div>"
+        f'<div class="dim" style="margin-top:6px">{_e(last_note)}</div>'
+        f"{web_note}"
+        f"{hints}"
+        f"</div></div>"
+    )
+
+
 # ---- Panel registry ----
 
 PANELS: dict[str, tuple] = {
@@ -5091,6 +5265,9 @@ PANELS: dict[str, tuple] = {
     "stats-recalled": (_get_recalled_data, _render_recalled_panel),
     "profiles": (_get_profiles_data, _render_profiles_panel),
     "transfer": (_get_transfer_data, _render_transfer_panel),
+    "wander-list": (_get_wander_data, _render_wander_list_panel),
+    "wander-seed": (_get_wander_data, _render_wander_seed_panel),
+    "wander-stats": (_get_wander_data, _render_wander_stats_panel),
 }
 
 # ---- View definitions ----
@@ -5141,6 +5318,14 @@ VIEWS: dict[str, dict] = {
             ["profiles", "transfer"],
         ],
     },
+    "play": {
+        "path": "/play",
+        "title": "Play",
+        "cols": [
+            ["wander-list"],
+            ["wander-seed", "wander-stats"],
+        ],
+    },
 }
 
 # Redirect old paths to new equivalents
@@ -5149,6 +5334,7 @@ _REDIRECTS: dict[str, str] = {
     "/simple": "/dev",
     "/mem": "/know",
     "/notes": "/know",
+    "/wander": "/play",
 }
 
 _PATH_TO_VIEW: dict[str, str] = {v["path"]: k for k, v in VIEWS.items()}
@@ -5881,6 +6067,20 @@ class _HiveHandler(BaseHTTPRequestHandler):
             except Exception as exc:
                 ok = False
                 error = str(exc)
+
+        elif self.path == "/api/wander/seed":
+            text = (data.get("text") or "").strip()
+            if not text:
+                ok = False
+                error = "text required"
+            else:
+                try:
+                    from keephive.storage import add_wander_seed
+
+                    add_wander_seed(text)
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
 
         elif self.path == "/api/transfer/import":
             import base64

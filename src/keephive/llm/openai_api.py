@@ -31,6 +31,7 @@ def _call_structured(
     _max_turns: int | None,
     timeout: int,
     verbose: bool,
+    **_kwargs,
 ) -> T:
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:

@@ -72,6 +72,7 @@ _DAEMON_DEFAULT_CONFIG = json.dumps(
             "standup-draft": {"enabled": False, "time": "17:00"},
             "soul-update": {"enabled": True},
             "self-improve": {"enabled": True},
+            "wander": {"enabled": False, "time": "14:00"},
         }
     },
     indent=2,

@@ -230,3 +230,42 @@ class ImprovementResponse(BaseModel):
     proposed_rules: list[ProposedRule] = Field(default_factory=list)
     proposed_edits: list[ProposedEdit] = Field(default_factory=list)
     summary: str = Field(description="Brief summary of what patterns triggered these proposals")
+
+
+# ---- Wander ----
+
+
+class WanderConnection(BaseModel):
+    memory_fragment: str = Field(
+        description="Exact quote or close paraphrase of the memory/fact this connects to"
+    )
+    connection: str = Field(
+        description="How the seed topic relates to or reframes this fragment"
+    )
+
+
+class WanderDocument(BaseModel):
+    seed: str = Field(description="The topic or seed phrase that triggered this wander")
+    seed_source: str = Field(
+        description="One of: user-queued, cross-pollination, recurring-topic, stale-todo"
+    )
+    thinking: str = Field(
+        description=(
+            "Free-form exploration, 100-200 words. First person, associative. "
+            "May include observations from web search if used."
+        )
+    )
+    connections: list[WanderConnection] = Field(
+        default_factory=list,
+        description="1-3 unexpected links to things already in memory or recent logs",
+    )
+    hypothesis: str = Field(
+        description="One sentence: the insight or pattern this thinking uncovered"
+    )
+    question: str = Field(
+        description="One open question worth surfacing to the user at next session"
+    )
+    used_web_search: bool = Field(
+        default=False,
+        description="True if web search was used during this wander",
+    )

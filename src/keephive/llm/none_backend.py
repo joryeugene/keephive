@@ -22,6 +22,7 @@ def _call_structured(
     max_turns: int | None,
     timeout: int,
     verbose: bool,
+    **_kwargs,
 ) -> T:
     queue_request(
         prompt,

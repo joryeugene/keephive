@@ -287,6 +287,26 @@ def build_context(cwd: str, project_name: str) -> str:
     except Exception:
         pass
 
+    # 11. Fresh wander question (only if <= 2 days old)
+    try:
+        from datetime import date as _date
+
+        from keephive.storage import list_wander_docs
+
+        _recent = list_wander_docs(limit=1)
+        if _recent:
+            _doc = _recent[0]
+            _date_str = _doc.get("date", "")
+            if len(_date_str) == 8:
+                _doc_date = _date.fromisoformat(
+                    f"{_date_str[:4]}-{_date_str[4:6]}-{_date_str[6:]}"
+                )
+                _age = (get_today() - _doc_date).days
+                if _age <= 2 and _doc.get("question"):
+                    parts.append(f"KingBee wonders: {_doc['question']}")
+    except Exception:
+        pass
+
     return "\n\n".join(parts)
 
 

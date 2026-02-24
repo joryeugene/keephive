@@ -54,6 +54,15 @@ HELP: dict[str, str] = {
     "export": "Usage: hive export [output_path]\n  Export current profile data as tar.gz archive\n  Default: ./hive-{profile}-YYYYMMDD.tar.gz",
     "import": "Usage: hive import <path.tar.gz> [--profile name]\n  Import data from archive\n  --profile name  Create new profile and import there",
     "telemetry": "Usage: hive telemetry\n  Show usage telemetry (session counts, token usage)",
+    "wander": (
+        "Usage: hive wander [list|show [slug]|seed <text>|run]\n"
+        "  list        Recent wander documents\n"
+        "  show [slug] Show a specific wander doc (default: most recent)\n"
+        "  seed <text> Queue a topic for the next wander run\n"
+        "  run         Trigger wander immediately\n"
+        "  KingBee's free-thinking log. Runs daily at 14:00 when enabled.\n"
+        "  Enable: hive daemon enable wander\n"
+    ),
 }
 
 # Map aliases to canonical names for help lookup
@@ -97,6 +106,8 @@ _CANONICAL: dict[str, str] = {
     "checkup": "checkup",
     "cfg": "config",
     "config": "config",
+    "wander": "wander",
+    "wr": "wander",
 }
 
 # Command families: (display_label, description, shorthand, tracked_aliases)
@@ -117,6 +128,7 @@ _CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
     ("flow [--skip-verify]", "Guided maintenance run", "", {"flow"}),
     ("checkup [--json]", "Production health check", "ck", {"checkup", "ck"}),
     ("daemon [run|status|enable|disable]", "KingBee background daemon", "", {"daemon"}),
+    ("wander [list|seed|run]", "Agent free-thinking log", "wr", {"wander", "wr"}),
     ("go [mode]", "Launch session", "go", {"go", "sesh", "session"}),
     ("stats [-p path]", "Usage + pipeline health", "st", {"st", "stats"}),
     ("mem [rm] <text>", "Add/remove working memory", "m", {"m", "mem"}),
@@ -382,6 +394,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "checkup": ("keephive.commands.checkup", "cmd_checkup"),
     "ck": ("keephive.commands.checkup", "cmd_checkup"),
     "telemetry": ("keephive.commands.telemetry", "cmd_telemetry"),
+    "wander": ("keephive.commands.wander", "cmd_wander"),
+    "wr": ("keephive.commands.wander", "cmd_wander"),
 }
 
 

@@ -29,8 +29,17 @@ def build_claude_command(
     model: str = "haiku",
     tools: list[str] | None = None,
     max_turns: int | None = None,
+    allowed_dirs: list[str] | None = None,
+    restrict_mcp: bool = True,
 ) -> list[str]:
-    """Build the claude -p command list."""
+    """Build the claude -p command list.
+
+    Args:
+        allowed_dirs: Directories to grant tool read access to (--add-dir flag).
+        restrict_mcp: When True (default), pass empty --mcp-config + --strict-mcp-config
+            alongside tools to prevent unexpected MCP calls. Set False for built-in tools
+            like WebSearch that don't need MCP.
+    """
     cmd = [
         "claude",
         "-p",
@@ -45,7 +54,11 @@ def build_claude_command(
 
     if tools:
         cmd.extend(["--tools", ",".join(tools)])
-        cmd.extend(["--mcp-config", '{"mcpServers":{}}', "--strict-mcp-config"])
+        if restrict_mcp:
+            cmd.extend(["--mcp-config", '{"mcpServers":{}}', "--strict-mcp-config"])
+    if allowed_dirs:
+        for d in allowed_dirs:
+            cmd.extend(["--add-dir", str(d)])
     if max_turns:
         cmd.extend(["--max-turns", str(max_turns)])
 
@@ -151,11 +164,13 @@ def _call_structured(
     max_turns: int | None,
     timeout: int,
     verbose: bool,
+    allowed_dirs: list[str] | None = None,
+    restrict_mcp: bool = True,
 ) -> T:
     """Execute claude -p subprocess and parse output."""
     schema = json.dumps(response_model.model_json_schema())
     env = build_claude_env()
-    cmd = build_claude_command(prompt, schema, model, tools, max_turns)
+    cmd = build_claude_command(prompt, schema, model, tools, max_turns, allowed_dirs, restrict_mcp)
 
     if verbose:
         print(f"[verbose] cmd: {' '.join(cmd)}", file=sys.stderr)

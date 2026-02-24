@@ -400,6 +400,11 @@ def slot_file(n: int) -> Path:
     return working_dir() / f"note-{n}.md"
 
 
+def wander_dir() -> Path:
+    """~/.claude/hive/wander/ — one markdown file per wander session."""
+    return hive_dir() / "wander"
+
+
 def ensure_dirs() -> None:
     """Create all required directories if they don't exist."""
     for d in [
@@ -410,6 +415,7 @@ def ensure_dirs() -> None:
         prompts_dir(),
         archive_dir(),
         notes_dir(),
+        wander_dir(),
     ]:
         d.mkdir(parents=True, exist_ok=True)
 
@@ -691,6 +697,172 @@ def append_to_daily(text: str, day: str | None = None) -> Path:
     with open(path, "a") as f:
         f.write(text + "\n")
     return path
+
+
+def _wander_slug(seed: str) -> str:
+    """Filename-safe slug from seed text, max 40 chars."""
+    slug = re.sub(r"[^a-z0-9]+", "-", seed.lower().strip())
+    return slug[:40].strip("-")
+
+
+def write_wander_doc(doc_dict: dict, seed: str) -> Path:
+    """Write wander document as markdown. Returns path.
+
+    Filename: YYYYMMDD-HHmmss-{slug}.md
+    """
+    from keephive.clock import get_now as _get_now
+
+    d = wander_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    ts = _get_now()
+    slug = _wander_slug(seed)
+    filename = f"{ts.strftime('%Y%m%d-%H%M%S')}-{slug}.md"
+    path = d / filename
+
+    seed_source = doc_dict.get("seed_source", "unknown")
+    thinking = doc_dict.get("thinking", "")
+    connections = doc_dict.get("connections", [])
+    hypothesis = doc_dict.get("hypothesis", "")
+    question = doc_dict.get("question", "")
+    used_web = doc_dict.get("used_web_search", False)
+
+    conn_lines = ""
+    for c in connections:
+        frag = c.get("memory_fragment", "") if isinstance(c, dict) else getattr(c, "memory_fragment", "")
+        conn_text = c.get("connection", "") if isinstance(c, dict) else getattr(c, "connection", "")
+        conn_lines += f"- **{frag}**: {conn_text}\n"
+
+    content = (
+        f"# Wander: {seed}\n\n"
+        f"**Seed source:** {seed_source}\n"
+        f"**Date:** {ts.strftime('%Y-%m-%d %H:%M')}\n"
+        f"**Web search:** {'yes' if used_web else 'no'}\n\n"
+        f"## Thinking\n\n{thinking}\n\n"
+        f"## Connections\n\n{conn_lines or '(none)\n'}\n"
+        f"## Hypothesis\n\n{hypothesis}\n\n"
+        f"## Open Question\n\n{question}\n"
+    )
+
+    tmp = path.with_suffix(".md.tmp")
+    tmp.write_text(content, encoding="utf-8")
+    os.replace(str(tmp), str(path))
+    return path
+
+
+def list_wander_docs(limit: int = 20) -> list[dict]:
+    """Return wander doc summaries, newest first.
+
+    Each dict: filename, date (YYYYMMDD), seed, seed_source,
+    hypothesis, question, used_web_search.
+    """
+    d = wander_dir()
+    if not d.exists():
+        return []
+
+    results: list[dict] = []
+    for path in sorted(d.glob("*.md"), reverse=True)[:limit]:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        lines = text.splitlines()
+
+        seed = ""
+        seed_source = ""
+        hypothesis = ""
+        question = ""
+        used_web_search = False
+
+        # Parse title: "# Wander: <seed>"
+        for line in lines:
+            if line.startswith("# Wander: "):
+                seed = line[len("# Wander: "):].strip()
+                break
+
+        for line in lines:
+            if line.startswith("**Seed source:**"):
+                seed_source = line[len("**Seed source:**"):].strip()
+            elif line.startswith("**Web search:**"):
+                used_web_search = "yes" in line.lower()
+
+        # Hypothesis: line after "## Hypothesis"
+        in_hyp = False
+        for line in lines:
+            if line.strip() == "## Hypothesis":
+                in_hyp = True
+                continue
+            if in_hyp and line.strip():
+                hypothesis = line.strip()
+                break
+
+        # Question: line after "## Open Question"
+        in_q = False
+        for line in lines:
+            if line.strip() == "## Open Question":
+                in_q = True
+                continue
+            if in_q and line.strip():
+                question = line.strip()
+                break
+
+        # Date from filename: YYYYMMDD-HHmmss-...
+        date_str = path.name[:8]
+
+        results.append({
+            "filename": path.name,
+            "date": date_str,
+            "seed": seed,
+            "seed_source": seed_source,
+            "hypothesis": hypothesis,
+            "question": question,
+            "used_web_search": used_web_search,
+        })
+
+    return results
+
+
+def read_wander_doc(filename: str) -> str:
+    """Full markdown content. Empty string if not found."""
+    path = wander_dir() / filename
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def get_wander_seeds() -> list[str]:
+    """Read .wander-seeds.json. Returns list (may be empty)."""
+    path = hive_dir() / ".wander-seeds.json"
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            return [s for s in data if isinstance(s, str)]
+    except (json.JSONDecodeError, OSError):
+        pass
+    return []
+
+
+def add_wander_seed(seed: str) -> None:
+    """Append to .wander-seeds.json. Deduplicates by exact match. Atomic write."""
+    seeds = get_wander_seeds()
+    if seed not in seeds:
+        seeds.append(seed)
+    path = hive_dir() / ".wander-seeds.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(seeds, indent=2), encoding="utf-8")
+    os.replace(str(tmp), str(path))
+
+
+def pop_wander_seed() -> str | None:
+    """Remove and return first seed from .wander-seeds.json. Returns None if empty."""
+    seeds = get_wander_seeds()
+    if not seeds:
+        return None
+    seed = seeds.pop(0)
+    path = hive_dir() / ".wander-seeds.json"
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(seeds, indent=2), encoding="utf-8")
+    os.replace(str(tmp), str(path))
+    return seed
 
 
 def stale_days() -> int:

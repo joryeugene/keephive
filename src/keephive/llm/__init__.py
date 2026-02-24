@@ -7,7 +7,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Dict, Iterable, Optional, Type, TypeVar
+from typing import Any, Callable, Dict, Iterable, Optional, Type, TypeVar
 
 from pydantic import BaseModel
 
@@ -32,9 +32,7 @@ class Backend:
     supports_structured: bool
     supports_tools: bool
     supports_streaming: bool
-    call_structured: Callable[
-        [str, Type[T], str, Optional[str], Optional[list[str]], Optional[int], int, bool], T
-    ]
+    call_structured: Callable[..., Any]
     detect: Callable[[], tuple[bool, str]]
     describe: Optional[Callable[[], str]] = None
 
@@ -200,6 +198,8 @@ def call_structured(
     timeout: int = 120,
     verbose: bool = False,
     backend_override: str | None = None,
+    allowed_dirs: list[str] | None = None,
+    restrict_mcp: bool = True,
 ) -> T:
     """Execute a structured LLM call via the selected backend."""
     attempted: set[str] = set()
@@ -236,6 +236,8 @@ def call_structured(
                 max_turns,
                 timeout,
                 verbose,
+                allowed_dirs=allowed_dirs,
+                restrict_mcp=restrict_mcp,
             )
             meta["status"] = "ok"
             _write_state(meta)

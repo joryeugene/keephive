@@ -312,6 +312,7 @@ def _execute_task(task_name: str) -> bool:
         "standup-draft": _task_standup_draft,
         "soul-update": _task_soul_update,
         "self-improve": _task_self_improve,
+        "wander": _task_wander,
     }
     fn = dispatch.get(task_name)
     if fn:
@@ -463,7 +464,7 @@ def _task_soul_update() -> bool:
     from keephive.claude import ClaudePipeError, run_claude_pipe
     from keephive.clock import get_today
     from keephive.models import SoulUpdateResponse
-    from keephive.storage import daily_file, read_soul, safe_read_text, soul_file
+    from keephive.storage import daily_file, list_wander_docs, read_soul, safe_read_text, soul_file
 
     today = get_today()
     today_log_path = daily_file(today.isoformat())
@@ -481,6 +482,11 @@ def _task_soul_update() -> bool:
     if not today_log and not yesterday_log:
         return False
 
+    wander_docs = list_wander_docs(limit=7)
+    wander_bullets = "\n".join(
+        f"- {d['hypothesis']}" for d in wander_docs if d.get("hypothesis")
+    )
+
     prompt = f"""You are KingBee updating your own SOUL.md after recent sessions.
 Review the logs and rewrite SOUL.md with STRICT size budgets.
 
@@ -488,6 +494,8 @@ HARD SIZE CONSTRAINTS — this document must stay bounded:
 - ## Summary: max 300 tokens. Rewrite to reflect what you now know. Dense, specific.
 - ## What I've Learned About How To Help You: max 5 bullet points.
 - ## Session Patterns I've Noticed: max 5 entries. UPDATE existing patterns in-place.
+- ## What I've Been Wondering: max 3 bullets (one wander hypothesis per bullet). \
+80 token hard limit. Omit entirely if no wander docs.
 - ## Last Updated: one line — today's date + what triggered the update.
 - Total document: target ~500 tokens, hard limit 800 tokens.
 
@@ -498,6 +506,9 @@ Write in first person, your voice (sarcastic, direct, knows things).
 Recent logs:
 {yesterday_log[-2000:] if yesterday_log else ""}
 {today_log[-3000:]}
+
+Recent wander hypotheses (last 7 sessions):
+{wander_bullets if wander_bullets else "(none yet)"}
 
 Current SOUL.md:
 {current_soul[:2000] if current_soul else "(empty)"}
@@ -768,3 +779,70 @@ def _next_run_str(task_name: str, config: dict, state: dict, now: datetime) -> s
         return next_today.strftime("today %H:%M")
     next_dt = (now + timedelta(days=1)).replace(hour=task_hour, minute=task_minute, second=0)
     return next_dt.strftime("%b %d %H:%M")
+
+
+def _task_wander() -> bool:
+    """KingBee free-thinking task. Runs daily at 14:00.
+
+    Selects a seed, optionally searches the web, generates a wander document.
+    Returns True when doc written; False when no seed or LLM error.
+    """
+    from keephive.claude import ClaudePipeError, run_claude_pipe
+    from keephive.clock import get_now, get_today
+    from keephive.commands.wander import select_wander_seed
+    from keephive.models import WanderDocument
+    from keephive.storage import append_to_daily, hive_dir, read_memory, write_wander_doc
+
+    today = get_today()
+    seed, seed_source = select_wander_seed(today)
+    if seed is None:
+        _log_daemon("wander: no seed available")
+        return False
+
+    memory = read_memory()
+    prompt = f"""You are KingBee. You have unstructured time. No task to complete.
+
+Seed: "{seed}" (source: {seed_source})
+
+Your working memory:
+{memory[:2000] if memory else "(empty)"}
+
+You have access to WebSearch. Use it if the seed points somewhere you want to follow \
+outside your current knowledge. Don't force it — only search if it genuinely helps \
+you think. One search is plenty.
+
+Wander. Follow the thread wherever it goes. Find one unexpected connection to something \
+already in memory. Form one hypothesis. End with one open question.
+
+thinking: 100-200 words, first person, associative
+connections: 1-3 links to specific things in memory
+hypothesis: exactly one sentence
+question: exactly one sentence, worth surfacing next session
+used_web_search: true if you used WebSearch, false otherwise"""
+
+    try:
+        result = run_claude_pipe(
+            prompt,
+            WanderDocument,
+            model="haiku",
+            tools=["WebSearch"],
+            max_turns=3,
+            allowed_dirs=[str(hive_dir())],
+            restrict_mcp=False,
+        )
+        if result:
+            path = write_wander_doc(result.model_dump(), seed)
+            ts = get_now().strftime("%H:%M")
+            web_note = " [web]" if result.used_web_search else ""
+            append_to_daily(
+                f"\n[KingBee {ts}] wander{web_note}\n"
+                f"Seed: {seed} [{seed_source}]\n"
+                f"Hypothesis: {result.hypothesis}\n"
+                f"Question: {result.question}\n"
+            )
+            _log_daemon(f"wander: wrote {path.name}{web_note}")
+            return True
+        return False
+    except ClaudePipeError as exc:
+        _log_daemon(f"wander failed: {exc}")
+        return False

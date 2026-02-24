@@ -3116,7 +3116,7 @@ def test_consolidated_views_exist():
     """View registry stays in sync with expected navigation tabs."""
     from keephive.commands.serve import VIEWS
 
-    assert set(VIEWS.keys()) == {"home", "dev", "brain", "know", "stats", "settings"}
+    assert set(VIEWS.keys()) == {"home", "dev", "brain", "know", "stats", "settings", "play"}
 
 
 # ---- Notes compact panel ----

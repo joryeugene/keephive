@@ -32,6 +32,11 @@ system: SOUL.md, self-improve, checkup, and the full command vocabulary.
 | `hive improve review`                | Interactive review of KingBee proposals           |
 | `hive improve list`                  | List pending proposals with age                   |
 | `hive improve clear-stale`           | Remove proposals older than 30 days               |
+| `hive wander list`                   | Show recent wander documents                      |
+| `hive wander seed <text>`            | Queue a topic for the next wander run             |
+| `hive wander show [slug]`            | Show a specific wander doc (default: most recent) |
+| `hive wander run`                    | Trigger wander immediately                        |
+| `hive daemon enable wander`          | Enable the daily wander task (14:00)              |
 
 ---
 
@@ -105,13 +110,14 @@ Edit with `hive daemon edit`.
 
 ### Task schedule defaults
 
-| Task              | Default | Trigger             | Throttle  |
-|-------------------|---------|---------------------|-----------|
-| soul-update       | on      | PreCompact / manual | 1h        |
-| self-improve      | on      | daily / manual      | 1 day     |
-| morning-briefing  | off     | 07:00               | daily     |
-| stale-check       | off     | Monday 08:00        | weekly    |
-| standup-draft     | off     | 17:00               | daily     |
+| Task              | Default | Trigger             | Throttle  | Notes                         |
+|-------------------|---------|---------------------|-----------|-------------------------------|
+| soul-update       | on      | PreCompact / manual | 1h        |                               |
+| self-improve      | on      | daily / manual      | 1 day     |                               |
+| morning-briefing  | off     | 07:00               | daily     |                               |
+| stale-check       | off     | Monday 08:00        | weekly    |                               |
+| standup-draft     | off     | 17:00               | daily     |                               |
+| wander            | off     | 14:00               | daily     | WebSearch enabled; 1 doc/day  |
 
 Tasks marked `off` require explicit opt-in:
 
@@ -167,6 +173,41 @@ hive checkup --diff          # see exactly what mutated
 
 ---
 
+## Wander Task — Agent Free Thinking
+
+The `wander` task gives KingBee unstructured time. Instead of reacting to a trigger,
+it picks a **seed** from memory and thinks freely. The result is a "wander document":
+free associations, unexpected connections, one hypothesis, one open question.
+
+The open question surfaces in the next session (injected into SessionStart context).
+The hypothesis is included in SOUL.md updates under "What I've Been Wondering".
+
+### Seed selection priority
+
+1. **User-queued** — topics explicitly queued with `hive wander seed <text>`
+2. **Cross-pollination** — two memory.md lines with no overlapping significant words
+3. **Recurring topic** — a word appearing in 3+ of the last 14 daily logs with freq >= 3
+4. **Stale TODO** — the oldest open TODO older than 7 days
+
+If no seed is available from any priority, the task skips silently (returns False, no retry throttle consumed).
+
+### Tool access
+
+Wander uses `WebSearch` (built-in, not MCP). The LLM prompt encourages but does not
+require search — KingBee decides whether to look something up. `used_web_search` in the
+wander document captures whether it did.
+
+### View wander output
+
+```bash
+hive wander list         # recent docs with hypothesis + question
+hive wander show         # most recent full doc
+hive wander show <slug>  # specific doc by filename prefix
+hive serve               # navigate to /play for the dashboard panel
+```
+
+---
+
 ## Throttle Reference
 
 | Operation        | Throttle    | Enforced by         | On skip     |
@@ -175,6 +216,7 @@ hive checkup --diff          # see exactly what mutated
 | self-improve     | 1 day       | Daemon tick         | Silent skip |
 | morning-briefing | Daily       | Daemon tick (07:00) | Skip        |
 | stale-check      | Weekly      | Daemon tick (Mon)   | Skip        |
+| wander           | Daily       | Daemon tick (14:00) | Skip        |
 | nudge (prompt)   | Every 5     | userpromptsubmit    | No nudge    |
 | nudge (tool)     | Every 5     | posttooluse         | No nudge    |
 | nudge (stop)     | Every 8     | stop hook           | No nudge    |

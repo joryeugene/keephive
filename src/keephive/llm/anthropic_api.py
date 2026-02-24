@@ -29,6 +29,7 @@ def _call_structured(
     _max_turns: int | None,
     timeout: int,
     verbose: bool,
+    **_kwargs,
 ) -> T:
     """Invoke the Anthropic Messages API with structured output."""
     try:
