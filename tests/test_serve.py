@@ -759,9 +759,11 @@ def test_hot_flag_worker_env_skips_watcher(hive_env, monkeypatch):
         watcher_called.append(port)
 
     monkeypatch.setattr("keephive.commands.serve._hot_watcher", fake_watcher)
-    # Can't actually start HTTPServer in test, so patch that too
+    # Can't actually start the server in test; patch _ThreadedHTTPServer directly
+    # (patching HTTPServer has no effect because _ThreadedHTTPServer's MRO is fixed
+    # at import time — it must be patched by its own name in the module namespace).
     monkeypatch.setattr(
-        "keephive.commands.serve.HTTPServer",
+        "keephive.commands.serve._ThreadedHTTPServer",
         lambda *a, **k: (_ for _ in ()).throw(OSError("test skip")),
     )
 

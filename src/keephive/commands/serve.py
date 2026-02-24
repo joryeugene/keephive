@@ -925,13 +925,13 @@ _JS = """
       // Save + restore scroll for this panel
       var lists=el.querySelectorAll('.session-list,.log-list,.todo-list');
       var scrolls={};
-      lists.forEach(function(l){scrolls[l.className]=l.scrollTop;});
+      lists.forEach(function(l){scrolls[l.className.split(' ')[0]]=l.scrollTop;});
       // Swap panel content
       var inner=el.querySelector('.grid-panel')||el;
       inner.innerHTML=d.html;
       // Restore scroll
       el.querySelectorAll('.session-list,.log-list,.todo-list').forEach(function(l){
-        if(scrolls[l.className])l.scrollTop=scrolls[l.className];
+        if(scrolls[l.className.split(' ')[0]])l.scrollTop=scrolls[l.className.split(' ')[0]];
       });
     });
     _sse.onerror=function(){
@@ -5678,32 +5678,35 @@ def _broadcast_panel_updates() -> None:
     needed: set[str] = set()
     for view_name, _ in clients:
         needed.update(_view_panels(view_name))
-    # Render and hash-compare
-    changed: dict[str, str] = {}
+    # Render outside the lock (may be slow; doesn't touch shared state)
+    rendered: dict[str, tuple[str, str]] = {}  # panel -> (html, md5)
     for panel in needed:
         html = _render_panel_safe(panel)
-        h = hashlib.md5(html.encode()).hexdigest()
-        if _panel_hashes.get(panel) != h:
-            _panel_hashes[panel] = h
-            changed[panel] = html
-    if not changed:
-        return
-    # Push to each client only the panels in their view
-    for view_name, q in clients:
-        view_panel_set = set(_view_panels(view_name))
-        for panel, html in changed.items():
-            if panel in view_panel_set:
-                q.put({"panel": panel, "html": html})
+        rendered[panel] = (html, hashlib.md5(html.encode()).hexdigest())
+    # Compare hashes and dispatch under lock so /api/events handler can't race
+    with _sse_lock:
+        changed: dict[str, str] = {}
+        for panel, (html, h) in rendered.items():
+            if _panel_hashes.get(panel) != h:
+                _panel_hashes[panel] = h
+                changed[panel] = html
+        if not changed:
+            return
+        for view_name, q in clients:
+            view_panel_set = set(_view_panels(view_name))
+            for panel, html in changed.items():
+                if panel in view_panel_set:
+                    q.put({"panel": panel, "html": html})
 
 
 def _file_watcher_thread() -> None:
     """Background daemon: polls HIVE_HOME mtimes every 0.5s, broadcasts on change."""
     from keephive import storage
 
+    hive_home = str(storage.hive_dir())
     snapshots: dict[str, float] = {}
     while True:
         changed = False
-        hive_home = str(storage.hive_dir())
         try:
             for root, _, files in os.walk(hive_home):
                 for fname in files:
@@ -5786,7 +5789,17 @@ class _HiveHandler(BaseHTTPRequestHandler):
             if view_name not in VIEWS:
                 view_name = "home"
             q: queue.Queue = queue.Queue()
+            # Render initial snapshot BEFORE registering so the broadcaster never
+            # sees this client with un-initialized hashes (prepare-then-register).
+            initial: list[tuple[str, str]] = []
+            for panel in _view_panels(view_name):
+                html = _render_panel_safe(panel)
+                initial.append((panel, html))
+            # Atomically record hashes + register client so broadcaster sees a
+            # consistent state (no window where client is listed but hash is absent).
             with _sse_lock:
+                for panel, html in initial:
+                    _panel_hashes[panel] = hashlib.md5(html.encode()).hexdigest()
                 _sse_clients.append((view_name, q))
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -5794,10 +5807,8 @@ class _HiveHandler(BaseHTTPRequestHandler):
             self.send_header("Connection", "keep-alive")
             self._cors()
             self.end_headers()
-            # Initial snapshot: push all panels for this view
-            for panel in _view_panels(view_name):
-                html = _render_panel_safe(panel)
-                _panel_hashes[panel] = hashlib.md5(html.encode()).hexdigest()
+            # Send initial snapshot to client
+            for panel, html in initial:
                 _send_sse_event(self.wfile, "panel-update", {"panel": panel, "html": html})
             try:
                 while True:
