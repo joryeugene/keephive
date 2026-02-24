@@ -413,7 +413,7 @@ def _render_status() -> None:
         src = llm_state.get("source", "auto")
         reason = llm_state.get("reason", "")
         llm_table.add_row("[dim]selected[/dim]", f"{sel} ({src}) {reason}")
-        if llm_state.get("status") == "error":
+        if llm_state.get("status") == "error" and not healthy_backend_found:
             err = llm_state.get("error", "unknown error")
             llm_table.add_row("[warn]last error[/warn]", err)
     for backend, available, reason in backend_rows:
@@ -431,7 +431,7 @@ def _render_status() -> None:
     for slug, spec in specs.items():
         marker = "[ok]\u25cf[/ok]" if spec.detected else "[dim]\u25cb[/dim]"
         skill_state = "skill ✓" if spec.skill_path.exists() else "skill ×"
-        hooks_state = "hooks ✓" if spec.hooks_dir.exists() else "hooks ×"
+        hooks_state = "hooks ✓" if spec.hooks_ok else "hooks ×"
         llm_table.add_row(f"{marker} {spec.title}", f"{skill_state}, {hooks_state}")
     console.print(Panel(llm_table, title="LLM Backend", border_style="dim", padding=(0, 1)))
 

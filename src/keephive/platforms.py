@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict
 
+from keephive.health import check_hooks
 from keephive.storage import hive_dir
 
 
@@ -21,6 +22,7 @@ class PlatformSpec:
     skill_path: Path
     detected: bool
     detection_reason: str
+    hooks_ok: bool
 
 
 def _detect(dir_path: Path, binary: str) -> tuple[bool, str]:
@@ -45,6 +47,11 @@ def platform_specs() -> Dict[str, PlatformSpec]:
 
     keephive_root = hive_dir().parent
 
+    # Claude Code hooks live in settings.json, not a filesystem directory
+    claude_hooks_ok = check_hooks()
+    gemini_hooks_ok = (keephive_root / "hooks" / "gemini").exists()
+    codex_hooks_ok = (keephive_root / "hooks" / "codex").exists()
+
     return {
         "claude": PlatformSpec(
             slug="claude",
@@ -54,6 +61,7 @@ def platform_specs() -> Dict[str, PlatformSpec]:
             skill_path=claude_dir / "skills" / "keephive-helper" / "SKILL.md",
             detected=claude_detected,
             detection_reason=claude_reason,
+            hooks_ok=claude_hooks_ok,
         ),
         "gemini": PlatformSpec(
             slug="gemini",
@@ -63,6 +71,7 @@ def platform_specs() -> Dict[str, PlatformSpec]:
             skill_path=gemini_dir / "skills" / "keephive-helper" / "SKILL.md",
             detected=gemini_detected,
             detection_reason=gemini_reason,
+            hooks_ok=gemini_hooks_ok,
         ),
         "codex": PlatformSpec(
             slug="codex",
@@ -72,6 +81,7 @@ def platform_specs() -> Dict[str, PlatformSpec]:
             skill_path=codex_dir / "skills" / "keephive-helper" / "SKILL.md",
             detected=codex_detected,
             detection_reason=codex_reason,
+            hooks_ok=codex_hooks_ok,
         ),
     }
 

@@ -441,7 +441,7 @@ class TestRouting:
 
         return _fn
 
-    def test_cli_backend_has_highest_priority(self, monkeypatch):
+    def test_cli_backend_has_highest_priority(self, monkeypatch, hive_env):
         """anthropic_cli (priority 10) is tried first when available."""
         import keephive.llm.anthropic_cli as cli_mod
 
@@ -455,7 +455,7 @@ class TestRouting:
         assert result.verdicts == []
         assert called == ["cli"]
 
-    def test_api_backend_used_when_cli_unavailable(self, monkeypatch):
+    def test_api_backend_used_when_cli_unavailable(self, monkeypatch, hive_env):
         """When CLI unavailable, anthropic_api (priority 20) takes over."""
         import keephive.llm.anthropic_api as api_mod
         import keephive.llm.anthropic_cli as cli_mod
@@ -471,7 +471,7 @@ class TestRouting:
         assert result.verdicts == []
         assert called == ["api"]
 
-    def test_claudecode_does_not_affect_routing(self, monkeypatch):
+    def test_claudecode_does_not_affect_routing(self, monkeypatch, hive_env):
         """CLAUDECODE env no longer changes routing; CLI is tried first regardless."""
         import keephive.llm.anthropic_cli as cli_mod
 
@@ -487,7 +487,7 @@ class TestRouting:
         assert result.verdicts == []
         assert called == ["cli"]
 
-    def test_tools_route_to_cli_backend(self, monkeypatch):
+    def test_tools_route_to_cli_backend(self, monkeypatch, hive_env):
         """Tools are handled by the CLI backend (supports_tools=True, priority 10)."""
         import keephive.llm.anthropic_cli as cli_mod
 
@@ -501,7 +501,7 @@ class TestRouting:
         assert result.verdicts == []
         assert called == ["cli"]
 
-    def test_cli_preferred_over_api_at_terminal(self, monkeypatch):
+    def test_cli_preferred_over_api_at_terminal(self, monkeypatch, hive_env):
         """API key in env but CLI takes priority (free over paid)."""
         import keephive.llm.anthropic_cli as cli_mod
 
@@ -517,7 +517,7 @@ class TestRouting:
         assert result.verdicts == []
         assert called == ["cli"]
 
-    def test_cli_preferred_for_tools_even_with_api_key(self, monkeypatch):
+    def test_cli_preferred_for_tools_even_with_api_key(self, monkeypatch, hive_env):
         """Tools + API key at terminal: CLI still takes priority (priority 10 vs 20)."""
         import keephive.llm.anthropic_cli as cli_mod
 
