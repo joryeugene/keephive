@@ -4,6 +4,12 @@ Counter-based system that fires periodic reminders to use hive tools.
 Uses a priority-based state machine instead of static rotations:
 highest-priority actionable state always wins.
 
+Recency gate: priorities 1-4 are suppressed if the same category fired
+within _RECENCY_THRESHOLD (15) calls this session. Priority 5 (generic
+fallback) is never gated — every nudge cycle always produces output.
+State is stored as `last_surfaced` dict in counter files; session change
+resets it automatically (session_id mismatch check).
+
 Used by UserPromptSubmit, PostToolUse, and Stop hooks.
 """
 

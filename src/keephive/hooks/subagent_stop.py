@@ -1,7 +1,9 @@
 """SubagentStop hook handler.
 
 Called by Claude Code when a Task-spawned subagent completes.
-Logs a completion breadcrumb to the daily log and tracks the event.
+For task_subject > 20 chars, calls _extract_output() (haiku, 30s timeout)
+to surface a concrete finding and key decision. On success, logs
+SUBAGENT-INSIGHT; on silence or any error, falls back to SUBAGENT-DONE.
 No stdout output. Non-blocking.
 """
 

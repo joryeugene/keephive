@@ -217,9 +217,9 @@ hive serve               # navigate to /play for the dashboard panel
 | morning-briefing | Daily       | Daemon tick (07:00) | Skip        |
 | stale-check      | Weekly      | Daemon tick (Mon)   | Skip        |
 | wander           | Daily       | Daemon tick (14:00) | Skip        |
-| nudge (prompt)   | Every 5     | userpromptsubmit    | No nudge    |
-| nudge (tool)     | Every 5     | posttooluse         | No nudge    |
-| nudge (stop)     | Every 8     | stop hook           | No nudge    |
+| nudge (prompt)   | Every 5; recency: 15 per category | userpromptsubmit    | No nudge (or fallback) |
+| nudge (tool)     | Every 5; recency: 15 per category | posttooluse         | No nudge (or fallback) |
+| nudge (stop)     | Every 8; recency: 15 per category | stop hook           | No nudge (or fallback) |
 
 **Note on silent throttle skips:** When the PreCompact hook skips soul-update due to
 throttle, nothing is written to daemon.log. This is intentional — throttle skips are

@@ -210,12 +210,13 @@ The diagram below shows the Claude Code integration path; MCP-only clients reuse
 
 ```mermaid
 flowchart TD
-    subgraph CYCLE["Session Cycle (7 hooks)"]
+    subgraph CYCLE["Session Cycle (8 hooks)"]
         direction LR
-        START([New session]) -->|"SessionStart:<br>inject context"| WORK([Working])
-        WORK -->|"PostToolUse · UserPromptSubmit:<br>nudge, ui-queue inject"| WORK
+        START([New session]) -->|"SessionStart:<br>inject context + style hint"| WORK([Working])
+        WORK -->|"PostToolUse · UserPromptSubmit:<br>recency-gated nudge, ui-queue"| WORK
         WORK -->|"Stop:<br>turn count, micro-nudge"| WORK
         WORK -->|"TaskCompleted:<br>auto-log DONE"| WORK
+        WORK -->|"SubagentStop:<br>INSIGHT or DONE breadcrumb"| WORK
         WORK -->|context full| PC["PreCompact:<br>extract → log<br>+ pending-facts queue"]
         PC -->|next session| START
         WORK -->|session ends| SEND["SessionEnd:<br>finalize stats"]
@@ -311,15 +312,16 @@ flowchart TD
 
 ### Hooks
 
-| Hook             | Trigger               | What it does                                           |
-| ---------------- | --------------------- | ------------------------------------------------------ |
-| SessionStart     | New session           | Injects memory, rules, TODOs, stale warnings, Agent Identity |
-| PreCompact       | Conversation compacts | Extracts insights; triggers throttled `soul-update`    |
-| PostToolUse      | After Edit/Write      | Periodic nudge to record decisions                     |
-| UserPromptSubmit | User sends prompt     | Periodic nudge, UI queue injection                     |
-| Stop             | Agent turn ends       | Increments turn counter, periodic micro-nudge          |
-| SessionEnd       | Session terminates    | Finalizes session stats with accurate end timestamp        |
-| TaskCompleted    | Task marked done      | Auto-logs DONE entry to daily log                      |
+| Hook             | Trigger               | What it does                                                            |
+| ---------------- | --------------------- | ----------------------------------------------------------------------- |
+| SessionStart     | New session           | Injects memory, rules, TODOs, stale warnings, Agent Identity, style hint |
+| PreCompact       | Conversation compacts | Extracts insights; triggers throttled `soul-update`                     |
+| PostToolUse      | After Edit/Write      | Periodic nudge (recency-gated) to record decisions                      |
+| UserPromptSubmit | User sends prompt     | Periodic nudge (recency-gated), UI queue injection                      |
+| Stop             | Agent turn ends       | Increments turn counter, periodic micro-nudge                           |
+| SessionEnd       | Session terminates    | Finalizes session stats with accurate end timestamp                     |
+| TaskCompleted    | Task marked done      | Auto-logs DONE entry to daily log                                       |
+| SubagentStop     | Task subagent done    | Logs SUBAGENT-INSIGHT (haiku extraction) or SUBAGENT-DONE breadcrumb    |
 
 See [the loop](#the-loop) above.
 

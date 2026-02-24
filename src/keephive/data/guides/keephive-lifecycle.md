@@ -81,16 +81,21 @@ Tiers from most stable (top) to most ephemeral (bottom).
 
 - **SessionStart**: Injects working memory, rules, **Agent Identity**, matched knowledge guides,
   stale warnings, open TODOs, and cross-project activity hints. Also triggers Morning Briefing.
+  `extract_style_hint()` appends a deterministic writing style fingerprint (avg entry length,
+  dominant category, recurring themes) when ≥5 daily log entries exist in the last 7 days.
 - **PreCompact**: Layer 1 deterministic scan + Layer 2 claude -p haiku.
   Writes classified entries (FACT/DECISION/etc.) to daily log.
   Triggers throttled `soul-update` (min 1h interval).
   Auto-close: passes open TODOs to LLM, writes DONE entries for resolved items.
-- **PostToolUse**: Counter-based nudge after Edit/Write to remind
-  `hive_remember` of key changes.
-- **UserPromptSubmit**: Counter-based nudge, UI queue injection.
+- **PostToolUse**: Counter-based nudge (recency-gated: same category suppressed within 15
+  calls per session) after Edit/Write to remind `hive_remember` of key changes.
+- **UserPromptSubmit**: Counter-based nudge (recency-gated), UI queue injection.
 - **Stop**: Increments turn counter. Periodic micro-nudge to capture wrap-up items.
 - **SessionEnd**: Finalizes session stats with accurate end timestamp. No stdout.
 - **TaskCompleted**: Auto-logs DONE to daily log. Tracks task completion count in meta stats.
+- **SubagentStop**: Attempts haiku extraction when `task_subject` > 20 chars (30s timeout,
+  silence gate). Logs `SUBAGENT-INSIGHT: {desc} -> {finding}` on success; falls back to
+  `SUBAGENT-DONE` on silence or error. No stdout.
 
 ## Promotion Path (ephemeral to durable)
 

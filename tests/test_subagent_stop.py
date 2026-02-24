@@ -10,7 +10,7 @@ from keephive.hooks.subagent_stop import hook_subagent_stop
 
 
 class TestSubagentStopLogging:
-    """Subagent completions are logged as SUBAGENT-DONE breadcrumbs."""
+    """Subagent completions are logged as SUBAGENT-DONE or SUBAGENT-INSIGHT breadcrumbs."""
 
     def _call_hook(self, input_data: dict) -> None:
         with patch("sys.stdin", StringIO(json.dumps(input_data))):

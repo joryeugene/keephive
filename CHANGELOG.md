@@ -1,5 +1,35 @@
 # Changelog
 
+## [Unreleased]
+
+### Features
+
+- **Voice discipline (`_VOICE_DISCIPLINE`)**: All four KingBee daemon task prompts
+  (morning_briefing, stale_check, soul_update, wander) now enforce consistent output
+  constraints via a shared constant: no markdown headers, no "Here is"/"I will" openers,
+  no hedging ("might"/"could"/"possibly"), no empty affirmations ("Great!"/"Sure!").
+  Silence is explicitly valid. Injected at the end of each prompt string.
+
+- **Recency-gated nudge suppression**: `nudge.py` now tracks which nudge category last
+  fired per session via a `last_surfaced` dict in counter files. Priorities 1-4 (TODOs,
+  stale facts, pending facts, unreflected logs) are suppressed if the same category fired
+  within the last 15 prompts (`_RECENCY_THRESHOLD = 15`). Priority 5 (generic fallback)
+  is never gated. Session change resets recency automatically.
+
+- **Deterministic style hint in sessionstart**: `extract_style_hint()` reads 7 days of
+  daily logs, computes average entry length, dominant log category, and recurring themes
+  (via STOPWORDS from `wander.py`). Injects a one-line hint like
+  `[style: ~218 chars/entry; dominant: FACT/TODO; active themes: keephive, project]`
+  into session context. Requires ≥5 entries across 7 days; returns `""` on any error.
+  No LLM call.
+
+- **SubagentStop peer extraction**: `hook_subagent_stop` now calls `_extract_output()`
+  (haiku, 30s timeout) when `task_subject` is longer than 20 chars. Non-empty `captured`
+  field logs `SUBAGENT-INSIGHT: {desc} -> {captured}` with optional `(decision: ...)`.
+  Silence gate: empty `captured` falls back to plain `SUBAGENT-DONE`. New
+  `SubagentExtractionResponse` Pydantic model with silence-valid defaults (`captured=""`,
+  `decision=""`).
+
 ## v1.1.0
 
 ### Features
