@@ -39,3 +39,6 @@ server_output.log
 
 # hive export backups (generated locally, not committed)
 *.tar.gz
+
+# Git worktrees (local dev only)
+.worktrees/
