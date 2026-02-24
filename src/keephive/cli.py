@@ -64,7 +64,7 @@ HELP: dict[str, str] = {
         "  Enable: hive daemon enable wander\n"
     ),
     "swarm": "Usage: hive swarm <tasks-file> [--dry-run]  (alias: sw)\n  Parse a markdown task list and spawn an agent team.\n  Task format:\n    - [tag] Description → file/hint\n  --dry-run   Print the prompt without launching\n  Example: hive swarm todo.md",
-    "inbox": "Usage: hive inbox [--days N]\n  What KingBee generated for you today.\n  Shows wander docs, morning briefings, standup drafts, and review queues.\n  --days N  Look back N days (default 1 = today + yesterday)",
+    "inbox": "Usage: hive inbox [--days N]\n  What KingBee generated for you today.\n  Shows wander docs, morning briefings, standup drafts, and review queues.\n  --days N  Days of history to include (default 2 = today + yesterday, max 30)",
 }
 
 # Map aliases to canonical names for help lookup

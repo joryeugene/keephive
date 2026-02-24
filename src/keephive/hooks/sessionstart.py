@@ -254,6 +254,17 @@ def build_context(cwd: str, project_name: str) -> str:
     except Exception:
         pass
 
+    # 7d. KingBee activity today
+    try:
+        from keephive.storage import count_kingbee_today
+
+        kb_count = count_kingbee_today()
+        if kb_count > 0:
+            s = "entry" if kb_count == 1 else "entries"
+            parts.append(f"KingBee wrote {kb_count} {s} today. Run: hive inbox")
+    except Exception:
+        pass
+
     # 8. Session context (brief productivity signal)
     try:
         from keephive.storage import session_metrics

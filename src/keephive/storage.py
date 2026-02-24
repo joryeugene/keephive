@@ -444,6 +444,19 @@ def ensure_daily(day: str | None = None) -> Path:
     return path
 
 
+_KINGBEE_ENTRY_RE = re.compile(r"^\[(🐝 )?KingBee \d{2}:\d{2}\]")
+
+
+def count_kingbee_today() -> int:
+    """Count KingBee entries in today's daily log. Used by sessionstart nudge."""
+    path = daily_file()
+    if not path.exists():
+        return 0
+    return sum(
+        1 for line in safe_read_text(path).splitlines() if _KINGBEE_ENTRY_RE.match(line)
+    )
+
+
 def memory_file() -> Path:
     return working_dir() / "memory.md"
 

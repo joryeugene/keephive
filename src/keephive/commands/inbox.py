@@ -12,6 +12,19 @@ _KINGBEE_RE = re.compile(r"^\[(🐝 )?KingBee (\d{2}:\d{2})\] (.+)$")
 # A regular log timestamp entry or excerpt delimiter ends a KingBee content block.
 _END_RE = re.compile(r"^(- \[\d{2}:\d{2}:\d{2}\]|<!--)")
 
+# Navigation hint shown below entries that have full content elsewhere
+_TYPE_HINTS: dict[str, str] = {
+    "wander": "hive wander show",
+    "stale-check": "hive verify",
+}
+# Fallback hint for long entries with no type-specific target
+_DEFAULT_LONG_HINT = "hive log"
+
+
+def _plural(n: int, word: str) -> str:
+    """Return "N word" (singular) or "N words" (plural)."""
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
 
 def _parse_kingbee_entries(text: str) -> list[dict]:
     """Parse KingBee entries from a daily log text.
@@ -88,18 +101,19 @@ def cmd_inbox(args: list[str]) -> None:
     from keephive.output import console
     from keephive.storage import daily_file, safe_read_text
 
-    days = 1
+    # Default 2 = today + yesterday. Clamped to [1, 30].
+    days = 2
     for i, arg in enumerate(args):
         if arg == "--days" and i + 1 < len(args):
             try:
-                days = int(args[i + 1])
+                days = max(1, min(int(args[i + 1]), 30))
             except ValueError:
                 pass
 
     today = get_today()
 
     all_entries: list[tuple[date, dict]] = []
-    for delta in range(days + 1):
+    for delta in range(days):
         day = today - timedelta(days=delta)
         path = daily_file(day.isoformat())
         if not path.exists():
@@ -120,15 +134,28 @@ def cmd_inbox(args: list[str]) -> None:
             content_lines = entry["lines"]
 
             console.print(f"  [dim]{day.isoformat()} {time_str}[/dim]  {type_label}")
-            for line in content_lines[:6]:
-                console.print(f"    {line}")
-            if len(content_lines) > 6:
-                console.print(f"    [dim]... ({len(content_lines) - 6} more lines)[/dim]")
-            if type_label.lower() == "wander":
-                console.print("    [dim]→ hive wander show[/dim]")
+
+            if not content_lines:
+                console.print("    [dim](no output)[/dim]")
+            else:
+                for line in content_lines[:6]:
+                    console.print(f"    {line}")
+                if len(content_lines) > 6:
+                    extra = len(content_lines) - 6
+                    line_word = "line" if extra == 1 else "lines"
+                    console.print(f"    [dim]... ({extra} more {line_word})[/dim]")
+
+            # Navigation hint: type-specific first, then generic for long entries
+            hint = _TYPE_HINTS.get(type_label.lower())
+            if hint is None and len(content_lines) > 6:
+                hint = _DEFAULT_LONG_HINT
+            if hint:
+                console.print(f"    [dim]→ {hint}[/dim]")
+
             console.print()
     else:
-        console.print("  [dim]No KingBee activity in the last day.[/dim]")
+        day_word = "day" if days == 1 else "days"
+        console.print(f"  [dim]No KingBee activity in the last {days} {day_word}.[/dim]")
         console.print()
 
     depths = _queue_depths()
@@ -137,28 +164,22 @@ def cmd_inbox(args: list[str]) -> None:
     console.print("  [b]Needs Your Attention[/b]")
     console.print()
 
+    _COL = 36  # fixed label column width for consistent → arrow alignment
+
     if not has_queue:
         console.print("  [dim]Nothing in the review queue.[/dim]")
     else:
         if depths["facts"]:
-            console.print(
-                f"    • Facts to review: [warn]{depths['facts']}[/warn]"
-                "   → hive mem review"
-            )
+            label = _plural(depths["facts"], "fact") + " to review"
+            console.print(f"    • {label:<{_COL}}  → hive mem review")
         if depths["rules"]:
-            console.print(
-                f"    • Rules to review: [warn]{depths['rules']}[/warn]"
-                "   → hive rule review"
-            )
+            label = _plural(depths["rules"], "rule") + " to review"
+            console.print(f"    • {label:<{_COL}}  → hive rule review")
         if depths["improvements"]:
-            console.print(
-                f"    • Improvements to review: [warn]{depths['improvements']}[/warn]"
-                "  → hive improve review"
-            )
+            label = _plural(depths["improvements"], "improvement") + " to review"
+            console.print(f"    • {label:<{_COL}}  → hive improve review")
         if depths["todos"]:
-            console.print(
-                f"    • Open TODOs: [warn]{depths['todos']}[/warn]"
-                "        → hive todo"
-            )
+            label = _plural(depths["todos"], "open TODO")
+            console.print(f"    • {label:<{_COL}}  → hive todo")
 
     console.print()

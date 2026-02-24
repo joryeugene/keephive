@@ -2542,3 +2542,39 @@ class TestBackupAndWriteRegression:
         content = "# Test\n\n" + "line\n" * 100
         backup_and_write(path, content)
         assert path.read_text() == content
+
+
+class TestCountKingbeeToday:
+    def test_count_kingbee_today_empty(self, hive_env):
+        """No daily log → returns 0."""
+        from keephive.storage import count_kingbee_today
+
+        assert count_kingbee_today() == 0
+
+    def test_count_kingbee_today_with_entries(self, hive_env):
+        """Daily log with 2 KingBee entries returns 2."""
+        from keephive.clock import get_today
+        from keephive.storage import count_kingbee_today
+
+        today = get_today()
+        daily_path = hive_env / "daily" / f"{today.isoformat()}.md"
+        daily_path.write_text(
+            f"# Daily Log: {today.isoformat()}\n\n"
+            "[KingBee 07:00] morning briefing\nSome briefing text.\n\n"
+            "- [08:00:00] FACT: Something noted\n\n"
+            "[🐝 KingBee 10:30] wander\nSeed: test.\n\n"
+        )
+        assert count_kingbee_today() == 2
+
+    def test_count_kingbee_today_no_log_entries(self, hive_env):
+        """Daily log with no KingBee entries returns 0."""
+        from keephive.clock import get_today
+        from keephive.storage import count_kingbee_today
+
+        today = get_today()
+        daily_path = hive_env / "daily" / f"{today.isoformat()}.md"
+        daily_path.write_text(
+            f"# Daily Log: {today.isoformat()}\n\n"
+            "- [10:00:00] FACT: Just a regular entry\n"
+        )
+        assert count_kingbee_today() == 0
