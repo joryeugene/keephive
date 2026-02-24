@@ -1398,3 +1398,95 @@ class TestPreCompactFiresSoulUpdate:
 
         soul_update_calls = [c for c in popen_calls if "daemon" in c and "soul-update" in c]
         assert not soul_update_calls, "soul-update should NOT fire when no excerpts were captured"
+
+
+class TestClearTrigger:
+    """PreCompact with trigger='clear' should log CONTEXT-CLEARED and skip LLM."""
+
+    def test_clear_trigger_logs_context_cleared(self, hive_env, monkeypatch):
+        """trigger='clear' writes a CONTEXT-CLEARED entry to the daily log."""
+        import io
+
+        from keephive.hooks.precompact import hook_precompact
+        from keephive.storage import daily_file
+
+        monkeypatch.setattr(
+            "sys.stdin",
+            io.StringIO(
+                json.dumps({"trigger": "clear", "session_id": "sess-clear", "cwd": str(hive_env)})
+            ),
+        )
+        hook_precompact([])
+
+        content = daily_file().read_text()
+        assert "CONTEXT-CLEARED" in content
+        assert "/clear invoked" in content
+
+    def test_clear_trigger_skips_llm(self, hive_env, monkeypatch):
+        """trigger='clear' returns early without calling run_claude_pipe."""
+        import io
+
+        llm_called = []
+
+        def mock_run_claude_pipe(*args, **kwargs):
+            llm_called.append(True)
+            from keephive.models import PreCompactResponse
+
+            return PreCompactResponse(insights=[], memory_updates=[], completed_todos=[])
+
+        monkeypatch.setattr(
+            "keephive.hooks.precompact._llm_summary",
+            lambda *a, **kw: llm_called.append(True),
+        )
+        monkeypatch.setattr(
+            "sys.stdin",
+            io.StringIO(
+                json.dumps({"trigger": "clear", "session_id": "sess-clear-llm", "cwd": str(hive_env)})
+            ),
+        )
+
+        from keephive.hooks.precompact import hook_precompact
+
+        hook_precompact([])
+
+        assert not llm_called, "LLM should not be called for trigger='clear'"
+
+    def test_non_clear_trigger_still_processes(self, hive_env, monkeypatch):
+        """trigger='auto' continues to the transcript extraction path (no early return)."""
+        import io
+
+        from keephive.hooks.precompact import hook_precompact
+        from keephive.storage import daily_file
+
+        transcript = hive_env / "transcript.jsonl"
+        transcript.write_text(
+            json.dumps(
+                {
+                    "type": "user",
+                    "message": {"content": [{"type": "text", "text": "What changed today?"}]},
+                }
+            )
+            + "\n"
+        )
+
+        monkeypatch.setattr(
+            "sys.stdin",
+            io.StringIO(
+                json.dumps(
+                    {
+                        "trigger": "auto",
+                        "session_id": "sess-auto",
+                        "cwd": str(hive_env),
+                        "transcript_path": str(transcript),
+                        "HIVE_SKIP_LLM": "1",
+                    }
+                )
+            ),
+        )
+        monkeypatch.setenv("HIVE_SKIP_LLM", "1")
+
+        hook_precompact([])
+
+        # CONTEXT-CLEARED should NOT appear for non-clear triggers
+        content = daily_file().read_text() if daily_file().exists() else ""
+        assert "CONTEXT-CLEARED" not in content

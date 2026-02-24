@@ -56,6 +56,8 @@ def hook_userpromptsubmit(args: list[str]) -> None:
     if not session_id:
         return
 
+    prompt_text = input_data.get("prompt", "").strip()
+
     # Track usage (before UI queue check — prompt happened regardless)
     try:
         from keephive.storage import track_event
@@ -67,6 +69,17 @@ def hook_userpromptsubmit(args: list[str]) -> None:
     # Session prompt counting removed: Claude Code session-meta provides
     # accurate user_message_count. Hook invocations overcount (~71x) due to
     # sub-agent spawns and tool continuations.
+
+    # Log slash commands to daily log as context breadcrumbs.
+    # Captures /clear, /compact, /new, etc. before Claude processes them.
+    if prompt_text.startswith("/"):
+        try:
+            from keephive.storage import append_to_daily
+
+            ts = get_now().strftime("%H:%M:%S")
+            append_to_daily(f"- [{ts}] SLASH: {prompt_text[:80]}")
+        except Exception:
+            pass
 
     # Check UI feedback queue — inject before nudge, persist to daily log
     try:

@@ -67,6 +67,17 @@ def hook_precompact(args: list[str]) -> None:
     except Exception:
         pass
 
+    # /clear fires PreCompact with trigger="clear" but there's nothing to
+    # summarize — the user intentionally wiped context. Log the event and
+    # return early to avoid a wasted LLM call.
+    if trigger == "clear":
+        try:
+            ts = get_now().strftime("%H:%M:%S")
+            append_to_daily(f"- [{ts}] CONTEXT-CLEARED: /clear invoked; context wiped")
+        except Exception:
+            pass
+        return
+
     # Find transcript
     transcript = _find_transcript(input_data)
 

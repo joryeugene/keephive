@@ -693,6 +693,20 @@ def _setup_hooks(settings_path: Path | None = None) -> None:
     else:
         console.print("  [dim]TaskCompleted hook already configured[/dim]")
 
+    # SubagentStop hook (log subagent completion breadcrumbs)
+    sas_hooks = hooks.setdefault("SubagentStop", [])
+    sas_cmd = f"{keephive_bin} hook-subagent-stop"
+    if not any("keephive hook-subagent-stop" in _extract_cmds(h) for h in sas_hooks):
+        sas_hooks.append(
+            {
+                "matcher": "*",
+                "hooks": [{"type": "command", "command": sas_cmd}],
+            }
+        )
+        console.print("  [ok]OK[/ok] SubagentStop hook added")
+    else:
+        console.print("  [dim]SubagentStop hook already configured[/dim]")
+
     # Write back
     settings_path.write_text(json.dumps(data, indent=2) + "\n")
 
@@ -798,6 +812,7 @@ def _uninstall() -> None:
                 "Stop",
                 "SessionEnd",
                 "TaskCompleted",
+                "SubagentStop",
             ]:
                 if event in hooks:
                     cleaned = []

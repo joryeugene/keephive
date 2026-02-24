@@ -497,3 +497,69 @@ class TestNudgeContentEdgeCases:
         assert out, "Expected nudge output with stale data"
         parsed = json.loads(out)
         assert "hookSpecificOutput" in parsed
+
+
+class TestSlashCommandLogging:
+    """Slash commands starting with / are logged to the daily log as breadcrumbs."""
+
+    def _call_hook(self, input_data):
+        if isinstance(input_data, dict):
+            stdin_text = json.dumps(input_data)
+        else:
+            stdin_text = input_data
+        with patch("sys.stdin", StringIO(stdin_text)):
+            hook_userpromptsubmit([])
+
+    def test_slash_clear_logged_to_daily(self, hive_env):
+        """/clear prompt is logged as SLASH entry in the daily log."""
+        from keephive.storage import daily_file
+
+        with patch.dict("os.environ", {"HIVE_NUDGE_INTERVAL": "999"}):
+            self._call_hook({"session_id": "sess-slash-1", "prompt": "/clear"})
+
+        content = daily_file().read_text()
+        assert "SLASH: /clear" in content
+
+    def test_slash_compact_logged(self, hive_env):
+        """/compact prompt is logged as SLASH entry in the daily log."""
+        from keephive.storage import daily_file
+
+        with patch.dict("os.environ", {"HIVE_NUDGE_INTERVAL": "999"}):
+            self._call_hook({"session_id": "sess-slash-2", "prompt": "/compact"})
+
+        content = daily_file().read_text()
+        assert "SLASH: /compact" in content
+
+    def test_non_slash_not_logged(self, hive_env):
+        """Regular (non-slash) prompts do NOT create SLASH entries."""
+        from keephive.storage import daily_file
+
+        with patch.dict("os.environ", {"HIVE_NUDGE_INTERVAL": "999"}):
+            self._call_hook({"session_id": "sess-slash-3", "prompt": "help me debug this"})
+
+        content = daily_file().read_text() if daily_file().exists() else ""
+        assert "SLASH:" not in content
+
+    def test_slash_logged_even_when_nudge_suppressed(self, hive_env):
+        """Slash logging is a side effect; it fires even when nudge is suppressed."""
+        from keephive.storage import daily_file
+
+        with patch.dict("os.environ", {"HIVE_NUDGE_INTERVAL": "999"}):
+            self._call_hook({"session_id": "sess-slash-4", "prompt": "/new"})
+
+        content = daily_file().read_text()
+        assert "SLASH: /new" in content
+
+    def test_slash_prompt_truncated_at_80_chars(self, hive_env):
+        """Slash prompts longer than 80 chars are truncated in the log."""
+        from keephive.storage import daily_file
+
+        long_slash = "/clear " + "x" * 100
+
+        with patch.dict("os.environ", {"HIVE_NUDGE_INTERVAL": "999"}):
+            self._call_hook({"session_id": "sess-slash-5", "prompt": long_slash})
+
+        content = daily_file().read_text()
+        # The entry should appear but be capped at 80 chars
+        assert "SLASH: /clear" in content
+        assert "x" * 100 not in content

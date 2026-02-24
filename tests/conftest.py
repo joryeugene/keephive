@@ -272,7 +272,7 @@ def _normalize_golden(text: str) -> str:
     text = re.sub(r"(claude code|terminal|web)\s+\d+%", r"\1  N%", text)
     text = re.sub(
         r"(precompact|userpromptsubmit|posttooluse|sessionstart"
-        r"|stop|sessionend|taskcompleted)\s+\d+",
+        r"|stop|sessionend|taskcompleted|subagent_stop)\s+\d+",
         r"\1  N",
         text,
     )
