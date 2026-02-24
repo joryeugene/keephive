@@ -90,8 +90,9 @@ class TestMainDispatch:
             "Garbage collection" in out or "archive" in out.lower() or "Nothing to archive" in out
         )
 
-    def test_inbox_not_in_commands(self):
-        """Inbox commands removed from dispatch table."""
-        assert "inbox" not in COMMANDS
+    def test_inbox_in_commands(self):
+        """inbox and ib are registered; bare i/in are not (would shadow other commands)."""
+        assert "inbox" in COMMANDS
+        assert "ib" in COMMANDS
         assert "i" not in COMMANDS
         assert "in" not in COMMANDS

@@ -22,6 +22,8 @@ HELP_TEXT = """Usage: hive swarm <tasks-file> [--dry-run]
     - [tag] Description → file/hint
     - [tag] Another task
     - Untagged task (gets worker-N)
+    - [ ] GitHub-style checkbox (gets worker-N)
+    - [x] Checked item (skipped — already done)
 
   Options:
     --dry-run   Print the prompt without launching
@@ -71,18 +73,37 @@ def _parse_tasks(file_path: Path) -> list[dict]:
     """Parse markdown task list into structured dicts.
 
     Supports:
-      - [tag] Description → hint
-      - [tag] Description
-      - Description (no tag → worker-N)
+      - [tag] Description → hint    (tagged task)
+      - [tag] Description            (tagged task, no hint)
+      - Description                  (bare task → worker-N)
+      - [ ] Description              (GitHub checkbox, unchecked → worker-N)
+      - [x] Description              (GitHub checkbox, checked → skipped)
+      - [X] Description              (GitHub checkbox, checked → skipped)
+
+    Checkbox lines are matched before tag lines so a space-only bracket
+    content ("[ ]") is never mistaken for an empty tag.
     """
     tasks = []
     worker_n = 1
+    checkbox_re = re.compile(r"^\s*-\s+\[([ xX])\]\s+(.+?)(?:\s+→\s+(.+))?$")
     tag_re = re.compile(r"^\s*-\s+\[([^\]]+)\]\s+(.+?)(?:\s+→\s+(.+))?$")
     bare_re = re.compile(r"^\s*-\s+(.+?)(?:\s+→\s+(.+))?$")
 
     for line in file_path.read_text().splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
+            continue
+
+        m = checkbox_re.match(line)
+        if m:
+            marker = m.group(1)
+            if marker in ("x", "X"):
+                continue  # already done, skip
+            description = m.group(2).strip()
+            hint = m.group(3).strip() if m.group(3) else ""
+            tag = f"worker-{worker_n}"
+            worker_n += 1
+            tasks.append({"tag": tag, "description": description, "hint": hint})
             continue
 
         m = tag_re.match(line)
