@@ -144,6 +144,7 @@ on each update. Trigger manually: `hive daemon run soul-update`. Check age: `hiv
 | morning-briefing  | off     | 07:00               | daily     |
 | stale-check       | off     | Monday 08:00        | weekly    |
 | standup-draft     | off     | 17:00               | daily     |
+| wander            | off     | 14:00               | daily     |
 
 `hive daemon enable morning-briefing` to activate any off-by-default task.
 `hive daemon log` to inspect background task activity.
@@ -269,6 +270,7 @@ After finishing work:
 | Brain    | `/brain`    | High-density: working memory, rules, TODOs, telemetry    |
 | Know     | `/know`     | Deep-read knowledge guides                               |
 | Stats    | `/stats`    | Usage patterns, command breakdown                        |
+| Play     | `/play`     | Wander log: free-thinking sessions, hypothesis archive   |
 | Settings | `/settings` | Profile management, agent identity, daemon status        |
 
 ### Layout principle
@@ -278,7 +280,7 @@ Dynamic content (log, TODOs) sits at the top. Static content (standup, knowledge
 ### Tips
 
 - **Cmd+K** opens search across all memory tiers
-- **Auto-refresh** interval is configurable via the dropdown (5s to 60s, or off)
+- **Real-time updates** via SSE — no polling. Status bar shows `live` or `reconnecting…`
 - **Date navigation** in `/daily` view lets you browse past days
 - **Bookmarklet** (`hive ui-install`) captures UI feedback from any page and queues it for your next Claude Code prompt
 
@@ -298,31 +300,32 @@ No manual copy-paste. The feedback appears in Claude Code's context on the very 
 ### Architecture
 
 ```
-             +---------+
-             | Browser |
-             +----+----+
-                  |
-          GET / POST (localhost:3847)
-                  |
-          +-------v--------+
-          |  _HiveHandler  |
-          +--+-----+--+---+
-             |     |   |
-     GET /   | /api/  POST /ui-feedback
-     (page)  | fragment   |
-             |            v
-     +-------v-------+  +-----------+
-     | render_page   |  | .ui-queue |
-     | render_fragment|  +-----------+
-     +-------+-------+       |
-             |          UserPromptSubmit
-     +-------v-------+  hook injects as
-     | PANELS dict   |  [UI Feedback]
-     | 18 panels     |
-     +---------------+
-
-  Bookmarklet (hive ui-install):
-    click → select element → POST /ui-feedback → .ui-queue → next prompt
+             +---------+        +---------+
+             | Browser |        | Browser |   (multiple tabs)
+             +----+----+        +----+----+
+                  |                  |
+          GET / POST (localhost:3847)|
+                  |                  |
+          +-------v------------------v-------+
+          |      _ThreadedHTTPServer          |
+          |  (ThreadingMixIn + HTTPServer)    |
+          +---+-------+-------+----------+---+
+              |       |       |          |
+     GET /    | GET   |  POST | GET      |
+     (page)   |/api/  |/ui-   |/api/events
+              |panels | feedback  (SSE stream)
+              |       |       |          |
+     +--------v-+  +--v----+  +----------v---+
+     | render_  |  |.ui-   |  | EventSource  |
+     | page /   |  |queue  |  | subscribers  |
+     | panels   |  +---+---+  +----------+---+
+     +--------+-+      |                 |
+              |   UserPromptSubmit  _file_watcher
+              |   hook injects as   polls mtimes
+     +--------v-------+   [UI Feedback] every 0.5s
+     | PANELS dict    |               |
+     | 18 panels      |<-_broadcast_panel_updates
+     +----------------+  (md5 compare, push changed)
 ```
 
 ### View layouts
@@ -355,6 +358,15 @@ Settings (/settings)    +------------------+
 +------------------+    +------------------+
 | soul preview     |    | knowledge guides |
 +------------------+    +------------------+
+
+Play (/play)
++------------------+
+| wander stats     |
++------------------+
+| wander log       |
++------------------+
+| seed queue       |
++------------------+
 ```
 
 ## Multi-Backend LLM Routing

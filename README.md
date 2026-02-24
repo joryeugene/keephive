@@ -418,7 +418,7 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 | Stats    | `/stats`    | Usage: sparkline, heatmap, streak, command breakdown       |
 | Settings | `/settings` | Profile management, agent identity, daemon status          |
 
-Auto-refresh (configurable interval), Cmd+K search, split-pane resizing, CRUD forms (remember, add TODO, mark done, append note), log type filters, and zero external dependencies.
+Real-time SSE push updates (file watcher, no polling), Cmd+K search, split-pane resizing, CRUD forms (remember, add TODO, mark done, append note), log type filters, and zero external dependencies.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-stats.png" width="700" alt="keephive stats view — sparkline, heatmap, streak, command breakdown" />
