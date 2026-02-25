@@ -587,6 +587,9 @@ mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 .wander-hypothesis{background:#1a2332;border-left:3px solid #58a6ff;padding:6px 10px;border-radius:0 4px 4px 0;font-size:13px;color:#c9d1d9;margin-bottom:6px}
 .wander-question{font-size:12px;color:#8b949e;font-style:italic}
 .badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:500}
+.badge-success{background:#0d2b1a;color:#3fb950}
+.badge-warn{background:#2a1f0a;color:#e3b341}
+.badge-error{background:#2a0d0d;color:#f85149}
 .badge-info{background:#1a2e44;color:#58a6ff}
 .badge-secondary{background:#21262d;color:#8b949e}
 .badge-user-queued{background:#1a3a2a;color:#3fb950}
@@ -2477,7 +2480,7 @@ def _render_todo_panel(data: dict, limit: int = 0) -> str:
             f"</div>"
         )
     if not rows:
-        rows = '<div class="empty">No open TODOs</div>'
+        rows = '<div class="empty">No open TODOs. Run: <code>hive todo add &quot;task&quot;</code></div>'
     meta = f"{total}" if total else ""
     todo_input = (
         '<form class="panel-input" data-action="/api/todo/add" data-field="text">'
@@ -2513,7 +2516,7 @@ def _render_recurring_panel(data: dict) -> str:
             f"</div>"
         )
     if not rows:
-        rows = '<div class="empty">No due recurring tasks</div>'
+        rows = '<div class="empty">No due recurring tasks. Run: <code>hive recurring add</code></div>'
     meta = f"{len(due)} due" if due else ""
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Recurring tasks">'
@@ -2627,7 +2630,7 @@ def _render_knowledge_compact_panel(data: dict) -> str:
     for s in skills:
         rows += f'<a class="know-item" href="/know"><span class="acc-type">skill</span> <span class="know-name">{_e(s["name"])}</span></a>'
     if not rows:
-        rows = '<div class="empty">No knowledge items</div>'
+        rows = '<div class="empty">No knowledge items. Run: <code>hive remember &quot;FACT: ...&quot;</code></div>'
     meta = f"{total} items" if total else ""
     link = '<a class="summary-link" href="/know">Expand all &rarr;</a>'
     return (
@@ -3017,7 +3020,7 @@ def _render_stats_commands_panel(data: dict) -> str:
             )
         rows = cmd_rows
     else:
-        rows = '<div class="empty">No usage data yet</div>'
+        rows = '<div class="empty">No usage data yet. Start a Claude Code session to begin tracking.</div>'
 
     # Tool breakdown (moved from Sessions panel)
     tools_html = ""
@@ -3079,7 +3082,7 @@ def _render_ps_panel(data: dict) -> str:
             f"</div>"
         )
     if not rows:
-        rows = '<div class="empty">No recent projects</div>'
+        rows = '<div class="empty">No recent projects. Open Claude Code in any project directory.</div>'
     proc_str = f"{active} active session{'s' if active != 1 else ''}"
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Projects">'
@@ -3142,13 +3145,59 @@ def _render_standup_panel(data: dict) -> str:
         rows += "</div>"
 
     if not rows:
-        rows = '<div class="empty">No standup data yet</div>'
+        rows = '<div class="empty">No standup data yet. Run: <code>hive standup</code></div>'
 
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Standup">'
         f'<div class="card-header"><span class="card-title">Today\'s Focus</span></div>'
         f"{_cmd_hints(['hive standup', 'hive todo', 'hive todo done <pat>'])}"
         f'<div class="card-body">{rows}</div>'
+        f"</div>"
+    )
+
+
+def _get_standup_preview_data() -> dict:
+    """Extract the most recent standup draft from today's daily log."""
+    import re
+
+    from keephive.clock import get_today
+    from keephive.storage import hive_dir
+
+    today = get_today()
+    log_file = hive_dir() / "daily" / f"{today}.md"
+    if not log_file.exists():
+        return {"draft": "", "date": str(today)}
+
+    content = log_file.read_text(errors="replace")
+    # Find all standup draft blocks (may appear multiple times — take the last)
+    pattern = r"\[(?:🐝 )?KingBee \d{2}:\d{2}\] standup draft\n(.*?)(?=\n\[|\n##|\Z)"
+    matches = re.findall(pattern, content, re.DOTALL)
+    if matches:
+        draft = matches[-1].strip()
+    else:
+        draft = ""
+    return {"draft": draft, "date": str(today)}
+
+
+def _render_standup_preview_panel(data: dict) -> str:
+    draft = data.get("draft", "").strip()
+    date = data.get("date", "")
+    if not draft:
+        body = (
+            '<div class="empty">No standup draft yet.'
+            ' Run: <code>hive daemon enable standup-draft</code></div>'
+        )
+    else:
+        escaped = _e(draft)
+        body = f'<pre style="white-space:pre-wrap;font-size:11px;color:#c9d1d9;margin:0">{escaped}</pre>'
+
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Standup Draft">'
+        f'<div class="card-header">'
+        f'<span class="card-title">Standup Draft</span>'
+        f'<span class="card-meta">{_e(date)}</span>'
+        f"</div>"
+        f'<div class="card-body">{body}</div>'
         f"</div>"
     )
 
@@ -3491,7 +3540,7 @@ def _render_sessions_panel(data: dict) -> str:
         return (
             '<div class="card" tabindex="0" role="region" aria-label="Sessions">'
             '<div class="card-header"><span class="card-title">Sessions</span></div>'
-            '<div class="card-body"><div class="empty">No session data yet</div></div>'
+            '<div class="card-body"><div class="empty">No session data yet. Start a Claude Code session to begin tracking.</div></div>'
             "</div>"
         )
 
@@ -3913,7 +3962,7 @@ def _render_trends_panel(data: dict) -> str:
             f"</div>"
         )
     if not rows:
-        rows = '<div class="empty">Not enough data for trends</div>'
+        rows = '<div class="empty">Not enough data for trends yet. Use keephive for a few days to see patterns.</div>'
 
     # Source breakdown bars using gauge classes
     sources_html = ""
@@ -4736,7 +4785,7 @@ def _render_pipeline_panel(data: dict) -> str:
         return (
             '<div class="card" tabindex="0" role="region" aria-label="Pipeline Health">'
             '<div class="card-header"><span class="card-title">Pipeline Health</span></div>'
-            '<div class="card-body"><div class="empty">No verified facts yet</div></div>'
+            '<div class="card-body"><div class="empty">No verified facts yet. Run: <code>hive remember &quot;FACT: ...&quot;</code> then <code>hive v</code></div></div>'
             "</div>"
         )
 
@@ -4940,7 +4989,7 @@ def _render_capture_panel(data: dict) -> str:
         return (
             '<div class="card" tabindex="0" role="region" aria-label="Capture signals">'
             '<div class="card-header"><span class="card-title">Capture Signals</span></div>'
-            '<div class="card-body"><div class="empty">No entries in last 7 days</div></div>'
+            '<div class="card-body"><div class="empty">No entries in last 7 days. Run: <code>hive remember &quot;FACT: ...&quot;</code></div></div>'
             "</div>"
         )
 
@@ -5010,7 +5059,7 @@ def _render_recalled_panel(data: dict) -> str:
         return (
             '<div class="card" tabindex="0" role="region" aria-label="Most Recalled">'
             '<div class="card-header"><span class="card-title">Most Recalled</span></div>'
-            '<div class="card-body"><div class="empty">No recall data yet</div></div>'
+            '<div class="card-body"><div class="empty">No recall data yet. Run: <code>hive recall &lt;topic&gt;</code></div></div>'
             "</div>"
         )
 
@@ -5134,7 +5183,7 @@ def _render_profiles_panel(data: dict) -> str:
         rows += "</div>"
 
     if not rows:
-        rows = '<div class="empty">No profiles yet</div>'
+        rows = '<div class="empty">No profiles yet. Run: <code>hive profile create &lt;name&gt;</code></div>'
 
     # Create form
     create_form = (
@@ -5596,7 +5645,7 @@ def _get_active_loops_data() -> dict:
 def _render_active_loops_panel(data: dict) -> str:
     loops = data.get("loops", [])
     if not loops:
-        body = '<div class="empty">No active loops</div>'
+        body = '<div class="empty">No active loops. Run: <code>hive run &lt;task&gt;</code></div>'
     else:
         rows = ""
         for loop in loops:
@@ -5762,7 +5811,7 @@ def _render_daemon_status_panel(data: dict) -> str:
             f"</div>"
         )
     if not rows:
-        rows = '<div class="empty">No daemon config found</div>'
+        rows = '<div class="empty">No daemon config found. Run: <code>hive daemon start</code></div>'
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Daemon status">'
         f'<div class="card-header"><span class="card-title">Daemon Tasks</span>'
@@ -5790,7 +5839,7 @@ def _get_daemon_log_data() -> dict:
 def _render_daemon_log_panel(data: dict) -> str:
     lines = data.get("lines", [])
     if not lines:
-        body = '<div class="empty">daemon.log is empty</div>'
+        body = '<div class="empty">daemon.log is empty. Run: <code>hive daemon start</code> or <code>hive daemon run &lt;task&gt;</code></div>'
     else:
         items = "".join(
             f'<div style="white-space:pre;overflow-x:hidden;text-overflow:ellipsis">{_e(line)}</div>'
@@ -5834,6 +5883,7 @@ PANELS: dict[str, tuple] = {
     "ps": (_get_ps_data, _render_ps_panel),
     "facts": (_get_recent_facts_data, _render_recent_facts_panel),
     "standup": (_get_standup_data, _render_standup_panel),
+    "standup-preview": (_get_standup_preview_data, _render_standup_preview_panel),
     "stats-summary": (_get_stats_summary_data, _render_stats_summary_panel),
     "knowledge-tabbed": (_get_knowledge_all_data, _render_knowledge_tabbed_panel),
     "sessions": (_get_session_data, _render_sessions_panel),
@@ -5864,7 +5914,7 @@ VIEWS: dict[str, dict] = {
         "rows": [["status", "stats"]],
         "cols": [
             ["log-home", "todos"],
-            ["standup", "stats-capture", "recurring", "ps"],
+            ["standup", "standup-preview", "stats-capture", "recurring", "ps"],
         ],
     },
     "dev": {
