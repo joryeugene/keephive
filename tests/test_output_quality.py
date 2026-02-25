@@ -130,9 +130,13 @@ class TestStandupOutput:
         out = capsys.readouterr().out
         assert "Blockers:" in out
 
-    def test_empty_standup_gives_guidance(self, hive_env, capsys):
+    def test_empty_standup_gives_guidance(self, hive_env, capsys, monkeypatch):
         """Empty standup shows how to start tracking work."""
+        import keephive.commands.standup as standup_mod
         from keephive.commands.standup import cmd_standup
+
+        # Isolate from real GitHub API so no open PRs pollute empty-state output
+        monkeypatch.setattr(standup_mod, "_run_gh", lambda *a, **kw: [])
 
         cmd_standup([])
         out = capsys.readouterr().out
