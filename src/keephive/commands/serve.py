@@ -5866,6 +5866,7 @@ PANELS: dict[str, tuple] = {
     "log": (_get_log_data, _render_log_panel),
     "log-brief": (_get_log_data, _render_log_brief_panel),
     "log-home": (_get_log_data, _render_log_home_panel),
+    "log-dated": (_get_log_data, _render_log_home_panel),
     "todos": (_get_todo_data, _render_todo_panel),
     "todos-brief": (_get_todo_data, _render_todo_brief_panel),
     "recurring": (_get_todo_data, _render_recurring_panel),
@@ -6298,6 +6299,22 @@ class _HiveHandler(BaseHTTPRequestHandler):
                     extra_params["log_date"] = log_date
                 body = render_fragment(view_name, extra_params or None).encode()
 
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self._cors()
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == "/api/panel/log-dated":
+            qs = parse_qs(parsed.query)
+            date_param = qs.get("date", [None])[0]
+            data = _get_log_data(date_param)
+            panel_html = _render_log_panel(data, limit=25, show_nav=True)
+            body = (
+                f'<div class="grid-panel" data-panel-id="log-dated">{panel_html}</div>'
+            ).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self._cors()
