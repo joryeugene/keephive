@@ -179,6 +179,12 @@ demo-f1: demo-seed
     gifsicle --optimize=3 --lossy=80 --colors=128 assets/cli-demo-f1.gif -o assets/cli-demo-f1.gif
     @ls -lh assets/cli-demo-f1.gif
 
+# Record F2 KB channel + checkup Stage 3 demo GIF (requires vhs)
+demo-f2: demo-seed
+    HIVE_HOME="$HOME/.claude/hive-demo" vhs assets/demo-f2.tape
+    gifsicle --optimize=3 --lossy=80 --colors=128 assets/cli-demo-f2.gif -o assets/cli-demo-f2.gif
+    @ls -lh assets/cli-demo-f2.gif
+
 # Take dashboard screenshots (requires shot-scraper: uv tool install shot-scraper)
 demo-screenshots: demo-seed
     #!/usr/bin/env bash
@@ -196,14 +202,28 @@ demo-screenshots: demo-seed
     shot-scraper http://localhost:13847/stats -o assets/dashboard-stats.png --width 1200 --height 900
     shot-scraper http://localhost:13847/know  -o assets/dashboard-knowledge.png --width 1200 --height 900
     shot-scraper http://localhost:13847/      -o assets/dashboard-home.png --width 1200 --height 900
+    shot-scraper http://localhost:13847/play  -o assets/dashboard-play.png --width 1200 --height 900
     # Cleanup
     kill $SERVER_PID 2>/dev/null || true
     @echo "Screenshots captured:"
     @ls -lh assets/dashboard-*.png
 
-# Regenerate all demo assets (GIF + screenshots)
-demo-assets: demo-gif demo-f1 demo-screenshots
-    @echo "All demo assets regenerated from demo profile"
+# Regenerate all demo assets in parallel (GIF recordings concurrent, screenshots last)
+demo-assets: demo-seed
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Run gif recordings in parallel
+    HIVE_HOME="$HOME/.claude/hive-demo" vhs assets/demo.tape &
+    HIVE_HOME="$HOME/.claude/hive-demo" vhs assets/demo-f1.tape &
+    HIVE_HOME="$HOME/.claude/hive-demo" vhs assets/demo-f2.tape &
+    wait
+    # Optimize all at once
+    gifsicle --optimize=3 --lossy=80 --colors=128 assets/cli-demo.gif -o assets/cli-demo.gif
+    gifsicle --optimize=3 --lossy=80 --colors=128 assets/cli-demo-f1.gif -o assets/cli-demo-f1.gif
+    gifsicle --optimize=3 --lossy=80 --colors=128 assets/cli-demo-f2.gif -o assets/cli-demo-f2.gif
+    # Screenshots last (needs serve running)
+    just demo-screenshots
+    echo "All demo assets regenerated"
 
 # ── Release ───────────────────────────────────────────────────────────────────
 

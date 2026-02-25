@@ -44,7 +44,7 @@ Everything else on this page is optional depth.
 > You never type a full name. Two keystrokes for the command, a few more for the target.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-brain.png" width="800" alt="keephive brain dashboard — working memory, rules, TODOs, platform telemetry" />
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-stats.png" width="800" alt="keephive stats view — sparkline, heatmap, streak, command breakdown" />
 </p>
 
 <p align="center">
@@ -425,6 +425,9 @@ Real-time SSE push updates (file watcher, no polling), Cmd+K search, split-pane 
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-stats.png" width="700" alt="keephive stats view — sparkline, heatmap, streak, command breakdown" />
+</p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-play.png" width="700" alt="keephive /play — wander docs and seed management" />
 </p>
 <p align="center">
   <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-knowledge.png" width="700" alt="keephive knowledge view — guides and prompt templates" />
