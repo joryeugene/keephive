@@ -7,8 +7,11 @@ Live updates via Server-Sent Events: a file-watcher thread polls HIVE_HOME mtime
 every 0.5s, re-renders changed panels (md5 hash compare), and pushes panel-update
 events to all connected browser tabs. No polling on the client side.
 
-Usage: hive serve [port] [--hot]
-       --hot   Watch source files, restart server on change
+Usage: hive serve [port] [--hot] [--restart]
+       hive serve stop
+       --hot      Watch source files, restart server on change
+       --restart  Stop any running server on this port, then start fresh
+       stop       Stop the server running on the default port and exit
 """
 
 from __future__ import annotations
@@ -7134,17 +7137,58 @@ def _hot_watcher(port: int) -> None:
             return
 
 
+def _stop_serve(port: int) -> int:
+    """Kill keephive serve processes listening on port. Returns count killed."""
+    import signal
+    import subprocess
+
+    result = subprocess.run(
+        ["lsof", "-ti", f"tcp:{port}"],
+        capture_output=True,
+        text=True,
+    )
+    raw_pids = [p.strip() for p in result.stdout.split() if p.strip().isdigit()]
+    killed = 0
+    for pid_str in raw_pids:
+        pid = int(pid_str)
+        # Verify it's a keephive serve process, not a browser client
+        cmd_result = subprocess.run(
+            ["ps", "-p", pid_str, "-o", "command="],
+            capture_output=True,
+            text=True,
+        )
+        cmd_line = cmd_result.stdout.strip()
+        if "keephive" in cmd_line and "serve" in cmd_line:
+            try:
+                os.kill(pid, signal.SIGTERM)
+                killed += 1
+            except ProcessLookupError:
+                pass
+    return killed
+
+
 def cmd_serve(args: list[str]) -> None:
     import os
 
     port = DEFAULT_PORT
     hot = False
+    restart = False
     remaining = []
     for a in args:
         if a in ("--hot", "--hot-reload"):
             hot = True
+        elif a == "--restart":
+            restart = True
         else:
             remaining.append(a)
+
+    if remaining and remaining[0] == "stop":
+        killed = _stop_serve(port)
+        if killed:
+            print(f"Stopped {killed} server process{'es' if killed != 1 else ''} on port {port}.")
+        else:
+            print(f"No keephive serve process found on port {port}.")
+        return
 
     if remaining:
         try:
@@ -7152,6 +7196,13 @@ def cmd_serve(args: list[str]) -> None:
         except ValueError:
             print(f"Invalid port: {remaining[0]}", file=sys.stderr)
             return
+
+    if restart:
+        killed = _stop_serve(port)
+        if killed:
+            print(f"Stopped {killed} existing server process{'es' if killed != 1 else ''}.")
+            import time
+            time.sleep(0.3)
 
     if hot and not os.environ.get("HIVE_SERVE_WORKER"):
         _hot_watcher(port)
@@ -7164,6 +7215,7 @@ def cmd_serve(args: list[str]) -> None:
         httpd = _ThreadedHTTPServer(("localhost", port), _HiveHandler)
     except OSError as exc:
         print(f"Could not start server on port {port}: {exc}", file=sys.stderr)
+        print("  Try: hive serve stop", file=sys.stderr)
         return
 
     watcher = threading.Thread(target=_file_watcher_thread, daemon=True)
