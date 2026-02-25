@@ -593,6 +593,7 @@ mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 .badge-cross-pollination{background:#1a2632;color:#58a6ff}
 .badge-recurring-topic{background:#2a2a1a;color:#e3b341}
 .badge-stale-todo{background:#2a1a1a;color:#f85149}
+.badge-pending{background:#2a1f0a;color:#d29922}
 .chip{display:inline-flex;align-items:center;gap:4px;background:#21262d;border:1px solid #30363d;border-radius:999px;padding:2px 8px;font-size:11px;color:#c9d1d9;margin:2px}
 .chip-num{color:#484f58;font-size:10px;margin-right:2px}
 .chip-remove{border:none;background:none;color:#484f58;cursor:pointer;padding:0 2px;font-size:12px;line-height:1}
@@ -5175,33 +5176,30 @@ def _render_transfer_panel(data: dict) -> str:
 
 
 def _get_wander_data() -> dict:
-    try:
-        from datetime import timedelta
+    from datetime import timedelta
 
-        from keephive.clock import get_today
-        from keephive.storage import get_wander_seeds, list_wander_docs
+    from keephive.clock import get_today
+    from keephive.storage import get_wander_seeds, list_wander_docs
 
-        all_docs = list_wander_docs(limit=100)
-        docs = all_docs[:20]
-        seeds = get_wander_seeds()
+    all_docs = list_wander_docs(limit=100)
+    docs = all_docs[:20]
+    seeds = get_wander_seeds()
 
-        # 30-day sparkline: (label, count, iso_date) per day
-        date_counts: dict[str, int] = {}
-        for doc in all_docs:
-            raw = doc.get("date", "")
-            if len(raw) == 8:
-                iso = f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
-                date_counts[iso] = date_counts.get(iso, 0) + 1
-        today = get_today()
-        spark = []
-        for i in range(29, -1, -1):
-            d = today - timedelta(days=i)
-            iso = d.isoformat()
-            spark.append((d.strftime("%b %d"), date_counts.get(iso, 0), iso))
+    # 30-day sparkline: (label, count, iso_date) per day
+    date_counts: dict[str, int] = {}
+    for doc in all_docs:
+        raw = doc.get("date", "")
+        if len(raw) == 8:
+            iso = f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
+            date_counts[iso] = date_counts.get(iso, 0) + 1
+    today = get_today()
+    spark = []
+    for i in range(29, -1, -1):
+        d = today - timedelta(days=i)
+        iso = d.isoformat()
+        spark.append((d.strftime("%b %d"), date_counts.get(iso, 0), iso))
 
-        return {"docs": docs, "seeds": seeds, "sparkline": spark}
-    except Exception:
-        return {"docs": [], "seeds": [], "sparkline": []}
+    return {"docs": docs, "seeds": seeds, "sparkline": spark}
 
 
 _SOURCE_LABELS: dict[str, str] = {
@@ -5302,12 +5300,26 @@ def _render_wander_seed_panel(data: dict) -> str:
     seeds = data.get("seeds", [])
     queued_count = len(seeds)
 
+    # Seeds with a prior completed doc get a "re-queued" hint
+    prior_seeds = {d.get("seed", "").lower() for d in data.get("docs", [])}
+
     chips = ""
     for i, seed in enumerate(seeds):
+        if seed.lower() in prior_seeds:
+            status = (
+                '<span class="badge badge-pending" '
+                'title="Previously wandered — queued again">pending &#x21bb;</span>'
+            )
+        else:
+            status = (
+                '<span class="badge badge-pending" '
+                'title="Waiting to be wandered">pending</span>'
+            )
         chips += (
             f'<span class="chip">'
             f'<span class="chip-num">{i + 1}</span>'
             f"{_e(seed)}"
+            f"{status}"
             f'<button onclick="removeWanderSeed({i})" class="chip-remove" title="Remove">&#x00D7;</button>'
             f"</span>"
         )

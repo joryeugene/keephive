@@ -4142,3 +4142,87 @@ class TestSseEndpointLive:
         assert not any(c is q for _, c in _serve._sse_clients), (
             "Handler must remove its queue from _sse_clients when write raises BrokenPipeError"
         )
+
+
+# ---- Wander panel: Bug 1 (bare-except removed) + Bug 2 (pending badge) ----
+
+
+def test_get_wander_data_returns_expected_keys(hive_env):
+    from keephive.commands.serve import _get_wander_data
+
+    data = _get_wander_data()
+    assert "docs" in data
+    assert "seeds" in data
+    assert "sparkline" in data
+    assert isinstance(data["docs"], list)
+    assert isinstance(data["seeds"], list)
+    assert len(data["sparkline"]) == 30
+
+
+def test_get_wander_data_propagates_exception(hive_env, monkeypatch):
+    """_get_wander_data must NOT swallow errors — propagates to _render_panel_safe.
+
+    The function does a lazy `from keephive.storage import list_wander_docs` on each
+    call, so patching the attribute on the storage module is the correct interception
+    point.
+    """
+    import keephive.storage as storage_mod
+    from keephive.commands.serve import _render_panel_safe
+
+    def boom(limit: int = 20):
+        raise RuntimeError("simulated storage failure")
+
+    monkeypatch.setattr(storage_mod, "list_wander_docs", boom)
+    html = _render_panel_safe("wander-stats")
+    assert "simulated storage failure" in html
+
+
+def test_render_wander_seed_panel_no_seeds(hive_env):
+    from keephive.commands.serve import _render_wander_seed_panel
+
+    html = _render_wander_seed_panel({"seeds": [], "docs": [], "sparkline": []})
+    assert "No seeds queued" in html
+    assert "badge-pending" not in html
+
+
+def test_render_wander_seed_panel_pending_badge(hive_env):
+    """New seed with no prior doc shows 'pending' badge."""
+    from keephive.commands.serve import _render_wander_seed_panel
+
+    data = {"seeds": ["brand new topic"], "docs": [], "sparkline": []}
+    html = _render_wander_seed_panel(data)
+    assert "badge-pending" in html
+    assert "pending" in html
+    assert "&#x21bb;" not in html  # no recycle symbol for a first-time seed
+
+
+def test_render_wander_seed_panel_requeued_badge(hive_env):
+    """Seed that already has a completed doc shows the re-queued indicator."""
+    from keephive.commands.serve import _render_wander_seed_panel
+
+    data = {
+        "seeds": ["reinstall test seed"],
+        "docs": [{"seed": "reinstall test seed", "seed_source": "user-queued"}],
+        "sparkline": [],
+    }
+    html = _render_wander_seed_panel(data)
+    assert "badge-pending" in html
+    assert "&#x21bb;" in html  # recycle symbol for re-queued seed
+
+
+def test_render_wander_stats_panel_shows_source_rows(hive_env):
+    from keephive.commands.serve import _render_wander_stats_panel
+
+    data = {
+        "docs": [
+            {"seed": "a", "seed_source": "user-queued", "used_web_search": False},
+            {"seed": "b", "seed_source": "cross-pollination", "used_web_search": True},
+            {"seed": "c", "seed_source": "user-queued", "used_web_search": False},
+        ],
+        "seeds": [],
+        "sparkline": [],
+    }
+    html = _render_wander_stats_panel(data)
+    assert "user-queued" in html
+    assert "cross-pollination" in html
+    assert "Web search: 1/3" in html
