@@ -771,3 +771,63 @@ class TestKingBeeIntegration:
         screen.has_any(["No pending", "still learning", "KingBee"])
         screen.lacks("Traceback")
         save_terminal_output("daemon/improve_review_empty", term)
+
+
+@pytest.mark.terminal
+class TestInboxCLI:
+    def test_inbox_empty_state(self, term, save_terminal_output):
+        """hive inbox on a fresh hive shows Inbox header and no-activity message."""
+        screen = term.type("python -m keephive inbox")
+        screen.has("Inbox")
+        screen.has_any(["No KingBee activity", "last 2 days", "last 1 day"])
+        screen.lacks("Traceback", "KeyError", "AttributeError")
+        save_terminal_output("inbox/empty_state", term)
+
+    def test_inbox_shows_kingbee_entries(self, term, save_terminal_output):
+        """hive inbox surfaces KingBee entries written to the daily log."""
+        today = "2026-02-25"
+        term.set_date(today)
+        daily_path = term.hive_home / "daily" / f"{today}.md"
+        daily_path.parent.mkdir(parents=True, exist_ok=True)
+        daily_path.write_text(
+            f"# Daily Log: {today}\n\n"
+            "[🐝 KingBee 14:30] wander\n"
+            "Deterministic seed selection confirmed working.\n"
+        )
+        screen = term.type("python -m keephive inbox")
+        screen.has("wander")
+        screen.lacks("Traceback")
+        save_terminal_output("inbox/with_entries", term)
+
+    def test_inbox_days_flag(self, term, save_terminal_output):
+        """hive inbox --days 1 renders without crash and shows Inbox header."""
+        screen = term.type("python -m keephive inbox --days 1")
+        screen.has("Inbox")
+        screen.lacks("Traceback", "ValueError", "AttributeError")
+        save_terminal_output("inbox/days_flag", term)
+
+
+@pytest.mark.terminal
+class TestImproveReview:
+    def test_improve_dismiss_flow(self, term, save_terminal_output):
+        """Dismissing an item via 'n' removes it from the pending queue."""
+        import json
+
+        item = {
+            "type": "rule",
+            "rule": "Capture rationale for decisions before session ends",
+            "rationale": "Missed in 3 consecutive sessions",
+            "proposed_at": "2026-02-22T10:00:00",
+        }
+        pending_path = term.hive_home / ".pending-improvements.json"
+        pending_path.write_text(json.dumps([item]))
+
+        # Pipe 'n\n' so stdin is non-TTY; prompt_choice reads 'n' and dismisses
+        screen = term.type("printf 'n\\n' | python -m keephive improve review")
+        screen.has("dismissed")
+        screen.lacks("Traceback")
+
+        # Pending queue must now be empty
+        remaining = json.loads(pending_path.read_text())
+        assert remaining == [], f"Expected empty queue after dismiss, got {remaining}"
+        save_terminal_output("improve/dismiss_flow", term)

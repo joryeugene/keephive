@@ -401,6 +401,8 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 | `hive wander seed <txt>`|                   | Queue a seed for next wander run           |
 | `hive wander show`      |                   | View most recent wander doc                |
 | `hive wander run`       |                   | Run wander task manually                   |
+| `hive run "<task>"`     | `rn`              | Run an autonomous multi-iteration loop     |
+| `hive inbox`            | `ib`              | Surface KingBee output + review queues     |
 
 </details>
 
@@ -577,6 +579,26 @@ hive improve review        # interactive accept/defer/dismiss
 hive improve list           # show pending proposals with age
 hive improve clear-stale    # remove proposals older than 30 days
 ```
+
+#### Autonomous Loops (`hive run`)
+
+`hive run "<task>"` launches a multi-iteration autonomous loop. Claude works on the task; the Stop hook captures progress after each turn and continues the loop until the task completes.
+
+    hive run "summarize last week's insights"
+    hive run "refactor the storage module" --background
+    hive run status      # show active loops
+    hive run history     # recent completed loops
+
+SOUL wisdom injects into the first iteration banner. Facts extracted from each iteration land in `.pending-facts.md` for review. See the built-in loop guide: `hive k loop`.
+
+#### Inbox (`hive inbox`)
+
+`hive inbox` surfaces what KingBee generated recently alongside pending review queues.
+
+    hive inbox            # last 2 calendar days
+    hive inbox --days 7   # extend lookback window
+
+Shows: KingBee activity (wander docs, standup drafts, stale findings) and queue depths (pending facts, rules, improvements, TODOs). Navigation hints point to the relevant review commands.
 
 #### Stats
 

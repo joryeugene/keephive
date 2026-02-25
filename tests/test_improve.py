@@ -414,6 +414,54 @@ class TestDismissedImprovements:
         assert "skill-0" not in names  # oldest item dropped off
 
 
+class TestApplySkillEditEditorFallback:
+    """_apply_improvement(edit action) opens $EDITOR when LLM apply fails."""
+
+    def test_apply_skill_edit_opens_editor_when_llm_fails(self, hive_env, monkeypatch):
+        """When _apply_skill_edit returns False, $EDITOR is opened as fallback.
+
+        Bug caught: LLM failure path silently skips the edit with no user feedback
+        instead of falling back to $EDITOR so the user can apply changes manually.
+        """
+        import os
+
+        from keephive.commands.improve import _apply_improvement
+        from keephive.storage import guides_dir
+
+        gd = guides_dir()
+        gd.mkdir(parents=True, exist_ok=True)
+        skill_path = gd / "keephive-guide.md"
+        skill_path.write_text("# keephive Guide\n\nOriginal content.\n")
+
+        # Force _apply_skill_edit to return False (simulates LLM unavailable)
+        monkeypatch.setattr("keephive.commands.improve._apply_skill_edit", lambda *a, **kw: False)
+
+        subprocess_calls = []
+
+        def capture_subprocess(*args, **kwargs):
+            subprocess_calls.append(args[0])
+
+        monkeypatch.setattr("subprocess.run", capture_subprocess)
+        monkeypatch.setenv("EDITOR", "nano")
+
+        item = {
+            "type": "edit",
+            "action": "edit",
+            "target_type": "skill",
+            "name": "keephive-guide",
+            "changes": "Add section about new feature",
+            "rationale": "Missing coverage",
+        }
+        _apply_improvement(item)
+
+        assert len(subprocess_calls) == 1, "Expected exactly one subprocess.run call for $EDITOR"
+        editor_cmd = subprocess_calls[0]
+        assert "nano" in editor_cmd, f"Expected 'nano' in editor command, got {editor_cmd}"
+        assert str(skill_path) in editor_cmd, (
+            f"Expected skill path in editor command, got {editor_cmd}"
+        )
+
+
 class TestKingBeeStatusLine:
     """hive stats output includes a KingBee status line when SOUL.md exists."""
 

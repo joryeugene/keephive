@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## v1.2.0
+
+Autonomous loops, inbox surfacing, LLM-driven improve review, KB identity channel, voice discipline, stats tracking, and privacy CLI mode.
 
 ### Features
 
