@@ -397,7 +397,11 @@ def _launch_tmux_window(loop_id: str, window_name: str, prompt: str) -> str | No
 
     # Interactive mode (not -p): Stop hook fires after each turn, advancing iter.
     # HIVE_LOOP_ID in env lets _find_loop_for_session claim the session on first Stop.
-    cmd_str = f"HIVE_LOOP_ID={loop_id} claude --dangerously-skip-permissions"
+    # Pass 'proceed' as the initial message positional arg — Claude interactive mode
+    # accepts this and auto-submits it, so no timing-sensitive send-keys is needed.
+    # SessionStart injects the loop context as additionalContext before Claude
+    # processes any user messages, so 'proceed' lands with full context available.
+    cmd_str = f"HIVE_LOOP_ID={loop_id} claude --dangerously-skip-permissions 'proceed'"
 
     result = subprocess.run(
         ["tmux", "new-window", "-n", window_name, cmd_str],
@@ -410,20 +414,6 @@ def _launch_tmux_window(loop_id: str, window_name: str, prompt: str) -> str | No
         console.print(f"[err]tmux launch failed:[/err] {err}")
         prompt_file.unlink(missing_ok=True)
         return None
-
-    # After claude starts, send a short trigger to kick off the first iteration.
-    # SessionStart already injected the loop banner via additionalContext; this
-    # trigger is just the user message that causes Claude to act on it.
-    # Poll until Claude's '>' input prompt is visible before sending keys — a
-    # fixed sleep races against SessionStart hook + model init and causes Enter
-    # to be swallowed, leaving 'proceed' typed but unsubmitted.
-    subprocess.Popen(
-        f"timeout 60 sh -c "
-        f"\"until tmux capture-pane -t '{window_name}' -p 2>/dev/null | tail -5 | grep -q '^>'; "
-        f"do sleep 1; done\" "
-        f"&& tmux send-keys -t '{window_name}' 'proceed' Enter",
-        shell=True,
-    )
 
     return window_name
 
