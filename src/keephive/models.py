@@ -213,15 +213,20 @@ class ProposedEdit(BaseModel):
     rationale: str = Field(description="Evidence from logs: why this edit improves things")
     changes: str = Field(
         description=(
-            "For edit: full updated content. "
+            "For edit: description of what to add, change, or fix — include any specific "
+            "new sections verbatim. The apply phase merges this with the full guide. "
             "For prune: reason to remove. "
-            "For merge: merged full content combining both."
+            "For merge: full merged content combining both."
         )
     )
     merge_with: str | None = Field(
         default=None,
         description="For merge: name of second item to combine with target_name",
     )
+
+
+class GuideApplyResponse(BaseModel):
+    content: str = Field(description="The complete updated guide content in Markdown")
 
 
 class ImprovementResponse(BaseModel):

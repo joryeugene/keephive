@@ -168,6 +168,37 @@ def _improve_review() -> None:
         console.print(f"\n  {len(remaining)} improvement(s) deferred.\n")
 
 
+def _apply_skill_edit(skill_path, target: str, changes: str) -> bool:
+    """Apply a proposed edit to a skill guide via LLM using full guide context.
+
+    Returns True on success, False on failure (caller opens $EDITOR as fallback).
+    """
+    from keephive.claude import ClaudePipeError, run_claude_pipe
+    from keephive.models import GuideApplyResponse
+
+    existing = skill_path.read_text()
+    prompt = f"""You are updating a knowledge guide.
+
+EXISTING GUIDE ({target}):
+{existing}
+
+PROPOSED CHANGE:
+{changes}
+
+Apply the proposed change to produce the complete updated guide.
+Preserve all existing content that is still accurate. Write clean Markdown only.
+No preamble, no commentary — output the guide directly."""
+
+    try:
+        result = run_claude_pipe(prompt, GuideApplyResponse, model="haiku")
+        if result and result.content.strip():
+            skill_path.write_text(result.content)
+            return True
+        return False
+    except ClaudePipeError:
+        return False
+
+
 def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
     item_type = item.get("type")
 
@@ -182,7 +213,9 @@ def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
         skill_path = gd / f"{name}.md"
         skill_path.write_text(content)
         console.print(f"  [green]✓[/green] Installed → {skill_path}")
-        console.print("  Run [dim]hive skill sync[/dim] to publish.")
+        from keephive.commands.skill import _skill_sync
+
+        _skill_sync()
 
     elif item_type == "task":
         name = item.get("name", "").strip()
@@ -245,7 +278,23 @@ def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
                 gd = guides_dir()
                 gd.mkdir(parents=True, exist_ok=True)
                 skill_path = gd / f"{target}.md"
-                skill_path.write_text(changes)
+
+                if action == "edit" and skill_path.exists():
+                    # Apply-time LLM: merge proposed changes into full guide
+                    success = _apply_skill_edit(skill_path, target, changes)
+                    if not success:
+                        import os
+                        import subprocess
+
+                        console.print(
+                            f"  [warn]LLM apply failed for {target} — opening $EDITOR as fallback[/warn]"
+                        )
+                        editor = os.environ.get("EDITOR", "nano")
+                        subprocess.run([editor, str(skill_path)])
+                else:
+                    # merge or new file: full replacement is correct
+                    skill_path.write_text(changes)
+
                 merge_note = (
                     f" (merged with {item.get('merge_with')})" if item.get("merge_with") else ""
                 )
@@ -257,7 +306,9 @@ def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
                         console.print(
                             f"  [green]✓[/green] Removed merged-in skill: {item['merge_with']}"
                         )
-                console.print("  Run [dim]hive skill sync[/dim] to publish.")
+                from keephive.commands.skill import _skill_sync
+
+                _skill_sync()
             elif target_type == "task":
                 daemon_cfg = read_daemon_config()
                 try:
