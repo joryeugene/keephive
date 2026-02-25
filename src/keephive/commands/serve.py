@@ -4844,7 +4844,6 @@ def _render_pipeline_panel(data: dict) -> str:
     gauges_html += _gauge_bar("memory freshness", fresh_pct, "#3fb950")
     gauges_html += _gauge_bar("recall rate", capture_recall, "#58a6ff")
     gauges_html += _gauge_bar("fact survival", survival, "#a371f7")
-    # TODO rate and streak from pulse components
     todo_rate = components.get("todo_rate", 0)
     streak_score = components.get("streak", 0)
     if todo_rate > 0:
