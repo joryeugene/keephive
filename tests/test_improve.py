@@ -5,7 +5,8 @@ Covers:
 - read/write/append pending improvements (atomic, append-only semantics)
 - dismissed improvements (rolling 100-cap, compact storage)
 - cmd_improve() list + review output
-- _apply_improvement() for skill, task, rule types
+- _apply_improvement() for skill, task, rule, and edit types
+- _apply_skill_edit() LLM success + failure fallback paths
 - KingBee status line in hive stats output
 """
 
@@ -219,6 +220,158 @@ class TestApplyImprovement:
         assert pending_rules.exists(), ".pending-rules.md not created"
         content = pending_rules.read_text()
         assert "Capture rationale" in content
+
+
+class TestApplySkillEdit:
+    """_apply_skill_edit() merges proposed changes into an existing guide via LLM."""
+
+    def test_llm_success_writes_merged_content(self, hive_env, monkeypatch):
+        """LLM returns merged content → file is updated with it.
+
+        Bug caught: edit overwrites with raw delta string instead of merged guide.
+        """
+        from keephive.commands.improve import _apply_skill_edit
+        from keephive.storage import guides_dir
+
+        gd = guides_dir()
+        gd.mkdir(parents=True, exist_ok=True)
+        skill_path = gd / "my-guide.md"
+        skill_path.write_text("# My Guide\n\nOriginal content here.\n")
+
+        class FakeResult:
+            content = "# My Guide\n\nOriginal content here.\n\n## New Section\n\nAdded by LLM.\n"
+
+        monkeypatch.setattr(
+            "keephive.commands.improve.run_claude_pipe", lambda *a, **kw: FakeResult()
+        )
+
+        result = _apply_skill_edit(skill_path, "my-guide", "Add a New Section about X")
+
+        assert result is True
+        text = skill_path.read_text()
+        assert "Original content here" in text
+        assert "Added by LLM" in text
+
+    def test_llm_failure_returns_false(self, hive_env, monkeypatch):
+        """ClaudePipeError from LLM → returns False, file unchanged.
+
+        Bug caught: exception propagates instead of returning False for fallback.
+        """
+        from keephive.claude import ClaudePipeError
+        from keephive.commands.improve import _apply_skill_edit
+        from keephive.storage import guides_dir
+
+        gd = guides_dir()
+        gd.mkdir(parents=True, exist_ok=True)
+        skill_path = gd / "my-guide.md"
+        original = "# My Guide\n\nOriginal content here.\n"
+        skill_path.write_text(original)
+
+        def raise_error(*a, **kw):
+            raise ClaudePipeError("LLM unavailable")
+
+        monkeypatch.setattr("keephive.commands.improve.run_claude_pipe", raise_error)
+
+        result = _apply_skill_edit(skill_path, "my-guide", "Add a New Section")
+
+        assert result is False
+        assert skill_path.read_text() == original  # file untouched
+
+    def test_llm_empty_response_returns_false(self, hive_env, monkeypatch):
+        """LLM returns empty content → returns False without overwriting.
+
+        Bug caught: empty string overwrites existing guide with blank file.
+        """
+        from keephive.commands.improve import _apply_skill_edit
+        from keephive.storage import guides_dir
+
+        gd = guides_dir()
+        gd.mkdir(parents=True, exist_ok=True)
+        skill_path = gd / "my-guide.md"
+        original = "# My Guide\n\nOriginal content here.\n"
+        skill_path.write_text(original)
+
+        class EmptyResult:
+            content = "   "
+
+        monkeypatch.setattr(
+            "keephive.commands.improve.run_claude_pipe", lambda *a, **kw: EmptyResult()
+        )
+
+        result = _apply_skill_edit(skill_path, "my-guide", "Add a New Section")
+
+        assert result is False
+        assert skill_path.read_text() == original
+
+    def test_edit_action_calls_apply_skill_edit_not_direct_write(self, hive_env, monkeypatch):
+        """edit action on existing skill routes through _apply_skill_edit, not write_text.
+
+        Bug caught: the corruption — edit was doing skill_path.write_text(changes) directly,
+        overwriting the guide with a delta string.
+        """
+        from keephive.commands.improve import _apply_improvement
+        from keephive.storage import guides_dir
+
+        gd = guides_dir()
+        gd.mkdir(parents=True, exist_ok=True)
+        skill_path = gd / "keephive-guide.md"
+        skill_path.write_text("# keephive Guide\n\nFull existing content.\n")
+
+        apply_calls = []
+
+        def fake_apply(path, target, changes):
+            apply_calls.append((str(path), target, changes))
+            return True
+
+        monkeypatch.setattr("keephive.commands.improve._apply_skill_edit", fake_apply)
+
+        item = {
+            "type": "edit",
+            "action": "edit",
+            "target_type": "skill",
+            "name": "keephive-guide",
+            "changes": "Add to Core commands table: | `hive loop` | `loop` | ...",
+            "rationale": "loop command missing from guide",
+        }
+        _apply_improvement(item)
+
+        assert len(apply_calls) == 1, "Expected exactly one _apply_skill_edit call"
+        assert apply_calls[0][1] == "keephive-guide"
+        # Verify original guide was NOT overwritten with the raw delta
+        assert skill_path.read_text() == "# keephive Guide\n\nFull existing content.\n"
+
+    def test_merge_action_does_direct_write(self, hive_env, monkeypatch):
+        """merge action bypasses _apply_skill_edit and does a direct write.
+
+        For merges, the LLM has already produced the combined full content.
+        """
+        from keephive.commands.improve import _apply_improvement
+        from keephive.storage import guides_dir
+
+        gd = guides_dir()
+        gd.mkdir(parents=True, exist_ok=True)
+        skill_path = gd / "guide-a.md"
+        skill_path.write_text("# Guide A\n\nOriginal.\n")
+
+        apply_calls = []
+        monkeypatch.setattr(
+            "keephive.commands.improve._apply_skill_edit",
+            lambda *a, **kw: apply_calls.append(a) or True,
+        )
+
+        merged_content = "# Guide A+B\n\nCombined content from both guides.\n"
+        item = {
+            "type": "edit",
+            "action": "merge",
+            "target_type": "skill",
+            "name": "guide-a",
+            "changes": merged_content,
+            "rationale": "guide-b covers same ground",
+        }
+        _apply_improvement(item)
+
+        assert len(apply_calls) == 0, "merge should not call _apply_skill_edit"
+        assert skill_path.read_text() == merged_content
 
 
 class TestDismissedImprovements:

@@ -5917,18 +5917,11 @@ VIEWS: dict[str, dict] = {
             ["standup", "standup-preview", "stats-capture", "recurring", "ps"],
         ],
     },
-    "dev": {
-        "path": "/dev",
-        "title": "Dev",
-        "cols": [
-            ["status-brief", "log-brief", "todos-brief", "facts"],
-            ["notes-compact", "knowledge-compact"],
-        ],
-    },
-    "brain": {
-        "path": "/brain",
-        "title": "Agent Brain",
-        "rows": [["brain"]],
+    "agent": {
+        "path": "/agent",
+        "title": "Agent",
+        "cols": [["active-loops"], ["daemon-status"]],
+        "rows": [["daemon-log"]],
     },
     "play": {
         "path": "/play",
@@ -5952,6 +5945,19 @@ VIEWS: dict[str, dict] = {
         ],
         "rows": [["stats-trends"]],
     },
+    "brain": {
+        "path": "/brain",
+        "title": "Brain",
+        "rows": [["brain"]],
+    },
+    "dev": {
+        "path": "/dev",
+        "title": "Dev",
+        "cols": [
+            ["status-brief", "log-brief", "todos-brief", "facts"],
+            ["notes-compact", "knowledge-compact"],
+        ],
+    },
     "settings": {
         "path": "/settings",
         "title": "Settings",
@@ -5959,12 +5965,6 @@ VIEWS: dict[str, dict] = {
             ["settings"],
             ["profiles", "transfer"],
         ],
-    },
-    "agent": {
-        "path": "/agent",
-        "title": "Agent",
-        "cols": [["active-loops"], ["daemon-status"]],
-        "rows": [["daemon-log"]],
     },
 }
 
