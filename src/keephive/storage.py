@@ -2875,3 +2875,46 @@ def clear_reviewed_facts(indices: list[int]) -> None:
         path.write_text("\n".join(keep) + "\n")
     else:
         path.unlink(missing_ok=True)
+
+
+# ── Privacy gate ──────────────────────────────────────────────────────
+
+
+def llm_paused_file() -> Path:
+    """Path to the .llm-paused flag file."""
+    return hive_dir() / ".llm-paused"
+
+
+def is_llm_paused() -> bool:
+    """Return True if the LLM privacy gate is active."""
+    return llm_paused_file().exists()
+
+
+def set_llm_paused(paused: bool) -> None:
+    """Create or remove the .llm-paused flag file."""
+    f = llm_paused_file()
+    if paused:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.touch()
+    else:
+        f.unlink(missing_ok=True)
+
+
+def force_cli_file() -> Path:
+    """Path to the .force-cli flag file."""
+    return hive_dir() / ".force-cli"
+
+
+def is_force_cli() -> bool:
+    """Return True when the CLI-only backend policy is active."""
+    return force_cli_file().exists()
+
+
+def set_force_cli(enabled: bool) -> None:
+    """Create or remove the .force-cli flag file."""
+    f = force_cli_file()
+    if enabled:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.touch()
+    else:
+        f.unlink(missing_ok=True)

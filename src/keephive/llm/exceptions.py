@@ -26,3 +26,9 @@ class BackendTimeoutError(ClaudePipeError):
     would silently change model behavior for the same prompt."""
 
     pass
+
+
+class LLMPausedError(ClaudePipeError):
+    """Raised when LLM calls are paused via `hive privacy on`."""
+
+    pass

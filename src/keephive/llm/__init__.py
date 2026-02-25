@@ -96,11 +96,19 @@ def _settings_backend() -> str | None:
 
 def _auto_select(require_tools: bool, attempted: set[str]) -> tuple[Backend, dict]:
     """Pick the highest-priority backend that matches capabilities."""
+    from keephive.storage import is_force_cli
+
+    force_cli = is_force_cli()
     reason = "auto"
     for backend in available_backends():
         if backend.name in attempted:
             continue
         if require_tools and not backend.supports_tools:
+            continue
+        # Enforce CLI-only policy: skip direct API backends
+        if force_cli and backend.name not in ("anthropic_cli", "none"):
+            attempted.add(backend.name)
+            reason = f"{backend.name}: blocked by CLI-only policy"
             continue
         available, info = backend.detect()
         if available:
@@ -136,6 +144,12 @@ def _resolve_backend(
         attempted = set()
 
     def _validate(candidate: Backend, source: str) -> tuple[Backend, dict] | None:
+        # Enforce CLI-only policy: reject direct API backends
+        from keephive.storage import is_force_cli
+
+        if is_force_cli() and candidate.name not in ("anthropic_cli", "none"):
+            return None
+
         available, info = candidate.detect()
         if not available:
             attempted.add(candidate.name)

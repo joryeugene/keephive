@@ -217,6 +217,11 @@ nav{background:#161b22;border-bottom:1px solid #30363d;padding:0 16px;display:fl
 #search-input{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:3px 8px;border-radius:4px;font-size:12px;width:140px;outline:none}
 #search-input:focus{border-color:#58a6ff}
 #search-input::placeholder{color:#6e7681}
+.privacy-banner{display:block;width:100%}
+.privacy-banner.active{background:#f59e0b;color:#1c1917;font-size:12px;font-weight:600;padding:6px 16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:12px}
+.privacy-banner.cli-only{background:#0e7490;color:#fff;font-size:12px;font-weight:600;padding:6px 16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:12px}
+.privacy-banner a{color:#1c1917;font-weight:700;text-decoration:underline}
+.privacy-banner.cli-only a{color:#cffafe;font-weight:700;text-decoration:underline}
 main{max-width:1400px;margin:0 auto;padding:16px}
 .grid-row{display:grid;gap:12px;margin-bottom:12px;align-items:start}
 .grid-cols-1{grid-template-columns:1fr}
@@ -562,9 +567,9 @@ mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 .brain-line{display:flex;align-items:center;gap:8px;justify-content:space-between}
 .brain-line .brain-text{flex:1;color:#c9d1d9}
 .brain-line .brain-detail{color:#6e7681;font-size:11px;white-space:nowrap}
-.brain-chip{display:inline-flex;align-items:center;justify-content:center;padding:2px 7px;border-radius:999px;font-size:10px;text-transform:uppercase;background:#21262d;color:#8b949e;border:1px solid #30363d;letter-spacing:.04em}
-.brain-chip-ok{background:#1f6feb;color:#fff;border-color:#388bfd}
-.brain-chip-warn{background:#b62324;color:#fff;border-color:#f85149}
+.brain-chip{display:inline-flex;align-items:center;justify-content:center;padding:1px 5px;border-radius:4px;font-size:10px;font-weight:500;background:#21262d;color:#8b949e;border:1px solid #30363d;letter-spacing:.01em;white-space:nowrap}
+.brain-chip-ok{background:#122d4a;color:#58a6ff;border-color:#1f4882}
+.brain-chip-warn{background:#2a1212;color:#f85149;border-color:#6b1a1a}
 .brain-chip-dim{background:#1c2128;color:#6e7681;border-color:#2d333b}
 .brain-meta{font-size:11px;color:#8b949e}
 .brain-meta-warn{color:#fdaeb7}
@@ -919,7 +924,8 @@ _JS = """
       if(!mc)return;
       // Skip if user is typing in the target panel
       var ae=document.activeElement;
-      var el=mc.querySelector('[data-panel-id="'+d.panel+'"]');
+      // Some panels (e.g. privacy-banner) live outside #main-content
+      var el=mc.querySelector('[data-panel-id="'+d.panel+'"]')||document.querySelector('[data-panel-id="'+d.panel+'"]');
       if(!el)return;
       if(ae&&el.contains(ae)&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'))return;
       // Save + restore scroll for this panel
@@ -3930,6 +3936,7 @@ def _render_trends_panel(data: dict) -> str:
 def _get_settings_data() -> dict:
     """Read all settings for dashboard display."""
     from keephive.settings import BUILTIN_SOUNDS, DEFAULTS, DESCRIPTIONS, read_settings
+    from keephive.storage import is_force_cli, is_llm_paused
 
     return {
         "settings": read_settings(),
@@ -3938,6 +3945,7 @@ def _get_settings_data() -> dict:
         "builtin_sounds": BUILTIN_SOUNDS,
         "backend": _get_backend_overview(),
         "platforms": _get_platform_overview(),
+        "privacy": {"paused": is_llm_paused(), "force_cli": is_force_cli()},
     }
 
 
@@ -4199,6 +4207,39 @@ def _render_settings_panel(data: dict) -> str:
         "</div>"
     )
 
+    # ── Privacy Controls card ──────────────────────────────────────────
+    privacy = data.get("privacy", {})
+    paused = privacy.get("paused", False)
+    force_cli_on = privacy.get("force_cli", False)
+
+    if paused:
+        state_badge = '<span class="brain-chip brain-chip-warn">🔒 Kill Switch ON</span>'
+    elif force_cli_on:
+        state_badge = '<span class="brain-chip" style="background:#0a2030;color:#22d3ee;border-color:#0e4f6a">🔐 CLI-Only ON</span>'
+    else:
+        state_badge = '<span class="brain-chip brain-chip-ok">🔓 Off</span>'
+
+    privacy_rows = (
+        f'<div class="brain-line">{state_badge}'
+        f'<span class="brain-detail">LLM backend policy</span></div>'
+        f'<div class="brain-meta" style="margin-top:.5rem">'
+        f'<a href="/privacy-on" class="action-link">Kill Switch</a>'
+        f" &nbsp;·&nbsp; "
+        f'<a href="/privacy-cli" class="action-link">CLI-Only</a>'
+        f" &nbsp;·&nbsp; "
+        f'<a href="/privacy-off" class="action-link">Disable</a>'
+        f"</div>"
+        f'<div class="brain-meta" style="color:#6e7681;font-size:11px;margin-top:.25rem">'
+        f"Kill switch blocks all LLM calls. CLI-only forces claude&nbsp;-p, ignores API keys."
+        f"</div>"
+    )
+    privacy_card = (
+        '<div class="card" tabindex="0" role="region" aria-label="Privacy controls">'
+        '<div class="card-header"><span class="card-title">Privacy Controls</span></div>'
+        f'<div class="card-body">{privacy_rows}</div>'
+        "</div>"
+    )
+
     mascot_uri = _mascot_data_uri()
     mascot_html = (
         f'<div style="text-align:center;margin-bottom:1rem">'
@@ -4213,7 +4254,7 @@ def _render_settings_panel(data: dict) -> str:
     )
     rows = [
         f'<div class="grid-row grid-cols-2">{settings_card}{backend_card}</div>',
-        f'<div class="grid-row grid-cols-1">{platform_card}</div>',
+        f'<div class="grid-row grid-cols-2">{platform_card}{privacy_card}</div>',
     ]
     return f"{mascot_html}" + "".join(rows)
 
@@ -5366,6 +5407,34 @@ def _render_wander_stats_panel(data: dict) -> str:
     )
 
 
+# ---- Privacy banner panel ----
+
+
+def _get_privacy_banner_data() -> dict:
+    from keephive.storage import is_force_cli, is_llm_paused
+
+    return {"paused": is_llm_paused(), "force_cli": is_force_cli()}
+
+
+def _render_privacy_banner_panel(data: dict) -> str:
+    if data.get("paused"):
+        extra = " CLI-only also active." if data.get("force_cli") else ""
+        return (
+            '<div class="privacy-banner active">'
+            f"🔒 LLM Privacy Mode ON — all API calls blocked.{extra} "
+            '<a href="/privacy-off">Resume</a>'
+            "</div>"
+        )
+    if data.get("force_cli"):
+        return (
+            '<div class="privacy-banner cli-only">'
+            "🔐 CLI-Only Mode — API backends blocked. LLM calls use claude -p only. "
+            '<a href="/privacy-off">Allow API</a>'
+            "</div>"
+        )
+    return ""
+
+
 # ---- Panel registry ----
 
 PANELS: dict[str, tuple] = {
@@ -5405,6 +5474,7 @@ PANELS: dict[str, tuple] = {
     "wander-list": (_get_wander_data, _render_wander_list_panel),
     "wander-seed": (_get_wander_data, _render_wander_seed_panel),
     "wander-stats": (_get_wander_data, _render_wander_stats_panel),
+    "privacy-banner": (_get_privacy_banner_data, _render_privacy_banner_panel),
 }
 
 # ---- View definitions ----
@@ -5565,6 +5635,7 @@ def render_page(view_name: str, port: int) -> str:
         brand_html += f' <span class="profile-badge">{_e(prof)}</span>'
 
     content = render_fragment(view_name)
+    privacy_banner = _render_panel_safe("privacy-banner")
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -5584,6 +5655,7 @@ def render_page(view_name: str, port: int) -> str:
     <span id="refresh-ts">connecting\u2026</span>
   </div>
 </nav>
+<div data-panel-id="privacy-banner">{privacy_banner}</div>
 <main>
   <div id="main-content" aria-live="polite">{content}</div>
 </main>
@@ -5693,6 +5765,9 @@ def _broadcast_panel_updates() -> None:
     needed: set[str] = set()
     for view_name, _ in clients:
         needed.update(_view_panels(view_name))
+    # Always check the privacy banner — it lives outside #main-content
+    # but must update on every hive_dir change (e.g. .llm-paused creation)
+    needed.add("privacy-banner")
     # Render outside the lock (may be slow; doesn't touch shared state)
     rendered: dict[str, tuple[str, str]] = {}  # panel -> (html, md5)
     for panel in needed:
@@ -5810,6 +5885,10 @@ class _HiveHandler(BaseHTTPRequestHandler):
             for panel in _view_panels(view_name):
                 html = _render_panel_safe(panel)
                 initial.append((panel, html))
+            # Always seed the privacy-banner hash so the broadcaster doesn't
+            # redundantly push it on the very first watcher tick.
+            pb_html = _render_panel_safe("privacy-banner")
+            initial.append(("privacy-banner", pb_html))
             # Atomically record hashes + register client so broadcaster sees a
             # consistent state (no window where client is listed but hash is absent).
             with _sse_lock:
@@ -6003,6 +6082,37 @@ class _HiveHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", str(len(resp_body)))
                 self.end_headers()
                 self.wfile.write(resp_body)
+            return
+
+        if path == "/privacy-off":
+            from keephive.storage import set_force_cli, set_llm_paused
+
+            set_llm_paused(False)
+            set_force_cli(False)
+            self.send_response(302)
+            self.send_header("Location", "/")
+            self._cors()
+            self.end_headers()
+            return
+
+        if path == "/privacy-on":
+            from keephive.storage import set_llm_paused
+
+            set_llm_paused(True)
+            self.send_response(302)
+            self.send_header("Location", "/settings")
+            self._cors()
+            self.end_headers()
+            return
+
+        if path == "/privacy-cli":
+            from keephive.storage import set_force_cli
+
+            set_force_cli(True)
+            self.send_response(302)
+            self.send_header("Location", "/settings")
+            self._cors()
+            self.end_headers()
             return
 
         # Redirect old paths to consolidated views

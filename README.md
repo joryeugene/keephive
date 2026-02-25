@@ -165,6 +165,8 @@ uv tool upgrade keephive   # manual alternative; run keephive setup after
 | Find patterns in daily logs        | `hive reflect` *(hive rf)*                 |
 | Get a quality assessment           | `hive audit` *(hive a)*                    |
 | Archive old logs                   | `hive gc`                                  |
+| Block all LLM calls (privacy)      | `hive privacy on` *(hive pv)*              |
+| Restrict to claude -p subscription | `hive privacy cli` *(hive pv)*             |
 
 ### Power features (when you need them)
 
@@ -386,6 +388,7 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 | `hive skill`            | `hive sk`         | Manage skill plugins                       |
 | **Maintain**            |                   |                                            |
 | `hive daemon [start]`   |                   | **KingBee background daemon** (morning briefs, soul) |
+| `hive privacy [on|off|cli]` | `hive pv`     | Pause/resume LLM calls or restrict to claude -p |
 | `hive doctor`           | `hive dr`         | Health check                               |
 | `hive gc`               | `hive g`          | Archive old logs                           |
 | `hive setup`            |                   | Register hooks and MCP server              |
@@ -525,10 +528,20 @@ hive daemon log                        # tail last 50 lines of daemon.log
 
 #### Checkup
 
-`hive checkup` (alias: `hive ck`) is a 6-stage read-only health report. No LLM calls, no writes. Runs in under a second.
+`hive checkup` (alias: `hive ck`) is a 7-stage read-only health report. No LLM calls, no writes. Runs in under a second.
+
+| Stage | What it checks |
+|-------|---------------|
+| 0 | Privacy gate (`.llm-paused` present?) |
+| 1 | Hook pipeline (all 8 hooks registered?) |
+| 2 | Daemon task freshness (last-run timestamps) |
+| 3 | Queue depths (pending facts, rules, improvements, TODOs) |
+| 4 | SOUL.md age (last update) |
+| 5 | JSON integrity (`.stats.json`, counters) |
+| 6 | Magic number audit (config thresholds) |
 
 ```bash
-hive checkup               # full 6-stage report: hooks, daemon, queues, SOUL.md, JSON, magic numbers
+hive checkup               # full 7-stage report
 hive checkup --snapshot    # git-snapshot hive state (before/after testing)
 hive checkup --diff        # show what changed since last snapshot
 hive checkup --json        # structured output for scripting/CI
@@ -604,52 +617,79 @@ All commands are also available as MCP tools for Claude Code to call directly:
 
 ## LLM features
 
-> [!IMPORTANT]
-> keephive calls `claude -p` for LLM features. If you're on a Claude Pro or Max subscription, these calls are included at no extra cost (they count against your plan's normal usage limits). If you use Claude Code with API billing, `claude -p` calls consume your API tokens. `ANTHROPIC_API_KEY` is never checked from a terminal or a hook.
+Most keephive commands are pure file I/O and never call an LLM. A handful are LLM-powered: `hive a` (audit), `hive v` (verify), `hive rf analyze/draft` (reflect), `hive l summarize`, `hive su` (standup), and the PreCompact hook's automatic extraction.
 
-The API path exists for one specific case: running LLM commands (`hive a`, `hive v`, etc.) _inside_ a Claude Code session rather than from a separate terminal. That is the only time `ANTHROPIC_API_KEY` is consulted.
+### Turn LLM calls off
+
+Two modes, one reset command:
+
+```bash
+# Full kill switch
+hive privacy on       # block ALL LLM calls
+hive privacy          # show current state
+hive privacy off      # full reset — allows all backends again
+
+# CLI-only mode (new)
+hive privacy cli      # use claude -p only; ignore ANTHROPIC_API_KEY
+hive privacy off      # same full reset — also clears CLI-only mode
+```
+
+`hive privacy off` is a full reset that clears both the kill switch and the CLI-only flag.
+
+**When to use `cli` mode:** You have a work `ANTHROPIC_API_KEY` set in `$ANTHROPIC_API_KEY` and want keephive to use your personal subscription (`claude -p`) only, not the API key. This is common when running keephive inside a Claude Code session where the API key is present in the environment.
+
+File I/O commands (`hive r`, `hive rc`, `hive s`, `hive todo`, `hive serve`) continue normally in both modes.
+
+The active privacy state is visible in `hive status`, the web dashboard nav bar, and `hive checkup` Stage 0.
+
+### Which billing path am I on?
+
+There are two paths. Which one is active depends on **where you run the command**:
+
+| Path | Active when | Cost | Data handling |
+|------|-------------|------|---------------|
+| `claude -p` CLI | Terminal, hooks, all background tasks (the default) | Included with Claude Pro/Max; API tokens on API billing | Your Claude Code / Claude.ai subscription terms |
+| Anthropic API | Inside a Claude Code session **and** `ANTHROPIC_API_KEY` is set | Per-token | Anthropic's API usage policy |
+
+**The short version:**
+- Running `hive v` from a terminal → `claude -p` path, subscription terms.
+- Running `hive v` inside a Claude Code session with `ANTHROPIC_API_KEY` set → API path, API terms.
+- Running any hook (PreCompact, SessionStart, etc.) → always `claude -p`, never the API path.
+
+The active backend is always shown in `hive doctor` under "LLM backend". `hive checkup --json` includes `"privacy_paused"` and `"force_cli"` flags for scripting. `hive status --json` includes `"llm_paused"` and `"force_cli"`.
 
 <details>
-<summary><b>Billing tiers and LLM-powered commands</b></summary>
-
-### Multi-backend routing
-
-keephive uses a priority-ordered backend chain. The first available backend wins:
-
-| Priority | Backend | When active | Cost |
-|----------|---------|-------------|------|
-| 10 | `claude -p` CLI | Terminal or hooks (default, always) | Included with Pro/Max; API tokens if on API billing |
-| 20 | Anthropic API | Inside Claude Code + `ANTHROPIC_API_KEY` | Paid — per-token |
-| 25 | Gemini API | `GEMINI_API_KEY` set | Paid — per-token |
-| 30 | OpenAI API | `OPENAI_API_KEY` set | Paid — per-token |
-| 99 | None (offline) | Always — last resort | Free, no LLM output |
-
-If a backend fails with a transient error, the router automatically tries the next one. **Timeouts are non-retriable** — a `BackendTimeoutError` propagates immediately rather than silently changing model behavior by switching to a different LLM.
-
-Hooks (PreCompact, etc.) run without the `CLAUDECODE` environment variable, so they always take the `claude -p` subprocess path regardless of whether any API key is present in your shell.
+<summary><b>LLM-powered commands, free commands, and multi-backend routing</b></summary>
 
 ### LLM-powered commands
 
-| Command | Model | When to use |
-|---------|-------|-------------|
-| `hive a` (audit) | 3× haiku + 1× sonnet | Intentional quality check |
-| `hive v` (verify) | sonnet + tools, multi-turn | Validating stale facts |
-| `hive rf analyze/draft` | haiku | Pattern discovery |
+| Command | Model | Notes |
+|---------|-------|-------|
+| `hive a` (audit) | 3× haiku + 1× sonnet | 4 parallel calls; use intentionally |
+| `hive v` (verify) | sonnet + tools, multi-turn | Heavyweight; runs against codebase |
+| `hive rf analyze/draft` | haiku | Pattern discovery across daily logs |
 | `hive su` (standup) | haiku | Daily standup generation |
-| `hive l summarize` | haiku | End-of-session summary |
-| `hive dr` (doctor) | haiku, optional | Duplicate TODO detection |
-| PreCompact hook | haiku | Automatic on compaction |
-
-`hive a` and `hive v` are the heavyweight operations. Use them intentionally.
+| `hive l summarize` | haiku | End-of-session log summary |
+| `hive dr` (doctor) | haiku, optional | Duplicate TODO detection only |
+| PreCompact hook | haiku | Fires automatically on compaction |
 
 ### Free commands (no LLM)
 
 `hive r`, `hive rc`, `hive s`, `hive todo`, `hive t`, `hive m`, `hive rule`, `hive e`, `hive n`, `hive k`, `hive p`, `hive st`, `hive l` (without `summarize`), `hive gc`, `hive sk`, and all hooks except PreCompact (SessionStart, PostToolUse, UserPromptSubmit, Stop, SessionEnd, TaskCompleted).
 
-### Disable automatic LLM calls
+### Multi-backend routing
 
-> [!NOTE]
-> Set `HIVE_SKIP_LLM=1` to skip the PreCompact hook's extraction step. SessionStart never calls an LLM.
+keephive uses a priority-ordered backend chain. The first available backend wins:
+
+| Priority | Backend | Active when | Cost |
+|----------|---------|-------------|------|
+| 10 | `claude -p` CLI | Terminal or hooks (always the default) | Included with Pro/Max; per-token on API billing |
+| 20 | Anthropic API | Inside Claude Code + `ANTHROPIC_API_KEY` set | Per-token |
+| 25 | Gemini API | `GEMINI_API_KEY` set | Per-token |
+| 30 | OpenAI API | `OPENAI_API_KEY` set | Per-token |
+| 99 | None (offline) | Last resort | Free — no LLM output |
+
+Transient errors trigger automatic fallback to the next backend. Timeouts are non-retriable — a `BackendTimeoutError` propagates immediately rather than silently switching models.
 
 </details>
 

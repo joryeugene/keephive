@@ -22,7 +22,8 @@ from keephive.llm.anthropic_cli import (
     build_claude_env,
     parse_claude_response,
 )
-from keephive.llm.exceptions import ClaudePipeError
+from keephive.llm.exceptions import ClaudePipeError, LLMPausedError
+from keephive.storage import is_llm_paused
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -47,6 +48,9 @@ def run_claude_pipe(
     work unchanged.
     """
 
+    if is_llm_paused():
+        raise LLMPausedError("LLM calls are paused. Run `hive privacy off` to resume.")
+
     return call_structured(
         prompt,
         response_model,
@@ -65,6 +69,7 @@ def run_claude_pipe(
 
 __all__ = [
     "ClaudePipeError",
+    "LLMPausedError",
     "build_claude_command",
     "build_claude_env",
     "parse_claude_response",

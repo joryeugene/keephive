@@ -22,6 +22,8 @@ from pathlib import Path
 from keephive.output import console
 from keephive.storage import (
     hive_dir,
+    is_force_cli,
+    is_llm_paused,
     read_daemon_state,
     safe_read_text,
     soul_file,
@@ -68,6 +70,10 @@ def _report() -> None:
 
     warnings: list[str] = []
 
+    # Stage 0
+    privacy_data = _check_privacy_gate()
+    _print_stage0(privacy_data, warnings)
+
     # Stage 1
     hook_data = _check_hook_pipeline(hd)
     _print_stage1(hook_data, warnings)
@@ -99,6 +105,28 @@ def _report() -> None:
     else:
         console.print("\n  [green]✓ System healthy[/green]")
     console.print()
+
+
+# ── Stage 0: Privacy gate ─────────────────────────────────────────────
+
+
+def _check_privacy_gate() -> dict:
+    return {"paused": is_llm_paused(), "force_cli": is_force_cli()}
+
+
+def _print_stage0(data: dict, warnings: list[str]) -> None:
+    console.print("  [bold]Stage 0: Privacy Gate[/bold]")
+    if data["paused"]:
+        w = "LLM privacy mode is ON — all API calls blocked (run `hive privacy off` to resume)"
+        warnings.append(w)
+        console.print("    [warn]⚠  Privacy gate: ON — .llm-paused present[/warn]")
+    else:
+        console.print("    [green]✓ Privacy gate: OFF (LLM calls enabled)[/green]")
+    if data.get("force_cli"):
+        console.print(
+            "    [bold cyan]🔐 CLI-only: ON[/bold cyan] — API backends blocked "
+            "(run `hive privacy off` to disable)"
+        )
 
 
 # ── Stage 1: Hook pipeline ────────────────────────────────────────────
@@ -413,7 +441,11 @@ def _report_json() -> None:
     # Collect warnings (reuse check functions' side-effect via temp list)
     _collect_warnings(hook_data, daemon_data, queue_data, soul_data, integrity_data, warnings)
 
+    privacy_data = _check_privacy_gate()
+
     out = {
+        "privacy_paused": privacy_data["paused"],
+        "force_cli": privacy_data["force_cli"],
         "hook_pipeline": hook_data,
         "daemon_tasks": {
             task: {

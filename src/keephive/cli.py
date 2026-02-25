@@ -82,6 +82,16 @@ HELP: dict[str, str] = {
         "    hive run history         Past loops\n"
         "    hive run review          Review extracted facts"
     ),
+    "privacy": (
+        "Usage: hive privacy [on|off|cli|status]  (alias: pv)\n"
+        "  Manage LLM privacy and billing controls.\n"
+        "    on      Block all LLM calls (full kill switch)\n"
+        "    off     Full reset — unblocks LLM calls and allows all backends\n"
+        "    cli     Route all LLM calls through claude -p only (ignore API keys)\n"
+        "    status  Show current state (default)\n"
+        "  Flag files: .llm-paused (kill switch), .force-cli (CLI-only mode)\n"
+        "  `off` clears both flags."
+    ),
 }
 
 # Map aliases to canonical names for help lookup
@@ -136,6 +146,7 @@ _CANONICAL: dict[str, str] = {
     "fw": "flow",
     "mr": "mem",
     "rr": "rule",
+    "pv": "privacy",
 }
 
 # Command families: (display_label, description, shorthand, tracked_aliases)
@@ -180,6 +191,7 @@ _CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
     ("seed [--days N]", "Seed demo data", "", {"seed"}),
     ("export [path]", "Export data as tar.gz", "", {"export"}),
     ("import <path>", "Import data archive", "", {"import"}),
+    ("privacy [on|off|cli]", "Pause/resume LLM calls or restrict to claude -p", "pv", {"privacy", "pv"}),
 ]
 
 
@@ -442,6 +454,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "run": ("keephive.commands.loop", "cmd_loop"),
     "rn": ("keephive.commands.loop", "cmd_loop"),
     "loop-extract": ("keephive.commands.loop", "cmd_loop_extract"),
+    "privacy": ("keephive.commands.privacy", "cmd_privacy"),
+    "pv": ("keephive.commands.privacy", "cmd_privacy"),
 }
 
 

@@ -30,6 +30,8 @@ from keephive.storage import (
     get_meaningful_entries,
     guides_dir,
     hive_dir,
+    is_force_cli,
+    is_llm_paused,
     memory_file,
     open_todos,
     read_stats,
@@ -402,6 +404,23 @@ def _render_status() -> None:
     health_parts = [_dot(hooks_ok, "hooks"), _dot(mcp_ok, "mcp"), _dot(data_ok, "data")]
     console.print(f"{'  '.join(health_parts)}")
 
+    if is_llm_paused():
+        console.print()
+        console.print(
+            "  [bold yellow]⚠ LLM PAUSED[/bold yellow]  [dim](hive privacy on)[/dim]"
+        )
+        console.print(
+            "  [dim]All API calls blocked. Run `hive privacy off` to resume.[/dim]"
+        )
+    elif is_force_cli():
+        console.print()
+        console.print(
+            "  [bold cyan]🔐 CLI-ONLY[/bold cyan]  [dim](hive privacy off to allow API)[/dim]"
+        )
+        console.print(
+            "  [dim]LLM calls route through claude -p only. API backends blocked.[/dim]"
+        )
+
     llm_table = Table(show_header=False, show_edge=False, box=None, padding=(0, 1))
     llm_table.add_column(justify="left")
     llm_table.add_column(justify="left")
@@ -690,6 +709,8 @@ def cmd_status(args: list[str]) -> None:
                     "data_ok": data_ok,
                     "anthropic_memory": anthropic_mem,
                     "llm": llm_summary,
+                    "llm_paused": is_llm_paused(),
+                    "force_cli": is_force_cli(),
                 }
             )
         )
