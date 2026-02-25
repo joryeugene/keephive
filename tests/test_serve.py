@@ -605,7 +605,7 @@ def test_render_standup_panel(hive_env):
 
     data = _get_standup_data()
     html = _render_standup_panel(data)
-    assert "Focus" in html or "Standup" in html or "Today" in html
+    assert "Today" in html
 
 
 def test_home_fragment_includes_standup(hive_env):
@@ -613,7 +613,72 @@ def test_home_fragment_includes_standup(hive_env):
 
     html = render_fragment("home")
     # Standup panel is in the home view
-    assert "Focus" in html or "Today" in html or "Standup" in html
+    assert "Today" in html or "KingBee Draft" in html
+
+
+# ---- standup-preview panel: regex unpack + rendering ----
+
+
+def test_get_standup_preview_data_extracts_time(hive_env):
+    """Two-group regex extracts both HH:MM and draft content."""
+    from keephive.commands.serve import _get_standup_preview_data
+
+    daily_dir = hive_env / "daily"
+    daily_dir.mkdir(parents=True, exist_ok=True)
+    import datetime
+
+    today = datetime.date.today().isoformat()
+    log_file = daily_dir / f"{today}.md"
+    log_file.write_text(
+        "[🐝 KingBee 17:02] standup draft\n"
+        "Yesterday: finished auth\n"
+        "Today: write tests\n"
+        "\n"
+    )
+
+    data = _get_standup_preview_data()
+
+    assert data["time"] == "17:02"
+    assert "Yesterday: finished auth" in data["draft"]
+    assert data["date"] == today
+
+
+def test_get_standup_preview_data_empty_when_no_log(hive_env):
+    """Returns empty dict with empty time when no logs exist."""
+    from keephive.commands.serve import _get_standup_preview_data
+
+    data = _get_standup_preview_data()
+
+    assert data["draft"] == ""
+    assert data["time"] == ""
+
+
+def test_render_standup_preview_panel_copy_button_present(hive_env):
+    """Copy button appears when draft is present."""
+    from keephive.commands.serve import _render_standup_preview_panel
+
+    data = {"draft": "Yesterday: wrote tests\nToday: ship it", "date": "2026-02-25", "time": "17:02"}
+    html = _render_standup_preview_panel(data)
+
+    assert "KingBee Draft" in html
+    assert "Generated 17:02" in html
+    assert "Copy" in html
+    assert "kb-draft-text" in html
+    assert "Yesterday: wrote tests" in html
+
+
+def test_render_standup_preview_panel_empty_state_no_emdash(hive_env):
+    """Empty state contains no em-dash and explains the 17:00 schedule."""
+    from keephive.commands.serve import _render_standup_preview_panel
+
+    data = {"draft": "", "date": "2026-02-25", "time": ""}
+    html = _render_standup_preview_panel(data)
+
+    assert "KingBee Draft" in html
+    assert "&mdash;" not in html
+    assert "—" not in html
+    assert "17:00" in html
+    assert "Copy" not in html
 
 
 # ---- New feature: knowledge limited panel in all view ----

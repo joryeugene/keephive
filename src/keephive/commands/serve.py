@@ -3148,8 +3148,8 @@ def _render_standup_panel(data: dict) -> str:
         rows = '<div class="empty">No standup data yet. Run: <code>hive standup</code></div>'
 
     return (
-        f'<div class="card" tabindex="0" role="region" aria-label="Standup">'
-        f'<div class="card-header"><span class="card-title">Today\'s Focus</span></div>'
+        f'<div class="card" tabindex="0" role="region" aria-label="Today\'s Activity">'
+        f'<div class="card-header"><span class="card-title">Today\'s Activity</span></div>'
         f"{_cmd_hints(['hive standup', 'hive todo', 'hive todo done <pat>'])}"
         f'<div class="card-body">{rows}</div>'
         f"</div>"
@@ -3168,7 +3168,7 @@ def _get_standup_preview_data() -> dict:
     from keephive.clock import get_today
     from keephive.storage import hive_dir
 
-    pattern = r"\[(?:🐝 )?KingBee \d{2}:\d{2}\] standup draft\n(.*?)(?=\n\[|\n##|\Z)"
+    pattern = r"\[(?:🐝 )?KingBee (\d{2}:\d{2})\] standup draft\n(.*?)(?=\n\[|\n##|\Z)"
     today = get_today()
     daily_dir = hive_dir() / "daily"
 
@@ -3180,29 +3180,51 @@ def _get_standup_preview_data() -> dict:
         content = log_file.read_text(errors="replace")
         matches = re.findall(pattern, content, re.DOTALL)
         if matches:
-            return {"draft": matches[-1].strip(), "date": str(candidate)}
+            time_str, draft_content = matches[-1]
+            return {"draft": draft_content.strip(), "date": str(candidate), "time": time_str}
 
-    return {"draft": "", "date": str(today)}
+    return {"draft": "", "date": str(today), "time": ""}
 
 
 def _render_standup_preview_panel(data: dict) -> str:
     draft = data.get("draft", "").strip()
     date = data.get("date", "")
+    time_str = data.get("time", "")
+    meta = f"Generated {time_str}" if time_str else date
+
     if not draft:
         body = (
-            '<div class="empty">No standup draft yet.'
-            ' Run: <code>hive daemon enable standup-draft</code></div>'
+            '<div class="empty">No draft yet.'
+            ' Enable with: <code>hive daemon enable standup-draft</code>.'
+            ' KingBee drafts at 17:00 daily.</div>'
         )
+        copy_btn = ""
     else:
         escaped = _e(draft)
-        body = f'<pre style="white-space:pre-wrap;font-size:11px;color:#c9d1d9;margin:0">{escaped}</pre>'
+        body = (
+            f'<pre id="kb-draft-text" style="white-space:pre-wrap;'
+            f'font-size:11px;color:#c9d1d9;margin:0">{escaped}</pre>'
+        )
+        copy_btn = (
+            '<button class="search-action-btn" '
+            'style="margin-left:auto;padding:2px 8px;font-size:0.82em" '
+            "onclick=\"var el=document.getElementById('kb-draft-text'),b=this;"
+            "if(el&&navigator.clipboard){"
+            "navigator.clipboard.writeText(el.innerText)"
+            ".then(function(){b.textContent='Copied!';setTimeout(function(){b.textContent='Copy';},2000);})"
+            ".catch(function(){b.textContent='Failed';setTimeout(function(){b.textContent='Copy';},2000);});"
+            "}\">"
+            "Copy</button>"
+        )
 
     return (
-        f'<div class="card" tabindex="0" role="region" aria-label="Standup Draft">'
+        f'<div class="card" tabindex="0" role="region" aria-label="KingBee Draft">'
         f'<div class="card-header">'
-        f'<span class="card-title">Standup Draft</span>'
-        f'<span class="card-meta">{_e(date)}</span>'
+        f'<span class="card-title">KingBee Draft</span>'
+        f'<span class="card-meta">{_e(meta)}</span>'
+        f"{copy_btn}"
         f"</div>"
+        f"{_cmd_hints(['hive standup', 'hive daemon run standup-draft'])}"
         f'<div class="card-body">{body}</div>'
         f"</div>"
     )
@@ -5930,7 +5952,7 @@ VIEWS: dict[str, dict] = {
         "rows": [["status", "stats"]],
         "cols": [
             ["log-home", "todos"],
-            ["standup", "standup-preview", "stats-capture", "recurring", "ps"],
+            ["standup-preview", "standup", "stats-capture", "recurring", "ps"],
         ],
     },
     "agent": {
