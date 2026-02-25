@@ -35,7 +35,7 @@ from keephive.llm.pending import list_pending, pending_count
 from keephive.platforms import platform_specs, read_hook_manifest
 from keephive.settings import get_setting
 from keephive.skillpack import get_record as get_skill_record
-from keephive.telemetry import read_events
+from keephive.telemetry import read_events, summarize
 
 DEFAULT_PORT = 3847
 
@@ -4039,10 +4039,35 @@ def _get_platform_overview() -> dict:
                     }
                 )
 
-        events = read_events(slug, limit=400)
-        counts = Counter(e.get("event", "unknown") for e in events)
-        recent = events[-6:]
         skill_record = get_skill_record(slug) or {}
+        if slug == "claude":
+            from keephive.storage import read_cc_sessions
+
+            cc_sessions = read_cc_sessions(days_back=30)
+            session_count = len(cc_sessions)
+            total_msgs = sum(s.get("user_messages", 0) for s in cc_sessions)
+            total_commits = sum(s.get("git_commits", 0) for s in cc_sessions)
+            by_event: dict[str, int] = {}
+            if session_count:
+                by_event["sessions"] = session_count
+            if total_msgs:
+                by_event["messages"] = total_msgs
+            if total_commits:
+                by_event["commits"] = total_commits
+            telemetry_data = {
+                "total": session_count,
+                "by_event": by_event,
+                "recent": [],
+            }
+        else:
+            events = read_events(slug, limit=400)
+            tel_summary = summarize(slug)
+            counts = Counter(e.get("event", "unknown") for e in events)
+            telemetry_data = {
+                "total": tel_summary["total"],
+                "by_event": dict(counts),
+                "recent": events[-6:],
+            }
         data[slug] = {
             "slug": slug,
             "title": spec.title,
@@ -4054,11 +4079,7 @@ def _get_platform_overview() -> dict:
             "hooks_dir": str(spec.hooks_dir),
             "hook_config": hook_entry.get("config_path", str(spec.config_path)),
             "hook_scripts": scripts_meta,
-            "telemetry": {
-                "total": len(events),
-                "by_event": dict(counts),
-                "recent": recent,
-            },
+            "telemetry": telemetry_data,
             "hook_count": len(scripts_meta),
         }
     return {"platforms": data}
@@ -4378,6 +4399,9 @@ def _render_brain_panel(data: dict) -> str:
     else:
         pending_rows += (
             '<div class="brain-meta">Re-run the command once a backend is available.</div>'
+            '<div class="brain-meta">'
+            '<a href="/clear-queue" class="action-link">Clear queue</a>'
+            "</div>"
         )
     pending_card = _brain_card("Queued LLM Tasks", pending_rows, aria="Pending LLM work items")
 
@@ -6111,6 +6135,16 @@ class _HiveHandler(BaseHTTPRequestHandler):
             set_force_cli(True)
             self.send_response(302)
             self.send_header("Location", "/settings")
+            self._cors()
+            self.end_headers()
+            return
+
+        if path == "/clear-queue":
+            from keephive.llm.pending import clear_queue
+
+            clear_queue()
+            self.send_response(302)
+            self.send_header("Location", "/brain")
             self._cors()
             self.end_headers()
             return
