@@ -398,7 +398,7 @@ def _task_morning_briefing() -> bool:
     pending_impr = len(read_pending_improvements())
 
     todos_path = hive_dir() / "TODO.md"
-    todos = safe_read_text(todos_path)[:500] if todos_path.exists() else "(none)"
+    todos = safe_read_text(todos_path)[:1200] if todos_path.exists() else "(none)"
 
     prompt = f"""You are KingBee, the keephive agent. Write a morning briefing.
 Voice: sarcastic but useful, proactive, directness 85%.
@@ -409,6 +409,10 @@ Yesterday's log:
 
 Active TODOs:
 {todos}
+
+If any TODO above appears completed or superseded by yesterday's log entries,
+flag it explicitly as a line: → DONE? [todo text]
+The user will confirm these via `hive todo done`. Do not mark anything done yourself.
 
 Pending queues (include as action items if non-zero):
 - pending facts: {pending_facts_count}  (hive mem review)
@@ -533,6 +537,9 @@ def _task_soul_update() -> bool:
     if not today_log and not yesterday_log:
         return False
 
+    todos_path = hive_dir() / "TODO.md"
+    todos_text = safe_read_text(todos_path)[:600] if todos_path.exists() else "(none)"
+
     wander_docs = list_wander_docs(limit=7)
     wander_bullets = "\n".join(f"- {d['hypothesis']}" for d in wander_docs if d.get("hypothesis"))
 
@@ -555,12 +562,19 @@ def _task_soul_update() -> bool:
     prompt = f"""You are KingBee updating your own SOUL.md after recent sessions.
 Review the logs and rewrite SOUL.md with STRICT size budgets.
 
+Open TODOs (for cross-reference only):
+{todos_text}
+
+If log evidence suggests any TODO is resolved, add a brief ## What Looks Done section
+(max 3 items, one line each: "→ DONE? [text]"). Omit section entirely if nothing looks done.
+
 HARD SIZE CONSTRAINTS — this document must stay bounded:
 - ## Summary: max 300 tokens. Rewrite to reflect what you now know. Dense, specific.
 - ## What I've Learned About How To Help You: max 5 bullet points.
 - ## Session Patterns I've Noticed: max 5 entries. UPDATE existing patterns in-place.
 - ## What I've Been Wondering: max 3 bullets (one wander hypothesis per bullet). \
 80 token hard limit. Omit entirely if no wander docs.
+- ## What Looks Done: max 3 lines. Omit if empty. Temporary — prune after user confirms.
 - ## Last Updated: one line — today's date + what triggered the update.
 - Total document: target ~500 tokens, hard limit 800 tokens.
 
@@ -664,6 +678,7 @@ def _task_self_improve() -> bool:
     from keephive.storage import open_todos
 
     stale_todos = []
+    todos: list = []
     try:
         todos = open_todos()
         for date_str, _ts, text in todos:
@@ -676,6 +691,25 @@ def _task_self_improve() -> bool:
                     stale_todos.append(f"[{age_days}d] {text[:80]}")
             except ValueError:
                 pass
+    except Exception:
+        pass
+
+    # ── Ghost TODOs: closed in logs but still open in TODO.md ─────────
+    ghost_todos: list[str] = []
+    try:
+        recent_log_text = "\n".join(recent_log_parts)
+        done_lines = [ln for ln in recent_log_text.splitlines() if "DONE:" in ln]
+        if done_lines:
+            from difflib import SequenceMatcher
+
+            for _, _ts, todo_text in todos:
+                for done_ln in done_lines:
+                    ratio = SequenceMatcher(
+                        None, todo_text.lower(), done_ln.lower()
+                    ).ratio()
+                    if ratio >= 0.55:
+                        ghost_todos.append(f"{todo_text[:80]} (seen in log as done)")
+                        break
     except Exception:
         pass
 
@@ -728,6 +762,7 @@ Existing skills (slug -> excerpt): {skill_excerpts if skill_excerpts else "(none
 Existing daemon tasks: {existing_tasks}
 Note slots with content: {note_summaries if note_summaries else "(all empty)"}
 Stale TODOs (>30 days open): {stale_todos if stale_todos else "(none)"}
+TODOs that appear closed in logs but still open: {ghost_todos if ghost_todos else "(none)"}
 Guides with 0 log mentions (potential orphans): {orphan_guide_hints if orphan_guide_hints else "(none)"}
 Already pending (DO NOT re-propose): {pending_summary if pending_summary else "(none)"}
 User dismissed — do not re-propose: {dismissed_summary if dismissed_summary else "(none)"}

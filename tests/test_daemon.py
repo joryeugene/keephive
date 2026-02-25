@@ -892,3 +892,100 @@ class TestExecuteTaskTracking:
             monkeypatch.setattr(f"keephive.commands.daemon.{fn_attr}", lambda: True)
             _execute_task(task_name)
             assert tracked == [("daemon_tasks", task_name)], f"Failed for {task_name}"
+
+
+class TestDaemonPromptTodoFlagging:
+    """Daemon prompts cross-reference open TODOs with log evidence."""
+
+    def test_morning_briefing_prompt_contains_done_flag_instruction(
+        self, hive_env, monkeypatch
+    ):
+        """morning_briefing prompt must contain the '→ DONE? [todo text]' instruction.
+
+        Bug caught: TODOs completed during the session were never flagged for closure
+        — they sat open indefinitely until the user ran 'hive todo done' manually.
+        """
+        from keephive.commands.daemon import _task_morning_briefing
+
+        captured_prompts: list[str] = []
+
+        def fake_pipe(prompt, *args, **kwargs):
+            captured_prompts.append(prompt)
+            return None
+
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", fake_pipe)
+        _task_morning_briefing()
+
+        assert captured_prompts, "Expected run_claude_pipe to be called"
+        prompt = captured_prompts[0]
+        assert "DONE?" in prompt, (
+            "morning_briefing prompt must include '→ DONE? [todo text]' flagging instruction"
+        )
+        assert "hive todo done" in prompt, (
+            "morning_briefing prompt must mention 'hive todo done' for user confirmation flow"
+        )
+
+    def test_soul_update_prompt_contains_what_looks_done_section(
+        self, hive_env, monkeypatch
+    ):
+        """soul_update prompt must contain '## What Looks Done' section instruction.
+
+        Bug caught: soul_update rewrote SOUL.md with no awareness of open TODOs,
+        missing opportunities to surface completed work for user confirmation.
+        """
+        from keephive.commands.daemon import _task_soul_update
+        from keephive.clock import get_today
+        from keephive.storage import daily_file
+
+        # Write today's log so soul_update doesn't return early
+        today = get_today()
+        df = daily_file(today.isoformat())
+        df.parent.mkdir(parents=True, exist_ok=True)
+        df.write_text("- [10:00:00] FACT: test fact today\n" * 5)
+
+        captured_prompts: list[str] = []
+
+        def fake_pipe(prompt, *args, **kwargs):
+            captured_prompts.append(prompt)
+            return None
+
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", fake_pipe)
+        _task_soul_update()
+
+        assert captured_prompts, "Expected run_claude_pipe to be called"
+        prompt = captured_prompts[0]
+        assert "What Looks Done" in prompt, (
+            "soul_update prompt must include '## What Looks Done' section instruction"
+        )
+        assert "Open TODOs" in prompt, (
+            "soul_update prompt must pass open TODO list for cross-reference"
+        )
+
+    def test_morning_briefing_todos_truncated_to_1200(self, hive_env, monkeypatch):
+        """morning_briefing uses 1200-char TODO budget (was 500 — too aggressive).
+
+        Bug caught: long TODO lists were silently truncated, hiding items from
+        the LLM that might have been flagged as done by log evidence.
+        """
+        from keephive.commands.daemon import _task_morning_briefing
+
+        # Write a TODO.md longer than 500 chars to expose the old truncation
+        todos_path = hive_env / "TODO.md"
+        long_todos = "\n".join([f"- TODO item {i}: this is a fairly detailed task description that uses space" for i in range(20)])
+        todos_path.write_text(long_todos)
+
+        captured_prompts: list[str] = []
+
+        def fake_pipe(prompt, *args, **kwargs):
+            captured_prompts.append(prompt)
+            return None
+
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", fake_pipe)
+        _task_morning_briefing()
+
+        assert captured_prompts
+        prompt = captured_prompts[0]
+        # The 15th item should appear if budget is >=1200 chars; would be cut at 500
+        assert "TODO item 14" in prompt, (
+            "TODO items beyond 500 chars should be included with 1200-char budget"
+        )

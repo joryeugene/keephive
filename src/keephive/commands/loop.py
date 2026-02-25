@@ -237,11 +237,20 @@ def _build_first_iter_output(
             lines.append(f"  {line}")
         lines.append("")
 
+    # Self-maintenance block — Claude must run these before task work
+    task_words = " ".join(task.split()[:3])  # first 3 words for rc query
+    lines.append("SELF-MAINTENANCE (complete before task work):")
+    lines.append("  1. hive todo          → review open items; close what's done")
+    lines.append("  2. hive s             → health snapshot; note warnings")
+    lines.append(f'  3. hive rc "{task_words}"  → pull prior context for this task')
+    lines.append("─" * 64)
+    lines.append("")
+
     # Task block for iteration 1
     lines.append(f"─── ITERATION 1/{max_iter} " + "─" * 45)
     lines.append(f"TASK: {task}")
     lines.append("")
-    lines.append("  Signal done: touch " + done_path)
+    lines.append("  Early stop: touch " + done_path + "  (omit = auto-continue to next iter)")
     lines.append("─" * 64)
 
     return "\n".join(lines)

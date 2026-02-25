@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -613,7 +614,7 @@ class TestCmdRunTaskInSession:
         out = capsys.readouterr().out
 
         assert "TASK: refactor auth module" in out
-        assert "Signal done:" in out  # ASCII banner uses "Signal done:" (was "Signal completion")
+        assert "Early stop:" in out  # Bug fix: was "Signal done:" which Claude misread as normal completion signal
 
     def test_guard_against_second_loop_in_same_session(self, hive_env, monkeypatch, capsys):
         """Second in-session loop for same session_id is blocked (H6)."""
@@ -1292,3 +1293,127 @@ class TestTickCustomTaskIntegration:
             _tick()
 
         assert len(executed) == 0, f"No non-queued tasks should run, but ran: {executed}"
+
+
+# ── Banner text regression guards ─────────────────────────────────────────────
+
+
+class TestBannerEarlyStopLabel:
+    """Bug fix: 'Signal done' caused Claude to touch done file every iteration."""
+
+    def test_banner_says_early_stop_not_signal_done(self, hive_env):
+        """Banner must say 'Early stop:' — 'Signal done' caused premature termination.
+
+        Bug caught: Claude interpreted 'Signal done: touch X' as 'touch X when done
+        with iteration', triggering loop completion after iteration 1 every time.
+        """
+        from keephive.commands.loop import _build_first_iter_output
+
+        out = _build_first_iter_output("fix-20260225-001", "Fix the loop bug", 5, [])
+        assert "Early stop:" in out, "'Early stop:' must appear in banner (Bug 1 fix)"
+        assert "Signal done" not in out, "'Signal done' must not appear — regression guard"
+
+    def test_banner_contains_self_maintenance_block(self, hive_env):
+        """SELF-MAINTENANCE block appears in first-iteration banner.
+
+        Ensures Claude runs hive todo + hive s before task work each loop.
+        """
+        from keephive.commands.loop import _build_first_iter_output
+
+        out = _build_first_iter_output("fix-20260225-001", "Fix the loop bug", 5, [])
+        assert "SELF-MAINTENANCE" in out
+
+    def test_banner_contains_hive_todo_instruction(self, hive_env):
+        """hive todo appears in the self-maintenance block."""
+        from keephive.commands.loop import _build_first_iter_output
+
+        out = _build_first_iter_output("fix-20260225-001", "Fix the loop bug", 5, [])
+        assert "hive todo" in out
+
+    def test_banner_self_maintenance_before_iteration_marker(self, hive_env):
+        """SELF-MAINTENANCE block must appear before 'ITERATION 1' so Claude runs it first."""
+        from keephive.commands.loop import _build_first_iter_output
+
+        out = _build_first_iter_output("fix-20260225-001", "Fix the loop bug", 5, [])
+        maint_idx = out.index("SELF-MAINTENANCE")
+        iter_idx = out.index("ITERATION 1")
+        assert maint_idx < iter_idx, "SELF-MAINTENANCE must precede ITERATION 1 header"
+
+
+class TestEarlyExitLabel:
+    """Bug fix: 'early exit' label was dead code because done_path was already unlinked."""
+
+    def test_early_exit_label_shows_when_done_file_triggered(self, hive_env, monkeypatch):
+        """Completion box shows 'early exit' when user created the done signal file.
+
+        Bug caught: done_path.unlink() ran before the exists() check, so 'early exit'
+        was unreachable — completion always showed 'N/M iter' regardless of how loop ended.
+        """
+        import pytest
+
+        session_id = "sess-early-exit-label"
+        loop_id = "early-exit-001"
+        make_loop_file(hive_env, loop_id, session_id=session_id, iter=2, max_iter=10)
+        # Simulate user touching the done file to abort early
+        (hive_env / f".loop-done-{loop_id}").write_text("abort")
+
+        monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
+        monkeypatch.setenv("HIVE_STOP_NUDGE_INTERVAL", "999")
+
+        payload = json.dumps({"session_id": session_id, "cwd": ""})
+        monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+
+        captured_out: list[str] = []
+        original_write = sys.stdout.write
+
+        def capture(s: str) -> int:
+            captured_out.append(s)
+            return original_write(s)
+
+        with patch("sys.stdout.write", side_effect=capture), patch("subprocess.Popen"):
+            from keephive.hooks.stop import hook_stop
+
+            with pytest.raises(SystemExit) as exc:
+                hook_stop([])
+
+        assert exc.value.code == 0
+        combined = "".join(captured_out)
+        assert "early exit" in combined, (
+            f"Completion box must show 'early exit' when done file was present. Got: {combined!r}"
+        )
+
+    def test_natural_completion_label_shows_iter_count(self, hive_env, monkeypatch):
+        """Completion box shows 'N/M iter' for natural (non-early) completion."""
+        import pytest
+
+        session_id = "sess-natural-completion"
+        loop_id = "natural-001"
+        # iter=14, max_iter=15 → iter_n=15 = done naturally
+        make_loop_file(hive_env, loop_id, session_id=session_id, iter=14, max_iter=15)
+        # No done signal file created
+
+        monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
+        monkeypatch.setenv("HIVE_STOP_NUDGE_INTERVAL", "999")
+
+        payload = json.dumps({"session_id": session_id, "cwd": ""})
+        monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+
+        captured_out: list[str] = []
+        original_write = sys.stdout.write
+
+        def capture(s: str) -> int:
+            captured_out.append(s)
+            return original_write(s)
+
+        with patch("sys.stdout.write", side_effect=capture), patch("subprocess.Popen"):
+            from keephive.hooks.stop import hook_stop
+
+            with pytest.raises(SystemExit) as exc:
+                hook_stop([])
+
+        assert exc.value.code == 0
+        combined = "".join(captured_out)
+        assert "15/15 iter" in combined, (
+            f"Completion box must show '15/15 iter' for natural completion. Got: {combined!r}"
+        )
+        assert "early exit" not in combined

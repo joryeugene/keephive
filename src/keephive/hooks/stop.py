@@ -49,6 +49,8 @@ def hook_stop(_args: list[str]) -> None:
             done = done_path.exists() or iter_n >= max_iter
 
             if done:
+                # Capture early-exit state before unlink (unlink destroys the evidence)
+                was_early = done_path.exists()
                 # Loop complete — clean up, spawn extractor, emit completion nudge
                 loop_file.unlink(missing_ok=True)
                 done_path.unlink(missing_ok=True)
@@ -83,7 +85,7 @@ def hook_stop(_args: list[str]) -> None:
                     except Exception:
                         pass
 
-                early = "early exit" if done_path.exists() else f"{iter_n}/{max_iter} iter"
+                early = "early exit" if was_early else f"{iter_n}/{max_iter} iter"
                 W = 62
                 completion_msg = (
                     "╔" + "═" * W + "╗\n"
@@ -107,11 +109,16 @@ def hook_stop(_args: list[str]) -> None:
 
                 next_iter = iter_n + 1
                 done_path_str = str(_loop_done_path(loop_id))
-                continuation = (
+                maintenance = (
+                    f"SELF-MAINTENANCE: hive todo → close what's done. hive s → note warnings.\n"
+                    + "─" * 64
+                    + "\n"
+                )
+                continuation = maintenance + (
                     f"─── ITERATION {next_iter}/{max_iter} " + "─" * 45 + "\n"
                     f"PROGRESS CHECK: In one line — what did iteration {iter_n} accomplish?\n"
                     f"TASK: {req['task']}\n"
-                    f"  Signal done: touch {done_path_str}\n"
+                    f"  Early stop: touch {done_path_str}  (omit = auto-continue)\n"
                     + "─" * 64
                 )
                 sys.stdout.write(build_nudge_output(continuation, event_name="Stop"))
