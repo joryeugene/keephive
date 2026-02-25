@@ -2128,12 +2128,15 @@ def drain_ui_queue(cwd: str, event_name: str = "UserPromptSubmit") -> "str | Non
 
     queue.unlink(missing_ok=True)
 
+    combined = "\n\n".join(context_blocks)
+    if event_name == "Stop":
+        return json.dumps({"systemMessage": combined}) + "\n"
     return (
         json.dumps(
             {
                 "hookSpecificOutput": {
                     "hookEventName": event_name,
-                    "additionalContext": "\n\n".join(context_blocks),
+                    "additionalContext": combined,
                 }
             }
         )

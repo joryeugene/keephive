@@ -563,3 +563,57 @@ class TestSlashCommandLogging:
         # The entry should appear but be capped at 80 chars
         assert "SLASH: /clear" in content
         assert "x" * 100 not in content
+
+
+class TestKBDetection:
+    """KB detection routes real user messages to the queue and blocks system noise."""
+
+    def test_is_system_message_blocks_known_prefixes(self):
+        """_is_system_message must return True for loop banners and daemon prompts."""
+        from keephive.hooks.userpromptsubmit import _is_system_message
+
+        # These must be blocked
+        assert _is_system_message("╔══ KingBee · Autonomous Loop ══╗")
+        assert _is_system_message("─── ITERATION 2/10 ─────────────")
+        assert _is_system_message("You are KingBee updating SOUL.md")
+        # These must pass through
+        assert not _is_system_message("hey @KB can you fix the tests")
+        assert not _is_system_message("KingBee rules")
+
+    def test_loop_banner_not_queued_as_kb(self, hive_env):
+        """Loop kickoff banner containing 'KingBee' must not be queued as a KB message."""
+        from keephive.hooks.userpromptsubmit import hook_userpromptsubmit
+        from keephive.storage import kb_queue_depth
+
+        banner = (
+            "╔══════════════════════════════════════════════════════════════╗\n"
+            "║  🐝 KingBee  ·  Autonomous Loop                             ║\n"
+            "║  Task: refactor auth                                         ║\n"
+            "╚══════════════════════════════════════════════════════════════╝"
+        )
+        with patch("sys.stdin", StringIO(json.dumps({"session_id": "s1-kb", "prompt": banner}))):
+            hook_userpromptsubmit([])
+        assert kb_queue_depth() == 0, "loop banner must not be queued as KB message"
+
+    def test_real_kb_message_is_queued(self, hive_env):
+        """A real user message addressing KingBee must be queued in .kb-queue.md."""
+        from keephive.hooks.userpromptsubmit import hook_userpromptsubmit
+        from keephive.storage import kb_queue_depth
+
+        msg = "hey KingBee, stop using em-dashes please"
+        with patch("sys.stdin", StringIO(json.dumps({"session_id": "s2-kb", "prompt": msg}))):
+            hook_userpromptsubmit([])
+        assert kb_queue_depth() == 1, "real KB message must be queued"
+
+    def test_daemon_prompt_not_queued_as_kb(self, hive_env):
+        """Daemon soul_update prompt starting with 'You are KingBee' must not be queued."""
+        from keephive.hooks.userpromptsubmit import hook_userpromptsubmit
+        from keephive.storage import kb_queue_depth
+
+        daemon_prompt = (
+            "You are KingBee updating your own SOUL.md after recent sessions.\n"
+            "Review the logs..."
+        )
+        with patch("sys.stdin", StringIO(json.dumps({"session_id": "s3-kb", "prompt": daemon_prompt}))):
+            hook_userpromptsubmit([])
+        assert kb_queue_depth() == 0, "daemon prompt must not be queued as KB message"

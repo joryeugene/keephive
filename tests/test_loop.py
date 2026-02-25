@@ -1036,6 +1036,43 @@ class TestBackgroundMode:
         kill_cmds = [c for c in kill_calls if "kill-window" in str(c)]
         assert kill_cmds, "Expected tmux kill-window to be called for background loop"
 
+    def test_background_mode_no_batch_flag(self, hive_env, monkeypatch, capsys):
+        """The claude command must NOT include -p (batch mode kills Stop hook)."""
+        monkeypatch.delenv("CLAUDECODE", raising=False)
+        captured = []
+
+        def mock_run(cmd, **kw):
+            captured.append(cmd)
+            r = MagicMock()
+            r.returncode = 0
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr("subprocess.run", mock_run)
+        monkeypatch.setattr("subprocess.Popen", MagicMock())
+
+        from keephive.commands.loop import cmd_loop
+
+        cmd_loop(["refactor auth", "--background"])
+        capsys.readouterr()
+
+        tmux = next(c for c in captured if c[0] == "tmux" and "new-window" in c)
+        cmd_str = tmux[-1]  # last arg to tmux new-window is the shell command
+        assert " -p " not in cmd_str and not cmd_str.endswith(" -p"), (
+            f"claude must not use -p batch mode: {cmd_str}"
+        )
+        assert "claude --dangerously-skip-permissions" in cmd_str
+
+    def test_window_name_uses_tail_for_uniqueness(self):
+        """Window name must use last chars of loop_id (unique timestamp) not first (stable prefix)."""
+        # Two IDs that collide under [:20] but not under [-10:]
+        id1 = "implement-20260224-224510"  # "implement-20260224-2" under [:20]
+        id2 = "implement-20260224-224531"  # "implement-20260224-2" under [:20]
+        assert id1[:20] == id2[:20], "precondition: old formula collides"
+        wn1 = f"hive-loop-{id1[-10:]}"
+        wn2 = f"hive-loop-{id2[-10:]}"
+        assert wn1 != wn2, f"window names must differ: {wn1}"
+
 
 # ── Phase 4: Scheduled daemon mode ───────────────────────────────────────────
 

@@ -123,8 +123,8 @@ class TestStopHookNudge:
             out3 = capsys.readouterr().out
             assert out3.strip(), "Nudge should fire at interval=3"
 
-    def test_nudge_hookEventName_is_Stop(self, hive_env, monkeypatch, capsys):
-        """Nudge output carries hookEventName='Stop', not 'UserPromptSubmit'."""
+    def test_nudge_output_uses_system_message(self, hive_env, monkeypatch, capsys):
+        """Nudge output uses systemMessage (not hookSpecificOutput) — Stop is not a valid hookSpecificOutput variant."""
         session_id = "sess-stop-event"
         payload = {"session_id": session_id}
 
@@ -133,29 +133,30 @@ class TestStopHookNudge:
 
         out = capsys.readouterr().out
         parsed = json.loads(out)
-        assert parsed["hookSpecificOutput"]["hookEventName"] == "Stop"
+        assert "systemMessage" in parsed
+        assert "hookSpecificOutput" not in parsed
 
     def test_nudge_output_is_valid_json(self, hive_env, monkeypatch, capsys):
-        """Nudge output is valid JSON with expected structure."""
+        """Nudge output is valid JSON with systemMessage structure (not hookSpecificOutput)."""
         with patch.dict("os.environ", {"HIVE_STOP_NUDGE_INTERVAL": "1"}):
             run_hook({"session_id": "sess-stop-json"}, monkeypatch, hive_env)
 
         out = capsys.readouterr().out.strip()
         assert out, "Expected nudge output at interval=1"
         parsed = json.loads(out)
-        assert "hookSpecificOutput" in parsed
-        assert "hookEventName" in parsed["hookSpecificOutput"]
-        assert "additionalContext" in parsed["hookSpecificOutput"]
+        assert "systemMessage" in parsed
+        assert isinstance(parsed["systemMessage"], str)
+        assert parsed["systemMessage"]
 
 
 class TestStopHookUIQueue:
     """UI queue injection via stop hook."""
 
-    def test_ui_queue_hookEventName_is_Stop(self, hive_env, monkeypatch, capsys):
-        """This is the regression test for the event_name bug.
+    def test_ui_queue_uses_system_message(self, hive_env, monkeypatch, capsys):
+        """Stop hook UI queue output must use systemMessage, not hookSpecificOutput.
 
-        drain_ui_queue() used to hardcode 'UserPromptSubmit' regardless of caller.
-        Stop hook must emit hookEventName='Stop' when injecting UI feedback.
+        hookSpecificOutput is only valid for PreToolUse/UserPromptSubmit/PostToolUse.
+        Stop hook must use systemMessage to inject UI feedback context.
         """
         queue_file = hive_env / ".ui-queue"
         queue_file.write_text(
@@ -169,9 +170,8 @@ class TestStopHookUIQueue:
         out = capsys.readouterr().out
         assert out.strip(), "Expected output when UI queue present"
         parsed = json.loads(out)
-        assert parsed["hookSpecificOutput"]["hookEventName"] == "Stop", (
-            "Stop hook must emit hookEventName='Stop', not 'UserPromptSubmit' — regression for drain_ui_queue bug"
-        )
+        assert "systemMessage" in parsed
+        assert "hookSpecificOutput" not in parsed
 
     def test_ui_queue_skips_nudge(self, hive_env, monkeypatch, capsys):
         """When UI queue is consumed, nudge is skipped for that invocation."""
@@ -185,10 +185,9 @@ class TestStopHookUIQueue:
 
         out = capsys.readouterr().out
         parsed = json.loads(out)
-        ctx = parsed["hookSpecificOutput"]["additionalContext"]
-        assert "UI Feedback" in ctx
+        assert "UI Feedback" in parsed["systemMessage"]
         # Must not contain nudge text (hive_remember or similar)
-        assert "hive_r" not in ctx.lower()
+        assert "hive_r" not in parsed["systemMessage"].lower()
 
     def test_ui_queue_consumed_after_drain(self, hive_env, monkeypatch, capsys):
         """UI queue file is deleted after stop hook processes it."""

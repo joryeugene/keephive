@@ -284,7 +284,9 @@ def _stop_nudge_interval() -> int:
 
 
 def build_nudge_output(context: str, event_name: str = "PostToolUse") -> str:
-    """Return JSON string with additionalContext format."""
+    """Return JSON string for hook stdout. Stop hooks use systemMessage; others use hookSpecificOutput."""
+    if event_name == "Stop":
+        return json.dumps({"systemMessage": context})
     output = {
         "hookSpecificOutput": {
             "hookEventName": event_name,
