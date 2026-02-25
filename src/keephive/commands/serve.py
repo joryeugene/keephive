@@ -7062,6 +7062,15 @@ class _HiveHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:  # noqa: A002
         pass  # Silence request logging
 
+    def handle_error(self, request: object, client_address: object) -> None:
+        # Suppress benign client-disconnect errors (browser SSE reconnects, etc.)
+        import sys
+
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionResetError, BrokenPipeError)):
+            return
+        super().handle_error(request, client_address)  # type: ignore[arg-type]
+
 
 # ---- Entry point ----
 
