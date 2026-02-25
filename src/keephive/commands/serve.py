@@ -5176,28 +5176,42 @@ def _render_transfer_panel(data: dict) -> str:
 
 
 def _get_wander_data() -> dict:
+    import sys
     from datetime import timedelta
 
     from keephive.clock import get_today
     from keephive.storage import get_wander_seeds, list_wander_docs
 
-    all_docs = list_wander_docs(limit=100)
-    docs = all_docs[:20]
-    seeds = get_wander_seeds()
+    try:
+        all_docs = list_wander_docs(limit=100)
+        docs = all_docs[:20]
+    except Exception as exc:
+        print(f"[serve] _get_wander_data: list_wander_docs failed: {exc}", file=sys.stderr)
+        return {"docs": [], "seeds": [], "sparkline": [], "error": str(exc)}
+
+    try:
+        seeds = get_wander_seeds()
+    except Exception as exc:
+        print(f"[serve] _get_wander_data: get_wander_seeds failed: {exc}", file=sys.stderr)
+        seeds = []
 
     # 30-day sparkline: (label, count, iso_date) per day
-    date_counts: dict[str, int] = {}
-    for doc in all_docs:
-        raw = doc.get("date", "")
-        if len(raw) == 8:
-            iso = f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
-            date_counts[iso] = date_counts.get(iso, 0) + 1
-    today = get_today()
-    spark = []
-    for i in range(29, -1, -1):
-        d = today - timedelta(days=i)
-        iso = d.isoformat()
-        spark.append((d.strftime("%b %d"), date_counts.get(iso, 0), iso))
+    try:
+        date_counts: dict[str, int] = {}
+        for doc in all_docs:
+            raw = doc.get("date", "")
+            if len(raw) == 8:
+                iso = f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
+                date_counts[iso] = date_counts.get(iso, 0) + 1
+        today = get_today()
+        spark = []
+        for i in range(29, -1, -1):
+            d = today - timedelta(days=i)
+            iso = d.isoformat()
+            spark.append((d.strftime("%b %d"), date_counts.get(iso, 0), iso))
+    except Exception as exc:
+        print(f"[serve] _get_wander_data: sparkline failed: {exc}", file=sys.stderr)
+        spark = []
 
     return {"docs": docs, "seeds": seeds, "sparkline": spark}
 
@@ -5225,7 +5239,26 @@ def _render_wander_list_panel(data: dict) -> str:
             f"</div>"
         )
 
+    # Build set of completed seed texts for pending cross-reference
+    completed_seeds = {doc.get("seed", "").lower().strip() for doc in docs}
+    seeds = data.get("seeds", [])
+    pending_seeds = [s for s in seeds if s.lower().strip() not in completed_seeds]
+
     cards = ""
+    # Show pending (queued but not yet wandered) seeds at the top
+    for seed_text in pending_seeds:
+        cards += (
+            f'<div class="wander-card" style="border-left:3px solid #e3b341;opacity:.85">'
+            f'<div class="wander-card-head">'
+            f'<span class="wander-title">{_e(seed_text)}</span>'
+            f'<span class="wander-meta">'
+            f'<span class="badge badge-warn" title="Queued but not yet wandered">pending</span>'
+            f"</span>"
+            f"</div>"
+            f'<div class="wander-thinking dim">Waiting for next wander run&hellip;</div>'
+            f"</div>"
+        )
+
     for doc in docs:
         date_raw = doc.get("date", "")
         date_str = (
@@ -5372,6 +5405,17 @@ def _render_wander_seed_panel(data: dict) -> str:
 
 
 def _render_wander_stats_panel(data: dict) -> str:
+    if data.get("error"):
+        err_msg = _e(data["error"])
+        return (
+            f'<div class="card" tabindex="0" role="region" aria-label="Wander stats">'
+            f'<div class="card-header"><span class="card-title">Wander Stats</span></div>'
+            f'<div class="card-body">'
+            f'<div class="empty" style="color:#f85149">Failed to load wander data: {err_msg}<br>'
+            f'<small style="color:#8b949e">Check: <code>hive wander list</code> or daemon.log for details.</small>'
+            f"</div>"
+            f"</div></div>"
+        )
     docs = data.get("docs", [])
     spark = data.get("sparkline", [])  # list of (label, count, iso_date)
     total = len(docs)
