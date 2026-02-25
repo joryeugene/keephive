@@ -1,6 +1,5 @@
 ---
 tags: [keephive, loop, autonomous, run, hive-run]
-projects: [keephive]
 ---
 
 # hive run — Autonomous Iteration Loop
