@@ -73,6 +73,8 @@ Tiers from most stable (top) to most ephemeral (bottom).
 | Agent needs creative/exploratory time | Wander mode   | `hive daemon enable wander` |
 | Checking production system health  | Health check     | `hive checkup`         |
 | Review KingBee's proposed changes  | Improve queue    | `hive improve review`  |
+| Need KB to remember a behavioral preference | Direct KB message or hive go kb | `.kb-queue.md → SOUL.md` |
+| Delegate multi-step task to agent  | `hive run "<task>"` | loop + pending-facts |
 | Universal style/tool preference | Global CLAUDE.md | Edit manually |
 | Project-specific invariant | Project CLAUDE.md | Edit manually |
 | Repeatable dev command | justfile | `just <recipe>` |
@@ -106,6 +108,7 @@ Tiers from most stable (top) to most ephemeral (bottom).
 - `working memory` + `hive v` -> verified facts -> updated date or auto-corrected
 - `knowledge guide` + `hive v` -> fact check -> stale facts flagged
 - `/insights` friction data + `hive rule learn` -> `.pending-rules.md` -> `hive rule review` -> `rules.md`
+- KB message → [pending] in `.kb-queue.md` → soul-update → SOUL.md → next loop WISDOM banner
 
 ## The Justfile as Workspace Scratchpad
 

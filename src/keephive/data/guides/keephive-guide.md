@@ -87,6 +87,9 @@ Launch a Claude session with full keephive context pre-loaded.
 | `hive session learn`           | `hive go learn`   | Active recall quiz on recent decisions    |
 | `hive session reflect`         | `hive go reflect` | Pattern discovery from daily logs         |
 | `hive session <prompt>`        | `hive go <prompt>`| Load a custom prompt by name or prefix    |
+| `hive run "<task>"`            |                   | Autonomous iteration loop (3 modes: in-session, background, scheduled) |
+| `hive run review`              |                   | Review facts extracted from completed loops |
+| `hive go kb`                   |                   | Direct conversation with KingBee (reads pending .kb-queue.md messages) |
 
 Prompt names resolve by prefix: `hive go pr-re` finds `pr-review-git-staged-diff-analysis.md` from `knowledge/prompts/`.
 

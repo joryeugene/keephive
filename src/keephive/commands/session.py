@@ -48,6 +48,7 @@ _MODE_PROMPTS: dict[str, str] = {
         'Use `hive r "INSIGHT: <pattern>"` to capture findings. '
         "Use `hive ke <name>` to draft a knowledge guide if warranted."
     ),
+    "kb": "",  # Populated dynamically in cmd_session — reads KB queue + SOUL.md
 }
 
 
@@ -180,6 +181,39 @@ def cmd_session(args: list[str]) -> None:
     context = build_context(cwd, project_name)
 
     mode, prompt = _resolve_mode(remaining)
+
+    # KB mode: build prompt dynamically from live queue + SOUL.md
+    if mode == "kb":
+        try:
+            from keephive.storage import kb_queue_depth, read_kb_queue, read_soul
+
+            kb_messages = read_kb_queue()
+            pending = [m["text"] for m in kb_messages if m["status"] == "pending"]
+            if pending:
+                kb_queue_summary = "\n".join(f"- {msg}" for msg in pending)
+            else:
+                kb_queue_summary = "(no pending messages)"
+
+            soul_text = read_soul() or ""
+            # Extract a short summary — first 400 chars of SOUL.md
+            soul_summary = soul_text[:400].strip() if soul_text else "(SOUL.md not yet written)"
+            depth = kb_queue_depth()
+
+            prompt = (
+                "You are KingBee, keephive's agent identity. This is a direct conversation.\n\n"
+                f"Pending direct messages ({depth} unprocessed):\n"
+                f"{kb_queue_summary}\n\n"
+                f"Current SOUL.md summary:\n{soul_summary}\n\n"
+                "Start by acknowledging any pending messages, then be present for whatever the "
+                "user wants to discuss. If the user gives a behavioral directive (style, tone, "
+                "workflow), note it clearly and offer to write it as a rule with "
+                "hive_remember('RULE: ...') before the session ends."
+            )
+        except Exception:
+            prompt = (
+                "You are KingBee, keephive's agent identity. "
+                "This is a direct conversation about your behavior and identity."
+            )
 
     session_prompt = _build_session_prompt(mode, prompt, context, piped_content)
 

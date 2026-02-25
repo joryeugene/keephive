@@ -61,8 +61,12 @@ def hook_stop(_args: list[str]) -> None:
                     if k not in {"CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"}
                 }
                 try:
+                    extract_cmd = [sys.executable, "-m", "keephive", "loop-extract", loop_id]
+                    # Pass task so extractor can auto-close matching TODOs
+                    if req.get("task"):
+                        extract_cmd.append(req["task"])
                     subprocess.Popen(
-                        [sys.executable, "-m", "keephive", "loop-extract", loop_id],
+                        extract_cmd,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                         start_new_session=True,
@@ -79,9 +83,18 @@ def hook_stop(_args: list[str]) -> None:
                     except Exception:
                         pass
 
+                early = "early exit" if done_path.exists() else f"{iter_n}/{max_iter} iter"
+                W = 62
                 completion_msg = (
-                    f"Loop {loop_id} complete ({iter_n}/{max_iter} iterations).\n"
-                    f"Facts queued → hive run review"
+                    "╔" + "═" * W + "╗\n"
+                    "║  🐝 Loop Complete" + " " * (W - 17) + "║\n"
+                    "╠" + "═" * W + "╣\n"
+                    f"║  {loop_id:<{W - 2}}║\n"
+                    f"║  ✓ {early:<{W - 4}}║\n"
+                    "║  ✓ Facts queued for review" + " " * (W - 26) + "║\n"
+                    "╠" + "═" * W + "╣\n"
+                    "║  Next: hive run review" + " " * (W - 22) + "║\n"
+                    "╚" + "═" * W + "╝"
                 )
                 sys.stdout.write(build_nudge_output(completion_msg, event_name="Stop"))
                 sys.exit(0)
@@ -95,9 +108,11 @@ def hook_stop(_args: list[str]) -> None:
                 next_iter = iter_n + 1
                 done_path_str = str(_loop_done_path(loop_id))
                 continuation = (
-                    f"Continue: {req['task']}\n"
-                    f"(Iteration {next_iter}/{max_iter}. "
-                    f"Signal completion: {done_path_str})"
+                    f"─── ITERATION {next_iter}/{max_iter} " + "─" * 45 + "\n"
+                    f"PROGRESS CHECK: In one line — what did iteration {iter_n} accomplish?\n"
+                    f"TASK: {req['task']}\n"
+                    f"  Signal done: touch {done_path_str}\n"
+                    + "─" * 64
                 )
                 sys.stdout.write(build_nudge_output(continuation, event_name="Stop"))
                 sys.exit(2)

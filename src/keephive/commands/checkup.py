@@ -294,6 +294,9 @@ def _print_stage2(data: dict, warnings: list[str]) -> None:
 
 def _check_queue_depths(hd: Path) -> dict:
     """Count pending items in each review queue."""
+    from keephive.clock import get_today
+    from keephive.storage import kb_queue_depth, list_wander_docs
+
     facts = _count_md_bullets(hd / ".pending-facts.md")
     rules = _count_md_bullets(hd / ".pending-rules.md")
 
@@ -305,7 +308,28 @@ def _check_queue_depths(hd: Path) -> dict:
         except (json.JSONDecodeError, ValueError):
             pass
 
-    return {"facts": facts, "rules": rules, "improvements": improvements}
+    kb_depth = kb_queue_depth()
+
+    # Wander activity: days since last wander doc
+    wander_days_ago = -1  # -1 = no docs found
+    try:
+        wander_docs = list_wander_docs(limit=1)
+        if wander_docs:
+            last_date = wander_docs[0].get("date", "")
+            if last_date:
+                from datetime import date
+
+                wander_days_ago = (get_today() - date.fromisoformat(last_date)).days
+    except Exception:
+        pass
+
+    return {
+        "facts": facts,
+        "rules": rules,
+        "improvements": improvements,
+        "kb_queue": kb_depth,
+        "wander_days_ago": wander_days_ago,
+    }
 
 
 def _count_md_bullets(path: Path) -> int:
@@ -320,13 +344,33 @@ def _print_stage3(data: dict, warnings: list[str]) -> None:
     console.print(f"    Pending rules:        {data['rules']}")
     console.print(f"    Pending improvements: {data['improvements']}")
 
-    overflowed = [k for k, v in data.items() if v > _QUEUE_WARN_DEPTH]
+    # KB queue
+    kb_depth = data.get("kb_queue", 0)
+    if kb_depth > 0:
+        console.print(f"    KB queue:             {kb_depth} unread message(s) — soul_update will process next compaction")
+    else:
+        console.print(f"    KB queue:             0 (clear)")
+
+    # Wander activity
+    wander_days_ago = data.get("wander_days_ago", -1)
+    if wander_days_ago == -1:
+        w = "Wander: no docs found — hive daemon status"
+        console.print(f"    [warn]⚠  {w}[/warn]")
+        warnings.append(w)
+    elif wander_days_ago > 3:
+        w = f"Wander: last run {wander_days_ago}d ago — daemon may be paused"
+        console.print(f"    [warn]⚠  {w}[/warn]")
+        warnings.append(w)
+    else:
+        console.print(f"    Wander:               last run {wander_days_ago}d ago [green]✓[/green]")
+
+    overflowed = [k for k, v in data.items() if isinstance(v, int) and k not in ("kb_queue", "wander_days_ago") and v > _QUEUE_WARN_DEPTH]
     if overflowed:
         for k in overflowed:
             w = f"Queue '{k}' has {data[k]} items (>{_QUEUE_WARN_DEPTH}) — run 'hive flow' to drain"
             warnings.append(w)
         console.print(f"    [warn]⚠  Queue overflow: {', '.join(overflowed)}[/warn]")
-    else:
+    elif kb_depth == 0 and wander_days_ago != -1 and wander_days_ago <= 3:
         console.print("    [green]✓ All queues healthy[/green]")
 
 

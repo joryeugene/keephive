@@ -58,7 +58,8 @@ def cmd_loop_extract(args: list[str]) -> None:
     loop_id = args[0] if args else ""
     if not loop_id:
         return
-    _do_loop_extract(loop_id)
+    task = args[1] if len(args) > 1 else ""
+    _do_loop_extract(loop_id, task=task)
 
 
 # ── Loop file helpers (imported by stop.py) ──────────────────────────────────
@@ -164,25 +165,68 @@ def _seed_memory(topic: str) -> list[str]:
     return relevant[:5]
 
 
+def _extract_soul_wisdom(soul_text: str) -> list[str]:
+    """Extract 'What I've Learned' bullets from SOUL.md.
+
+    Looks for the section starting with '## What I've Learned' and returns
+    up to 3 bullet points before the next ## section.
+    """
+    if not soul_text:
+        return []
+    in_section = False
+    bullets: list[str] = []
+    for line in soul_text.splitlines():
+        if "## What I've Learned" in line:
+            in_section = True
+            continue
+        if in_section:
+            if line.startswith("## "):
+                break
+            if line.startswith("- "):
+                bullets.append(line[2:].strip())
+    return bullets
+
+
 def _build_first_iter_output(
     loop_id: str, task: str, max_iter: int, seed_lines: list[str]
 ) -> str:
     """Build the stdout block for the first iteration.
 
     This is read by Claude as Bash output, kicking off iteration 1 automatically.
+    Includes an ASCII opening banner with KingBee identity + SOUL.md wisdom injection.
     """
-    from keephive.storage import hive_dir
+    from keephive.storage import hive_dir, safe_read_text
 
     done_path = str(hive_dir() / f".loop-done-{loop_id}")
+    task_preview = task[:54] if len(task) > 54 else task
 
+    # Box header (width 62 content chars, 64 total with borders)
+    W = 62
     lines = [
-        f"🔁 Loop started · {task}",
-        f"   Loop ID: {loop_id}",
-        f"   Max: {max_iter} iterations · Memory seeded: {len(seed_lines)} items",
-        f"   Cancel: hive run cancel",
-        "",
-        f"─── TASK (Iteration 1/{max_iter}) " + "─" * 40,
+        "╔" + "═" * W + "╗",
+        "║  🐝 KingBee  ·  Autonomous Loop" + " " * (W - 31) + "║",
+        "╠" + "═" * W + "╣",
+        f"║  Task: {task_preview:<{W - 8}}║",
+        f"║  Loop: {loop_id:<{W - 8}}║",
+        (
+            f"║  Max: {max_iter} iter  ·  Memory seeded: {len(seed_lines)} items"
+            + " " * max(0, W - 40 - len(str(max_iter)) - len(str(len(seed_lines))))
+            + "║"
+        ),
+        "╚" + "═" * W + "╝",
     ]
+
+    # SOUL injection — best-effort, silent on missing
+    try:
+        soul_path = hive_dir() / "SOUL.md"
+        soul_wisdom = _extract_soul_wisdom(safe_read_text(soul_path) if soul_path.exists() else "")
+        if soul_wisdom:
+            lines.append("WISDOM (from KingBee's memory):")
+            for wisdom in soul_wisdom[:3]:
+                lines.append(f"  {wisdom}")
+            lines.append("")
+    except Exception:
+        pass  # Never let SOUL injection crash the loop start
 
     if seed_lines:
         lines.append("CONTEXT:")
@@ -190,11 +234,12 @@ def _build_first_iter_output(
             lines.append(f"  {line}")
         lines.append("")
 
+    # Task block for iteration 1
+    lines.append(f"─── ITERATION 1/{max_iter} " + "─" * 45)
     lines.append(f"TASK: {task}")
     lines.append("")
-    lines.append("Signal completion by writing any content to:")
-    lines.append(done_path)
-    lines.append("─" * 60)
+    lines.append("  Signal done: touch " + done_path)
+    lines.append("─" * 64)
 
     return "\n".join(lines)
 
@@ -636,7 +681,7 @@ def _cmd_run_review() -> None:
 # ── Loop extract (internal, called non-blocking after loop completes) ────────
 
 
-def _do_loop_extract(loop_id: str) -> None:
+def _do_loop_extract(loop_id: str, task: str = "") -> None:
     """Extract learnings from a completed loop. Best-effort, never crashes."""
     from keephive.clock import get_today
     from keephive.storage import (
@@ -683,6 +728,28 @@ def _do_loop_extract(loop_id: str) -> None:
 
     except Exception:
         pass  # Extraction is best-effort; never crash a background process
+
+    # Auto-close TODOs whose text fuzzy-matches the loop task
+    if task:
+        try:
+            from difflib import SequenceMatcher
+
+            from keephive.clock import get_now
+            from keephive.storage import open_todos
+
+            todos = open_todos()
+            task_lower = task.lower()
+            closed: list[str] = []
+            for _, _, todo_text in todos:
+                ratio = SequenceMatcher(None, task_lower, todo_text.lower()).ratio()
+                if ratio >= 0.55:
+                    ts = get_now().strftime("%H:%M:%S")
+                    append_to_daily(f"- [{ts}] DONE: {todo_text}")
+                    closed.append(todo_text[:50])
+            if closed:
+                append_to_daily(f"[Loop {loop_id} auto-closed {len(closed)} TODO(s)]")
+        except Exception:
+            pass  # Best-effort, never crash
 
 
 # ── Help ─────────────────────────────────────────────────────────────────────

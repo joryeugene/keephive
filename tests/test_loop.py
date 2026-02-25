@@ -612,7 +612,7 @@ class TestCmdRunTaskInSession:
         out = capsys.readouterr().out
 
         assert "TASK: refactor auth module" in out
-        assert "Signal completion" in out
+        assert "Signal done:" in out  # ASCII banner uses "Signal done:" (was "Signal completion")
 
     def test_guard_against_second_loop_in_same_session(self, hive_env, monkeypatch, capsys):
         """Second in-session loop for same session_id is blocked (H6)."""

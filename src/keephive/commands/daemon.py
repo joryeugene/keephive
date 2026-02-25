@@ -502,7 +502,16 @@ def _task_soul_update() -> bool:
     from keephive.claude import ClaudePipeError, run_claude_pipe
     from keephive.clock import get_today
     from keephive.models import SoulUpdateResponse
-    from keephive.storage import daily_file, list_wander_docs, read_soul, safe_read_text, soul_file
+    from keephive.storage import (
+        clear_kb_queue,
+        daily_file,
+        list_wander_docs,
+        pending_rules_file,
+        read_kb_queue,
+        read_soul,
+        safe_read_text,
+        soul_file,
+    )
 
     today = get_today()
     today_log_path = daily_file(today.isoformat())
@@ -522,6 +531,22 @@ def _task_soul_update() -> bool:
 
     wander_docs = list_wander_docs(limit=7)
     wander_bullets = "\n".join(f"- {d['hypothesis']}" for d in wander_docs if d.get("hypothesis"))
+
+    # KB queue — direct messages from the user to KingBee
+    kb_messages = read_kb_queue()
+    kb_pending = [m["text"] for m in kb_messages if m["status"] == "pending"]
+
+    # Pending rules count — signal for self-awareness
+    pr_path = pending_rules_file()
+    pending_rules_count = len(pr_path.read_text().splitlines()) if pr_path.exists() else 0
+
+    # Build KB queue block for prompt
+    kb_block = ""
+    if kb_pending:
+        kb_lines = "\n".join(f"- {msg}" for msg in kb_pending)
+        kb_block = f"\nDIRECT MESSAGES TO KINGBEE ({len(kb_pending)} pending):\n{kb_lines}\n"
+
+    system_state_block = f"\nSYSTEM STATE:\n- Pending rules awaiting review: {pending_rules_count}\n"
 
     prompt = f"""You are KingBee updating your own SOUL.md after recent sessions.
 Review the logs and rewrite SOUL.md with STRICT size budgets.
@@ -545,7 +570,7 @@ Recent logs:
 
 Recent wander hypotheses (last 7 sessions):
 {wander_bullets if wander_bullets else "(none yet)"}
-
+{kb_block}{system_state_block}
 Current SOUL.md:
 {current_soul[:2000] if current_soul else "(empty)"}
 
@@ -558,6 +583,9 @@ Return the complete updated SOUL.md content (bounded, distilled, not expanded)."
         if result and result.content:
             soul_file().write_text(result.content)
             _log_daemon("SOUL.md updated")
+            # Drain KB queue — the LLM saw the messages, don't re-process them
+            if kb_pending:
+                clear_kb_queue()
             return True  # caller handles _mark_last_run
         return False
     except ClaudePipeError as e:
@@ -856,6 +884,10 @@ thinking: 100-200 words, first person, associative
 connections: 1-3 links to specific things in memory
 hypothesis: exactly one sentence
 question: exactly one sentence, worth surfacing next session
+action (optional): if this hypothesis suggests a concrete, specific action \
+(e.g. "remove unused skill X", "add rule about Y"), state it in one sentence. \
+Leave empty if exploratory only.
+action_type: "run" | "edit" | "rule" | "none". Set to "none" if action is empty.
 {_VOICE_DISCIPLINE}
 
 used_web_search: true if you used WebSearch, false otherwise"""
@@ -882,6 +914,25 @@ used_web_search: true if you used WebSearch, false otherwise"""
                 f"Question: {result.question}\n"
             )
             _log_daemon(f"wander: wrote {path.name}{web_note}")
+
+            # If wander produced an actionable hypothesis, queue it for hive improve review
+            if result.action and result.action_type != "none":
+                try:
+                    from keephive.storage import append_pending_improvements, read_pending_improvements
+
+                    existing = read_pending_improvements()
+                    # Dedup: skip if rationale already in queue
+                    if not any(i.get("rationale", "") == result.action for i in existing):
+                        item = {
+                            "type": result.action_type,
+                            "rationale": result.action,
+                            "source": "wander",
+                        }
+                        append_pending_improvements([item])
+                        _log_daemon(f"wander: queued improvement ({result.action_type}): {result.action[:60]}")
+                except Exception:
+                    pass  # Best-effort, never fail the wander task
+
             return True
         return False
     except ClaudePipeError as exc:

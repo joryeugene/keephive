@@ -10,6 +10,26 @@
   no hedging ("might"/"could"/"possibly"), no empty affirmations ("Great!"/"Sure!").
   Silence is explicitly valid. Injected at the end of each prompt string.
 
+- **KB Identity Channel**: `UserPromptSubmit` hook detects "KingBee"/"@KB" in prompts,
+  queues to `.kb-queue.md`. `soul_update` reads and incorporates. `hive go kb` session mode.
+
+- **Wander improvements**: `WanderDocument.action` field. When wander forms an actionable
+  hypothesis, it auto-appends to `.pending-improvements.json` with `source: "wander"`.
+
+- **Nudge priorities**: Priority 1.5 (KB queue unread, recency gate 3) + Priority 4.5
+  (review lag when v/a/mem review > 1 day, recency gate 8).
+
+- **Loop ceremony**: ASCII opening banner + SOUL wisdom injection + iteration progress
+  banner + ASCII closing ceremony in `hive run` loops.
+
+- **Auto-TODO close**: `_do_loop_extract()` fuzzy-closes matching open TODOs (0.55 threshold)
+  after loop completes.
+
+- **Checkup Stage 3**: KB queue depth + wander activity checks added.
+
+- **Storage**: `kb_queue_file()`, `append_kb_message()`, `read_kb_queue()`, `kb_queue_depth()`,
+  `clear_kb_queue()`, `last_cmd_date()`, `pending_rules_file()` added to `storage.py`.
+
 - **Recency-gated nudge suppression**: `nudge.py` now tracks which nudge category last
   fired per session via a `last_surfaced` dict in counter files. Priorities 1-4 (TODOs,
   stale facts, pending facts, unreflected logs) are suppressed if the same category fired

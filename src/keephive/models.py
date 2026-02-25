@@ -267,6 +267,18 @@ class WanderDocument(BaseModel):
         default=False,
         description="True if web search was used during this wander",
     )
+    action: str = Field(
+        default="",
+        description=(
+            "Optional: if this hypothesis suggests a concrete, specific action "
+            "(e.g. 'remove unused skill X', 'add rule about Y'), state it in one sentence. "
+            "Leave empty if exploratory only."
+        ),
+    )
+    action_type: str = Field(
+        default="none",
+        description="One of: run, edit, rule, none. Set to 'none' if action is empty.",
+    )
 
 
 # ---- SubagentStop ----

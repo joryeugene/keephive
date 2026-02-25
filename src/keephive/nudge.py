@@ -20,6 +20,8 @@ import os
 from pathlib import Path
 
 _RECENCY_THRESHOLD = 15
+_KB_RECENCY_THRESHOLD = 3      # KB queue nudges more frequently (unread directives)
+_REVIEW_RECENCY_THRESHOLD = 8  # Review lag nudge (same cadence as stop hook)
 
 
 def _counter_path(name: str) -> Path:
@@ -156,7 +158,7 @@ def _lifecycle_nudge(
     5. Context-specific capture/recall reminder (NEVER gated)
     """
     try:
-        from keephive.storage import count_stale_facts, open_todos
+        from keephive.storage import count_stale_facts, kb_queue_depth, last_cmd_date, open_todos
 
         recency = read_recency(counter_name, session_id)
 
@@ -169,6 +171,19 @@ def _lifecycle_nudge(
                 _, _, text = todos[0]
                 short = text[:60] + "..." if len(text) > 60 else text
                 result = f'Open TODO: "{short}" - resolved? `hive td`'
+                record_surfaced(counter_name, cat, count, session_id)
+                return result
+
+        # Priority 1.5: KB queue — direct messages pending soul_update processing
+        kb_depth = kb_queue_depth()
+        if kb_depth > 0:
+            cat = "kb_queue"
+            last = recency.get(cat, 0)
+            if last == 0 or count - last >= _KB_RECENCY_THRESHOLD:
+                result = (
+                    f"{kb_depth} direct KB message(s) queued. "
+                    "soul_update will process on next compaction."
+                )
                 record_surfaced(counter_name, cat, count, session_id)
                 return result
 
@@ -201,6 +216,40 @@ def _lifecycle_nudge(
                 result = f"{log_count} daily logs since last reflect. Run: hive rf"
                 record_surfaced(counter_name, cat, count, session_id)
                 return result
+
+        # Priority 4.5: Review lag — no v/a/mem in >1 day
+        # Only fires when there is stats history (fresh install = no lag to report)
+        from datetime import date
+
+        from keephive.storage import stats_file
+
+        if stats_file().exists():
+            today = date.today()
+            review_dates = {
+                "v": last_cmd_date("v"),
+                "a": last_cmd_date("a"),
+                "m": last_cmd_date("m"),
+            }
+            # Find worst offender (longest since last run)
+            worst_days = 0
+            for _last_date in review_dates.values():
+                if _last_date is None:
+                    days = 999  # never run = worst
+                else:
+                    days = (today - _last_date).days
+                if days > worst_days:
+                    worst_days = days
+
+            if worst_days > 1:
+                cat = "review_lag"
+                last = recency.get(cat, 0)
+                if last == 0 or count - last >= _REVIEW_RECENCY_THRESHOLD:
+                    if worst_days >= 3:
+                        result = f"{worst_days}d without review. Facts are drifting. hive v"
+                    else:
+                        result = f"No review in {worst_days}d. Try: hive v · hive a · hive mem review"
+                    record_surfaced(counter_name, cat, count, session_id)
+                    return result
 
     except Exception:
         pass

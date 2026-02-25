@@ -224,3 +224,31 @@ hive serve               # navigate to /play for the dashboard panel
 **Note on silent throttle skips:** When the PreCompact hook skips soul-update due to
 throttle, nothing is written to daemon.log. This is intentional — throttle skips are
 expected and frequent; logging them would create noise that obscures real daemon activity.
+
+---
+
+## KB Identity Channel
+
+Any prompt containing "KingBee", "King Bee", "King B", or "@KB"/"@kb" is detected
+as a direct message and queued to `.kb-queue.md`:
+
+  KingBee, please stop starting sentences with "I".
+  @kb use more concrete examples
+
+Messages accumulate until `soul-update` runs (1h throttle). soul-update reads
+the queue, incorporates directives into SOUL.md synthesis, then marks them [done].
+
+To start a direct conversation: `hive go kb`
+To check queue depth: `hive checkup` (Stage 3 shows KB queue depth)
+
+## hive run — Autonomous Loops
+
+Loops interact with KingBee's identity system:
+- Opening banner: reads SOUL.md "What I've Learned" bullets, shows as WISDOM
+- Each iteration: progress check prompt forces self-articulation
+- Loop end: ASCII closing ceremony + auto-close matching TODOs + extract to pending-facts
+
+After a loop completes: `hive run review` to review extracted facts.
+
+Write specs to `~/.claude/hive/specs/<name>.md` for complex tasks.
+The loop agent reads spec files as its task brief.

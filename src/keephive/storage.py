@@ -2827,7 +2827,12 @@ def update_custom_task_status(task_id: str, status: str) -> None:
             fh.write(json.dumps(tasks, indent=2).encode("utf-8"))
 
 
-# ---- Pending facts -------------------------------------------------------------------
+# ---- Pending rules / facts -----------------------------------------------------------
+
+
+def pending_rules_file() -> Path:
+    """Path to .pending-rules.md — proposed rules awaiting user review."""
+    return hive_dir() / ".pending-rules.md"
 
 
 def pending_facts_file() -> Path:
@@ -2898,6 +2903,105 @@ def set_llm_paused(paused: bool) -> None:
         f.touch()
     else:
         f.unlink(missing_ok=True)
+
+
+def kb_queue_file() -> Path:
+    """Path to the .kb-queue.md file — direct messages to KingBee."""
+    return hive_dir() / ".kb-queue.md"
+
+
+def append_kb_message(text: str) -> None:
+    """Append one direct KB message in [YYYY-MM-DD HH:MM] [pending] {text} format.
+
+    Dedup: skips if SequenceMatcher ratio > 0.85 against last 5 entries.
+    """
+    from difflib import SequenceMatcher
+
+    from keephive.clock import get_now
+
+    path = kb_queue_file()
+    existing_lines: list[str] = []
+    if path.exists():
+        existing_lines = [ln for ln in path.read_text().splitlines() if ln.strip()]
+
+    # Extract text portions of recent entries for dedup
+    recent_texts: list[str] = []
+    for line in existing_lines[-5:]:
+        # Format: [DATE TIME] [STATUS] TEXT
+        parts = line.split("] ", 2)
+        if len(parts) >= 3:
+            recent_texts.append(parts[2].strip())
+
+    # Dedup check
+    text_clean = text.strip()
+    for recent in recent_texts:
+        ratio = SequenceMatcher(None, text_clean.lower(), recent.lower()).ratio()
+        if ratio > 0.85:
+            return  # Too similar to a recent entry, skip
+
+    ts = get_now().strftime("%Y-%m-%d %H:%M")
+    entry = f"[{ts}] [pending] {text_clean}"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a") as f:
+        f.write(entry + "\n")
+
+
+def read_kb_queue() -> list[dict]:
+    """Parse .kb-queue.md into a list of {timestamp, status, text} dicts."""
+    path = kb_queue_file()
+    if not path.exists():
+        return []
+    results = []
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # Format: [YYYY-MM-DD HH:MM] [STATUS] TEXT
+        parts = line.split("] ", 2)
+        if len(parts) >= 3:
+            ts = parts[0].lstrip("[")
+            status = parts[1].lstrip("[")
+            text = parts[2].strip()
+            results.append({"timestamp": ts, "status": status, "text": text})
+    return results
+
+
+def kb_queue_depth() -> int:
+    """Count messages with [pending] status in .kb-queue.md."""
+    path = kb_queue_file()
+    if not path.exists():
+        return 0
+    return sum(1 for ln in path.read_text().splitlines() if "[pending]" in ln)
+
+
+def clear_kb_queue() -> None:
+    """Rewrite .kb-queue.md with all [pending] entries marked [done]."""
+    path = kb_queue_file()
+    if not path.exists():
+        return
+    lines = path.read_text().splitlines()
+    new_lines = [ln.replace("[pending]", "[done]") for ln in lines]
+    path.write_text("\n".join(new_lines) + ("\n" if new_lines else ""))
+
+
+def last_cmd_date(cmd: str) -> "date | None":
+    """Return the most recent date on which a command was run, or None if never.
+
+    Scans .stats.json['days'] backward (newest key first).
+    Returns first date where stats['days'][datestr]['commands'][cmd] > 0.
+    """
+    from datetime import date
+
+    try:
+        data = read_stats()
+        days = data.get("days", {})
+        for datestr in sorted(days.keys(), reverse=True):
+            cmds = days[datestr].get("commands", {})
+            if cmds.get(cmd, 0) > 0:
+                return date.fromisoformat(datestr)
+    except Exception:
+        pass
+    return None
 
 
 def force_cli_file() -> Path:
