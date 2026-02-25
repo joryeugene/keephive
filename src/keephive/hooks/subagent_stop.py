@@ -11,8 +11,12 @@ from __future__ import annotations
 
 import json
 import sys
+from typing import TYPE_CHECKING
 
 from keephive.clock import get_now
+
+if TYPE_CHECKING:
+    from keephive.models import SubagentExtractionResponse
 
 
 def _extract_output(description: str) -> "SubagentExtractionResponse | None":

@@ -10,6 +10,8 @@ import time
 from http.client import HTTPConnection
 from pathlib import Path
 
+import pytest
+
 # ---- Markdown renderer tests ----
 
 
@@ -630,10 +632,7 @@ def test_get_standup_preview_data_extracts_time(hive_env):
     today = datetime.date.today().isoformat()
     log_file = daily_dir / f"{today}.md"
     log_file.write_text(
-        "[🐝 KingBee 17:02] standup draft\n"
-        "Yesterday: finished auth\n"
-        "Today: write tests\n"
-        "\n"
+        "[🐝 KingBee 17:02] standup draft\nYesterday: finished auth\nToday: write tests\n\n"
     )
 
     data = _get_standup_preview_data()
@@ -657,7 +656,11 @@ def test_render_standup_preview_panel_copy_button_present(hive_env):
     """Copy button appears when draft is present."""
     from keephive.commands.serve import _render_standup_preview_panel
 
-    data = {"draft": "Yesterday: wrote tests\nToday: ship it", "date": "2026-02-25", "time": "17:02"}
+    data = {
+        "draft": "Yesterday: wrote tests\nToday: ship it",
+        "date": "2026-02-25",
+        "time": "17:02",
+    }
     html = _render_standup_preview_panel(data)
 
     assert "KingBee Draft" in html
@@ -3191,7 +3194,16 @@ def test_consolidated_views_exist():
     """View registry stays in sync with expected navigation tabs."""
     from keephive.commands.serve import VIEWS
 
-    assert set(VIEWS.keys()) == {"home", "dev", "brain", "know", "stats", "settings", "play", "agent"}
+    assert set(VIEWS.keys()) == {
+        "home",
+        "dev",
+        "brain",
+        "know",
+        "stats",
+        "settings",
+        "play",
+        "agent",
+    }
 
 
 # ---- Notes compact panel ----
@@ -3875,9 +3887,6 @@ def _drain_queue(q: queue.Queue) -> list:
         except queue.Empty:
             break
     return items
-
-
-import pytest
 
 
 @pytest.fixture
