@@ -423,8 +423,6 @@ class TestApplySkillEditEditorFallback:
         Bug caught: LLM failure path silently skips the edit with no user feedback
         instead of falling back to $EDITOR so the user can apply changes manually.
         """
-        import os
-
         from keephive.commands.improve import _apply_improvement
         from keephive.storage import guides_dir
 
