@@ -5610,6 +5610,78 @@ def _render_active_loops_panel(data: dict) -> str:
     )
 
 
+def _get_daemon_task_last_output(task: str) -> str:
+    """Return a one-line summary (≤120 chars) of the last output for a daemon task."""
+    try:
+        if task == "wander":
+            from keephive.storage import list_wander_docs
+
+            docs = list_wander_docs(limit=1)
+            if docs:
+                hyp = (docs[0].get("hypothesis", "") or "").strip()
+                if hyp:
+                    return hyp[:120]
+
+        elif task == "soul-update":
+            from keephive.storage import read_soul
+
+            soul = read_soul()
+            for marker in ("## What I've Learned", "## What I Have Learned"):
+                idx = soul.find(marker)
+                if idx >= 0:
+                    bullets = [
+                        ln.strip()[2:].strip()
+                        for ln in soul[idx:].splitlines()
+                        if ln.strip().startswith("- ")
+                    ]
+                    if bullets:
+                        return bullets[-1][:120]
+
+        elif task == "self-improve":
+            from keephive.storage import hive_dir
+
+            log = hive_dir() / "daemon.log"
+            if log.exists():
+                for line in reversed(log.read_text(errors="replace").splitlines()):
+                    if "self-improve: " in line:
+                        parts = line.split("] ", 1)
+                        return (parts[1] if len(parts) > 1 else line)[:120]
+
+        elif task in ("standup-draft", "morning-briefing", "stale-check"):
+            import re
+            from datetime import timedelta
+
+            from keephive.clock import get_today
+            from keephive.storage import hive_dir
+
+            tag_map = {
+                "standup-draft": "standup draft",
+                "morning-briefing": "morning briefing",
+                "stale-check": "stale-check",
+            }
+            tag = tag_map[task]
+            today = get_today()
+            for i in range(7):
+                log_file = hive_dir() / "daily" / f"{today - timedelta(days=i)}.md"
+                if not log_file.exists():
+                    continue
+                content = log_file.read_text(errors="replace")
+                pattern = (
+                    r"\[(?:🐝 )?KingBee \d{2}:\d{2}\] "
+                    + re.escape(tag)
+                    + r"\n(.*?)(?=\n\[|\n##|\Z)"
+                )
+                m = re.search(pattern, content, re.DOTALL)
+                if m:
+                    lines = [ln.strip() for ln in m.group(1).splitlines() if ln.strip()]
+                    if lines:
+                        return lines[0][:120]
+
+    except Exception:
+        pass
+    return ""
+
+
 def _get_daemon_status_data() -> dict:
     from datetime import datetime
 
@@ -5637,7 +5709,14 @@ def _get_daemon_status_data() -> dict:
                 age = last_run_str[:10]
         else:
             age = "never"
-        rows.append({"task": task, "enabled": enabled, "last_run": age})
+        rows.append(
+            {
+                "task": task,
+                "enabled": enabled,
+                "last_run": age,
+                "last_output": _get_daemon_task_last_output(task),
+            }
+        )
     return {"tasks": rows}
 
 
@@ -5648,15 +5727,24 @@ def _render_daemon_status_panel(data: dict) -> str:
         task = t.get("task", "")
         enabled = t.get("enabled", False)
         last_run = t.get("last_run", "never")
+        last_output = t.get("last_output", "")
         badge_cls = "badge-success" if enabled else "badge-secondary"
         badge_text = "ON" if enabled else "OFF"
+        output_html = (
+            f'<div style="font-size:0.78em;color:#8b949e;margin:2px 0 6px 0;'
+            f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px">'
+            f"{_e(last_output)}</div>"
+            if last_output
+            else ""
+        )
         rows += (
-            f'<div class="ps-item">'
+            f'<div class="ps-item" style="flex-wrap:wrap;align-items:flex-start">'
             f'<span class="ps-name">{_e(task)}</span>'
             f'<span class="ps-meta">{_e(last_run)}</span>'
             f'<span class="badge {badge_cls}">{badge_text}</span> '
             f'<button class="search-action-btn" onclick="toggleDaemon(\'{_e(task)}\')">'
             f"Toggle</button>"
+            f"{output_html}"
             f"</div>"
         )
     if not rows:
