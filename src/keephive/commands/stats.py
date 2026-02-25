@@ -870,6 +870,67 @@ def _productivity_pulse(
 
 # ---- Display functions ----
 
+_DAEMON_TASK_ORDER = [
+    ("wander", "wander"),
+    ("soul-update", "soul-update"),
+    ("standup-draft", "standup-draft"),
+    ("stale-check", "stale-check"),
+    ("morning-briefing", "morning-brief"),
+    ("self-improve", "self-improve"),
+]
+
+
+def _display_command_activity(data: dict, days: int = 7) -> None:
+    """Display command activity: top commands, daemon task runs, loop stats."""
+    days_data = data.get("days", {})
+    today = get_today()
+    cutoff = (today - timedelta(days=days - 1)).isoformat()
+    recent_days = {k: v for k, v in days_data.items() if k >= cutoff}
+
+    commands = _sum_counters(recent_days, "commands")
+    daemon_tasks = _sum_counters(recent_days, "daemon_tasks")
+    loops = _sum_counters(recent_days, "loops")
+
+    top_cmds = sorted(commands.items(), key=lambda x: -x[1])[:8]
+
+    if not top_cmds and not daemon_tasks and not loops:
+        return
+
+    console.print()
+    console.print(f"[dim]Command Activity · last {days} days[/dim]")
+
+    max_cmd = max((c for _, c in top_cmds), default=1) or 1
+    max_daemon = max(daemon_tasks.values(), default=1) or 1
+
+    left: list[str] = ["[dim]Top commands[/dim]"]
+    for name, count in top_cmds:
+        bar = _bar(count, max_cmd, width=10)
+        left.append(f"  {name:<14}  {count:>4}  {bar}")
+
+    right: list[str] = ["[dim]Daemon tasks[/dim]"]
+    if daemon_tasks:
+        for task_key, task_label in _DAEMON_TASK_ORDER:
+            count = daemon_tasks.get(task_key, 0)
+            bar = _bar(count, max_daemon, width=8) if count > 0 else "\u2591"
+            right.append(f"  {task_label:<14}  {count:>3}  {bar}")
+    else:
+        right.append("  [dim]none yet — enable with hive daemon[/dim]")
+
+    grid = Table.grid(padding=(0, 4))
+    grid.add_column()
+    grid.add_column()
+    max_rows = max(len(left), len(right))
+    left += [""] * (max_rows - len(left))
+    right += [""] * (max_rows - len(right))
+    for l_row, r_row in zip(left, right):
+        grid.add_row(l_row, r_row)
+    console.print(grid)
+
+    started = loops.get("started", 0)
+    iterations = loops.get("iteration", 0)
+    if started > 0 or iterations > 0:
+        console.print(f"  Loops: {started} started · {iterations} iterations")
+
 
 def _reflect_ctx() -> str:
     """Context string for reflect action: number of daily logs available."""
@@ -1211,6 +1272,9 @@ def _display_full(data: dict) -> None:
                 status = f"[dim]{last_date}[/dim]"
         ctx_str = f"  [dim]{ctx}[/dim]" if ctx else ""
         console.print(f"  {meta['hint']:<10} {status}{ctx_str}")
+
+    # Command activity: top commands, daemon task runs, loop stats
+    _display_command_activity(data)
 
     # KingBee status line — shows last soul-update + pending improvement count
     try:

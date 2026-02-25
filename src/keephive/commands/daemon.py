@@ -32,6 +32,7 @@ from keephive.storage import (  # noqa: E402
     read_daemon_config,
     read_daemon_state,
     read_pending_improvements,
+    track_event,
     write_daemon_state,
 )
 
@@ -353,7 +354,10 @@ def _execute_task(task_name: str) -> bool:
     }
     fn = dispatch.get(task_name)
     if fn:
-        return fn() or False  # coerce None → False
+        result = fn() or False  # coerce None → False
+        if result:
+            track_event("daemon_tasks", task_name)
+        return result
     _log_daemon(f"unknown task: {task_name}")
     return False
 

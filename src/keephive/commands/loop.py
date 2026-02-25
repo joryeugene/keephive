@@ -58,6 +58,9 @@ def cmd_loop_extract(args: list[str]) -> None:
     loop_id = args[0] if args else ""
     if not loop_id:
         return
+    from keephive.storage import track_event
+
+    track_event("loops", "iteration")
     task = args[1] if len(args) > 1 else ""
     _do_loop_extract(loop_id, task=task)
 
@@ -276,7 +279,7 @@ def _parse_run_flags(flag_args: list[str]) -> dict:
 
 def _cmd_run_task(task: str, flag_args: list[str]) -> None:
     """Main entry: detect mode, seed memory, write loop file, launch."""
-    from keephive.storage import append_to_daily, hive_dir
+    from keephive.storage import append_to_daily, hive_dir, track_event
 
     opts = _parse_run_flags(flag_args)
     loop_id = _sanitize_loop_id(task)
@@ -327,6 +330,7 @@ def _cmd_run_task(task: str, flag_args: list[str]) -> None:
     }
     hive_dir().mkdir(parents=True, exist_ok=True)
     loop_file.write_text(json.dumps(loop_data))
+    track_event("loops", "started")
 
     # Log start
     append_to_daily(f"[Loop {loop_id} start: {task} (max {opts['max_iter']} iter)]")
@@ -339,7 +343,7 @@ def _launch_background(
     loop_id: str, task: str, opts: dict, seed_lines: list[str]
 ) -> None:
     """Launch loop in a new tmux window."""
-    from keephive.storage import append_to_daily, hive_dir
+    from keephive.storage import append_to_daily, hive_dir, track_event
 
     # Require tmux
     tmux_ok = bool(os.environ.get("TMUX")) or (
@@ -369,6 +373,7 @@ def _launch_background(
     }
     hive_dir().mkdir(parents=True, exist_ok=True)
     loop_file.write_text(json.dumps(loop_data))
+    track_event("loops", "started")
 
     prompt = _build_first_iter_output(loop_id, task, opts["max_iter"], seed_lines)
     append_to_daily(f"[Loop {loop_id} start (background): {task}]")
