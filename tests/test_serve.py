@@ -218,13 +218,16 @@ def test_render_brain_panel_empty_guidance():
         "todos": {"total": 0, "items": []},
         "log": [],
         "soul": {"soul": "", "last_modified": "", "pending_count": 0},
+        "active_loops": {"loops": []},
+        "wander_insights": [],
     }
     html = _render_brain_panel(data)
     assert "No platform telemetry yet" in html
     assert "keephive setup --yes" in html
     assert "Soul" in html
-    assert 'class="masonry"' in html
-    assert 'data-cols="2"' in html
+    assert "grid-template-columns" in html
+    assert "Active Loops" in html
+    assert "Wander Insights" in html
 
 
 def test_render_stats_platforms_panel_empty_hint():

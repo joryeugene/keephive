@@ -560,7 +560,7 @@ mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
 .source-bar-fill{height:100%;border-radius:2px;background:#1a3a5c}
 .source-pct{min-width:35px;text-align:right;font-size:12px;color:#8b949e}
 
-.card.brain-card{border-color:#262b33;min-height:140px}
+.card.brain-card{border-color:#262b33}
 .card.brain-card.brain-card-emphasis{border-color:#3fb950}
 .card.brain-card .card-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .card.brain-card .card-body{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#c9d1d9}
@@ -4097,6 +4097,7 @@ def _get_brain_data() -> dict:
     """Agent brain view: knowledge corpus, pending work, telemetry snapshot."""
     from keephive.storage import (
         get_meaningful_entries,
+        list_wander_docs,
         open_todos,
         read_memory,
         read_rules,
@@ -4110,6 +4111,16 @@ def _get_brain_data() -> dict:
     ]
     todos = open_todos()
     latest_entries = get_meaningful_entries()[:6]
+
+    wander_docs = list_wander_docs(limit=3)
+    wander_insights = [
+        {
+            "date": doc.get("date", ""),
+            "seed": doc.get("seed", ""),
+            "hypothesis": doc.get("hypothesis", ""),
+        }
+        for doc in wander_docs
+    ]
 
     return {
         "memory": {"total": len(mem_lines), "preview": mem_lines[:12]},
@@ -4125,6 +4136,8 @@ def _get_brain_data() -> dict:
         "platforms": _get_platform_overview(),
         "pending_llm": list_pending(limit=6),
         "soul": _get_soul_data(),
+        "active_loops": _get_active_loops_data(),
+        "wander_insights": wander_insights,
     }
 
 
@@ -4291,7 +4304,6 @@ def _render_settings_panel(data: dict) -> str:
 def _render_brain_panel(data: dict) -> str:
     backend = data.get("backend", {})
     platforms = data.get("platforms", {}).get("platforms", {})
-    pending = data.get("pending_llm", [])
     memory = data.get("memory", {})
     rules = data.get("rules", {})
     todos = data.get("todos", {})
@@ -4395,24 +4407,6 @@ def _render_brain_panel(data: dict) -> str:
         aria="LLM backend overview",
     )
 
-    pending_rows = "".join(
-        '<div class="brain-line">'
-        f'<span class="brain-chip brain-chip-warn">{_e(item.get("model", ""))}</span>'
-        f'<span class="brain-text">{_e(item.get("prompt_preview", "")[:160])}</span>'
-        "</div>"
-        for item in pending
-    )
-    if not pending_rows:
-        pending_rows = '<div class="brain-empty">Queue clear</div>'
-    else:
-        pending_rows += (
-            '<div class="brain-meta">Re-run the command once a backend is available.</div>'
-            '<div class="brain-meta">'
-            '<a href="/clear-queue" class="action-link">Clear queue</a>'
-            "</div>"
-        )
-    pending_card = _brain_card("Queued LLM Tasks", pending_rows, aria="Pending LLM work items")
-
     summary_rows: list[str] = []
     for slug, info in sorted(platforms.items()):
         detected = info.get("detected")
@@ -4437,64 +4431,84 @@ def _render_brain_panel(data: dict) -> str:
         aria="Platform integration summary",
     )
 
-    platform_detail_cards: list[str] = []
-    for slug, info in sorted(platforms.items()):
-        detected = info.get("detected")
-        chip = "brain-chip-ok" if detected else "brain-chip-dim"
-        telemetry = info.get("telemetry", {})
-        by_event = telemetry.get("by_event", {})
-        recent_rows: list[str] = []
-        if by_event:
-            for event, count in sorted(by_event.items(), key=lambda x: (-x[1], x[0]))[:6]:
-                recent_rows.append(
-                    '<div class="brain-line">'
-                    f'<span class="brain-chip">{_e(event)}</span>'
-                    f'<span class="brain-detail">{count}</span>'
-                    "</div>"
-                )
-        else:
-            recent_rows.append('<div class="brain-empty">No telemetry yet.</div>')
-            if detected:
-                recent_rows.append(
-                    '<div class="brain-hint">Open a session in this agent to start streaming telemetry.</div>'
-                )
-        recent_rows.append(
-            f'<div class="brain-meta">Skill: {"✓" if info.get("skill_installed") else "×"} · Hooks: {len(info.get("hook_scripts", []))}</div>'
+    # Active Loops card
+    loops = data.get("active_loops", {}).get("loops", [])
+    if not loops:
+        loops_body = (
+            '<div class="brain-empty">No active loops.'
+            ' <span class="brain-hint">Run: hive run &lt;task&gt;</span></div>'
         )
-        recent_rows.append(f'<div class="brain-meta">{_e(info.get("detection_reason", ""))}</div>')
-        platform_detail_cards.append(
-            _brain_card(
-                info.get("title", slug.title()),
-                "".join(recent_rows),
-                meta=slug,
-                aria=f"{slug} platform telemetry details",
+    else:
+        loop_rows: list[str] = []
+        for loop in loops:
+            task_txt = (loop.get("task") or "")[:60]
+            it = loop.get("iter", 0)
+            mx = loop.get("max_iter", 0)
+            mode = loop.get("mode", "")
+            elapsed = loop.get("elapsed", "")
+            meta_parts = [f"iter {it}/{mx}", mode, elapsed]
+            meta_str = " \u00b7 ".join(p for p in meta_parts if p)
+            loop_rows.append(
+                '<div class="brain-line">'
+                f'<span class="brain-chip brain-chip-ok">active</span>'
+                f'<span class="brain-text">{_e(task_txt)}</span>'
+                f'<span class="brain-detail">{_e(meta_str)}</span>'
+                "</div>"
             )
-        )
+        loops_body = "".join(loop_rows)
+    active_loops_card = _brain_card(
+        "Active Loops",
+        loops_body,
+        meta=str(len(loops)) if loops else "0",
+        aria="Active autonomous loops",
+    )
 
-    cards = [
-        ("brain-backend", backend_card),
-        ("brain-pending", pending_card),
-        ("brain-platform-summary", platform_summary_card),
+    # Wander Insights card
+    wander_insights = data.get("wander_insights", [])
+    if not wander_insights:
+        wander_body = (
+            '<div class="brain-empty">No wander docs yet.'
+            ' <span class="brain-hint">Run: hive daemon enable wander</span></div>'
+        )
+    else:
+        wander_rows: list[str] = []
+        for insight in wander_insights:
+            date_raw = insight.get("date", "")
+            if len(date_raw) == 8:
+                date_disp = f"{date_raw[:4]}-{date_raw[4:6]}-{date_raw[6:]}"
+            else:
+                date_disp = date_raw
+            seed_label = (insight.get("seed") or "")[:50]
+            hyp = (insight.get("hypothesis") or "")[:120]
+            wander_rows.append(
+                '<div class="brain-line" style="flex-direction:column;align-items:flex-start;gap:2px">'
+                f'<span><span class="badge badge-info">{_e(date_disp)}</span>'
+                f' <span class="brain-chip">{_e(seed_label)}</span></span>'
+                f'<span class="brain-text" style="color:#8b949e;font-size:11px">{_e(hyp)}</span>'
+                "</div>"
+            )
+        wander_body = "".join(wander_rows)
+    wander_insights_card = _brain_card(
+        "Wander Insights",
+        wander_body,
+        meta=str(len(wander_insights)),
+        aria="Recent wander hypotheses",
+    )
+
+    # CSS grid — cockpit priority order: most actionable first
+    grid_cards = [
+        todos_card,
+        _render_soul_panel(soul_data),
+        log_card,
+        active_loops_card,
+        wander_insights_card,
+        memory_card,
+        rules_card,
+        backend_card,
+        platform_summary_card,
     ]
-    cards.extend(
-        (f"brain-platform-{idx}", card) for idx, card in enumerate(platform_detail_cards, start=1)
-    )
-    cards.extend(
-        [
-            ("brain-todos", todos_card),
-            ("brain-log", log_card),
-            ("brain-memory", memory_card),
-            ("brain-rules", rules_card),
-            ("brain-soul", _render_soul_panel(soul_data)),
-        ]
-    )
-    if not cards:
-        return ""
-    masonry_items = "".join(
-        f'<div class="masonry-item" data-brain-card="{_e(card_id)}">{card_html}</div>'
-        for card_id, card_html in cards
-    )
-    return f'<div class="masonry" data-cols="2">{masonry_items}</div>'
+    grid_html = "".join(grid_cards)
+    return f'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">{grid_html}</div>'
 
 
 # ---- Pipeline health panels ----
