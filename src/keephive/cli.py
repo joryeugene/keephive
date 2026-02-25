@@ -65,7 +65,7 @@ HELP: dict[str, str] = {
     ),
     "inbox": "Usage: hive inbox [--days N]\n  What KingBee generated for you today.\n  Shows wander docs, morning briefings, standup drafts, and review queues.\n  --days N  Days of history to include (default 2 = today + yesterday, max 30)",
     "run": (
-        "Usage: hive run \"<task>\" [--max N] [--background] [--at HH:MM] [--tonight]  (alias: rn)\n"
+        'Usage: hive run "<task>" [--max N] [--background] [--at HH:MM] [--tonight]  (alias: rn)\n'
         "  Run an autonomous iteration loop on a task.\n"
         "  Modes:\n"
         "    (no flags)     In-session stop-hook loop\n"
@@ -169,7 +169,7 @@ _CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
     ("daemon [run|status|enable|disable]", "KingBee background daemon", "dm", {"daemon", "dm"}),
     ("wander [list|seed|run]", "Agent free-thinking log", "w", {"wander", "wr", "w"}),
     ("inbox [--days N]", "KingBee output + review queue", "ib", {"inbox", "ib"}),
-    ("run \"<task>\" [--max N]", "Autonomous iteration loop", "rn", {"run", "rn"}),
+    ('run "<task>" [--max N]', "Autonomous iteration loop", "rn", {"run", "rn"}),
     ("improve [review]", "Review self-improvement proposals", "im", {"improve", "im"}),
     ("go [mode]", "Launch session", "go", {"go", "sesh", "session"}),
     ("stats [-p path]", "Usage + pipeline health", "st", {"st", "stats"}),
@@ -191,7 +191,12 @@ _CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
     ("seed [--days N]", "Seed demo data", "", {"seed"}),
     ("export [path]", "Export data as tar.gz", "", {"export"}),
     ("import <path>", "Import data archive", "", {"import"}),
-    ("privacy [on|off|cli]", "Pause/resume LLM calls or restrict to claude -p", "pv", {"privacy", "pv"}),
+    (
+        "privacy [on|off|cli]",
+        "Pause/resume LLM calls or restrict to claude -p",
+        "pv",
+        {"privacy", "pv"},
+    ),
 ]
 
 

@@ -2574,7 +2574,6 @@ class TestCountKingbeeToday:
         today = get_today()
         daily_path = hive_env / "daily" / f"{today.isoformat()}.md"
         daily_path.write_text(
-            f"# Daily Log: {today.isoformat()}\n\n"
-            "- [10:00:00] FACT: Just a regular entry\n"
+            f"# Daily Log: {today.isoformat()}\n\n- [10:00:00] FACT: Just a regular entry\n"
         )
         assert count_kingbee_today() == 0

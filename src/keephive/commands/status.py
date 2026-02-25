@@ -406,20 +406,14 @@ def _render_status() -> None:
 
     if is_llm_paused():
         console.print()
-        console.print(
-            "  [bold yellow]⚠ LLM PAUSED[/bold yellow]  [dim](hive privacy on)[/dim]"
-        )
-        console.print(
-            "  [dim]All API calls blocked. Run `hive privacy off` to resume.[/dim]"
-        )
+        console.print("  [bold yellow]⚠ LLM PAUSED[/bold yellow]  [dim](hive privacy on)[/dim]")
+        console.print("  [dim]All API calls blocked. Run `hive privacy off` to resume.[/dim]")
     elif is_force_cli():
         console.print()
         console.print(
             "  [bold cyan]🔐 CLI-ONLY[/bold cyan]  [dim](hive privacy off to allow API)[/dim]"
         )
-        console.print(
-            "  [dim]LLM calls route through claude -p only. API backends blocked.[/dim]"
-        )
+        console.print("  [dim]LLM calls route through claude -p only. API backends blocked.[/dim]")
 
     llm_table = Table(show_header=False, show_edge=False, box=None, padding=(0, 1))
     llm_table.add_column(justify="left")

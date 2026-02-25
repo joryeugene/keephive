@@ -161,9 +161,7 @@ class TestLoopExtractIncludesTodos:
         today = get_today()
         log_path = daily_file(today.isoformat())
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        log_path.write_text(
-            f"- [10:00:00] [Loop {loop_id} start: test task (max 3 iter)]\n"
-        )
+        log_path.write_text(f"- [10:00:00] [Loop {loop_id} start: test task (max 3 iter)]\n")
 
         # LLM response with a todo — this is what gets silently dropped currently
         response = LoopExtractionResponse(
@@ -207,16 +205,26 @@ class TestStopHookPromptFileCleanup:
         prompt_file = hive_dir() / f".loop-prompt-{loop_id}.txt"
 
         # iter=9, max_iter=10 → next iter=10 = done
-        loop_file.write_text(json.dumps({
-            "loop_id": loop_id, "task": "prompt cleanup test",
-            "max_iter": 10, "iter": 9,
-            "mode": "background", "session_id": sess,
-            "cwd": str(hive_dir()), "created_at": "2026-02-24T14:00:00",
-        }))
+        loop_file.write_text(
+            json.dumps(
+                {
+                    "loop_id": loop_id,
+                    "task": "prompt cleanup test",
+                    "max_iter": 10,
+                    "iter": 9,
+                    "mode": "background",
+                    "session_id": sess,
+                    "cwd": str(hive_dir()),
+                    "created_at": "2026-02-24T14:00:00",
+                }
+            )
+        )
         prompt_file.write_text("fake tmux prompt content")
 
         monkeypatch.delenv("HIVE_LOOP_ID", raising=False)  # Ensure in-session mode path
-        monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"session_id": sess, "cwd": "/tmp"})))
+        monkeypatch.setattr(
+            "sys.stdin", io.StringIO(json.dumps({"session_id": sess, "cwd": "/tmp"}))
+        )
         monkeypatch.setattr("sys.stdout", io.StringIO())
         monkeypatch.setattr("subprocess.Popen", MagicMock())  # Don't spawn loop-extract
 
@@ -613,7 +621,9 @@ class TestCmdRunTaskInSession:
         out = capsys.readouterr().out
 
         assert "TASK: refactor auth module" in out
-        assert "Early stop:" in out  # Bug fix: was "Signal done:" which Claude misread as normal completion signal
+        assert (
+            "Early stop:" in out
+        )  # Bug fix: was "Signal done:" which Claude misread as normal completion signal
 
     def test_guard_against_second_loop_in_same_session(self, hive_env, monkeypatch, capsys):
         """Second in-session loop for same session_id is blocked (H6)."""
@@ -797,9 +807,7 @@ class TestStopHookLoopIntercept:
         """Done signal file triggers loop completion even before max_iter."""
         session_id = "sess-loop-signal"
         loop_id = "signal-loop-001"
-        loop_file = make_loop_file(
-            hive_env, loop_id, session_id=session_id, iter=1, max_iter=10
-        )
+        loop_file = make_loop_file(hive_env, loop_id, session_id=session_id, iter=1, max_iter=10)
         # Write the done signal
         (hive_env / f".loop-done-{loop_id}").write_text("done")
         monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
@@ -937,9 +945,7 @@ class TestBackgroundMode:
         assert data["session_id"] is None, "Background loops start unclaimed"
         assert data["tmux_window"].startswith("hive-loop-")
 
-    def test_background_mode_sets_hive_loop_id_in_tmux_command(
-        self, hive_env, monkeypatch, capsys
-    ):
+    def test_background_mode_sets_hive_loop_id_in_tmux_command(self, hive_env, monkeypatch, capsys):
         """The tmux command string includes HIVE_LOOP_ID=<id>."""
         monkeypatch.delenv("CLAUDECODE", raising=False)
         monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
@@ -1163,10 +1169,22 @@ class TestScheduledMode:
         )
 
         append_custom_task(
-            {"task_id": "t1", "task": "task one", "status": "queued", "due": "22:00", "due_date": "2026-02-24"}
+            {
+                "task_id": "t1",
+                "task": "task one",
+                "status": "queued",
+                "due": "22:00",
+                "due_date": "2026-02-24",
+            }
         )
         append_custom_task(
-            {"task_id": "t2", "task": "task two", "status": "queued", "due": "22:30", "due_date": "2026-02-24"}
+            {
+                "task_id": "t2",
+                "task": "task two",
+                "status": "queued",
+                "due": "22:30",
+                "due_date": "2026-02-24",
+            }
         )
 
         update_custom_task_status("t1", "running")

@@ -557,7 +557,9 @@ def _task_soul_update() -> bool:
         kb_lines = "\n".join(f"- {msg}" for msg in kb_pending)
         kb_block = f"\nDIRECT MESSAGES TO KINGBEE ({len(kb_pending)} pending):\n{kb_lines}\n"
 
-    system_state_block = f"\nSYSTEM STATE:\n- Pending rules awaiting review: {pending_rules_count}\n"
+    system_state_block = (
+        f"\nSYSTEM STATE:\n- Pending rules awaiting review: {pending_rules_count}\n"
+    )
 
     prompt = f"""You are KingBee updating your own SOUL.md after recent sessions.
 Review the logs and rewrite SOUL.md with STRICT size budgets.
@@ -704,9 +706,7 @@ def _task_self_improve() -> bool:
 
             for _, _ts, todo_text in todos:
                 for done_ln in done_lines:
-                    ratio = SequenceMatcher(
-                        None, todo_text.lower(), done_ln.lower()
-                    ).ratio()
+                    ratio = SequenceMatcher(None, todo_text.lower(), done_ln.lower()).ratio()
                     if ratio >= 0.55:
                         ghost_todos.append(f"{todo_text[:80]} (seen in log as done)")
                         break
@@ -971,7 +971,9 @@ used_web_search: true if you used WebSearch, false otherwise"""
                             "source": "wander",
                         }
                         append_pending_improvements([item])
-                        _log_daemon(f"wander: queued improvement ({result.action_type}): {result.action[:60]}")
+                        _log_daemon(
+                            f"wander: queued improvement ({result.action_type}): {result.action[:60]}"
+                        )
                 except Exception:
                     pass  # Best-effort, never fail the wander task
 

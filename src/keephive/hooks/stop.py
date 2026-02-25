@@ -118,8 +118,7 @@ def hook_stop(_args: list[str]) -> None:
                     f"─── ITERATION {next_iter}/{max_iter} " + "─" * 45 + "\n"
                     f"PROGRESS CHECK: In one line — what did iteration {iter_n} accomplish?\n"
                     f"TASK: {req['task']}\n"
-                    f"  Early stop: touch {done_path_str}  (omit = auto-continue)\n"
-                    + "─" * 64
+                    f"  Early stop: touch {done_path_str}  (omit = auto-continue)\n" + "─" * 64
                 )
                 sys.stdout.write(build_nudge_output(continuation, event_name="Stop"))
                 sys.exit(2)

@@ -52,12 +52,8 @@ def _print_state() -> None:
     if paused:
         console.print()
         console.print("[bold yellow]🔒 LLM privacy mode: ON[/bold yellow]")
-        console.print(
-            "   All LLM calls (hive a, hive v, precompact, daemon tasks) are blocked."
-        )
-        console.print(
-            "   File I/O commands (remember, recall, todo, serve) continue normally."
-        )
+        console.print("   All LLM calls (hive a, hive v, precompact, daemon tasks) are blocked.")
+        console.print("   File I/O commands (remember, recall, todo, serve) continue normally.")
         console.print("   Run [bold]hive privacy off[/bold] to resume.")
         console.print(f"   Flag: [dim]{paused_flag}[/dim]")
         if force_cli:
@@ -68,12 +64,8 @@ def _print_state() -> None:
     elif force_cli:
         console.print()
         console.print("[bold cyan]🔐 CLI-only mode: ACTIVE[/bold cyan]")
-        console.print(
-            "   Direct API backends (Anthropic API, Gemini, OpenAI) blocked."
-        )
-        console.print(
-            "   All LLM calls route through claude -p (your Pro/Max subscription)."
-        )
+        console.print("   Direct API backends (Anthropic API, Gemini, OpenAI) blocked.")
+        console.print("   All LLM calls route through claude -p (your Pro/Max subscription).")
         console.print("   Run [bold]hive privacy off[/bold] to allow API backends.")
         console.print(f"   Flag: [dim]{cli_flag}[/dim]")
         console.print()

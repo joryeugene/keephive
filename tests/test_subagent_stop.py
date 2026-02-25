@@ -138,9 +138,7 @@ class TestSubagentStopExtraction:
         """Descriptions <= 20 chars skip extraction entirely."""
         import unittest.mock as mock
 
-        with mock.patch(
-            "keephive.hooks.subagent_stop._extract_output"
-        ) as mock_extract:
+        with mock.patch("keephive.hooks.subagent_stop._extract_output") as mock_extract:
             self._call_hook({"task_subject": "Short task"})  # 10 chars
 
         mock_extract.assert_not_called()
@@ -161,9 +159,7 @@ class TestSubagentStopExtraction:
 
         from keephive.storage import daily_file
 
-        with mock.patch(
-            "keephive.hooks.subagent_stop._extract_output", return_value=None
-        ):
+        with mock.patch("keephive.hooks.subagent_stop._extract_output", return_value=None):
             self._call_hook({"task_subject": "Implement OAuth2 authentication endpoint"})
 
         content = daily_file().read_text()
@@ -181,9 +177,7 @@ class TestSubagentStopExtraction:
             captured="Implemented JWT token validation with 24h expiry",
             decision="",
         )
-        with mock.patch(
-            "keephive.hooks.subagent_stop._extract_output", return_value=fake_result
-        ):
+        with mock.patch("keephive.hooks.subagent_stop._extract_output", return_value=fake_result):
             self._call_hook({"task_subject": "Implement OAuth2 authentication endpoint"})
 
         content = daily_file().read_text()
@@ -202,9 +196,7 @@ class TestSubagentStopExtraction:
             captured="Implemented auth endpoint",
             decision="JWT over sessions for stateless scaling",
         )
-        with mock.patch(
-            "keephive.hooks.subagent_stop._extract_output", return_value=fake_result
-        ):
+        with mock.patch("keephive.hooks.subagent_stop._extract_output", return_value=fake_result):
             self._call_hook({"task_subject": "Implement OAuth2 authentication endpoint"})
 
         content = daily_file().read_text()
@@ -246,9 +238,7 @@ class TestSubagentStopExtraction:
         from keephive.models import SubagentExtractionResponse
 
         fake_result = SubagentExtractionResponse(captured="something important", decision="")
-        with mock.patch(
-            "keephive.hooks.subagent_stop._extract_output", return_value=fake_result
-        ):
+        with mock.patch("keephive.hooks.subagent_stop._extract_output", return_value=fake_result):
             self._call_hook({"task_subject": "Implement OAuth2 authentication endpoint"})
 
         out = capsys.readouterr().out

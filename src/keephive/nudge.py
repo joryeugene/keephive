@@ -20,7 +20,7 @@ import os
 from pathlib import Path
 
 _RECENCY_THRESHOLD = 15
-_KB_RECENCY_THRESHOLD = 3      # KB queue nudges more frequently (unread directives)
+_KB_RECENCY_THRESHOLD = 3  # KB queue nudges more frequently (unread directives)
 _REVIEW_RECENCY_THRESHOLD = 8  # Review lag nudge (same cadence as stop hook)
 
 
@@ -247,7 +247,9 @@ def _lifecycle_nudge(
                     if worst_days >= 3:
                         result = f"{worst_days}d without review. Facts are drifting. hive v"
                     else:
-                        result = f"No review in {worst_days}d. Try: hive v · hive a · hive mem review"
+                        result = (
+                            f"No review in {worst_days}d. Try: hive v · hive a · hive mem review"
+                        )
                     record_surfaced(counter_name, cat, count, session_id)
                     return result
 

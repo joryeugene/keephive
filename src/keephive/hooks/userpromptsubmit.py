@@ -20,16 +20,16 @@ from keephive.clock import get_now
 # Also matches @KB / @kb (requires @ prefix to avoid bare "KB" false positives)
 _KB_PATTERN = re.compile(
     r"(?i)\b(king[\s_-]*b(?:ee)?)\b"  # KingBee / King B / King Bee / king-bee
-    r"|(?<!\w)@kb(?!\w)",              # @KB / @kb — requires @ prefix
+    r"|(?<!\w)@kb(?!\w)",  # @KB / @kb — requires @ prefix
     re.IGNORECASE,
 )
 
 # Prefixes that identify system-generated content (not real user messages).
 # Loop banners and daemon task prompts start with these and must never queue as KB.
 _SYSTEM_MSG_PREFIXES = (
-    "╔",               # Loop/system ASCII box banners (loop kickoff banner)
-    "─── ITERATION",   # Loop iteration progress banners
-    "You are KingBee", # Daemon task prompts (soul_update template)
+    "╔",  # Loop/system ASCII box banners (loop kickoff banner)
+    "─── ITERATION",  # Loop iteration progress banners
+    "You are KingBee",  # Daemon task prompts (soul_update template)
 )
 
 

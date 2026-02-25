@@ -149,6 +149,7 @@ def extract_style_hint(days: int = 7) -> str:
     import re
     from collections import Counter
     from datetime import timedelta
+
     try:
         from keephive.commands.wander import STOPWORDS
     except ImportError:

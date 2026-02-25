@@ -178,7 +178,13 @@ def _call_structured(
     schema = json.dumps(response_model.model_json_schema())
     env = build_claude_env()
     cmd = build_claude_command(
-        prompt, schema, model, tools, max_turns, allowed_dirs, restrict_mcp,
+        prompt,
+        schema,
+        model,
+        tools,
+        max_turns,
+        allowed_dirs,
+        restrict_mcp,
         dangerously_skip_permissions,
     )
 

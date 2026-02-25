@@ -439,11 +439,7 @@ def _configure_codex_hooks(config_path: Path, script_dir: Path) -> bool:
         stripped = line.strip()
         if stripped.startswith("[") and not stripped.startswith("[["):
             current_section = stripped.split("]")[0].lstrip("[").split(".")[0]
-        if (
-            current_section == "features"
-            and stripped.startswith("notify")
-            and "[" in stripped
-        ):
+        if current_section == "features" and stripped.startswith("notify") and "[" in stripped:
             continue  # drop the bad line
         new_lines.append(line)
     content = "".join(new_lines)

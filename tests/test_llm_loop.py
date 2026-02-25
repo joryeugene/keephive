@@ -125,18 +125,14 @@ class TestLoopStopHookIntegration:
     def test_loop_file_deleted_at_completion(self, llm_hive_env: Path) -> None:
         """Loop file is removed when iteration count is exhausted."""
         loop_id = "del-20260224-120000"
-        _make_loop_file(
-            llm_hive_env, loop_id, session_id="sess-del", iter=9, max_iter=10
-        )
+        _make_loop_file(llm_hive_env, loop_id, session_id="sess-del", iter=9, max_iter=10)
         _run_stop_hook(llm_hive_env, "sess-del")
         assert not (llm_hive_env / f".loop-{loop_id}.json").exists()
 
     def test_done_signal_exits_0_early(self, llm_hive_env: Path) -> None:
         """Writing the done-signal file causes early completion (exit 0) below max_iter."""
         loop_id = "sig-20260224-120000"
-        _make_loop_file(
-            llm_hive_env, loop_id, session_id="sess-sig", iter=2, max_iter=10
-        )
+        _make_loop_file(llm_hive_env, loop_id, session_id="sess-sig", iter=2, max_iter=10)
         (llm_hive_env / f".loop-done-{loop_id}").write_text("done")
         _, code = _run_stop_hook(llm_hive_env, "sess-sig")
         assert code == 0
@@ -144,9 +140,7 @@ class TestLoopStopHookIntegration:
     def test_done_signal_and_loop_files_both_deleted(self, llm_hive_env: Path) -> None:
         """Both loop file and done-signal file are cleaned up on completion."""
         loop_id = "sig2-20260224-120000"
-        _make_loop_file(
-            llm_hive_env, loop_id, session_id="sess-sig2", iter=2, max_iter=10
-        )
+        _make_loop_file(llm_hive_env, loop_id, session_id="sess-sig2", iter=2, max_iter=10)
         (llm_hive_env / f".loop-done-{loop_id}").write_text("done")
         _run_stop_hook(llm_hive_env, "sess-sig2")
         assert not (llm_hive_env / f".loop-{loop_id}.json").exists()
@@ -351,9 +345,7 @@ class TestLoopExtractQuality:
 
         pending = llm_hive_env / ".pending-facts.md"
         if pending.exists():
-            lines = [
-                ln for ln in pending.read_text().splitlines() if ln.strip().startswith("- ")
-            ]
+            lines = [ln for ln in pending.read_text().splitlines() if ln.strip().startswith("- ")]
             assert len(lines) >= 1, f"Expected ≥1 fact from rich log:\n{pending.read_text()}"
             for line in lines:
                 fact = line.lstrip("- ").strip()

@@ -347,7 +347,9 @@ def _print_stage3(data: dict, warnings: list[str]) -> None:
     # KB queue
     kb_depth = data.get("kb_queue", 0)
     if kb_depth > 0:
-        console.print(f"    KB queue:             {kb_depth} unread message(s) — soul_update will process next compaction")
+        console.print(
+            f"    KB queue:             {kb_depth} unread message(s) — soul_update will process next compaction"
+        )
     else:
         console.print("    KB queue:             0 (clear)")
 
@@ -364,7 +366,11 @@ def _print_stage3(data: dict, warnings: list[str]) -> None:
     else:
         console.print(f"    Wander:               last run {wander_days_ago}d ago [green]✓[/green]")
 
-    overflowed = [k for k, v in data.items() if isinstance(v, int) and k not in ("kb_queue", "wander_days_ago") and v > _QUEUE_WARN_DEPTH]
+    overflowed = [
+        k
+        for k, v in data.items()
+        if isinstance(v, int) and k not in ("kb_queue", "wander_days_ago") and v > _QUEUE_WARN_DEPTH
+    ]
     if overflowed:
         for k in overflowed:
             w = f"Queue '{k}' has {data[k]} items (>{_QUEUE_WARN_DEPTH}) — run 'hive flow' to drain"

@@ -452,9 +452,7 @@ def count_kingbee_today() -> int:
     path = daily_file()
     if not path.exists():
         return 0
-    return sum(
-        1 for line in safe_read_text(path).splitlines() if _KINGBEE_ENTRY_RE.match(line)
-    )
+    return sum(1 for line in safe_read_text(path).splitlines() if _KINGBEE_ENTRY_RE.match(line))
 
 
 def memory_file() -> Path:

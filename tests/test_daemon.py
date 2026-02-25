@@ -868,9 +868,7 @@ class TestExecuteTaskTracking:
 
         assert _execute_task("soul-update") is False
 
-    def test_track_event_records_correct_task_name_for_each_task(
-        self, hive_env, monkeypatch
-    ):
+    def test_track_event_records_correct_task_name_for_each_task(self, hive_env, monkeypatch):
         """Each of the 6 task names produces a track_event with that exact name."""
         from keephive.commands.daemon import _execute_task
 
@@ -896,9 +894,7 @@ class TestExecuteTaskTracking:
 class TestDaemonPromptTodoFlagging:
     """Daemon prompts cross-reference open TODOs with log evidence."""
 
-    def test_morning_briefing_prompt_contains_done_flag_instruction(
-        self, hive_env, monkeypatch
-    ):
+    def test_morning_briefing_prompt_contains_done_flag_instruction(self, hive_env, monkeypatch):
         """morning_briefing prompt must contain the '→ DONE? [todo text]' instruction.
 
         Bug caught: TODOs completed during the session were never flagged for closure
@@ -924,9 +920,7 @@ class TestDaemonPromptTodoFlagging:
             "morning_briefing prompt must mention 'hive todo done' for user confirmation flow"
         )
 
-    def test_soul_update_prompt_contains_what_looks_done_section(
-        self, hive_env, monkeypatch
-    ):
+    def test_soul_update_prompt_contains_what_looks_done_section(self, hive_env, monkeypatch):
         """soul_update prompt must contain '## What Looks Done' section instruction.
 
         Bug caught: soul_update rewrote SOUL.md with no awareness of open TODOs,
@@ -970,7 +964,12 @@ class TestDaemonPromptTodoFlagging:
 
         # Write a TODO.md longer than 500 chars to expose the old truncation
         todos_path = hive_env / "TODO.md"
-        long_todos = "\n".join([f"- TODO item {i}: this is a fairly detailed task description that uses space" for i in range(20)])
+        long_todos = "\n".join(
+            [
+                f"- TODO item {i}: this is a fairly detailed task description that uses space"
+                for i in range(20)
+            ]
+        )
         todos_path.write_text(long_todos)
 
         captured_prompts: list[str] = []

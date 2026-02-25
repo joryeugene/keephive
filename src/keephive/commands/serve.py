@@ -2519,7 +2519,9 @@ def _render_recurring_panel(data: dict) -> str:
             f"</div>"
         )
     if not rows:
-        rows = '<div class="empty">No due recurring tasks. Run: <code>hive recurring add</code></div>'
+        rows = (
+            '<div class="empty">No due recurring tasks. Run: <code>hive recurring add</code></div>'
+        )
     meta = f"{len(due)} due" if due else ""
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Recurring tasks">'
@@ -3198,8 +3200,8 @@ def _render_standup_preview_panel(data: dict) -> str:
     if not draft:
         body = (
             '<div class="empty">No draft yet.'
-            ' Enable with: <code>hive daemon enable standup-draft</code>.'
-            ' KingBee drafts at 17:00 daily.</div>'
+            " Enable with: <code>hive daemon enable standup-draft</code>."
+            " KingBee drafts at 17:00 daily.</div>"
         )
         copy_btn = ""
     else:
@@ -3215,7 +3217,7 @@ def _render_standup_preview_panel(data: dict) -> str:
             "navigator.clipboard.writeText(el.textContent)"
             ".then(function(){b.textContent='Copied!';setTimeout(function(){b.textContent='Copy';},2000);})"
             ".catch(function(){b.textContent='Failed';setTimeout(function(){b.textContent='Copy';},2000);});"
-            "}\">"
+            '}">'
             "Copy</button>"
         )
 
@@ -4587,7 +4589,9 @@ def _render_brain_panel(data: dict) -> str:
         platform_summary_card,
     ]
     grid_html = "".join(grid_cards)
-    return f'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">{grid_html}</div>'
+    return (
+        f'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">{grid_html}</div>'
+    )
 
 
 # ---- Pipeline health panels ----
@@ -5437,8 +5441,7 @@ def _render_wander_seed_panel(data: dict) -> str:
             )
         else:
             status = (
-                '<span class="badge badge-pending" '
-                'title="Waiting to be wandered">pending</span>'
+                '<span class="badge badge-pending" title="Waiting to be wandered">pending</span>'
             )
         chips += (
             f'<span class="chip">'
@@ -5848,7 +5851,9 @@ def _render_daemon_status_panel(data: dict) -> str:
             f"{output_snippet}"
         )
     if not cells:
-        body = '<div class="empty">No daemon config found. Run: <code>hive daemon start</code></div>'
+        body = (
+            '<div class="empty">No daemon config found. Run: <code>hive daemon start</code></div>'
+        )
     else:
         body = f'<div style="{grid_style}">{cells}</div>'
     return (
@@ -6372,7 +6377,7 @@ class _HiveHandler(BaseHTTPRequestHandler):
             return
 
         if path.startswith("/api/panel/"):
-            panel_name = path[len("/api/panel/"):]
+            panel_name = path[len("/api/panel/") :]
             panel_html = _render_panel_safe(panel_name)
             body = (
                 f'<div class="grid-panel" data-panel-id="{_e(panel_name)}">{panel_html}</div>'
@@ -7020,7 +7025,7 @@ class _HiveHandler(BaseHTTPRequestHandler):
                     error = str(exc)
 
         elif self.path.startswith("/api/daemon/toggle/"):
-            task_name = self.path[len("/api/daemon/toggle/"):].strip("/")
+            task_name = self.path[len("/api/daemon/toggle/") :].strip("/")
             if not task_name:
                 ok = False
                 error = "task name required"
@@ -7210,6 +7215,7 @@ def cmd_serve(args: list[str]) -> None:
         if killed:
             print(f"Stopped {killed} existing server process{'es' if killed != 1 else ''}.")
             import time
+
             time.sleep(0.3)
 
     if hot and not os.environ.get("HIVE_SERVE_WORKER"):

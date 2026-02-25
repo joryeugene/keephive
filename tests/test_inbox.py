@@ -170,9 +170,7 @@ class TestCmdInboxNoData:
         output = _run_inbox(["--days", "3"], monkeypatch)
         assert "standup draft" in output
 
-    def test_days_flag_excludes_beyond_range(
-        self, hive_env: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_days_flag_excludes_beyond_range(self, hive_env: Path, monkeypatch: pytest.MonkeyPatch):
         """--days 1 shows today only; entry from yesterday does not appear."""
         from keephive.clock import get_today
 
@@ -232,8 +230,7 @@ class TestCmdInboxContentDisplay:
         daily_path = hive_env / "daily" / f"{today.isoformat()}.md"
         content_block = "\n".join(lines)
         daily_path.write_text(
-            f"# Daily Log: {today.isoformat()}\n\n"
-            f"[KingBee 10:00] {type_name}\n{content_block}\n\n"
+            f"# Daily Log: {today.isoformat()}\n\n[KingBee 10:00] {type_name}\n{content_block}\n\n"
         )
 
     def test_zero_content_entry_shows_placeholder(
@@ -255,19 +252,13 @@ class TestCmdInboxContentDisplay:
         self, hive_env: Path, monkeypatch: pytest.MonkeyPatch
     ):
         """Entry with exactly 6 content lines: no truncation message."""
-        self._write_entry(
-            hive_env, "morning briefing", [f"Line {i}" for i in range(1, 7)]
-        )
+        self._write_entry(hive_env, "morning briefing", [f"Line {i}" for i in range(1, 7)])
         output = _run_inbox(["--days", "1"], monkeypatch)
         assert "more line" not in output
 
-    def test_seven_line_cap_shows_truncation(
-        self, hive_env: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_seven_line_cap_shows_truncation(self, hive_env: Path, monkeypatch: pytest.MonkeyPatch):
         """Entry with 7 content lines: shows '(1 more line)'."""
-        self._write_entry(
-            hive_env, "morning briefing", [f"Line {i}" for i in range(1, 8)]
-        )
+        self._write_entry(hive_env, "morning briefing", [f"Line {i}" for i in range(1, 8)])
         output = _run_inbox(["--days", "1"], monkeypatch)
         assert "(1 more line)" in output
 
@@ -275,9 +266,7 @@ class TestCmdInboxContentDisplay:
         self, hive_env: Path, monkeypatch: pytest.MonkeyPatch
     ):
         """Long morning briefing entry (>6 lines) shows '→ hive log' navigation hint."""
-        self._write_entry(
-            hive_env, "morning briefing", [f"Detail {i}" for i in range(1, 9)]
-        )
+        self._write_entry(hive_env, "morning briefing", [f"Detail {i}" for i in range(1, 9)])
         output = _run_inbox(["--days", "1"], monkeypatch)
         assert "hive log" in output
 
@@ -304,9 +293,7 @@ class TestCmdInboxQueueDisplay:
         """'2 facts to review' uses plural grammar."""
         from keephive.storage import hive_dir
 
-        (hive_dir() / ".pending-facts.md").write_text(
-            "- FACT: First fact\n- FACT: Second fact\n"
-        )
+        (hive_dir() / ".pending-facts.md").write_text("- FACT: First fact\n- FACT: Second fact\n")
         output = _run_inbox(["--days", "1"], monkeypatch)
         assert "2 facts to review" in output
 
@@ -331,17 +318,14 @@ class TestCmdInboxQueueDisplay:
         arrow_positions = [ln.index("→") for ln in arrow_lines]
         assert len(set(arrow_positions)) == 1, f"Arrows not aligned: positions {arrow_positions}"
 
-    def test_combined_queues_and_activity(
-        self, hive_env: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_combined_queues_and_activity(self, hive_env: Path, monkeypatch: pytest.MonkeyPatch):
         """Both KingBee activity section and queue section appear when both are populated."""
         from keephive.clock import get_today
         from keephive.storage import hive_dir
 
         today = get_today()
         (hive_env / "daily" / f"{today.isoformat()}.md").write_text(
-            f"# Daily Log: {today.isoformat()}\n\n"
-            "[KingBee 09:00] wander\nSome wander content.\n\n"
+            f"# Daily Log: {today.isoformat()}\n\n[KingBee 09:00] wander\nSome wander content.\n\n"
         )
         (hive_dir() / ".pending-facts.md").write_text("- FACT: Combined test fact\n")
 

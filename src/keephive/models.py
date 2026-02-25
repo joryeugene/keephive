@@ -309,6 +309,6 @@ class SubagentExtractionResponse(BaseModel):
 class LoopExtractionResponse(BaseModel):
     """Silence-valid. Empty lists are acceptable output."""
 
-    facts: list[str] = Field(default_factory=list)       # 0-3 facts learned
-    decisions: list[str] = Field(default_factory=list)   # 0-2 decisions made
-    todos: list[str] = Field(default_factory=list)        # 0-2 follow-ups
+    facts: list[str] = Field(default_factory=list)  # 0-3 facts learned
+    decisions: list[str] = Field(default_factory=list)  # 0-2 decisions made
+    todos: list[str] = Field(default_factory=list)  # 0-2 follow-ups

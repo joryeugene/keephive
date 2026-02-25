@@ -611,9 +611,10 @@ class TestKBDetection:
         from keephive.storage import kb_queue_depth
 
         daemon_prompt = (
-            "You are KingBee updating your own SOUL.md after recent sessions.\n"
-            "Review the logs..."
+            "You are KingBee updating your own SOUL.md after recent sessions.\nReview the logs..."
         )
-        with patch("sys.stdin", StringIO(json.dumps({"session_id": "s3-kb", "prompt": daemon_prompt}))):
+        with patch(
+            "sys.stdin", StringIO(json.dumps({"session_id": "s3-kb", "prompt": daemon_prompt}))
+        ):
             hook_userpromptsubmit([])
         assert kb_queue_depth() == 0, "daemon prompt must not be queued as KB message"

@@ -169,9 +169,7 @@ class TestConfigureCodexHooks:
     def test_removes_invalid_features_notify_array(self, tmp_path):
         """Strip notify = [...] from [features] — the bad pattern."""
         cfg = tmp_path / "config.toml"
-        cfg.write_text(
-            '[features]\nmulti_agent = true\nnotify = ["bash", "/some/script.sh"]\n'
-        )
+        cfg.write_text('[features]\nmulti_agent = true\nnotify = ["bash", "/some/script.sh"]\n')
         script_dir = tmp_path / "hooks"
 
         from keephive.commands.setup import _configure_codex_hooks

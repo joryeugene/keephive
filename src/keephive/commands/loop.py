@@ -145,9 +145,7 @@ def _seed_memory(topic: str) -> list[str]:
         return []
 
     topic_words = {
-        w.lower()
-        for w in re.findall(r"[a-z]+", topic.lower())
-        if len(w) > 3 and w not in STOPWORDS
+        w.lower() for w in re.findall(r"[a-z]+", topic.lower()) if len(w) > 3 and w not in STOPWORDS
     }
     if not topic_words:
         return []
@@ -189,9 +187,7 @@ def _extract_soul_wisdom(soul_text: str) -> list[str]:
     return bullets
 
 
-def _build_first_iter_output(
-    loop_id: str, task: str, max_iter: int, seed_lines: list[str]
-) -> str:
+def _build_first_iter_output(loop_id: str, task: str, max_iter: int, seed_lines: list[str]) -> str:
     """Build the stdout block for the first iteration.
 
     This is read by Claude as Bash output, kicking off iteration 1 automatically.
@@ -316,8 +312,7 @@ def _cmd_run_task(task: str, flag_args: list[str]) -> None:
                 req = json.loads(f.read_text())
                 if req.get("session_id") == session_id and req.get("mode") == "in-session":
                     console.print(
-                        f"[warn]Loop already active in this session:[/warn] "
-                        f"{req.get('loop_id')}"
+                        f"[warn]Loop already active in this session:[/warn] {req.get('loop_id')}"
                     )
                     console.print("Cancel it first: hive run cancel")
                     return
@@ -347,9 +342,7 @@ def _cmd_run_task(task: str, flag_args: list[str]) -> None:
     print(_build_first_iter_output(loop_id, task, opts["max_iter"], seed_lines))
 
 
-def _launch_background(
-    loop_id: str, task: str, opts: dict, seed_lines: list[str]
-) -> None:
+def _launch_background(loop_id: str, task: str, opts: dict, seed_lines: list[str]) -> None:
     """Launch loop in a new tmux window."""
     from keephive.storage import append_to_daily, hive_dir, track_event
 
@@ -359,9 +352,7 @@ def _launch_background(
     )
     if not tmux_ok:
         console.print("[err]Background mode requires tmux.[/err]")
-        console.print(
-            "Options: use --at HH:MM to schedule, or run without --background"
-        )
+        console.print("Options: use --at HH:MM to schedule, or run without --background")
         return
 
     window_name = f"hive-loop-{loop_id[-10:]}"
@@ -494,9 +485,7 @@ def _cmd_run_status() -> None:
             try:
                 age = datetime.now() - datetime.fromisoformat(created)
                 minutes = int(age.total_seconds() / 60)
-                age_str = (
-                    f"{minutes} minutes ago" if minutes < 60 else f"{int(minutes/60)}h ago"
-                )
+                age_str = f"{minutes} minutes ago" if minutes < 60 else f"{int(minutes / 60)}h ago"
             except ValueError:
                 pass
 
@@ -548,9 +537,7 @@ def _cmd_run_cancel(cancel_args: list[str]) -> None:
                 mode = req.get("mode", "?")
                 iter_n = req.get("iter", 0)
                 max_iter = req.get("max_iter", 10)
-                console.print(
-                    f"  {lid:<40} {task[:40]:<42} ({mode}, iter {iter_n}/{max_iter})"
-                )
+                console.print(f"  {lid:<40} {task[:40]:<42} ({mode}, iter {iter_n}/{max_iter})")
             except (json.JSONDecodeError, OSError):
                 continue
         console.print()
@@ -614,9 +601,7 @@ def _cmd_run_history() -> None:
         for line in path.read_text().splitlines():
             m = re.search(r"\[Loop (\S+) (start|iter \d+|extract)[^\]]*\]", line)
             if m:
-                entries.append(
-                    {"loop_id": m.group(1), "event": m.group(2), "day": day}
-                )
+                entries.append({"loop_id": m.group(1), "event": m.group(2), "day": day})
 
     if not entries:
         console.print("No loop history found.")
