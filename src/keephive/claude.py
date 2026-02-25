@@ -39,6 +39,7 @@ def run_claude_pipe(
     backend_override: str | None = None,
     allowed_dirs: list[str] | None = None,
     restrict_mcp: bool = True,
+    dangerously_skip_permissions: bool = False,
 ) -> T:
     """Proxy to the backend-agnostic LLM router.
 
@@ -58,6 +59,7 @@ def run_claude_pipe(
         backend_override=backend_override,
         allowed_dirs=allowed_dirs,
         restrict_mcp=restrict_mcp,
+        dangerously_skip_permissions=dangerously_skip_permissions,
     )
 
 

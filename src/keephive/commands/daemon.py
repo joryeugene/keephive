@@ -269,6 +269,7 @@ def cmd_daemon_loop(_args: list[str]) -> None:
 
 def _tick() -> None:
     from keephive.clock import get_now
+    from keephive.storage import read_custom_task_queue
 
     config = read_daemon_config()
     state = read_daemon_state()
@@ -290,6 +291,14 @@ def _tick() -> None:
                     _log_daemon(f"skipped (no data): {task_name}")
             except Exception as e:
                 _log_daemon(f"task failed: {task_name}: {e}")
+
+    # Custom task queue (hive run --at / --tonight)
+    try:
+        for task in read_custom_task_queue():
+            if task.get("status") == "queued" and _is_custom_task_due(task):
+                _execute_custom_task(task)
+    except Exception as e:
+        _log_daemon(f"custom task queue error: {e}")
 
 
 def _is_task_due(task_name: str, config: dict, state: dict, now: datetime) -> bool:
@@ -877,4 +886,102 @@ used_web_search: true if you used WebSearch, false otherwise"""
         return False
     except ClaudePipeError as exc:
         _log_daemon(f"wander failed: {exc}")
+        return False
+
+
+# ── Custom task queue (hive run --at / --tonight) ─────────────────────────────
+
+
+def _is_custom_task_due(task: dict) -> bool:
+    """Return True if a queued custom task's due time has arrived today."""
+    from keephive.clock import get_now
+
+    now = get_now()
+    due_str = task.get("due", "")
+    due_date_str = task.get("due_date", "")
+
+    if not due_str:
+        return False
+
+    # due_date must match today (tasks don't carry over to tomorrow)
+    today_str = now.strftime("%Y-%m-%d")
+    if due_date_str and due_date_str != today_str:
+        return False
+
+    try:
+        due_hour, due_minute = (int(x) for x in due_str.split(":"))
+    except (ValueError, AttributeError):
+        return False
+
+    due_dt = now.replace(hour=due_hour, minute=due_minute, second=0, microsecond=0)
+    return now >= due_dt
+
+
+def _execute_custom_task(task: dict) -> bool:
+    """Execute a scheduled custom task via run_claude_pipe.
+
+    Returns True on success (did work), False on failure or skip.
+    Marks status 'running' before LLM call (overlap guard), 'done'/'failed' after.
+    """
+    from keephive.claude import run_claude_pipe
+    from keephive.llm.exceptions import ClaudePipeError
+    from keephive.models import LoopExtractionResponse
+    from keephive.storage import (
+        append_pending_facts,
+        append_to_daily,
+        update_custom_task_status,
+    )
+
+    task_id = task.get("task_id", "")
+    task_text = task.get("task", "")
+    cwd = task.get("cwd", str(hive_dir()))
+    max_iter = task.get("max_iter", 10)
+
+    # Overlap guard: mark running before LLM call
+    update_custom_task_status(task_id, "running")
+    _log_daemon(f"run: {task_id} starting: {task_text[:60]}")
+
+    # Seed memory for context
+    try:
+        from keephive.commands.loop import _seed_memory
+
+        seed_lines = _seed_memory(task_text)
+        context_block = "\n".join(seed_lines) if seed_lines else ""
+    except Exception:
+        context_block = ""
+
+    prompt = (
+        f"You are working on a scheduled task.\n\n"
+        f"{'CONTEXT:\n' + context_block + chr(10) + chr(10) if context_block else ''}"
+        f"TASK: {task_text}\n\n"
+        "Complete the task as thoroughly as possible. When done, extract any key facts, "
+        "decisions, or follow-up TODOs worth capturing. Empty lists are valid if nothing "
+        "worth capturing emerged."
+    )
+
+    try:
+        result = run_claude_pipe(
+            prompt,
+            LoopExtractionResponse,
+            model="haiku",
+            max_turns=max_iter,
+            timeout=300,
+            restrict_mcp=False,
+            allowed_dirs=[cwd, str(hive_dir())],
+            dangerously_skip_permissions=True,
+        )
+
+        all_facts = result.facts + result.decisions
+        if all_facts:
+            append_pending_facts(all_facts, task_id)
+
+        count = len(all_facts)
+        append_to_daily(f"[Loop {task_id} complete — {count} facts queued]")
+        update_custom_task_status(task_id, "done")
+        _log_daemon(f"run: {task_id} complete, {count} facts")
+        return True
+
+    except ClaudePipeError as e:
+        _log_daemon(f"run: {task_id} failed: {e}")
+        update_custom_task_status(task_id, "failed")
         return False

@@ -63,8 +63,25 @@ HELP: dict[str, str] = {
         "  KingBee's free-thinking log. Runs daily at 14:00 when enabled.\n"
         "  Enable: hive daemon enable wander\n"
     ),
-    "swarm": "Usage: hive swarm <tasks-file> [--dry-run]  (alias: sw)\n  Parse a markdown task list and spawn an agent team.\n  Task format:\n    - [tag] Description → file/hint\n  --dry-run   Print the prompt without launching\n  Example: hive swarm todo.md",
     "inbox": "Usage: hive inbox [--days N]\n  What KingBee generated for you today.\n  Shows wander docs, morning briefings, standup drafts, and review queues.\n  --days N  Days of history to include (default 2 = today + yesterday, max 30)",
+    "run": (
+        "Usage: hive run \"<task>\" [--max N] [--background] [--at HH:MM] [--tonight]  (alias: rn)\n"
+        "  Run an autonomous iteration loop on a task.\n"
+        "  Modes:\n"
+        "    (no flags)     In-session stop-hook loop\n"
+        "    --background   New tmux window (requires tmux)\n"
+        "    --at HH:MM     Schedule via daemon\n"
+        "    --tonight      Schedule for tonight at 22:00\n"
+        "  Options:\n"
+        "    --max N        Maximum iterations (default 10)\n"
+        "    --safe         Read-only mode\n"
+        "  Subcommands:\n"
+        "    hive run status          Active loops\n"
+        "    hive run cancel [id]     Cancel loop(s)\n"
+        "    hive run cancel --all    Cancel all\n"
+        "    hive run history         Past loops\n"
+        "    hive run review          Review extracted facts"
+    ),
 }
 
 # Map aliases to canonical names for help lookup
@@ -99,6 +116,7 @@ _CANONICAL: dict[str, str] = {
     "up": "update",
     "draft": "note",
     "rl": "rule",
+    "rn": "run",
     "ws": "serve",
     "pf": "profile",
     "daemon": "daemon",
@@ -111,7 +129,6 @@ _CANONICAL: dict[str, str] = {
     "wander": "wander",
     "wr": "wander",
     "w": "wander",
-    "sw": "swarm",
     "ib": "inbox",
     "inbox": "inbox",
     "im": "improve",
@@ -141,7 +158,7 @@ _CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
     ("daemon [run|status|enable|disable]", "KingBee background daemon", "dm", {"daemon", "dm"}),
     ("wander [list|seed|run]", "Agent free-thinking log", "w", {"wander", "wr", "w"}),
     ("inbox [--days N]", "KingBee output + review queue", "ib", {"inbox", "ib"}),
-    ("swarm <tasks-file>", "Spawn agent team from task list", "sw", {"swarm", "sw"}),
+    ("run \"<task>\" [--max N]", "Autonomous iteration loop", "rn", {"run", "rn"}),
     ("improve [review]", "Review self-improvement proposals", "im", {"improve", "im"}),
     ("go [mode]", "Launch session", "go", {"go", "sesh", "session"}),
     ("stats [-p path]", "Usage + pipeline health", "st", {"st", "stats"}),
@@ -239,7 +256,7 @@ Usage: hive <command> [args]
     flow              Guided maintenance run             fw
     wander [list|run] Agent free-thinking log           w
     inbox [--days N]  KingBee output + review queue     ib
-    swarm <tasks>     Spawn agent team from list        sw
+    run "<task>"      Autonomous iteration loop         rn
     go [mode]         Launch session                    go
     stats [-p path]   Usage + pipeline health           st
     log [date]        View daily log                    l
@@ -422,8 +439,9 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "w": ("keephive.commands.wander", "cmd_wander"),
     "inbox": ("keephive.commands.inbox", "cmd_inbox"),
     "ib": ("keephive.commands.inbox", "cmd_inbox"),
-    "swarm": ("keephive.commands.swarm", "cmd_swarm"),
-    "sw": ("keephive.commands.swarm", "cmd_swarm"),
+    "run": ("keephive.commands.loop", "cmd_loop"),
+    "rn": ("keephive.commands.loop", "cmd_loop"),
+    "loop-extract": ("keephive.commands.loop", "cmd_loop_extract"),
 }
 
 

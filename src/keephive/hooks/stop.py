@@ -3,11 +3,18 @@
 Called by Claude Code when the agent's turn ends.
 Increments a turn counter per session and fires a periodic micro-nudge
 to encourage capturing wrap-up items (TODOs, decisions, facts).
+
+Loop mode: if a `.loop-*.json` file exists for this session, intercepts the
+stop to either continue the loop (exit 2) or complete it (exit 0).
+Exit code 2 tells Claude Code to inject additionalContext and continue the session
+rather than ending it.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 
 from keephive.clock import get_now
@@ -24,6 +31,92 @@ def hook_stop(_args: list[str]) -> None:
     session_id = input_data.get("session_id", "")
     if not session_id:
         return
+
+    # ── Loop intercept: MUST come before nudge logic ──────────────────────────
+    # If a loop is active for this session, drive the iteration state machine.
+    try:
+        from keephive.commands.loop import _find_loop_for_session, _loop_done_path, _write_iter_log
+        from keephive.nudge import build_nudge_output
+        from keephive.storage import hive_dir
+
+        req, loop_file = _find_loop_for_session(session_id)
+        if req is not None:
+            loop_id = req["loop_id"]
+            max_iter = req.get("max_iter", 10)
+            # iter tracks completions so far; iter_n is what we just finished
+            iter_n = req["iter"] + 1
+            done_path = _loop_done_path(loop_id)
+            done = done_path.exists() or iter_n >= max_iter
+
+            if done:
+                # Loop complete — clean up, spawn extractor, emit completion nudge
+                loop_file.unlink(missing_ok=True)
+                done_path.unlink(missing_ok=True)
+                (hive_dir() / f".loop-prompt-{loop_id}.txt").unlink(missing_ok=True)
+                _write_iter_log(loop_id, iter_n, "complete")
+
+                env = {
+                    k: v
+                    for k, v in os.environ.items()
+                    if k not in {"CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"}
+                }
+                try:
+                    subprocess.Popen(
+                        [sys.executable, "-m", "keephive", "loop-extract", loop_id],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        start_new_session=True,
+                        env=env,
+                    )
+                except Exception as spawn_err:
+                    try:
+                        debug_log = hive_dir() / ".hook-debug.log"
+                        with open(debug_log, "a") as dbg:
+                            dbg.write(
+                                f"[{get_now().isoformat(timespec='seconds')}] "
+                                f"loop-extract spawn error: {spawn_err}\n"
+                            )
+                    except Exception:
+                        pass
+
+                completion_msg = (
+                    f"Loop {loop_id} complete ({iter_n}/{max_iter} iterations).\n"
+                    f"Facts queued → hive run review"
+                )
+                sys.stdout.write(build_nudge_output(completion_msg, event_name="Stop"))
+                sys.exit(0)
+
+            else:
+                # Loop continues — update state, emit continuation, exit 2
+                req["iter"] = iter_n
+                loop_file.write_text(json.dumps(req))
+                _write_iter_log(loop_id, iter_n, f"{iter_n}/{max_iter}")
+
+                next_iter = iter_n + 1
+                done_path_str = str(_loop_done_path(loop_id))
+                continuation = (
+                    f"Continue: {req['task']}\n"
+                    f"(Iteration {next_iter}/{max_iter}. "
+                    f"Signal completion: {done_path_str})"
+                )
+                sys.stdout.write(build_nudge_output(continuation, event_name="Stop"))
+                sys.exit(2)
+
+    except SystemExit:
+        raise  # Re-raise exit(0) and exit(2) — do not swallow
+    except Exception as loop_err:
+        # Never let loop errors crash the stop hook
+        try:
+            from keephive.storage import hive_dir
+
+            debug_log = hive_dir() / ".hook-debug.log"
+            with open(debug_log, "a") as dbg:
+                dbg.write(
+                    f"[{get_now().isoformat(timespec='seconds')}] loop stop error: {loop_err}\n"
+                )
+        except Exception:
+            pass
+    # ── End loop intercept ────────────────────────────────────────────────────
 
     # Track hook event
     try:

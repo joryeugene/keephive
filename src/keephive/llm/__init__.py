@@ -200,6 +200,7 @@ def call_structured(
     backend_override: str | None = None,
     allowed_dirs: list[str] | None = None,
     restrict_mcp: bool = True,
+    dangerously_skip_permissions: bool = False,
 ) -> T:
     """Execute a structured LLM call via the selected backend."""
     attempted: set[str] = set()
@@ -238,6 +239,7 @@ def call_structured(
                 verbose,
                 allowed_dirs=allowed_dirs,
                 restrict_mcp=restrict_mcp,
+                dangerously_skip_permissions=dangerously_skip_permissions,
             )
             meta["status"] = "ok"
             _write_state(meta)

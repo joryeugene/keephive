@@ -2764,3 +2764,114 @@ def session_metrics(days_back: int = 30) -> dict:
         "total_output_tokens": total_output_tokens,
         "source": "claude_code",
     }
+
+
+# ---- Loop / Run queue ----------------------------------------------------------------
+
+
+_custom_tasks_lock = threading.Lock()
+
+
+def custom_tasks_file() -> Path:
+    return hive_dir() / ".custom-tasks.json"
+
+
+def read_custom_task_queue() -> list[dict]:
+    """Read all custom tasks from .custom-tasks.json."""
+    path = custom_tasks_file()
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def append_custom_task(task_dict: dict) -> None:
+    """Append a task to .custom-tasks.json. Thread-safe via lock + fcntl."""
+    path = custom_tasks_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with _custom_tasks_lock:
+        with open(path, "a+b") as fh:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+            fh.seek(0)
+            raw = fh.read().decode("utf-8", errors="replace")
+            try:
+                existing = json.loads(raw) if raw.strip() else []
+            except json.JSONDecodeError:
+                existing = []
+            existing.append(task_dict)
+            fh.seek(0)
+            fh.truncate()
+            fh.write(json.dumps(existing, indent=2).encode("utf-8"))
+
+
+def update_custom_task_status(task_id: str, status: str) -> None:
+    """Update the status field of a custom task. Thread-safe via lock + fcntl."""
+    path = custom_tasks_file()
+    if not path.exists():
+        return
+    with _custom_tasks_lock:
+        with open(path, "r+b") as fh:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+            raw = fh.read().decode("utf-8", errors="replace")
+            try:
+                tasks = json.loads(raw) if raw.strip() else []
+            except json.JSONDecodeError:
+                return
+            for task in tasks:
+                if task.get("task_id") == task_id:
+                    task["status"] = status
+            fh.seek(0)
+            fh.truncate()
+            fh.write(json.dumps(tasks, indent=2).encode("utf-8"))
+
+
+# ---- Pending facts -------------------------------------------------------------------
+
+
+def pending_facts_file() -> Path:
+    return hive_dir() / ".pending-facts.md"
+
+
+def append_pending_facts(facts: list[str], source_loop_id: str) -> None:
+    """Append extracted facts to .pending-facts.md with loop attribution."""
+    if not facts:
+        return
+    path = pending_facts_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a") as fh:
+        for fact in facts:
+            fh.write(f"- [loop:{source_loop_id}] {fact}\n")
+
+
+def read_pending_facts() -> list[dict]:
+    """Return list of {fact: str, loop_id: str}. Reads .pending-facts.md."""
+    path = pending_facts_file()
+    if not path.exists():
+        return []
+    items = []
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line.startswith("- "):
+            continue
+        content = line[2:].strip()
+        m = re.match(r"^\[loop:([^\]]+)\]\s+(.+)$", content)
+        if m:
+            items.append({"loop_id": m.group(1), "fact": m.group(2)})
+        else:
+            items.append({"loop_id": "", "fact": content})
+    return items
+
+
+def clear_reviewed_facts(indices: list[int]) -> None:
+    """Remove facts at given line indices from .pending-facts.md."""
+    path = pending_facts_file()
+    if not path.exists():
+        return
+    lines = [ln for ln in path.read_text().splitlines() if ln.strip().startswith("- ")]
+    keep = [line for i, line in enumerate(lines) if i not in set(indices)]
+    if keep:
+        path.write_text("\n".join(keep) + "\n")
+    else:
+        path.unlink(missing_ok=True)

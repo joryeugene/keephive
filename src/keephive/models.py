@@ -284,3 +284,14 @@ class SubagentExtractionResponse(BaseModel):
         default="",
         description="The most important choice made. Empty string if none.",
     )
+
+
+# ---- Loop / Run ----
+
+
+class LoopExtractionResponse(BaseModel):
+    """Silence-valid. Empty lists are acceptable output."""
+
+    facts: list[str] = Field(default_factory=list)       # 0-3 facts learned
+    decisions: list[str] = Field(default_factory=list)   # 0-2 decisions made
+    todos: list[str] = Field(default_factory=list)        # 0-2 follow-ups

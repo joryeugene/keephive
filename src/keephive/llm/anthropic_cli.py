@@ -31,6 +31,7 @@ def build_claude_command(
     max_turns: int | None = None,
     allowed_dirs: list[str] | None = None,
     restrict_mcp: bool = True,
+    dangerously_skip_permissions: bool = False,
 ) -> list[str]:
     """Build the claude -p command list.
 
@@ -39,6 +40,8 @@ def build_claude_command(
         restrict_mcp: When True (default), pass empty --mcp-config + --strict-mcp-config
             alongside tools to prevent unexpected MCP calls. Set False for built-in tools
             like WebSearch that don't need MCP.
+        dangerously_skip_permissions: When True, pass --dangerously-skip-permissions
+            for unattended autonomous loops.
     """
     cmd = [
         "claude",
@@ -51,6 +54,9 @@ def build_claude_command(
         model,
         "--no-session-persistence",
     ]
+
+    if dangerously_skip_permissions:
+        cmd.append("--dangerously-skip-permissions")
 
     if tools:
         cmd.extend(["--tools", ",".join(tools)])
@@ -166,11 +172,15 @@ def _call_structured(
     verbose: bool,
     allowed_dirs: list[str] | None = None,
     restrict_mcp: bool = True,
+    dangerously_skip_permissions: bool = False,
 ) -> T:
     """Execute claude -p subprocess and parse output."""
     schema = json.dumps(response_model.model_json_schema())
     env = build_claude_env()
-    cmd = build_claude_command(prompt, schema, model, tools, max_turns, allowed_dirs, restrict_mcp)
+    cmd = build_claude_command(
+        prompt, schema, model, tools, max_turns, allowed_dirs, restrict_mcp,
+        dangerously_skip_permissions,
+    )
 
     if verbose:
         print(f"[verbose] cmd: {' '.join(cmd)}", file=sys.stderr)

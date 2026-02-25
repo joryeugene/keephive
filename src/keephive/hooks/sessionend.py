@@ -68,3 +68,21 @@ def hook_sessionend(_args: list[str]) -> None:
             )
     except Exception:
         pass
+
+    # Loop cleanup: remove orphaned loop files owned by this session.
+    # Runs silently — sessionend must never produce stdout.
+    try:
+        from keephive.storage import hive_dir
+
+        for loop_file in hive_dir().glob(".loop-*.json"):
+            try:
+                req = json.loads(loop_file.read_text())
+                if req.get("session_id") == session_id:
+                    loop_file.unlink(missing_ok=True)
+                    loop_id = req.get("loop_id", "")
+                    done_path = hive_dir() / f".loop-done-{loop_id}"
+                    done_path.unlink(missing_ok=True)
+            except (json.JSONDecodeError, OSError):
+                pass
+    except Exception:
+        pass
