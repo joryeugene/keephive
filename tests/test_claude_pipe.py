@@ -308,7 +308,7 @@ class TestParseClaudeResponse:
         assert "[keephive]" in err
         assert "timed out" in err
 
-    def test_stderr_on_nonzero_exit(self, monkeypatch, capsys):
+    def test_stderr_on_nonzero_exit(self, monkeypatch, capsys, hive_env):
         """Verify stderr message on non-zero exit code.
 
         Non-zero exit is retriable (transient auth/API failures may warrant fallback),
