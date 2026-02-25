@@ -165,6 +165,51 @@ class TestExtractCmds:
         assert result == ""
 
 
+class TestConfigureCodexHooks:
+    def test_removes_invalid_features_notify_array(self, tmp_path):
+        """Strip notify = [...] from [features] — the bad pattern."""
+        cfg = tmp_path / "config.toml"
+        cfg.write_text(
+            '[features]\nmulti_agent = true\nnotify = ["bash", "/some/script.sh"]\n'
+        )
+        script_dir = tmp_path / "hooks"
+
+        from keephive.commands.setup import _configure_codex_hooks
+
+        changed = _configure_codex_hooks(cfg, script_dir)
+        assert changed
+        out = cfg.read_text()
+        assert "notify" not in out.split("[tui]")[0]  # gone from [features]
+        assert "notifications" in out  # written under [tui]
+
+    def test_adds_tui_section_when_absent(self, tmp_path):
+        """Add [tui] notifications when config has no [tui] section."""
+        cfg = tmp_path / "config.toml"
+        cfg.write_text("[features]\nmulti_agent = true\n")
+        script_dir = tmp_path / "hooks"
+
+        from keephive.commands.setup import _configure_codex_hooks
+
+        _configure_codex_hooks(cfg, script_dir)
+        text = cfg.read_text()
+        assert "[tui]" in text
+        assert "notifications" in text
+
+    def test_idempotent_when_already_correct(self, tmp_path):
+        """No change when [tui] notifications already points at our shim."""
+        script_dir = tmp_path / "hooks"
+        script_dir.mkdir()
+        notify = script_dir / "notify.py"
+        notify.touch()
+        cfg = tmp_path / "config.toml"
+        cfg.write_text(f'[tui]\nnotifications = ["python3", "{notify}"]\n')
+
+        from keephive.commands.setup import _configure_codex_hooks
+
+        changed = _configure_codex_hooks(cfg, script_dir)
+        assert not changed
+
+
 def test_codex_notify_fallback(tmp_path, monkeypatch):
     """Codex notify hook should log telemetry even without keephive import."""
     script_src = Path("src/keephive/data/templates/hooks/codex/notify.py")

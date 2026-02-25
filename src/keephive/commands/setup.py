@@ -414,10 +414,60 @@ def _configure_gemini_hooks(config_path: Path, script_dir: Path) -> bool:
 
 
 def _configure_codex_hooks(config_path: Path, script_dir: Path) -> bool:
-    """Codex CLI currently expects notify to be a boolean flag, so skip editing."""
-    # We still ensure hooks directory exists for the shipped script.
+    """Migrate invalid [features].notify array → [tui].notifications.
+
+    Older setup runs wrote `notify = [...]` under [features], which codex now
+    rejects (must be boolean). The correct location is [tui] notifications,
+    which accepts boolean | string[].
+    """
+    import re
+
     script_dir.mkdir(parents=True, exist_ok=True)
-    return False
+    notify_script = script_dir / "notify.py"
+
+    if not config_path.exists():
+        return False
+
+    content = config_path.read_text(encoding="utf-8")
+    original = content
+
+    # --- Pass 1: strip invalid [features] notify = [...] lines ---
+    lines = content.splitlines(keepends=True)
+    new_lines = []
+    current_section: str | None = None
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("[") and not stripped.startswith("[["):
+            current_section = stripped.split("]")[0].lstrip("[").split(".")[0]
+        if (
+            current_section == "features"
+            and stripped.startswith("notify")
+            and "[" in stripped
+        ):
+            continue  # drop the bad line
+        new_lines.append(line)
+    content = "".join(new_lines)
+
+    # --- Pass 2: ensure [tui] notifications points at our shim ---
+    desired = f'notifications = ["python3", "{notify_script}"]'
+
+    if "[tui]" not in content:
+        content = content.rstrip("\n") + f"\n\n[tui]\n{desired}\n"
+    elif not re.search(r"^\s*notifications\s*=", content, re.MULTILINE):
+        # [tui] exists but no notifications key — insert after header
+        content = re.sub(r"(\[tui\]\n)", r"\1" + desired + "\n", content)
+    elif desired not in content:
+        # notifications key present but wrong value — replace it
+        content = re.sub(r"(?m)^\s*notifications\s*=.*$", desired, content)
+
+    if content == original:
+        return False
+
+    backup = config_path.with_suffix(".toml.keephive.bak")
+    if not backup.exists():
+        shutil.copy(config_path, backup)
+    config_path.write_text(content, encoding="utf-8")
+    return True
 
 
 def _deploy_hooks(namespace: argparse.Namespace) -> None:
