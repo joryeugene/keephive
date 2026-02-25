@@ -33,9 +33,9 @@ def _call_structured(
     verbose: bool,
     **_kwargs,
 ) -> T:
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not api_key:
-        raise ClaudePipeError("GEMINI_API_KEY not set.")
+        raise ClaudePipeError("GEMINI_API_KEY (or GOOGLE_API_KEY) not set.")
 
     model_id = _MODEL_MAP.get(model, model or "gemini-1.5-flash")
     url = f"{_BASE_URL}/{model_id}:generateContent?key={api_key}"
@@ -94,7 +94,9 @@ def _call_structured(
 def _detect() -> tuple[bool, str]:
     if os.environ.get("GEMINI_API_KEY"):
         return True, "GEMINI_API_KEY present"
-    return False, "GEMINI_API_KEY not set"
+    if os.environ.get("GOOGLE_API_KEY"):
+        return True, "GOOGLE_API_KEY present"
+    return False, "GEMINI_API_KEY (or GOOGLE_API_KEY) not set"
 
 
 backend = Backend(
@@ -105,5 +107,5 @@ backend = Backend(
     supports_streaming=True,
     call_structured=_call_structured,
     detect=_detect,
-    describe=lambda: "Google Gemini API (requires GEMINI_API_KEY).",
+    describe=lambda: "Google Gemini API (requires GEMINI_API_KEY or GOOGLE_API_KEY).",
 )
