@@ -3157,26 +3157,32 @@ def _render_standup_panel(data: dict) -> str:
 
 
 def _get_standup_preview_data() -> dict:
-    """Extract the most recent standup draft from today's daily log."""
+    """Extract the most recent standup draft from daily logs.
+
+    Scans today first, then backwards up to 7 days so the panel shows
+    the last draft even if the daemon hasn't run yet today.
+    """
     import re
+    from datetime import timedelta
 
     from keephive.clock import get_today
     from keephive.storage import hive_dir
 
-    today = get_today()
-    log_file = hive_dir() / "daily" / f"{today}.md"
-    if not log_file.exists():
-        return {"draft": "", "date": str(today)}
-
-    content = log_file.read_text(errors="replace")
-    # Find all standup draft blocks (may appear multiple times — take the last)
     pattern = r"\[(?:🐝 )?KingBee \d{2}:\d{2}\] standup draft\n(.*?)(?=\n\[|\n##|\Z)"
-    matches = re.findall(pattern, content, re.DOTALL)
-    if matches:
-        draft = matches[-1].strip()
-    else:
-        draft = ""
-    return {"draft": draft, "date": str(today)}
+    today = get_today()
+    daily_dir = hive_dir() / "daily"
+
+    for days_back in range(7):
+        candidate = today - timedelta(days=days_back)
+        log_file = daily_dir / f"{candidate}.md"
+        if not log_file.exists():
+            continue
+        content = log_file.read_text(errors="replace")
+        matches = re.findall(pattern, content, re.DOTALL)
+        if matches:
+            return {"draft": matches[-1].strip(), "date": str(candidate)}
+
+    return {"draft": "", "date": str(today)}
 
 
 def _render_standup_preview_panel(data: dict) -> str:
@@ -5784,7 +5790,16 @@ def _get_daemon_status_data() -> dict:
 
 def _render_daemon_status_panel(data: dict) -> str:
     tasks = data.get("tasks", [])
-    rows = ""
+    # 5-column grid: name | age | badge | toggle | last_output
+    # Single grid container so all rows share column widths — no per-row wrapping.
+    grid_style = (
+        "display:grid;"
+        "grid-template-columns:8.5em 5.5em 2.8em 5em 1fr;"
+        "align-items:center;"
+        "gap:3px 8px;"
+        "font-size:0.88em"
+    )
+    cells = ""
     for t in tasks:
         task = t.get("task", "")
         enabled = t.get("enabled", False)
@@ -5792,31 +5807,32 @@ def _render_daemon_status_panel(data: dict) -> str:
         last_output = t.get("last_output", "")
         badge_cls = "badge-success" if enabled else "badge-secondary"
         badge_text = "ON" if enabled else "OFF"
-        output_html = (
-            f'<div style="font-size:0.78em;color:#8b949e;margin:2px 0 6px 0;'
-            f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px">'
-            f"{_e(last_output)}</div>"
+        output_snippet = (
+            f'<span style="color:#8b949e;overflow:hidden;text-overflow:ellipsis;'
+            f'white-space:nowrap" title="{_e(last_output)}">{_e(last_output)}</span>'
             if last_output
-            else ""
+            else '<span style="color:#484f58">—</span>'
         )
-        rows += (
-            f'<div class="ps-item" style="flex-wrap:wrap;align-items:flex-start">'
-            f'<span class="ps-name">{_e(task)}</span>'
-            f'<span class="ps-meta">{_e(last_run)}</span>'
-            f'<span class="badge {badge_cls}">{badge_text}</span> '
-            f'<button class="search-action-btn" onclick="toggleDaemon(\'{_e(task)}\')">'
+        cells += (
+            f'<span style="font-weight:500;color:#e6edf3;white-space:nowrap;'
+            f'overflow:hidden;text-overflow:ellipsis">{_e(task)}</span>'
+            f'<span style="color:#8b949e;text-align:right">{_e(last_run)}</span>'
+            f'<span class="badge {badge_cls}" style="justify-self:center">{badge_text}</span>'
+            f'<button class="search-action-btn" style="padding:2px 6px;font-size:0.82em" '
+            f"onclick=\"toggleDaemon('{_e(task)}')\">"
             f"Toggle</button>"
-            f"{output_html}"
-            f"</div>"
+            f"{output_snippet}"
         )
-    if not rows:
-        rows = '<div class="empty">No daemon config found. Run: <code>hive daemon start</code></div>'
+    if not cells:
+        body = '<div class="empty">No daemon config found. Run: <code>hive daemon start</code></div>'
+    else:
+        body = f'<div style="{grid_style}">{cells}</div>'
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Daemon status">'
         f'<div class="card-header"><span class="card-title">Daemon Tasks</span>'
-        f'<span class="card-meta">6 tasks</span></div>'
+        f'<span class="card-meta">{len(tasks)} tasks</span></div>'
         f"{_cmd_hints(['hive daemon status', 'hive daemon enable <task>'])}"
-        f'<div class="card-body">{rows}</div>'
+        f'<div class="card-body">{body}</div>'
         f"</div>"
     )
 

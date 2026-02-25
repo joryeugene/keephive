@@ -241,9 +241,7 @@ class TestApplySkillEdit:
         class FakeResult:
             content = "# My Guide\n\nOriginal content here.\n\n## New Section\n\nAdded by LLM.\n"
 
-        monkeypatch.setattr(
-            "keephive.commands.improve.run_claude_pipe", lambda *a, **kw: FakeResult()
-        )
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", lambda *a, **kw: FakeResult())
 
         result = _apply_skill_edit(skill_path, "my-guide", "Add a New Section about X")
 
@@ -270,7 +268,7 @@ class TestApplySkillEdit:
         def raise_error(*a, **kw):
             raise ClaudePipeError("LLM unavailable")
 
-        monkeypatch.setattr("keephive.commands.improve.run_claude_pipe", raise_error)
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", raise_error)
 
         result = _apply_skill_edit(skill_path, "my-guide", "Add a New Section")
 
@@ -294,9 +292,7 @@ class TestApplySkillEdit:
         class EmptyResult:
             content = "   "
 
-        monkeypatch.setattr(
-            "keephive.commands.improve.run_claude_pipe", lambda *a, **kw: EmptyResult()
-        )
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", lambda *a, **kw: EmptyResult())
 
         result = _apply_skill_edit(skill_path, "my-guide", "Add a New Section")
 
