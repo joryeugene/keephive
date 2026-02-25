@@ -1063,6 +1063,36 @@ class TestBackgroundMode:
         )
         assert "claude --dangerously-skip-permissions" in cmd_str
 
+    def test_proceed_trigger_polls_for_prompt_not_fixed_sleep(self, hive_env, monkeypatch, capsys):
+        """Trigger command must poll for Claude's '>' prompt, not use a fixed sleep.
+
+        Fixed sleep races against SessionStart hook + model init: Enter arrives
+        before Claude's input handler is ready, gets swallowed, 'proceed' appears
+        in the input box unsubmitted.
+        """
+        monkeypatch.delenv("CLAUDECODE", raising=False)
+        popen_calls = []
+
+        def mock_popen(cmd, **kw):
+            popen_calls.append(cmd)
+            return MagicMock()
+
+        monkeypatch.setattr("subprocess.run", lambda cmd, **kw: MagicMock(returncode=0, stderr=""))
+        monkeypatch.setattr("subprocess.Popen", mock_popen)
+
+        from keephive.commands.loop import cmd_loop
+
+        cmd_loop(["refactor auth", "--background"])
+        capsys.readouterr()
+
+        assert popen_calls, "Expected Popen to be called for proceed trigger"
+        trigger = popen_calls[0]
+        assert "sleep 5" not in trigger, "Must not use fixed sleep — races against init"
+        assert "timeout" in trigger, "Must have a timeout guard for the poll loop"
+        assert "grep -q" in trigger and "^>" in trigger, (
+            "Must poll for Claude's '>' prompt before sending keys"
+        )
+
     def test_window_name_uses_tail_for_uniqueness(self):
         """Window name must use last chars of loop_id (unique timestamp) not first (stable prefix)."""
         # Two IDs that collide under [:20] but not under [-10:]

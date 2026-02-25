@@ -414,9 +414,14 @@ def _launch_tmux_window(loop_id: str, window_name: str, prompt: str) -> str | No
     # After claude starts, send a short trigger to kick off the first iteration.
     # SessionStart already injected the loop banner via additionalContext; this
     # trigger is just the user message that causes Claude to act on it.
-    # sleep 5 gives claude time to initialize before keys arrive.
+    # Poll until Claude's '>' input prompt is visible before sending keys — a
+    # fixed sleep races against SessionStart hook + model init and causes Enter
+    # to be swallowed, leaving 'proceed' typed but unsubmitted.
     subprocess.Popen(
-        f"sleep 5 && tmux send-keys -t '{window_name}' 'proceed' Enter",
+        f"timeout 60 sh -c "
+        f"\"until tmux capture-pane -t '{window_name}' -p 2>/dev/null | tail -5 | grep -q '^>'; "
+        f"do sleep 1; done\" "
+        f"&& tmux send-keys -t '{window_name}' 'proceed' Enter",
         shell=True,
     )
 
