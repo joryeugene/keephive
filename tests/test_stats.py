@@ -1011,3 +1011,131 @@ class TestSessionsInDisplay:
         )
         result = stats_text()
         assert "Sessions" in result or "session" in result.lower()
+
+
+class TestCommandActivity:
+    """_display_command_activity() shows top commands, daemon task runs, loop stats."""
+
+    def _day_data(self, *, commands=None, daemon_tasks=None, loops=None):
+        """Build a stats data dict for today with given subcategories."""
+        from keephive.clock import get_today
+
+        day_data: dict = {}
+        if commands:
+            day_data["commands"] = commands
+        if daemon_tasks:
+            day_data["daemon_tasks"] = daemon_tasks
+        if loops:
+            day_data["loops"] = loops
+        return {"days": {get_today().isoformat(): day_data}}
+
+    def test_renders_command_names_and_counts(self, hive_env, capsys):
+        """Top commands section shows command names and their counts."""
+        from keephive.commands.stats import _display_command_activity
+
+        data = self._day_data(commands={"remember": 42, "recall": 25, "todo": 10})
+        _display_command_activity(data)
+        out = capsys.readouterr().out
+        assert "Command Activity" in out
+        assert "remember" in out
+        assert "42" in out
+        assert "recall" in out
+
+    def test_renders_daemon_task_names_and_counts(self, hive_env, capsys):
+        """Daemon tasks section shows task names with their run counts."""
+        from keephive.commands.stats import _display_command_activity
+
+        data = self._day_data(
+            commands={"remember": 5},
+            daemon_tasks={"wander": 7, "soul-update": 3},
+        )
+        _display_command_activity(data)
+        out = capsys.readouterr().out
+        assert "Daemon tasks" in out
+        assert "wander" in out
+        assert "7" in out
+        assert "soul-update" in out
+
+    def test_empty_daemon_tasks_shows_none_yet(self, hive_env, capsys):
+        """When no daemon_tasks data exists, renders 'none yet' hint."""
+        from keephive.commands.stats import _display_command_activity
+
+        data = self._day_data(commands={"remember": 5})
+        _display_command_activity(data)
+        out = capsys.readouterr().out
+        assert "none yet" in out
+        assert "hive daemon" in out
+
+    def test_loops_summary_shows_started_and_iterations(self, hive_env, capsys):
+        """Loops summary line shows started count and iteration count."""
+        from keephive.commands.stats import _display_command_activity
+
+        data = self._day_data(
+            commands={"remember": 1},
+            loops={"started": 3, "iteration": 24},
+        )
+        _display_command_activity(data)
+        out = capsys.readouterr().out
+        assert "3 started" in out
+        assert "24 iterations" in out
+
+    def test_loops_line_omitted_when_zero(self, hive_env, capsys):
+        """Loops line is not rendered when both started and iteration are zero."""
+        from keephive.commands.stats import _display_command_activity
+
+        data = self._day_data(commands={"remember": 5})
+        _display_command_activity(data)
+        out = capsys.readouterr().out
+        assert "started" not in out
+
+    def test_no_output_when_no_activity_data(self, hive_env, capsys):
+        """Renders nothing when commands, daemon_tasks, and loops are all absent."""
+        from keephive.commands.stats import _display_command_activity
+
+        _display_command_activity({"days": {}})
+        out = capsys.readouterr().out
+        assert out == ""
+
+    def test_top_commands_capped_at_eight(self, hive_env, capsys):
+        """Only the top 8 commands are shown; the rest are silent."""
+        from keephive.commands.stats import _display_command_activity
+
+        commands = {f"cmd{i}": (100 - i) for i in range(15)}
+        data = self._day_data(commands=commands)
+        _display_command_activity(data)
+        out = capsys.readouterr().out
+        assert "cmd0" in out
+        assert "cmd7" in out
+        assert "cmd8" not in out
+
+    def test_sum_counters_aggregates_daemon_tasks_across_days(self, hive_env):
+        """_sum_counters correctly totals daemon_tasks across multiple day entries."""
+        from datetime import timedelta
+
+        from keephive.clock import get_today
+        from keephive.commands.stats import _sum_counters
+
+        today = get_today()
+        days = {
+            today.isoformat(): {"daemon_tasks": {"wander": 3, "soul-update": 1}},
+            (today - timedelta(days=1)).isoformat(): {"daemon_tasks": {"wander": 2}},
+        }
+        result = _sum_counters(days, "daemon_tasks")
+        assert result["wander"] == 5
+        assert result["soul-update"] == 1
+
+    def test_sum_counters_aggregates_loops_across_days(self, hive_env):
+        """_sum_counters correctly totals loops.started and loops.iteration across days."""
+        from datetime import timedelta
+
+        from keephive.clock import get_today
+        from keephive.commands.stats import _sum_counters
+
+        today = get_today()
+        days = {
+            today.isoformat(): {"loops": {"started": 2, "iteration": 10}},
+            (today - timedelta(days=1)).isoformat(): {"loops": {"started": 1, "iteration": 5}},
+        }
+        result = _sum_counters(days, "loops")
+        assert result["started"] == 3
+        assert result["iteration"] == 15

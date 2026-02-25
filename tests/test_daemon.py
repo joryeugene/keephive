@@ -8,6 +8,7 @@ Covers:
 - _task_self_improve() time throttle (1-day) and depth cap (20 items)
 - _enable_task() / _disable_task() via cmd_daemon enable/disable subcommands
 - sessionend fires non-blocking Popen when soul-update is enabled
+- _execute_task() track_event instrumentation (only fires on True result)
 """
 
 from __future__ import annotations
@@ -800,3 +801,94 @@ class TestVoiceDisciplineConstant:
 
         assert captured_prompts, "Expected run_claude_pipe to be called"
         assert _VOICE_DISCIPLINE.strip() in captured_prompts[0]
+
+
+class TestExecuteTaskTracking:
+    """_execute_task() writes to daemon_tasks category only when task does real work."""
+
+    def test_track_event_called_when_task_returns_true(self, hive_env, monkeypatch):
+        """track_event("daemon_tasks", task_name) fires when task fn returns True."""
+        from keephive.commands.daemon import _execute_task
+
+        tracked: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            "keephive.commands.daemon.track_event",
+            lambda cat, name: tracked.append((cat, name)),
+        )
+        monkeypatch.setattr("keephive.commands.daemon._task_wander", lambda: True)
+
+        _execute_task("wander")
+
+        assert tracked == [("daemon_tasks", "wander")]
+
+    def test_track_event_not_called_when_task_returns_false(self, hive_env, monkeypatch):
+        """track_event is NOT called when task fn returns False (throttled or skipped)."""
+        from keephive.commands.daemon import _execute_task
+
+        tracked: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            "keephive.commands.daemon.track_event",
+            lambda cat, name: tracked.append((cat, name)),
+        )
+        monkeypatch.setattr("keephive.commands.daemon._task_wander", lambda: False)
+
+        _execute_task("wander")
+
+        assert tracked == []
+
+    def test_track_event_not_called_for_unknown_task(self, hive_env, monkeypatch):
+        """track_event is NOT called and False is returned for unknown task names."""
+        from keephive.commands.daemon import _execute_task
+
+        tracked: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            "keephive.commands.daemon.track_event",
+            lambda cat, name: tracked.append((cat, name)),
+        )
+
+        result = _execute_task("nonexistent-task")
+
+        assert result is False
+        assert tracked == []
+
+    def test_execute_task_returns_true_when_task_succeeds(self, hive_env, monkeypatch):
+        """_execute_task() propagates the True return from the task fn."""
+        from keephive.commands.daemon import _execute_task
+
+        monkeypatch.setattr("keephive.commands.daemon.track_event", lambda *a: None)
+        monkeypatch.setattr("keephive.commands.daemon._task_soul_update", lambda: True)
+
+        assert _execute_task("soul-update") is True
+
+    def test_execute_task_returns_false_when_task_skips(self, hive_env, monkeypatch):
+        """_execute_task() propagates False when the task fn returns False."""
+        from keephive.commands.daemon import _execute_task
+
+        monkeypatch.setattr("keephive.commands.daemon.track_event", lambda *a: None)
+        monkeypatch.setattr("keephive.commands.daemon._task_soul_update", lambda: False)
+
+        assert _execute_task("soul-update") is False
+
+    def test_track_event_records_correct_task_name_for_each_task(
+        self, hive_env, monkeypatch
+    ):
+        """Each of the 6 task names produces a track_event with that exact name."""
+        from keephive.commands.daemon import _execute_task
+
+        task_pairs = [
+            ("morning-briefing", "_task_morning_briefing"),
+            ("stale-check", "_task_stale_check"),
+            ("standup-draft", "_task_standup_draft"),
+            ("soul-update", "_task_soul_update"),
+            ("self-improve", "_task_self_improve"),
+            ("wander", "_task_wander"),
+        ]
+        for task_name, fn_attr in task_pairs:
+            tracked: list[tuple[str, str]] = []
+            monkeypatch.setattr(
+                "keephive.commands.daemon.track_event",
+                lambda cat, name: tracked.append((cat, name)),
+            )
+            monkeypatch.setattr(f"keephive.commands.daemon.{fn_attr}", lambda: True)
+            _execute_task(task_name)
+            assert tracked == [("daemon_tasks", task_name)], f"Failed for {task_name}"
