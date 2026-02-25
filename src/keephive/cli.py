@@ -436,6 +436,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "hook-sessionend": ("keephive.hooks.sessionend", "hook_sessionend"),
     "hook-taskcompleted": ("keephive.hooks.taskcompleted", "hook_taskcompleted"),
     "hook-subagent-stop": ("keephive.hooks.subagent_stop", "hook_subagent_stop"),
+    "hook-notification": ("keephive.hooks.notification", "hook_notification"),
     "daemon": ("keephive.commands.daemon", "cmd_daemon"),
     "dm": ("keephive.commands.daemon", "cmd_daemon"),
     "daemon-loop": ("keephive.commands.daemon", "cmd_daemon_loop"),

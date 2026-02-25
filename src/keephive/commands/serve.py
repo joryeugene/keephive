@@ -1198,7 +1198,7 @@ _JS = """
   window.profileSwitch=function(name){
     fetch('/api/profiles/use',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
       .then(function(r){return r.json();})
-      .then(function(d){if(d.ok)location.reload();});
+      .then(function(d){if(d.ok)refresh();});
   };
   window.profileCreate=function(){
     var inp=document.getElementById('profile-name');
@@ -1329,7 +1329,7 @@ _JS = """
   });
 
   // --- Keyboard navigation ---
-  var _VIEW_KEYS={h:'/',d:'/dev',b:'/brain',k:'/know',s:'/stats',c:'/settings',p:'/play'};
+  var _VIEW_KEYS={h:'/',d:'/dev',b:'/brain',k:'/know',s:'/stats',c:'/settings',p:'/play',a:'/agent'};
 
   function _clearG(){
     _gPending=false;
@@ -1634,6 +1634,13 @@ _JS = """
         setTimeout(function(){btn.classList.remove('playing');},1500);
       });
   });
+
+  // --- Daemon toggle ---
+  window.toggleDaemon=function(task){
+    fetch('/api/daemon/toggle/'+task,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+      .then(function(r){return r.json();})
+      .catch(function(){});
+  };
 })();
 """
 
@@ -5228,7 +5235,7 @@ def _render_wander_list_panel(data: dict) -> str:
         )
         ts_raw = doc.get("timestamp", "")
         time_str = f"{ts_raw[:2]}:{ts_raw[2:4]}" if len(ts_raw) >= 4 else ""
-        date_time = f"{date_str} {time_str}".strip() if time_str else date_str
+        date_time = (f"{date_str} {time_str}".strip() if time_str else date_str) or "Unknown date"
 
         source = doc.get("seed_source", "")
         source_display = _SOURCE_LABELS.get(source) or source
@@ -5245,7 +5252,7 @@ def _render_wander_list_panel(data: dict) -> str:
             else ""
         )
 
-        seed = doc.get("seed", "")
+        seed = doc.get("seed", "") or "Untitled"
         thinking = doc.get("thinking", "")
         connections = doc.get("connections", [])
         hypothesis = doc.get("hypothesis", "")
@@ -5265,6 +5272,9 @@ def _render_wander_list_panel(data: dict) -> str:
         question_html = (
             f'<div class="wander-question">&#10067; {_e(question)}</div>' if question else ""
         )
+
+        if not (thinking_html or connections_html or hypothesis_html or question_html):
+            thinking_html = '<div class="wander-thinking dim">No preview available</div>'
 
         cards += (
             f'<div class="wander-card">'
@@ -5322,7 +5332,9 @@ def _render_wander_seed_panel(data: dict) -> str:
         "body:JSON.stringify({text:t})})"
         ".then(function(r){return r.json();})"
         ".then(function(d){"
-        "if(d.ok){document.getElementById('wander-seed-input').value='';location.reload();}"
+        "if(d.ok){document.getElementById('wander-seed-input').value='';"
+        "fetch('/api/panel/wander-seed').then(function(r){return r.text();}).then(function(html){"
+        "var el=document.querySelector('[data-panel-id=\"wander-seed\"]');if(el)el.outerHTML=html;});}"
         "});"
         "return false;}"
         "function removeWanderSeed(idx){"
@@ -5330,7 +5342,9 @@ def _render_wander_seed_panel(data: dict) -> str:
         "headers:{'Content-Type':'application/json'},"
         "body:JSON.stringify({index:idx})})"
         ".then(function(r){return r.json();})"
-        ".then(function(d){if(d.ok)location.reload();});}"
+        ".then(function(d){if(d.ok){"
+        "fetch('/api/panel/wander-seed').then(function(r){return r.text();}).then(function(html){"
+        "var el=document.querySelector('[data-panel-id=\"wander-seed\"]');if(el)el.outerHTML=html;});}});}"
         "</script>"
     )
 
@@ -5459,6 +5473,184 @@ def _render_privacy_banner_panel(data: dict) -> str:
     return ""
 
 
+# ---- Agent view panels ----
+
+_DAEMON_TASK_LIST = [
+    "soul-update",
+    "self-improve",
+    "morning-briefing",
+    "stale-check",
+    "standup-draft",
+    "wander",
+]
+
+
+def _get_active_loops_data() -> dict:
+    from datetime import datetime
+
+    from keephive.storage import hive_dir
+
+    loops = []
+    for f in sorted(hive_dir().glob(".loop-*.json"), reverse=True):
+        try:
+            d = json.loads(f.read_text())
+            created = d.get("created_at", "")
+            elapsed_str = ""
+            if created:
+                try:
+                    dt = datetime.fromisoformat(created)
+                    secs = int((datetime.now() - dt).total_seconds())
+                    if secs < 60:
+                        elapsed_str = f"{secs}s"
+                    elif secs < 3600:
+                        elapsed_str = f"{secs // 60}m"
+                    else:
+                        elapsed_str = f"{secs // 3600}h {(secs % 3600) // 60}m"
+                except Exception:
+                    pass
+            loops.append(
+                {
+                    "loop_id": d.get("loop_id", f.stem),
+                    "task": d.get("task", ""),
+                    "iter": d.get("iter", 0),
+                    "max_iter": d.get("max_iter", 0),
+                    "mode": d.get("mode", ""),
+                    "elapsed": elapsed_str,
+                }
+            )
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {"loops": loops}
+
+
+def _render_active_loops_panel(data: dict) -> str:
+    loops = data.get("loops", [])
+    if not loops:
+        body = '<div class="empty">No active loops</div>'
+    else:
+        rows = ""
+        for loop in loops:
+            task = (loop.get("task") or "")[:40]
+            it = loop.get("iter", 0)
+            mx = loop.get("max_iter", 0)
+            mode = loop.get("mode", "")
+            elapsed = loop.get("elapsed", "")
+            meta_parts = [f"iter {it}/{mx}", mode, elapsed]
+            meta = " \u00b7 ".join(p for p in meta_parts if p)
+            rows += (
+                f'<div class="ps-item">'
+                f'<span class="ps-name">{_e(task)}</span>'
+                f'<span class="ps-meta">{_e(meta)}</span>'
+                f"</div>"
+            )
+        body = rows
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Active loops">'
+        f'<div class="card-header"><span class="card-title">Active Loops</span>'
+        f'<span class="card-meta">{len(loops)}</span></div>'
+        f"{_cmd_hints(['hive run', 'hive run cancel'])}"
+        f'<div class="card-body">{body}</div>'
+        f"</div>"
+    )
+
+
+def _get_daemon_status_data() -> dict:
+    from datetime import datetime
+
+    from keephive.storage import read_daemon_config, read_daemon_state
+
+    config = read_daemon_config()
+    state = read_daemon_state()
+    tasks_cfg = config.get("tasks", {})
+    rows = []
+    for task in _DAEMON_TASK_LIST:
+        cfg = tasks_cfg.get(task, {})
+        enabled = cfg.get("enabled", False)
+        last_run_str = state.get(task, {}).get("last_run", "")
+        if last_run_str:
+            try:
+                dt = datetime.fromisoformat(last_run_str)
+                secs = int((datetime.now() - dt).total_seconds())
+                if secs < 3600:
+                    age = f"{secs // 60}m ago"
+                elif secs < 86400:
+                    age = f"{secs // 3600}h ago"
+                else:
+                    age = f"{secs // 86400}d ago"
+            except Exception:
+                age = last_run_str[:10]
+        else:
+            age = "never"
+        rows.append({"task": task, "enabled": enabled, "last_run": age})
+    return {"tasks": rows}
+
+
+def _render_daemon_status_panel(data: dict) -> str:
+    tasks = data.get("tasks", [])
+    rows = ""
+    for t in tasks:
+        task = t.get("task", "")
+        enabled = t.get("enabled", False)
+        last_run = t.get("last_run", "never")
+        badge_cls = "badge-success" if enabled else "badge-secondary"
+        badge_text = "ON" if enabled else "OFF"
+        rows += (
+            f'<div class="ps-item">'
+            f'<span class="ps-name">{_e(task)}</span>'
+            f'<span class="ps-meta">{_e(last_run)}</span>'
+            f'<span class="badge {badge_cls}">{badge_text}</span> '
+            f'<button class="search-action-btn" onclick="toggleDaemon(\'{_e(task)}\')">'
+            f"Toggle</button>"
+            f"</div>"
+        )
+    if not rows:
+        rows = '<div class="empty">No daemon config found</div>'
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Daemon status">'
+        f'<div class="card-header"><span class="card-title">Daemon Tasks</span>'
+        f'<span class="card-meta">6 tasks</span></div>'
+        f"{_cmd_hints(['hive daemon status', 'hive daemon enable <task>'])}"
+        f'<div class="card-body">{rows}</div>'
+        f"</div>"
+    )
+
+
+def _get_daemon_log_data() -> dict:
+    from keephive.storage import hive_dir
+
+    log_path = hive_dir() / "daemon.log"
+    if not log_path.exists():
+        return {"lines": []}
+    try:
+        text = log_path.read_text(errors="replace")
+        all_lines = text.splitlines()
+        return {"lines": list(reversed(all_lines[-50:]))}
+    except OSError:
+        return {"lines": []}
+
+
+def _render_daemon_log_panel(data: dict) -> str:
+    lines = data.get("lines", [])
+    if not lines:
+        body = '<div class="empty">daemon.log is empty</div>'
+    else:
+        items = "".join(
+            f'<div style="white-space:pre;overflow-x:hidden;text-overflow:ellipsis">{_e(line)}</div>'
+            for line in lines
+        )
+        body = (
+            f'<div style="max-height:300px;overflow-y:auto;'
+            f'font-family:monospace;font-size:0.8em;padding:4px 0">{items}</div>'
+        )
+    return (
+        f'<div class="card" tabindex="0" role="region" aria-label="Daemon log">'
+        f'<div class="card-header"><span class="card-title">Daemon Log</span>'
+        f'<span class="card-meta">last 50 lines</span></div>'
+        f'<div class="card-body">{body}</div>'
+        f"</div>"
+    )
+
+
 # ---- Panel registry ----
 
 PANELS: dict[str, tuple] = {
@@ -5499,6 +5691,9 @@ PANELS: dict[str, tuple] = {
     "wander-seed": (_get_wander_data, _render_wander_seed_panel),
     "wander-stats": (_get_wander_data, _render_wander_stats_panel),
     "privacy-banner": (_get_privacy_banner_data, _render_privacy_banner_panel),
+    "active-loops": (_get_active_loops_data, _render_active_loops_panel),
+    "daemon-status": (_get_daemon_status_data, _render_daemon_status_panel),
+    "daemon-log": (_get_daemon_log_data, _render_daemon_log_panel),
 }
 
 # ---- View definitions ----
@@ -5556,6 +5751,12 @@ VIEWS: dict[str, dict] = {
             ["settings"],
             ["profiles", "transfer"],
         ],
+    },
+    "agent": {
+        "path": "/agent",
+        "title": "Agent",
+        "cols": [["active-loops"], ["daemon-status"]],
+        "rows": [["daemon-log"]],
     },
 }
 
@@ -5889,6 +6090,20 @@ class _HiveHandler(BaseHTTPRequestHandler):
                     extra_params["log_date"] = log_date
                 body = render_fragment(view_name, extra_params or None).encode()
 
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self._cors()
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path.startswith("/api/panel/"):
+            panel_name = path[len("/api/panel/"):]
+            panel_html = _render_panel_safe(panel_name)
+            body = (
+                f'<div class="grid-panel" data-panel-id="{_e(panel_name)}">{panel_html}</div>'
+            ).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self._cors()
@@ -6527,6 +6742,32 @@ class _HiveHandler(BaseHTTPRequestHandler):
                                 src = tar.extractfile(member)
                                 if src:
                                     dest.write_bytes(src.read())
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path.startswith("/api/daemon/toggle/"):
+            task_name = self.path[len("/api/daemon/toggle/"):].strip("/")
+            if not task_name:
+                ok = False
+                error = "task name required"
+            else:
+                try:
+                    from keephive.storage import daemon_config_file, read_daemon_config
+
+                    cfg = read_daemon_config()
+                    cfg.setdefault("tasks", {}).setdefault(task_name, {})
+                    current = cfg["tasks"][task_name].get("enabled", False)
+                    cfg["tasks"][task_name]["enabled"] = not current
+                    daemon_config_file().write_text(json.dumps(cfg, indent=2))
+                    resp_body = json.dumps({"task": task_name, "enabled": not current}).encode()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self._cors()
+                    self.send_header("Content-Length", str(len(resp_body)))
+                    self.end_headers()
+                    self.wfile.write(resp_body)
+                    return
                 except Exception as exc:
                     ok = False
                     error = str(exc)

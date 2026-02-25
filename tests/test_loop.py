@@ -215,6 +215,7 @@ class TestStopHookPromptFileCleanup:
         }))
         prompt_file.write_text("fake tmux prompt content")
 
+        monkeypatch.delenv("HIVE_LOOP_ID", raising=False)  # Ensure in-session mode path
         monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"session_id": sess, "cwd": "/tmp"})))
         monkeypatch.setattr("sys.stdout", io.StringIO())
         monkeypatch.setattr("subprocess.Popen", MagicMock())  # Don't spawn loop-extract

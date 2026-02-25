@@ -24,6 +24,20 @@ _KB_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Prefixes that identify system-generated content (not real user messages).
+# Loop banners and daemon task prompts start with these and must never queue as KB.
+_SYSTEM_MSG_PREFIXES = (
+    "╔",               # Loop/system ASCII box banners (loop kickoff banner)
+    "─── ITERATION",   # Loop iteration progress banners
+    "You are KingBee", # Daemon task prompts (soul_update template)
+)
+
+
+def _is_system_message(text: str) -> bool:
+    """Return True if text is system-generated content that should not be queued as KB."""
+    stripped = text.strip()
+    return any(stripped.startswith(p) for p in _SYSTEM_MSG_PREFIXES)
+
 
 def _format_ui_context(data: dict) -> str:
     """Format UI feedback queue data as a context block for Claude."""
@@ -94,8 +108,9 @@ def hook_userpromptsubmit(args: list[str]) -> None:
         except Exception:
             pass
 
-    # KB detection — queue direct messages and inject context block
-    if prompt_text and _KB_PATTERN.search(prompt_text):
+    # KB detection — queue direct messages and inject context block.
+    # System-generated content (loop banners, daemon prompts) is filtered out first.
+    if prompt_text and not _is_system_message(prompt_text) and _KB_PATTERN.search(prompt_text):
         try:
             from keephive.nudge import build_nudge_output
             from keephive.storage import append_kb_message, kb_queue_depth

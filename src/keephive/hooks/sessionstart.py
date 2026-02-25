@@ -211,6 +211,20 @@ def build_context(cwd: str, project_name: str) -> str:
     """
     parts: list[str] = []
 
+    # 0a. Background loop: inject first-iteration prompt from .loop-prompt-{id}.txt.
+    # HIVE_LOOP_ID is set in the tmux window environment by _launch_tmux_window().
+    # Reading the already-written file avoids re-generating and keeps this hook fast.
+    try:
+        import os as _loop_os
+
+        _loop_id = _loop_os.environ.get("HIVE_LOOP_ID")
+        if _loop_id:
+            _prompt_file = hive_dir() / f".loop-prompt-{_loop_id}.txt"
+            if _prompt_file.exists():
+                parts.append(_prompt_file.read_text())
+    except Exception:
+        pass  # Never let loop injection crash the sessionstart hook
+
     # 0. Auto-reverify stale facts (deterministic, no LLM, silent)
     _auto_reverify()
 

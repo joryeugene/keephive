@@ -352,7 +352,7 @@ def _launch_background(
         )
         return
 
-    window_name = f"hive-loop-{loop_id[:20]}"
+    window_name = f"hive-loop-{loop_id[-10:]}"
 
     # Write loop file (session_id null — Stop hook claims it via HIVE_LOOP_ID)
     loop_file = hive_dir() / f".loop-{loop_id}.json"
@@ -390,16 +390,14 @@ def _launch_tmux_window(loop_id: str, window_name: str, prompt: str) -> str | No
     """Launch a new tmux window for the loop. Returns window name or None on failure."""
     from keephive.storage import hive_dir
 
-    # Write prompt to a file to avoid shell-quoting nightmares with long strings
+    # Write prompt to a file — SessionStart hook reads it via HIVE_LOOP_ID and
+    # injects it as additionalContext so Claude sees the task on session open.
     prompt_file = hive_dir() / f".loop-prompt-{loop_id}.txt"
     prompt_file.write_text(prompt)
 
-    # Shell expansion: $(cat 'file') expands the prompt file content at launch time,
-    # avoiding all quoting issues with long multi-line prompt strings.
-    cmd_str = (
-        f"HIVE_LOOP_ID={loop_id} "
-        f"claude --dangerously-skip-permissions -p \"$(cat '{prompt_file}')\""
-    )
+    # Interactive mode (not -p): Stop hook fires after each turn, advancing iter.
+    # HIVE_LOOP_ID in env lets _find_loop_for_session claim the session on first Stop.
+    cmd_str = f"HIVE_LOOP_ID={loop_id} claude --dangerously-skip-permissions"
 
     result = subprocess.run(
         ["tmux", "new-window", "-n", window_name, cmd_str],
@@ -412,6 +410,15 @@ def _launch_tmux_window(loop_id: str, window_name: str, prompt: str) -> str | No
         console.print(f"[err]tmux launch failed:[/err] {err}")
         prompt_file.unlink(missing_ok=True)
         return None
+
+    # After claude starts, send a short trigger to kick off the first iteration.
+    # SessionStart already injected the loop banner via additionalContext; this
+    # trigger is just the user message that causes Claude to act on it.
+    # sleep 5 gives claude time to initialize before keys arrive.
+    subprocess.Popen(
+        f"sleep 5 && tmux send-keys -t '{window_name}' 'proceed' Enter",
+        shell=True,
+    )
 
     return window_name
 

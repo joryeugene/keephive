@@ -757,6 +757,20 @@ def _setup_hooks(settings_path: Path | None = None) -> None:
     else:
         console.print("  [dim]SubagentStop hook already configured[/dim]")
 
+    # Notification hook (log + macOS desktop notification)
+    notif_hooks = hooks.setdefault("Notification", [])
+    notif_cmd = f"{keephive_bin} hook-notification"
+    if not any("keephive hook-notification" in _extract_cmds(h) for h in notif_hooks):
+        notif_hooks.append(
+            {
+                "matcher": "*",
+                "hooks": [{"type": "command", "command": notif_cmd}],
+            }
+        )
+        console.print("  [ok]OK[/ok] Notification hook added")
+    else:
+        console.print("  [dim]Notification hook already configured[/dim]")
+
     # Write back
     settings_path.write_text(json.dumps(data, indent=2) + "\n")
 
@@ -863,6 +877,7 @@ def _uninstall() -> None:
                 "SessionEnd",
                 "TaskCompleted",
                 "SubagentStop",
+                "Notification",
             ]:
                 if event in hooks:
                     cleaned = []
