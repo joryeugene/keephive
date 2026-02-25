@@ -74,3 +74,9 @@ Run existing tests FIRST, before writing any fix.
 - Failing tests reveal root cause faster than reading code alone.
 - If no tests exist, write a failing test that reproduces the bug, then fix it.
 - Understanding what passes and what fails gives you the root cause.
+
+## soul_update Precondition
+
+Always check `kb_queue_depth` before running soul_update. If the KB queue has pending messages,
+soul_update will consume and clear them — running without checking first risks losing context about
+what KingBee was asked to integrate.
