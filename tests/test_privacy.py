@@ -32,7 +32,6 @@ from keephive.storage import (
     set_llm_paused,
 )
 
-
 # ── Storage helpers (kill switch) ─────────────────────────────────────
 
 

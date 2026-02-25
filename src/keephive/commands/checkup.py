@@ -349,7 +349,7 @@ def _print_stage3(data: dict, warnings: list[str]) -> None:
     if kb_depth > 0:
         console.print(f"    KB queue:             {kb_depth} unread message(s) — soul_update will process next compaction")
     else:
-        console.print(f"    KB queue:             0 (clear)")
+        console.print("    KB queue:             0 (clear)")
 
     # Wander activity
     wander_days_ago = data.get("wander_days_ago", -1)

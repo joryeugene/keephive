@@ -784,7 +784,6 @@ class TestVoiceDisciplineConstant:
     def test_constant_injected_in_wander(self, hive_env, monkeypatch):
         """_VOICE_DISCIPLINE text appears in the wander prompt."""
         from keephive.commands.daemon import _VOICE_DISCIPLINE, _task_wander
-        from keephive.commands.wander import select_wander_seed
 
         captured_prompts = []
 
@@ -933,8 +932,8 @@ class TestDaemonPromptTodoFlagging:
         Bug caught: soul_update rewrote SOUL.md with no awareness of open TODOs,
         missing opportunities to surface completed work for user confirmation.
         """
-        from keephive.commands.daemon import _task_soul_update
         from keephive.clock import get_today
+        from keephive.commands.daemon import _task_soul_update
         from keephive.storage import daily_file
 
         # Write today's log so soul_update doesn't return early

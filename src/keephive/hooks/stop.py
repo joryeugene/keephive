@@ -110,7 +110,7 @@ def hook_stop(_args: list[str]) -> None:
                 next_iter = iter_n + 1
                 done_path_str = str(_loop_done_path(loop_id))
                 maintenance = (
-                    f"SELF-MAINTENANCE: hive todo → close what's done. hive s → note warnings.\n"
+                    "SELF-MAINTENANCE: hive todo → close what's done. hive s → note warnings.\n"
                     + "─" * 64
                     + "\n"
                 )

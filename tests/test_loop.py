@@ -9,7 +9,6 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
 # ── Helper ────────────────────────────────────────────────────────────────────
 
 
@@ -153,10 +152,10 @@ class TestSafeFlagRemoved:
 class TestLoopExtractIncludesTodos:
     def test_todos_included_in_pending_facts(self, hive_env, monkeypatch):
         """result.todos must be appended to pending facts, not silently dropped."""
+        from keephive.clock import get_today
         from keephive.commands.loop import _do_loop_extract
         from keephive.models import LoopExtractionResponse
         from keephive.storage import daily_file, hive_dir
-        from keephive.clock import get_today
 
         loop_id = "test-todos-bug"
         today = get_today()
@@ -718,9 +717,9 @@ class TestStopHookLoopIntercept:
 
         with patch("sys.stdout.write", side_effect=capturing_write):
             try:
-                from keephive.hooks import stop  # Force reimport for isolation
-
                 import importlib
+
+                from keephive.hooks import stop  # Force reimport for isolation
 
                 importlib.reload(stop)
                 stop.hook_stop([])
@@ -1157,7 +1156,11 @@ class TestScheduledMode:
 
     def test_update_custom_task_status(self, hive_env):
         """update_custom_task_status changes status without corrupting other tasks."""
-        from keephive.storage import append_custom_task, read_custom_task_queue, update_custom_task_status
+        from keephive.storage import (
+            append_custom_task,
+            read_custom_task_queue,
+            update_custom_task_status,
+        )
 
         append_custom_task(
             {"task_id": "t1", "task": "task one", "status": "queued", "due": "22:00", "due_date": "2026-02-24"}
@@ -1222,7 +1225,7 @@ class TestTickCustomTaskIntegration:
 
     def test_tick_runs_due_custom_task(self, hive_env, monkeypatch):
         """_tick() calls _execute_custom_task for queued tasks that are due."""
-        from keephive.storage import append_custom_task, read_custom_task_queue
+        from keephive.storage import append_custom_task
 
         now = datetime(2026, 2, 24, 22, 5)
         append_custom_task(

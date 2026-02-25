@@ -957,7 +957,10 @@ used_web_search: true if you used WebSearch, false otherwise"""
             # If wander produced an actionable hypothesis, queue it for hive improve review
             if result.action and result.action_type != "none":
                 try:
-                    from keephive.storage import append_pending_improvements, read_pending_improvements
+                    from keephive.storage import (
+                        append_pending_improvements,
+                        read_pending_improvements,
+                    )
 
                     existing = read_pending_improvements()
                     # Dedup: skip if rationale already in queue

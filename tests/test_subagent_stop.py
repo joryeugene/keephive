@@ -158,6 +158,7 @@ class TestSubagentStopExtraction:
     def test_silence_gate_falls_back_to_subagent_done(self, hive_env):
         """When extraction returns None (silence gate), logs plain SUBAGENT-DONE."""
         import unittest.mock as mock
+
         from keephive.storage import daily_file
 
         with mock.patch(
@@ -172,6 +173,7 @@ class TestSubagentStopExtraction:
     def test_captured_output_produces_subagent_insight(self, hive_env):
         """Non-empty captured produces SUBAGENT-INSIGHT with -> separator."""
         import unittest.mock as mock
+
         from keephive.models import SubagentExtractionResponse
         from keephive.storage import daily_file
 
@@ -192,6 +194,7 @@ class TestSubagentStopExtraction:
     def test_decision_appended_when_present(self, hive_env):
         """Non-empty decision is appended to the insight line."""
         import unittest.mock as mock
+
         from keephive.models import SubagentExtractionResponse
         from keephive.storage import daily_file
 
@@ -211,6 +214,7 @@ class TestSubagentStopExtraction:
     def test_extraction_error_falls_back_gracefully(self, hive_env):
         """_extract_output returning None falls back to plain SUBAGENT-DONE."""
         import unittest.mock as mock
+
         from keephive.storage import daily_file
 
         with mock.patch(
@@ -238,6 +242,7 @@ class TestSubagentStopExtraction:
     def test_no_stdout_output_with_extraction(self, hive_env, capsys):
         """SubagentStop hook never writes to stdout even with extraction."""
         import unittest.mock as mock
+
         from keephive.models import SubagentExtractionResponse
 
         fake_result = SubagentExtractionResponse(captured="something important", decision="")

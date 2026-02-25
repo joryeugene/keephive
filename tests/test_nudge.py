@@ -440,7 +440,7 @@ class TestRecencyGate:
 
     def test_read_recency_resets_on_session_change(self, hive_env):
         """read_recency returns {} when session_id doesn't match stored session."""
-        from keephive.nudge import record_surfaced, read_recency
+        from keephive.nudge import read_recency, record_surfaced
 
         record_surfaced("prompt", "stale", 5, "session-old")
         result = read_recency("prompt", "session-new")
@@ -448,7 +448,7 @@ class TestRecencyGate:
 
     def test_record_and_read_roundtrip(self, hive_env):
         """record_surfaced writes; read_recency reads back same data."""
-        from keephive.nudge import record_surfaced, read_recency
+        from keephive.nudge import read_recency, record_surfaced
 
         record_surfaced("prompt", "stale", 10, "sess-xyz")
         result = read_recency("prompt", "sess-xyz")
