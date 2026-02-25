@@ -2565,12 +2565,18 @@ def read_live_sessions(
                                             if name:
                                                 tool_counts[name] = tool_counts.get(name, 0) + 1
 
-                # Skip ghost sessions
-                if user_count == 0:
+                # Skip ghost sessions — but preserve compacted sessions confirmed by stats.
+                # After hard compaction a new JSONL may contain only system/compact_boundary
+                # and progress records with zero user-type messages yet.  active_dirs tells us
+                # the process is alive; stats_starts tells us it was real.  Drop it only when
+                # there is no evidence of it in either place.
+                if user_count == 0 and session_id not in stats_starts:
                     continue
 
                 # If .stats.json recorded an earlier start (pre-compaction), prefer it so
                 # duration reflects the true session length, not the post-compaction window.
+                # Also handle the case where the JSONL yielded no start time at all (e.g.
+                # post-compaction: zero user records) — use stats as the sole source.
                 stats_start = stats_starts.get(session_id, "")
                 if stats_start and first_ts:
                     try:
@@ -2582,6 +2588,9 @@ def read_live_sessions(
                             first_ts = stats_start
                     except (ValueError, TypeError):
                         pass
+                elif stats_start and not first_ts:
+                    # Post-compaction: no user messages in JSONL yet, fall back to stats start.
+                    first_ts = stats_start
 
                 # Compute duration from timestamps
                 duration_minutes = 0

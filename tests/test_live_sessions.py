@@ -522,3 +522,64 @@ class TestToolCountsParsing:
         assert s["permission_mode"] == "plan", (
             f"Expected permission_mode='plan', got {s['permission_mode']!r}"
         )
+
+
+class TestCompactionBug:
+    def test_session_after_compaction_appears_if_stats_entry_exists(self, hive_env):
+        """Session with 0 JSONL user messages (post-compaction) appears if stats.json entry exists.
+
+        After hard compaction the new session JSONL may temporarily contain only
+        system/compact_boundary and progress records with no user-type messages.
+        active_dirs confirms the process is alive; stats.json has the pre-compaction
+        start time. The session must appear with the stats-based start time.
+
+        Regression: the `if user_count == 0: continue` guard at read_live_sessions
+        was unconditional, so these sessions were silently dropped.
+        """
+        from keephive.storage import read_live_sessions, track_session_event
+
+        cwd = "/Users/test/compacted-project"
+        session_id = "compact-test-0001"
+
+        # Simulate a session that was tracked before compaction wiped the JSONL user turns.
+        track_session_event(session_id, "start", project=cwd)
+        track_session_event(session_id, "compact", project=cwd)
+
+        # JSONL now contains only non-user-type records (post-compaction, no new prompts yet).
+        lines = [
+            json.dumps(
+                {
+                    "type": "system",
+                    "subtype": "compact_boundary",
+                    "content": "Conversation compacted",
+                    "timestamp": "2026-02-25T10:30:00Z",
+                    "sessionId": session_id,
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "progress",
+                    "data": {"type": "hook_progress"},
+                    "timestamp": "2026-02-25T10:30:01Z",
+                }
+            ),
+        ]
+        content = ("\n".join(lines) + "\n").encode()
+        write_session(
+            cc_projects_dir(hive_env),
+            cwd,
+            session_id,
+            content,
+            mtime=time.time(),
+        )
+
+        result = read_live_sessions(active_dirs=[cwd])
+        assert len(result) == 1, (
+            f"Expected compacted session to appear in live sessions, got {result!r}"
+        )
+        s = result[0]
+        assert s["session_id"] == session_id
+        assert s["started"] != "", (
+            "Expected non-empty started timestamp sourced from stats.json, got empty string"
+        )
+        assert s["is_live"] is True
