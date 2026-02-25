@@ -663,7 +663,8 @@ def test_render_standup_preview_panel_copy_button_present(hive_env):
     assert "KingBee Draft" in html
     assert "Generated 17:02" in html
     assert "Copy" in html
-    assert "kb-draft-text" in html
+    assert "kb-draft-text" in html  # hidden raw-text element for clipboard
+    assert 'class="md"' in html  # rendered markdown wrapper
     assert "Yesterday: wrote tests" in html
 
 

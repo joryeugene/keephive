@@ -3203,17 +3203,16 @@ def _render_standup_preview_panel(data: dict) -> str:
         )
         copy_btn = ""
     else:
-        escaped = _e(draft)
         body = (
-            f'<pre id="kb-draft-text" style="white-space:pre-wrap;'
-            f'font-size:11px;color:#c9d1d9;margin:0">{escaped}</pre>'
+            f'<pre id="kb-draft-text" style="display:none">{_e(draft)}</pre>'
+            f'<div class="md">{render_md(draft)}</div>'
         )
         copy_btn = (
             '<button class="search-action-btn" '
             'style="margin-left:auto;padding:2px 8px;font-size:0.82em" '
             "onclick=\"var el=document.getElementById('kb-draft-text'),b=this;"
             "if(el&&navigator.clipboard){"
-            "navigator.clipboard.writeText(el.innerText)"
+            "navigator.clipboard.writeText(el.textContent)"
             ".then(function(){b.textContent='Copied!';setTimeout(function(){b.textContent='Copy';},2000);})"
             ".catch(function(){b.textContent='Failed';setTimeout(function(){b.textContent='Copy';},2000);});"
             "}\">"
@@ -6294,6 +6293,15 @@ class _ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
 
     daemon_threads = True
 
+    def handle_error(self, request: object, client_address: object) -> None:
+        # Suppress benign client-disconnect errors (browser SSE reconnects, etc.)
+        import sys
+
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionResetError, BrokenPipeError)):
+            return
+        super().handle_error(request, client_address)  # type: ignore[arg-type]
+
 
 # ---- HTTP handler ----
 
@@ -7061,15 +7069,6 @@ class _HiveHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A002
         pass  # Silence request logging
-
-    def handle_error(self, request: object, client_address: object) -> None:
-        # Suppress benign client-disconnect errors (browser SSE reconnects, etc.)
-        import sys
-
-        exc = sys.exc_info()[1]
-        if isinstance(exc, (ConnectionResetError, BrokenPipeError)):
-            return
-        super().handle_error(request, client_address)  # type: ignore[arg-type]
 
 
 # ---- Entry point ----
