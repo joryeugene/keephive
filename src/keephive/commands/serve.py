@@ -5932,15 +5932,9 @@ def _get_stats_tokens_data() -> dict:
         for offset in range(6, -1, -1):
             day = today - timedelta(days=offset)
             day_str = day.isoformat()
-            day_in = sum(
-                s.get("input_tokens", 0)
-                for s in sessions
-                if s.get("day", "") == day_str
-            )
+            day_in = sum(s.get("input_tokens", 0) for s in sessions if s.get("day", "") == day_str)
             day_out = sum(
-                s.get("output_tokens", 0)
-                for s in sessions
-                if s.get("day", "") == day_str
+                s.get("output_tokens", 0) for s in sessions if s.get("day", "") == day_str
             )
             week_days.append({"date": day_str, "in": day_in, "out": day_out})
     except Exception:
@@ -5973,8 +5967,8 @@ def _render_stats_tokens_panel(data: dict) -> str:
     # Summary row
     summary = (
         f'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px">'
-        f'<span><strong>{output_tok // 1000}K</strong> out</span>'
-        f'<span><strong>{input_tok // 1000}K</strong> in</span>'
+        f"<span><strong>{output_tok // 1000}K</strong> out</span>"
+        f"<span><strong>{input_tok // 1000}K</strong> in</span>"
         f'<span style="color:var(--c-muted)">{ratio:.1f}x read:write</span>'
         f"</div>"
     )
@@ -5996,7 +5990,9 @@ def _render_stats_tokens_panel(data: dict) -> str:
                 f'<span style="font-size:0.65em;color:var(--c-muted)">{_e(label)}</span>'
                 f"</div>"
             )
-        bars = f'<div style="display:flex;gap:4px;align-items:flex-end;margin-bottom:6px">{bars}</div>'
+        bars = (
+            f'<div style="display:flex;gap:4px;align-items:flex-end;margin-bottom:6px">{bars}</div>'
+        )
 
     note = '<div style="color:var(--c-muted);font-size:0.8em">session-meta tokens · completed sessions only</div>'
     body = summary + bars + note

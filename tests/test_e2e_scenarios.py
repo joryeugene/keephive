@@ -843,7 +843,9 @@ class TestAutoTrustImprove:
 
         term.type("python -m keephive improve trust off").has("disabled")
         term.type("python -m keephive improve trust").has("off")
-        assert not term.file_exists(".auto-improve-trusted"), "Flag file must be removed after 'trust off'"
+        assert not term.file_exists(".auto-improve-trusted"), (
+            "Flag file must be removed after 'trust off'"
+        )
 
     def test_auto_apply_roundtrip(self, term):
         """Trusted rule items are auto-applied on review; untrusted items are not."""
@@ -875,7 +877,9 @@ class TestAutoTrustImprove:
 
         # daemon.log must record the auto-applied rule.
         log = term.read_file("daemon.log")
-        assert "[AUTO-APPLIED rule:" in log, f"Expected AUTO-APPLIED entry in daemon.log, got: {log}"
+        assert "[AUTO-APPLIED rule:" in log, (
+            f"Expected AUTO-APPLIED entry in daemon.log, got: {log}"
+        )
 
         # .pending-rules.md must contain the queued rule text.
         rules_pending = term.read_file(".pending-rules.md")

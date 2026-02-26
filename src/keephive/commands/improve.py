@@ -32,7 +32,9 @@ def cmd_improve(args: list[str]) -> None:
         flag = args[1] if len(args) > 1 else ""
         if flag == "on":
             set_auto_improve_trusted(True)
-            console.print("  [green]✓[/green] Auto-apply enabled for trusted improvements (skill + rule types).")
+            console.print(
+                "  [green]✓[/green] Auto-apply enabled for trusted improvements (skill + rule types)."
+            )
             console.print("  KingBee will apply low-risk proposals without manual review.")
         elif flag == "off":
             set_auto_improve_trusted(False)
@@ -40,7 +42,9 @@ def cmd_improve(args: list[str]) -> None:
         else:
             state = "on" if is_auto_improve_trusted() else "off"
             console.print(f"  Auto-apply trusted: [bold]{state}[/bold]")
-            console.print("  Toggle with [dim]hive improve trust on[/dim] / [dim]hive improve trust off[/dim]")
+            console.print(
+                "  Toggle with [dim]hive improve trust on[/dim] / [dim]hive improve trust off[/dim]"
+            )
     else:
         console.print(f"[err]Unknown subcommand: {sub}[/err]")
         console.print("Usage: hive improve [review|list|clear-stale|trust on|trust off]")
@@ -89,7 +93,9 @@ def _improve_list() -> None:
         age = _age_str(item.get("proposed_at"))
         stale_tag = " [dim][stale][/dim]" if _is_stale(item) else ""
         auto_tag = " [dim][auto][/dim]" if item.get("trusted") else ""
-        console.print(f"  [{i}] [bold]{t.upper()}[/bold]: {name}  [dim]{age}[/dim]{stale_tag}{auto_tag}")
+        console.print(
+            f"  [{i}] [bold]{t.upper()}[/bold]: {name}  [dim]{age}[/dim]{stale_tag}{auto_tag}"
+        )
         console.print(f"      {rationale}")
     console.print()
 
