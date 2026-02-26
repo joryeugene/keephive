@@ -30,6 +30,7 @@ _SYSTEM_MSG_PREFIXES = (
     "╔",  # Loop/system ASCII box banners (loop kickoff banner)
     "─── ITERATION",  # Loop iteration progress banners
     "You are KingBee",  # Daemon task prompts (soul_update template)
+    "You are analyzing excerpts",  # PreCompact hook LLM prompt — can be thousands of lines
 )
 
 

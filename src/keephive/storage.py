@@ -3005,13 +3005,16 @@ def kb_queue_depth() -> int:
 
 
 def clear_kb_queue() -> None:
-    """Rewrite .kb-queue.md with all [pending] entries marked [done]."""
+    """Truncate .kb-queue.md after soul_update has consumed all pending messages.
+
+    Previous behavior marked entries [done] but kept them, causing unbounded growth
+    (the file accumulated full PreCompact transcripts over time). Messages are already
+    incorporated into SOUL.md before this is called, so no audit value is lost.
+    """
     path = kb_queue_file()
     if not path.exists():
         return
-    lines = path.read_text().splitlines()
-    new_lines = [ln.replace("[pending]", "[done]") for ln in lines]
-    path.write_text("\n".join(new_lines) + ("\n" if new_lines else ""))
+    path.write_text("")
 
 
 def last_cmd_date(cmd: str) -> "date | None":
