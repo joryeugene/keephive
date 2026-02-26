@@ -401,7 +401,7 @@ def slot_file(n: int) -> Path:
 
 
 def wander_dir() -> Path:
-    """~/.claude/hive/wander/ — one markdown file per wander session."""
+    """~/.keephive/hive/wander/ — one markdown file per wander session."""
     return hive_dir() / "wander"
 
 

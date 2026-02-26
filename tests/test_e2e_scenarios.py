@@ -831,3 +831,54 @@ class TestImproveReview:
         remaining = json.loads(pending_path.read_text())
         assert remaining == [], f"Expected empty queue after dismiss, got {remaining}"
         save_terminal_output("improve/dismiss_flow", term)
+
+
+@pytest.mark.terminal
+class TestAutoTrustImprove:
+    def test_trust_toggle(self, term):
+        """trust on/off toggles the flag file and reports state correctly."""
+        term.type("python -m keephive improve trust on").has("Auto-apply enabled")
+        term.type("python -m keephive improve trust").has("on")
+        assert term.file_exists(".auto-improve-trusted"), "Flag file must exist after 'trust on'"
+
+        term.type("python -m keephive improve trust off").has("disabled")
+        term.type("python -m keephive improve trust").has("off")
+        assert not term.file_exists(".auto-improve-trusted"), "Flag file must be removed after 'trust off'"
+
+    def test_auto_apply_roundtrip(self, term):
+        """Trusted rule items are auto-applied on review; untrusted items are not."""
+        import json
+
+        # One trusted rule (should be auto-applied) and one untrusted task (should not).
+        items = [
+            {
+                "type": "rule",
+                "rule": "Always verify field names before using in templates.",
+                "rationale": "Prevents field mismatch bugs",
+                "trusted": True,
+                "proposed_at": "2026-02-26T00:00:00",
+            },
+            {
+                "type": "task",
+                "name": "some-structural-task",
+                "rationale": "Requires human review",
+                "proposed_at": "2026-02-26T00:00:00",
+            },
+        ]
+        (term.hive_home / ".pending-improvements.json").write_text(json.dumps(items))
+
+        term.type("python -m keephive improve trust on").has("Auto-apply enabled")
+        # Pipe 'n\n' to dismiss the remaining untrusted task during interactive review.
+        screen = term.type("printf 'n\\n' | python -m keephive improve review")
+        screen.has("Auto-applied 1")
+        screen.lacks("Traceback")
+
+        # daemon.log must record the auto-applied rule.
+        log = term.read_file("daemon.log")
+        assert "[AUTO-APPLIED rule:" in log, f"Expected AUTO-APPLIED entry in daemon.log, got: {log}"
+
+        # .pending-rules.md must contain the queued rule text.
+        rules_pending = term.read_file(".pending-rules.md")
+        assert "verify field names" in rules_pending, (
+            f"Rule text not found in .pending-rules.md: {rules_pending}"
+        )

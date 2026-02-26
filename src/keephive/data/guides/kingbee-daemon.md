@@ -250,5 +250,5 @@ Loops interact with KingBee's identity system:
 
 After a loop completes: `hive run review` to review extracted facts.
 
-Write specs to `~/.claude/hive/specs/<name>.md` for complex tasks.
+Write specs to `~/.keephive/hive/specs/<name>.md` for complex tasks.
 The loop agent reads spec files as its task brief.

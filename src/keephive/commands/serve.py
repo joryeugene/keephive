@@ -5968,10 +5968,6 @@ def _render_stats_tokens_panel(data: dict) -> str:
             "</div>"
         )
 
-    # Blended cost: 60% haiku / 40% sonnet approximation
-    blended_in = (0.6 * 0.80 + 0.4 * 3.00) / 1_000_000
-    blended_out = (0.6 * 4.00 + 0.4 * 15.00) / 1_000_000
-    est_cost = input_tok * blended_in + output_tok * blended_out
     ratio = input_tok / output_tok if output_tok else 0
 
     # Summary row
@@ -5980,7 +5976,6 @@ def _render_stats_tokens_panel(data: dict) -> str:
         f'<span><strong>{output_tok // 1000}K</strong> out</span>'
         f'<span><strong>{input_tok // 1000}K</strong> in</span>'
         f'<span style="color:var(--c-muted)">{ratio:.1f}x read:write</span>'
-        f'<span style="color:var(--c-green)">est. ~${est_cost:.2f}</span>'
         f"</div>"
     )
 
@@ -5990,7 +5985,7 @@ def _render_stats_tokens_panel(data: dict) -> str:
         max_total = max((d["in"] + d["out"] for d in week_days), default=1) or 1
         for d in week_days:
             total = d["in"] + d["out"]
-            pct = int(total / max_total * 100)
+            pct = max(2, int(total / max_total * 100)) if total > 0 else 0
             label = d["date"][-5:]  # MM-DD
             bars += (
                 f'<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1">'
@@ -6003,13 +5998,13 @@ def _render_stats_tokens_panel(data: dict) -> str:
             )
         bars = f'<div style="display:flex;gap:4px;align-items:flex-end;margin-bottom:6px">{bars}</div>'
 
-    note = '<div style="color:var(--c-muted);font-size:0.8em">Blended rate: 60% haiku · 40% sonnet</div>'
+    note = '<div style="color:var(--c-muted);font-size:0.8em">session-meta tokens · completed sessions only</div>'
     body = summary + bars + note
 
     return (
         '<div class="card" tabindex="0" role="region" aria-label="Token budget">'
         '<div class="card-header"><span class="card-title">Token Budget</span>'
-        '<span class="card-meta">30 days · est. cost</span></div>'
+        '<span class="card-meta">7 days · session-meta</span></div>'
         f'<div class="card-body">{body}</div>'
         "</div>"
     )
