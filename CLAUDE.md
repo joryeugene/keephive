@@ -42,7 +42,7 @@ Prefer `just <recipe>` over raw commands. See `just --list` or the `justfile` fo
 - `commands/edit.py`: `hive e` targets (memory, rules, claude, today, todo, etc.). Opens `$EDITOR`.
 - `commands/knowledge.py`: List, view, create/edit knowledge guides and prompt templates.
 - `commands/note.py`: Multi-slot scratchpad. Open, copy, clear, list, restore, template start. `hive n todo` extracts TODOs via edit-buffer (full note, candidates pre-marked `- `, mtime cancel detection). `hive 4 "text"` quick-appends without editor.
-- `commands/profile.py`: Profile CRUD (create/list/use/delete). Sibling directories: `~/.claude/hive-{name}/`.
+- `commands/profile.py`: Profile CRUD (create/list/use/delete). Sibling directories: `~/.keephive/hive-{name}/`.
 - `commands/seed.py`: Demo data seeder. Deterministic RNG (`Random(42)`), loads from `data/demo/entries.json`.
 - `commands/session.py`: Interactive session launcher. Reuses `build_context()` from sessionstart, replaces process with `claude` via `os.execvpe`. kb mode: dynamically builds prompt from `read_kb_queue()` pending messages + `read_soul()` summary. Queue not cleared here — soul_update does that.
 - `commands/skill.py`: Plugin/skill system for extensible commands.
@@ -82,7 +82,7 @@ keephive and Claude Code track sessions independently. They serve different purp
 - Read by: `storage.read_cc_sessions()`, called from `session_metrics()`, `_session_productivity()`, and serve.py panels.
 
 **keephive** (source of truth for workflow analytics):
-- Location: `~/.claude/hive/.stats.json`
+- Location: `~/.keephive/hive/.stats.json`
 - Written by hooks during session. Contains: command usage, hourly patterns, project breakdown, daily aggregates, compacted flag
 - Also: `.prompt-counter`, `.tool-counter`, `.stop-counter` for nudge cadence (tuned for hook invocation frequency, not user counts)
 
@@ -219,7 +219,7 @@ Real LLM calls. Tests the full pipeline: prompt -> claude -p -> Pydantic validat
 - Time-travel with `HIVE_DATE` across multiple commands
 - Testing that commands create the right files
 
-**Use direct commands** (`hive a`, `hive v`, `hive stats`) when you need to verify something works against real user data, not test data. Direct commands hit your actual `~/.claude/hive/` directory. Use them for:
+**Use direct commands** (`hive a`, `hive v`, `hive stats`) when you need to verify something works against real user data, not test data. Direct commands hit your actual `~/.keephive/hive/` directory. Use them for:
 - Smoke-testing a fix against real accumulated data
 - Verifying LLM-dependent features (audit, verify) actually call the model
 - Checking serve dashboard renders with real content
@@ -303,6 +303,6 @@ save_terminal_output("scenario_name", term)
 **Gotchas:**
 - TODO text must be distinct enough to survive fuzzy dedup (0.8 SequenceMatcher threshold). "Task A"/"Task B" will dedup. Use descriptive names.
 - Single quotes in `send-keys` args need care. Prefer double quotes for fact text.
-- `HIVE_HOME` isolation means commands never touch real `~/.claude/hive/`.
+- `HIVE_HOME` isolation means commands never touch real `~/.keephive/hive/`.
 - Each `term` fixture creates a fresh tmux session with unique name. Cleanup is automatic.
 

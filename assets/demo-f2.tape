@@ -12,7 +12,7 @@ Set Padding 20
 Set TypingSpeed 45ms
 
 # ── Seed: write something for KingBee (direct message via daily log for demo) ──
-Type "hive r 'KingBee, stop starting sentences with \"I\"'"
+Type "hive r 'KingBee, stop starting sentences with I'"
 Enter
 Sleep 3.5s
 

@@ -54,7 +54,7 @@ Everything else on this page is optional depth.
 After a few sessions, `hive` shows what your agent has learned:
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/cli-demo.gif" width="700" alt="keephive CLI demo — remember, recall, todo, log, knowledge, stats" />
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/cli-demo.gif" width="700" alt="keephive CLI demo — remember, recall, todo, log, knowledge, stats, inbox" />
 </p>
 
 Keep your agent orientated across platforms. The new <code>hive serve /brain</code> view condenses working memory, rules, TODOs, and platform telemetry into a single high-density dashboard. It highlights the active backend, queued LLM work, and which agents (Claude, Gemini, Codex) are feeding data back into keephive.
@@ -64,8 +64,8 @@ Keep your agent orientated across platforms. The new <code>hive serve /brain</co
 
 ```console
 $ hive
-keephive v1.0.0
-  ● hooks  ● mcp  ● data
+keephive v1.2.0
+  ● hooks  ● mcp  ● data  ● daemon
 
   4 facts (4 ok) | 12 today | 8 yesterday | 2 guides | 48K
   42 cmds today · 120 this week · 5d streak ▁▂▅▃█▇▂▁▁▃▅▆▇█▂▁▁▁▁▁▁▁▁
@@ -81,7 +81,7 @@ keephive v1.0.0
 
   Active draft: slot 1 · "api testing todo list..." (47 words)  ->  hive nc
 
-  hive go (session) | hive l (log) | hive rf (reflect) | hive help
+  hive go (session) | hive inbox (ib) | hive l (log) | hive rf (reflect) | hive help
 ```
 
 </details>
@@ -178,6 +178,10 @@ uv tool upgrade keephive   # manual alternative; run keephive setup after
 | Use a multi-slot scratchpad        | `hive note` *(hive n)*                     |
 | Create a knowledge guide           | `hive knowledge edit <name>` *(hive ke)*   |
 | Generate a standup                 | `hive standup` *(hive su)*                 |
+| See what KingBee surfaced          | `hive inbox` *(hive ib)*                   |
+| Start an autonomous task loop      | `hive run "<task>"` *(hive rn)*            |
+| Review KingBee improvement ideas   | `hive improve list` *(hive im)*            |
+| Quick pipeline health check        | `hive checkup` *(hive ck)*                 |
 
 ---
 
@@ -257,7 +261,7 @@ flowchart TD
         WANDER["wander exploration"]
     end
 
-    subgraph CC["Claude Code Data (~/.keephive/usage-data/)"]
+    subgraph CC["Claude Code Data (~/.claude/usage-data/)"]
         META[("session-meta/<br>msgs, tools, duration,<br>lines, tokens, commits")]
         FACETS[("facets/<br>outcome, friction,<br>satisfaction")]
     end
@@ -352,7 +356,7 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 ## Commands
 
 <details>
-<summary><b>Full command reference</b> (42 commands)</summary>
+<summary><b>Full command reference</b></summary>
 
 | Command                 | Short             | What                                       |
 | ----------------------- | ----------------- | ------------------------------------------ |
@@ -390,6 +394,7 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 | `hive daemon [start]`   |                   | **KingBee background daemon** (morning briefs, soul) |
 | `hive privacy [on|off|cli]` | `hive pv`     | Pause/resume LLM calls or restrict to claude -p |
 | `hive doctor`           | `hive dr`         | Health check                               |
+| `hive checkup`          | `hive ck`         | Pipeline health: hooks, queues, JSON integrity, magic numbers |
 | `hive gc`               | `hive g`          | Archive old logs                           |
 | `hive setup`            |                   | Register hooks and MCP server              |
 | `hive update`           | `hive up`         | Upgrade keephive in-place                  |
@@ -427,12 +432,6 @@ Real-time SSE push updates (file watcher, no polling), Cmd+K search, split-pane 
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-stats.png" width="700" alt="keephive stats view — sparkline, heatmap, streak, command breakdown" />
-</p>
-<p align="center">
-  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-play.png" width="700" alt="keephive /play — wander docs and seed management" />
-</p>
-<p align="center">
-  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/dashboard-knowledge.png" width="700" alt="keephive knowledge view — guides and prompt templates" />
 </p>
 
 **UI feedback loop**: `hive ui-install` generates a bookmarklet and copies it to your clipboard. Paste it as a bookmark URL, then click it on any page to capture an element selector and a note. The feedback is POSTed to the dashboard server, queued in `.ui-queue`, and automatically injected into your next Claude Code prompt via the UserPromptSubmit hook. No copy-paste required.

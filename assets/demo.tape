@@ -65,3 +65,8 @@ Sleep 2.5s
 Type "hive stats"
 Enter
 Sleep 3s
+
+# ── Inbox: what did KingBee surface? ──
+Type "hive inbox"
+Enter
+Sleep 3s
