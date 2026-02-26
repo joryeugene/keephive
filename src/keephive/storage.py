@@ -2840,6 +2840,26 @@ def update_custom_task_status(task_id: str, status: str) -> None:
 # ---- Pending rules / facts -----------------------------------------------------------
 
 
+def auto_improve_trusted_file() -> Path:
+    """Path to .auto-improve-trusted flag — enables auto-apply of trusted improvements."""
+    return hive_dir() / ".auto-improve-trusted"
+
+
+def is_auto_improve_trusted() -> bool:
+    """Return True if auto-apply for trusted improvements is enabled."""
+    return auto_improve_trusted_file().exists()
+
+
+def set_auto_improve_trusted(enabled: bool) -> None:
+    """Enable or disable auto-apply of trusted improvements."""
+    flag = auto_improve_trusted_file()
+    if enabled:
+        flag.parent.mkdir(parents=True, exist_ok=True)
+        flag.touch()
+    else:
+        flag.unlink(missing_ok=True)
+
+
 def pending_rules_file() -> Path:
     """Path to .pending-rules.md — proposed rules awaiting user review."""
     return hive_dir() / ".pending-rules.md"

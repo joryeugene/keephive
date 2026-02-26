@@ -9,8 +9,10 @@ from keephive.storage import (
     daemon_config_file,
     guides_dir,
     hive_dir,
+    is_auto_improve_trusted,
     read_daemon_config,
     read_pending_improvements,
+    set_auto_improve_trusted,
     write_pending_improvements,
 )
 
@@ -18,7 +20,7 @@ _STALE_DAYS = 30
 
 
 def cmd_improve(args: list[str]) -> None:
-    """hive improve [review|list|clear-stale]"""
+    """hive improve [review|list|clear-stale|trust on|trust off]"""
     sub = args[0] if args else "review"
     if sub == "review":
         _improve_review()
@@ -26,9 +28,22 @@ def cmd_improve(args: list[str]) -> None:
         _improve_list()
     elif sub == "clear-stale":
         _improve_clear_stale()
+    elif sub == "trust":
+        flag = args[1] if len(args) > 1 else ""
+        if flag == "on":
+            set_auto_improve_trusted(True)
+            console.print("  [green]✓[/green] Auto-apply enabled for trusted improvements (skill + rule types).")
+            console.print("  KingBee will apply low-risk proposals without manual review.")
+        elif flag == "off":
+            set_auto_improve_trusted(False)
+            console.print("  [dim]Auto-apply disabled. All proposals go to manual review.[/dim]")
+        else:
+            state = "on" if is_auto_improve_trusted() else "off"
+            console.print(f"  Auto-apply trusted: [bold]{state}[/bold]")
+            console.print("  Toggle with [dim]hive improve trust on[/dim] / [dim]hive improve trust off[/dim]")
     else:
         console.print(f"[err]Unknown subcommand: {sub}[/err]")
-        console.print("Usage: hive improve [review|list|clear-stale]")
+        console.print("Usage: hive improve [review|list|clear-stale|trust on|trust off]")
 
 
 def _age_str(proposed_at: str | None) -> str:
@@ -73,9 +88,61 @@ def _improve_list() -> None:
         rationale = item.get("rationale", "")[:80]
         age = _age_str(item.get("proposed_at"))
         stale_tag = " [dim][stale][/dim]" if _is_stale(item) else ""
-        console.print(f"  [{i}] [bold]{t.upper()}[/bold]: {name}  [dim]{age}[/dim]{stale_tag}")
+        auto_tag = " [dim][auto][/dim]" if item.get("trusted") else ""
+        console.print(f"  [{i}] [bold]{t.upper()}[/bold]: {name}  [dim]{age}[/dim]{stale_tag}{auto_tag}")
         console.print(f"      {rationale}")
     console.print()
+
+
+def _auto_apply_trusted(items: list[dict]) -> tuple[list[dict], int]:
+    """Auto-apply trusted skill/rule items if auto-trust is enabled.
+
+    Returns (remaining_items, applied_count). Trusted items that succeed are
+    removed from the list; failures stay for manual review.
+    """
+    if not is_auto_improve_trusted():
+        return items, 0
+
+    _SAFE_TYPES = {"skill", "rule"}
+    remaining = []
+    applied = 0
+    for item in items:
+        if item.get("trusted") and item.get("type") in _SAFE_TYPES:
+            try:
+                _apply_improvement(item)
+                _log_auto_applied(item)
+                applied += 1
+            except Exception:
+                remaining.append(item)  # failure → keep for manual review
+        else:
+            remaining.append(item)
+    return remaining, applied
+
+
+def _log_auto_applied(item: dict) -> None:
+    """Append [AUTO-APPLIED] entry to daemon.log for audit trail."""
+    from keephive.clock import get_now
+
+    item_type = item.get("type", "?")
+    name = item.get("name", item.get("rule", "")[:50])
+    ts = get_now().strftime("%H:%M")
+    try:
+        from keephive.storage import hive_dir
+
+        daemon_log = hive_dir() / "daemon.log"
+        with daemon_log.open("a") as f:
+            f.write(f"[{ts}] [AUTO-APPLIED {item_type}: {name}]\n")
+    except Exception:
+        pass
+
+
+def _run_auto_apply() -> int:
+    """Read queue, auto-apply trusted items, write back remainder. Returns applied count."""
+    items = read_pending_improvements()
+    remaining, applied = _auto_apply_trusted(items)
+    if applied:
+        write_pending_improvements(remaining)
+    return applied
 
 
 def _improve_clear_stale() -> None:
@@ -92,6 +159,11 @@ def _improve_clear_stale() -> None:
 
 def _improve_review() -> None:
     items = read_pending_improvements()
+    # Auto-apply trusted items (skill/rule) before the interactive loop
+    items, auto_count = _auto_apply_trusted(items)
+    if auto_count:
+        write_pending_improvements(items)
+        console.print(f"  [dim]Auto-applied {auto_count} trusted improvement(s).[/dim]")
     if not items:
         console.print("[dim]No pending improvements. KingBee is still learning.[/dim]")
         return

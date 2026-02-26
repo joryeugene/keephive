@@ -357,6 +357,16 @@ def _execute_task(task_name: str) -> bool:
         result = fn() or False  # coerce None → False
         if result:
             track_event("daemon_tasks", task_name)
+            # After self-improve queues proposals, immediately apply any trusted ones
+            if task_name == "self-improve":
+                try:
+                    from keephive.commands.improve import _run_auto_apply
+
+                    applied = _run_auto_apply()
+                    if applied:
+                        _log_daemon(f"self-improve: auto-applied {applied} trusted proposal(s)")
+                except Exception as exc:
+                    _log_daemon(f"self-improve: auto-apply error: {exc}")
         return result
     _log_daemon(f"unknown task: {task_name}")
     return False
@@ -785,6 +795,7 @@ If nothing warrants a proposal, return all empty lists with summary "No patterns
                         "name": skill.name,
                         "rationale": skill.rationale,
                         "content": skill.content,
+                        "trusted": True,  # append-only, reversible
                     }
                 )
             for task in result.proposed_tasks:
@@ -794,6 +805,7 @@ If nothing warrants a proposal, return all empty lists with summary "No patterns
                         "name": task.name,
                         "rationale": task.rationale,
                         "config": task.config,
+                        # tasks not trusted — structural change, requires human review
                     }
                 )
             for rule in result.proposed_rules:
@@ -802,6 +814,7 @@ If nothing warrants a proposal, return all empty lists with summary "No patterns
                         "type": "rule",
                         "rationale": rule.rationale,
                         "rule": rule.rule,
+                        "trusted": True,  # append-only, reversible
                     }
                 )
             for edit in result.proposed_edits:

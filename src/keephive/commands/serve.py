@@ -959,6 +959,11 @@ _JS = """
   }
   _connectSSE();
 
+  // --- Reconnect on tab focus so time-sensitive panels show fresh data ---
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState==='visible'){_connectSSE();}
+  });
+
   // --- Log date navigation ---
   window.loadLog=function(dateStr){
     logDate=dateStr;
@@ -5902,6 +5907,114 @@ def _render_daemon_log_panel(data: dict) -> str:
     )
 
 
+def _get_stats_tokens_data() -> dict:
+    """Token usage data from Claude Code session-meta (last 30 days)."""
+    from keephive.storage import session_metrics
+
+    try:
+        sm = session_metrics(days_back=30)
+    except Exception:
+        sm = {}
+
+    input_tok = sm.get("total_input_tokens", 0)
+    output_tok = sm.get("total_output_tokens", 0)
+
+    # Build 7-day breakdown from session-meta
+    from datetime import timedelta
+
+    from keephive.clock import get_today
+    from keephive.storage import read_cc_sessions
+
+    today = get_today()
+    week_days: list[dict] = []
+    try:
+        sessions = read_cc_sessions(days_back=30)
+        for offset in range(6, -1, -1):
+            day = today - timedelta(days=offset)
+            day_str = day.isoformat()
+            day_in = sum(
+                s.get("input_tokens", 0)
+                for s in sessions
+                if s.get("day", "") == day_str
+            )
+            day_out = sum(
+                s.get("output_tokens", 0)
+                for s in sessions
+                if s.get("day", "") == day_str
+            )
+            week_days.append({"date": day_str, "in": day_in, "out": day_out})
+    except Exception:
+        week_days = []
+
+    return {
+        "total_input_tokens": input_tok,
+        "total_output_tokens": output_tok,
+        "week_days": week_days,
+    }
+
+
+def _render_stats_tokens_panel(data: dict) -> str:
+    """Token budget card: 30-day totals, 7-day breakdown, blended cost estimate."""
+    input_tok = data.get("total_input_tokens", 0)
+    output_tok = data.get("total_output_tokens", 0)
+    week_days = data.get("week_days", [])
+
+    if output_tok == 0 and input_tok == 0:
+        return (
+            '<div class="card" tabindex="0" role="region" aria-label="Token budget">'
+            '<div class="card-header"><span class="card-title">Token Budget</span>'
+            '<span class="card-meta">30 days</span></div>'
+            '<div class="card-body"><div class="empty">No session data yet.</div></div>'
+            "</div>"
+        )
+
+    # Blended cost: 60% haiku / 40% sonnet approximation
+    blended_in = (0.6 * 0.80 + 0.4 * 3.00) / 1_000_000
+    blended_out = (0.6 * 4.00 + 0.4 * 15.00) / 1_000_000
+    est_cost = input_tok * blended_in + output_tok * blended_out
+    ratio = input_tok / output_tok if output_tok else 0
+
+    # Summary row
+    summary = (
+        f'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px">'
+        f'<span><strong>{output_tok // 1000}K</strong> out</span>'
+        f'<span><strong>{input_tok // 1000}K</strong> in</span>'
+        f'<span style="color:var(--c-muted)">{ratio:.1f}x read:write</span>'
+        f'<span style="color:var(--c-green)">est. ~${est_cost:.2f}</span>'
+        f"</div>"
+    )
+
+    # 7-day mini bars
+    bars = ""
+    if week_days:
+        max_total = max((d["in"] + d["out"] for d in week_days), default=1) or 1
+        for d in week_days:
+            total = d["in"] + d["out"]
+            pct = int(total / max_total * 100)
+            label = d["date"][-5:]  # MM-DD
+            bars += (
+                f'<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1">'
+                f'<div style="width:100%;background:var(--c-border);border-radius:2px;height:40px;'
+                f'display:flex;align-items:flex-end">'
+                f'<div style="width:100%;height:{pct}%;background:var(--c-accent);border-radius:2px 2px 0 0"></div>'
+                f"</div>"
+                f'<span style="font-size:0.65em;color:var(--c-muted)">{_e(label)}</span>'
+                f"</div>"
+            )
+        bars = f'<div style="display:flex;gap:4px;align-items:flex-end;margin-bottom:6px">{bars}</div>'
+
+    note = '<div style="color:var(--c-muted);font-size:0.8em">Blended rate: 60% haiku · 40% sonnet</div>'
+    body = summary + bars + note
+
+    return (
+        '<div class="card" tabindex="0" role="region" aria-label="Token budget">'
+        '<div class="card-header"><span class="card-title">Token Budget</span>'
+        '<span class="card-meta">30 days · est. cost</span></div>'
+        f'<div class="card-body">{body}</div>'
+        "</div>"
+    )
+
+
 # ---- Panel registry ----
 
 PANELS: dict[str, tuple] = {
@@ -5938,6 +6051,7 @@ PANELS: dict[str, tuple] = {
     "stats-pipeline": (_get_pipeline_data, _render_pipeline_panel),
     "stats-capture": (_get_capture_data, _render_capture_panel),
     "stats-recalled": (_get_recalled_data, _render_recalled_panel),
+    "stats-tokens": (_get_stats_tokens_data, _render_stats_tokens_panel),
     "profiles": (_get_profiles_data, _render_profiles_panel),
     "transfer": (_get_transfer_data, _render_transfer_panel),
     "wander-list": (_get_wander_data, _render_wander_list_panel),
@@ -5986,7 +6100,7 @@ VIEWS: dict[str, dict] = {
         "title": "Stats",
         "cols": [
             ["stats", "stats-pipeline", "stats-capture", "stats-platforms"],
-            ["sessions", "stats-commands"],
+            ["sessions", "stats-commands", "stats-tokens"],
         ],
         "rows": [["stats-trends"]],
     },

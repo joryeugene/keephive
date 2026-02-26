@@ -1080,14 +1080,21 @@ def _display_full(data: dict) -> None:
     if extra_parts:
         console.print(f"  {' · '.join(extra_parts)}")
 
-    # Token usage
+    # Token usage + blended cost estimate
     input_tok = sess_prod.get("total_input_tokens", 0)
     output_tok = sess_prod.get("total_output_tokens", 0)
     if output_tok > 0:
         ratio = input_tok / output_tok if output_tok else 0
+        # Blended rate: mix of haiku (daemon) + sonnet (interactive).
+        # Haiku 4.5: $0.80/$4 per MTok in/out. Sonnet 4.6: $3/$15 per MTok.
+        # Approximate 60% haiku / 40% sonnet blend.
+        blended_in = (0.6 * 0.80 + 0.4 * 3.00) / 1_000_000
+        blended_out = (0.6 * 4.00 + 0.4 * 15.00) / 1_000_000
+        est_cost = input_tok * blended_in + output_tok * blended_out
+        cost_str = f" · est. ~${est_cost:.2f} this week"
         console.print(
             f"  tokens: {output_tok // 1000}K out · {input_tok // 1000}K in"
-            f" ({ratio:.1f}x read:write)"
+            f" ({ratio:.1f}x read:write){cost_str}"
         )
 
     # Session Quality (from /insights facets data)

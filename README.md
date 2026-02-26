@@ -214,143 +214,42 @@ Full architecture: see [Architecture](#architecture) below.
 
 The diagram below shows the Claude Code integration path; MCP-only clients reuse the same knowledge store and tools without the hook cycle.
 
-```mermaid
-flowchart LR
-    subgraph HOOKS["⚡ Session Hooks  (8 events)"]
-        direction TB
-        SS["SessionStart\ncontext · guides · style hint\nauto-reverify (deterministic)"]
-        UPS["UserPromptSubmit\nnudge (priority 1–5) · @KB route · UI queue"]
-        PTU["PostToolUse\nnudge · UI queue"]
-        STP["Stop\nturn counter · loop driver (exit 2)"]
-        PC["PreCompact\nL1: extract transcript (deterministic)\nL2: LLM classify → queue facts / rules / todos"]
-        SE["SessionEnd\nfinalize stats · spawn daemon tasks"]
-        TC["TaskCompleted\nauto-log DONE breadcrumb"]
-        SAS["SubagentStop\nhaiku extract → SUBAGENT-INSIGHT"]
-    end
+```text
+ ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+ │  keephive architecture                                                            ← feedback loops →     │
+ └─────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-    subgraph STORE["🗄️  Knowledge Store  (~/.keephive/hive/)"]
-        direction TB
-        subgraph LIVE_STATE["Live state"]
-            direction TB
-            MEM[("memory.md\nfacts + verified dates  ·  30–90d TTL")]
-            SOUL[("SOUL.md\nKingBee identity  ·  ~500 tokens  ·  complete rewrite")]
-            TODOS[("TODO.md\nopen + recurring")]
-            RULES[("rules.md\nbehavioral rules")]
-        end
-        subgraph STREAM_DATA["Stream"]
-            direction TB
-            LOG[("daily/YYYY-MM-DD.md\nDECISION · FACT · TODO · INSIGHT")]
-            WDOCS[("wander/*.md\nhypotheses · questions · actions")]
-            GUIDES[("knowledge/guides/\nskills · prompt templates")]
-        end
-        subgraph QUEUES["Queues"]
-            direction TB
-            KBQUE[(".kb-queue\n@KB pending messages")]
-            PFACTS[(".pending-facts\nprecompact-staged additions")]
-            PRULES[(".pending-rules\nstaged behavioral rules")]
-            PIMPR[(".pending-improvements\nwander + self-improve proposals")]
-        end
-        subgraph ANALYTICS["Analytics"]
-            direction TB
-            STATS[(".stats.json\nhooks · commands · daemon · loops")]
-            EVI[(".evidence.json\ncompound verification memory")]
-        end
-    end
-
-    subgraph DAEMON["🐝 KingBee Daemon  (background · scheduled)"]
-        direction TB
-        SOUL_UP["soul-update  ·  sonnet\nSessionEnd + PreCompact  ·  1h throttle\nreads KB queue → rewrites SOUL.md"]
-        SELF_IMP["self-improve  ·  sonnet  ·  daily @ SessionEnd\n7d logs + existing skills → proposals\nexcludes dismissed items"]
-        WANDER["wander  ·  haiku  ·  14:00 daily\nWebSearch (built-in, restrict_mcp)\nhypothesis + actionable improvement"]
-        BRIEF["morning-briefing  ·  haiku  ·  07:00\nTODOs · pending queues · ghost-TODO detect"]
-        STALECK["stale-check  ·  haiku  ·  Mon 08:00\nmemory.md freshness scan → daily log"]
-        STANDUP["standup-draft  ·  sonnet  ·  17:00\ndaily logs + GitHub PRs → daily log"]
-    end
-
-    subgraph LLM["LLM Routing  (all run_claude_pipe callers)"]
-        direction TB
-        PG{".llm-paused gate\n.force-cli flag"}
-        BCLI["claude -p  ·  priority 10"]
-        BAPI["Anthropic API  ·  priority 20"]
-        BGEM["Gemini API  ·  priority 25"]
-        BOAI["OpenAI API  ·  priority 30"]
-        PG -->|ok| BCLI
-        PG -->|paused| NOOP(("∅"))
-        BCLI -->|error| BAPI
-        BAPI -->|error| BGEM
-        BGEM -->|error| BOAI
-    end
-
-    subgraph OD["On-demand  (CLI · MCP · Dashboard)"]
-        direction TB
-        REM["hive r · t · note\ncapture to daily log"]
-        RCL["hive rc\nrecall + FTS index search"]
-        VRF["hive v\nLLM verify (sonnet + tools)  ·  30-fact batches\ncorrect stale → evidence compound"]
-        IMPR["hive improve\nreview proposals → install skill / rule / task / edit\ndismiss → .dismissed-improvements"]
-        RFL["hive rf\nreflect: scan → LLM analyze → promote → draft guide"]
-        LOOP["hive run\nautonomous loop  ·  exit 2 driver\nin-session · background · scheduled"]
-        DASH["hive serve\ndashboard  ·  SSE live panels  ·  bookmarklet  ·  CRUD forms"]
-        INBOX["hive inbox\nKingBee surfaces: wander · stale · standup · queue depths"]
-        STCMD["hive stats  ·  hive insights\nworkflow analytics · session quality · friction"]
-    end
-
-    CC[("~/.claude/usage-data/\nsession-meta: msgs · tools · tokens\nfacets: outcome · friction")]
-
-    %% ── Hook → Store ─────────────────────────────────────
-    SS -.->|"reads on start"| STORE
-    UPS -->|"@KB detected"| KBQUE
-    PC -->|"classifies"| LOG
-    PC -->|"queues"| PFACTS
-    PC -.->|"LLM classify"| LLM
-    PC -->|"spawns"| SOUL_UP
-    SE -->|"spawns"| SOUL_UP
-    SE -->|"spawns"| SELF_IMP
-    SE -->|"finalizes"| STATS
-    TC --> LOG
-    SAS --> LOG
-
-    %% ── Daemon → Store ───────────────────────────────────
-    SOUL_UP -->|"clears"| KBQUE
-    SOUL_UP -->|"rewrites"| SOUL
-    SOUL_UP -.->|"LLM"| LLM
-    SELF_IMP -->|"proposals"| PIMPR
-    SELF_IMP -.->|"LLM"| LLM
-    WANDER -->|"writes"| WDOCS
-    WANDER -->|"actionable"| PIMPR
-    WANDER -.->|"LLM"| LLM
-    BRIEF & STALECK & STANDUP -->|"[🐝 KingBee]"| LOG
-    BRIEF & STALECK & STANDUP -.->|"LLM"| LLM
-
-    %% ── On-demand → Store ────────────────────────────────
-    REM --> LOG
-    RCL -.->|"searches"| STORE
-    VRF -->|"corrects"| MEM
-    VRF -->|"compound"| EVI
-    VRF -.->|"LLM + tools"| LLM
-    IMPR -->|"skill"| GUIDES
-    IMPR -->|"rule"| PRULES
-    RFL -->|"promotes"| MEM
-    RFL -->|"drafts"| GUIDES
-    PFACTS -->|"hive mem review"| MEM
-    LOOP -->|"exit 2"| STP
-
-    %% ── Surface reads ────────────────────────────────────
-    DASH -.->|"SSE reads"| STORE
-    DASH -.->|"session data"| CC
-    STCMD -.->|"analytics"| CC
-    INBOX -.->|"surfaces from"| LOG
-
-    %% ── Feedback loops (backward dotted = closed loops) ──
-    MEM -.->|"stale facts\n→ verify cycle"| VRF
-    PIMPR -.->|"proposals\n→ review"| IMPR
-
-    %% ── Styles ───────────────────────────────────────────
-    classDef daemon fill:#1a1a2e,stroke:#ffd700,stroke-width:1px,color:#ffd700
-    classDef ccnode fill:#1a1a2e,stroke:#4a9eff,stroke-width:2px,color:#4a9eff
-    classDef store fill:#0d1f12,stroke:#22c55e,stroke-width:1px,color:#22c55e
-    class SOUL_UP,SELF_IMP,WANDER,BRIEF,STALECK,STANDUP daemon
-    class CC ccnode
-    class MEM,SOUL,TODOS,RULES,LOG,WDOCS,GUIDES,KBQUE,PFACTS,PRULES,PIMPR,STATS,EVI store
+ ⚡ SESSION HOOKS (8)           🗄️  KNOWLEDGE STORE                🐝 KINGBEE DAEMON          📋 ON-DEMAND
+ ──────────────────────────     ──────────────────────────────     ──────────────────────     ────────────────────────
+ SessionStart                   ┌── Live State ─────────────┐     soul-update               hive r · t · note
+   context · guides · style ──▶ │ memory.md   30–90d TTL   │ ◀── sonnet · 1h throttle       hive rc  (FTS search)
+                                 │ SOUL.md     ~500 tok      │                          ◀──  hive v   (LLM verify)
+ UserPromptSubmit            ──▶ │ TODO.md     open+recur    │ ◀── self-improve                            │
+   nudge · @KB · UI queue        │ rules.md    behavioral    │     sonnet · daily             hive improve ◀┘
+                                 └───────────────────────────┘                               hive rf  (reflect+promote)
+ PostToolUse                     ┌── Stream ──────────────────┐ ◀── wander                   hive run (autonomous loop)
+   nudge · UI queue         ──▶  │ daily/YYYY-MM-DD.md        │     haiku · WebSearch
+                                 │ wander/*.md                │     14:00 daily              hive serve
+ Stop                            │ knowledge/guides/          │                               └──SSE──▶ 🌐 browser
+   turn counter · loop exit2     └────────────────────────────┘ ──▶ morning-briefing              (panel-update events
+                                 ┌── Queues ──────────────────┐     haiku · 07:00               0.5s poll · CRUD forms
+ PreCompact              ──────▶ │ .kb-queue   @KB messages   │                                 bookmarklet capture)
+   L1: extract (deterministic)   │ .pending-facts             │ ──▶ stale-check
+   L2: LLM classify      ──────▶ │ .pending-rules             │     haiku · Mon 08:00        hive inbox
+     → queue facts/rules/todos   │ .pending-improvements      │                               (surfaces KingBee output)
+                                 └────────────────────────────┘ ──▶ standup-draft             hive stats · insights
+ SessionEnd              ──────▶ ┌── Analytics ───────────────┐     sonnet · 17:00
+   finalize stats                │ .stats.json                │                              ~/.claude/usage-data/
+   spawn daemon tasks       ──▶  │ .evidence.json             │  LLM ROUTING (all tasks)      session-meta
+                                 └────────────────────────────┘  .llm-paused gate ─▶ ∅        facets
+ TaskCompleted           ──────▶   daily log                     claude -p   (p10)
+ SubagentStop · haiku    ──────▶   daily log                     Anthropic   (p20)
+                                                                  Gemini      (p25)
+ ── feedback loops (closes the system) ─────────────────          OpenAI      (p30)
+   memory.md ──────────────────────────────────▶ hive v  (stale verify cycle)
+   .pending-improvements ────────────────────────▶ hive improve  (review + install)
+   daily log ──────────────────────────────────────▶ hive rf  (reflect → promote → guides)
+   .kb-queue ──────────────────────────────────────▶ soul-update  (KB message loop)
 ```
 
 ### Memory tiers
