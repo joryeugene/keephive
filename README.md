@@ -215,95 +215,142 @@ Full architecture: see [Architecture](#architecture) below.
 The diagram below shows the Claude Code integration path; MCP-only clients reuse the same knowledge store and tools without the hook cycle.
 
 ```mermaid
-flowchart TD
-    subgraph CYCLE["Session Cycle (8 hooks)"]
-        direction LR
-        START([New session]) -->|"SessionStart:<br>inject context + style hint"| WORK([Working])
-        WORK -->|"PostToolUse · UserPromptSubmit:<br>recency-gated nudge, ui-queue"| WORK
-        WORK -->|"Stop:<br>turn count, micro-nudge"| WORK
-        WORK -->|"TaskCompleted:<br>auto-log DONE"| WORK
-        WORK -->|"SubagentStop:<br>INSIGHT or DONE breadcrumb"| WORK
-        WORK -->|context full| PC["PreCompact:<br>extract → log<br>+ pending-facts queue"]
-        PC -->|next session| START
-        WORK -->|session ends| SEND["SessionEnd:<br>finalize stats"]
+flowchart LR
+    subgraph HOOKS["⚡ Session Hooks  (8 events)"]
+        direction TB
+        SS["SessionStart\ncontext · guides · style hint\nauto-reverify (deterministic)"]
+        UPS["UserPromptSubmit\nnudge (priority 1–5) · @KB route · UI queue"]
+        PTU["PostToolUse\nnudge · UI queue"]
+        STP["Stop\nturn counter · loop driver (exit 2)"]
+        PC["PreCompact\nL1: extract transcript (deterministic)\nL2: LLM classify → queue facts / rules / todos"]
+        SE["SessionEnd\nfinalize stats · spawn daemon tasks"]
+        TC["TaskCompleted\nauto-log DONE breadcrumb"]
+        SAS["SubagentStop\nhaiku extract → SUBAGENT-INSIGHT"]
     end
 
-    subgraph LLM["LLM Routing (priority chain)"]
-        direction LR
-        ACLI["claude -p CLI<br>(priority 10, default)"]
-        AAPI["Anthropic API<br>(priority 20)"]
-        GAPI["Gemini API<br>(priority 25)"]
-        OAPI["OpenAI API<br>(priority 30)"]
-        NONE["none / offline<br>(priority 99)"]
-        ACLI -->|"timeout → non-retriable"| NONE
-        ACLI -->|"error in auto mode"| AAPI
-        AAPI -->|"error"| GAPI
-        GAPI -->|"error"| OAPI
-        OAPI -->|"error"| NONE
+    subgraph STORE["🗄️  Knowledge Store  (~/.keephive/hive/)"]
+        direction TB
+        subgraph LIVE_STATE["Live state"]
+            direction TB
+            MEM[("memory.md\nfacts + verified dates  ·  30–90d TTL")]
+            SOUL[("SOUL.md\nKingBee identity  ·  ~500 tokens  ·  complete rewrite")]
+            TODOS[("TODO.md\nopen + recurring")]
+            RULES[("rules.md\nbehavioral rules")]
+        end
+        subgraph STREAM_DATA["Stream"]
+            direction TB
+            LOG[("daily/YYYY-MM-DD.md\nDECISION · FACT · TODO · INSIGHT")]
+            WDOCS[("wander/*.md\nhypotheses · questions · actions")]
+            GUIDES[("knowledge/guides/\nskills · prompt templates")]
+        end
+        subgraph QUEUES["Queues"]
+            direction TB
+            KBQUE[(".kb-queue\n@KB pending messages")]
+            PFACTS[(".pending-facts\nprecompact-staged additions")]
+            PRULES[(".pending-rules\nstaged behavioral rules")]
+            PIMPR[(".pending-improvements\nwander + self-improve proposals")]
+        end
+        subgraph ANALYTICS["Analytics"]
+            direction TB
+            STATS[(".stats.json\nhooks · commands · daemon · loops")]
+            EVI[(".evidence.json\ncompound verification memory")]
+        end
     end
 
-    subgraph STORE["Knowledge Store (~/.keephive/hive/)"]
-        MEM[("Memory<br>30–90d TTL")]
-        SOUL[("SOUL.md<br>agent identity")]
-        GUIDES[("Guides")]
-        RULES[("Rules")]
-        LOG[("Daily log")]
-        TODOS[("TODOs")]
-        PENDING[(".pending-facts")]
-        STATS[(".stats.json<br>workflow analytics")]
+    subgraph DAEMON["🐝 KingBee Daemon  (background · scheduled)"]
+        direction TB
+        SOUL_UP["soul-update  ·  sonnet\nSessionEnd + PreCompact  ·  1h throttle\nreads KB queue → rewrites SOUL.md"]
+        SELF_IMP["self-improve  ·  sonnet  ·  daily @ SessionEnd\n7d logs + existing skills → proposals\nexcludes dismissed items"]
+        WANDER["wander  ·  haiku  ·  14:00 daily\nWebSearch (built-in, restrict_mcp)\nhypothesis + actionable improvement"]
+        BRIEF["morning-briefing  ·  haiku  ·  07:00\nTODOs · pending queues · ghost-TODO detect"]
+        STALECK["stale-check  ·  haiku  ·  Mon 08:00\nmemory.md freshness scan → daily log"]
+        STANDUP["standup-draft  ·  sonnet  ·  17:00\ndaily logs + GitHub PRs → daily log"]
     end
 
-    subgraph DAEMON["KingBee Daemon (background)"]
-        BRIEF["morning briefing"]
-        IMPROVE[(".pending-improvements")]
-        STALECK["stale-check scan"]
-        STANDUP["standup-draft"]
-        WANDER["wander exploration"]
+    subgraph LLM["LLM Routing  (all run_claude_pipe callers)"]
+        direction TB
+        PG{".llm-paused gate\n.force-cli flag"}
+        BCLI["claude -p  ·  priority 10"]
+        BAPI["Anthropic API  ·  priority 20"]
+        BGEM["Gemini API  ·  priority 25"]
+        BOAI["OpenAI API  ·  priority 30"]
+        PG -->|ok| BCLI
+        PG -->|paused| NOOP(("∅"))
+        BCLI -->|error| BAPI
+        BAPI -->|error| BGEM
+        BGEM -->|error| BOAI
     end
 
-    subgraph CC["Claude Code Data (~/.claude/usage-data/)"]
-        META[("session-meta/<br>msgs, tools, duration,<br>lines, tokens, commits")]
-        FACETS[("facets/<br>outcome, friction,<br>satisfaction")]
+    subgraph OD["On-demand  (CLI · MCP · Dashboard)"]
+        direction TB
+        REM["hive r · t · note\ncapture to daily log"]
+        RCL["hive rc\nrecall + FTS index search"]
+        VRF["hive v\nLLM verify (sonnet + tools)  ·  30-fact batches\ncorrect stale → evidence compound"]
+        IMPR["hive improve\nreview proposals → install skill / rule / task / edit\ndismiss → .dismissed-improvements"]
+        RFL["hive rf\nreflect: scan → LLM analyze → promote → draft guide"]
+        LOOP["hive run\nautonomous loop  ·  exit 2 driver\nin-session · background · scheduled"]
+        DASH["hive serve\ndashboard  ·  SSE live panels  ·  bookmarklet  ·  CRUD forms"]
+        INBOX["hive inbox\nKingBee surfaces: wander · stale · standup · queue depths"]
+        STCMD["hive stats  ·  hive insights\nworkflow analytics · session quality · friction"]
     end
 
-    subgraph MANUAL["On-demand (CLI · MCP)"]
-        REM["hive r · capture"]
-        RCL["hive rc · recall"]
-        VRF["hive v · verify"]
-        REV["hive mem review"]
-        RFL["hive rf · reflect"]
-        DASH["hive serve · dashboard<br>+ bookmarklet"]
-        STCMD["hive stats · hive insights"]
-    end
+    CC[("~/.claude/usage-data/\nsession-meta: msgs · tools · tokens\nfacets: outcome · friction")]
 
-    START -->|reads| STORE
-    PC --> LOG
-    PC --> PENDING
-    PC -->|"soul-update (if data, throttled 1h)"| SOUL
-    PC -.->|LLM classify| LLM
-    VRF -.->|LLM verify| LLM
-    LOG -->|"hive rf · promote"| MEM
-    PENDING -->|"hive mem review"| MEM
-    MEM -->|"hive v · re-stamp"| MEM
+    %% ── Hook → Store ─────────────────────────────────────
+    SS -.->|"reads on start"| STORE
+    UPS -->|"@KB detected"| KBQUE
+    PC -->|"classifies"| LOG
+    PC -->|"queues"| PFACTS
+    PC -.->|"LLM classify"| LLM
+    PC -->|"spawns"| SOUL_UP
+    SE -->|"spawns"| SOUL_UP
+    SE -->|"spawns"| SELF_IMP
+    SE -->|"finalizes"| STATS
+    TC --> LOG
+    SAS --> LOG
+
+    %% ── Daemon → Store ───────────────────────────────────
+    SOUL_UP -->|"clears"| KBQUE
+    SOUL_UP -->|"rewrites"| SOUL
+    SOUL_UP -.->|"LLM"| LLM
+    SELF_IMP -->|"proposals"| PIMPR
+    SELF_IMP -.->|"LLM"| LLM
+    WANDER -->|"writes"| WDOCS
+    WANDER -->|"actionable"| PIMPR
+    WANDER -.->|"LLM"| LLM
+    BRIEF & STALECK & STANDUP -->|"[🐝 KingBee]"| LOG
+    BRIEF & STALECK & STANDUP -.->|"LLM"| LLM
+
+    %% ── On-demand → Store ────────────────────────────────
     REM --> LOG
-    RCL -.->|searches| STORE
-    VRF --> MEM
-    REV --> MEM
-    RFL --> GUIDES
-    DASH -.->|reads| STORE
-    DASH -.->|"session analytics"| CC
-    STCMD -.->|"session analytics"| CC
-    STCMD -.->|"workflow analytics"| STORE
-    SEND -.->|".stats.json"| STATS
-    DAEMON -->|reads/writes| STORE
-    DAEMON --> BRIEF
-    DAEMON --> IMPROVE
-    DAEMON --> STALECK
-    DAEMON --> STANDUP
-    DAEMON --> WANDER
+    RCL -.->|"searches"| STORE
+    VRF -->|"corrects"| MEM
+    VRF -->|"compound"| EVI
+    VRF -.->|"LLM + tools"| LLM
+    IMPR -->|"skill"| GUIDES
+    IMPR -->|"rule"| PRULES
+    RFL -->|"promotes"| MEM
+    RFL -->|"drafts"| GUIDES
+    PFACTS -->|"hive mem review"| MEM
+    LOOP -->|"exit 2"| STP
 
-    classDef ccdata fill:#1a1a2e,stroke:#4a9eff,stroke-width:2px,color:#4a9eff
-    class META,FACETS ccdata
+    %% ── Surface reads ────────────────────────────────────
+    DASH -.->|"SSE reads"| STORE
+    DASH -.->|"session data"| CC
+    STCMD -.->|"analytics"| CC
+    INBOX -.->|"surfaces from"| LOG
+
+    %% ── Feedback loops (backward dotted = closed loops) ──
+    MEM -.->|"stale facts\n→ verify cycle"| VRF
+    PIMPR -.->|"proposals\n→ review"| IMPR
+
+    %% ── Styles ───────────────────────────────────────────
+    classDef daemon fill:#1a1a2e,stroke:#ffd700,stroke-width:1px,color:#ffd700
+    classDef ccnode fill:#1a1a2e,stroke:#4a9eff,stroke-width:2px,color:#4a9eff
+    classDef store fill:#0d1f12,stroke:#22c55e,stroke-width:1px,color:#22c55e
+    class SOUL_UP,SELF_IMP,WANDER,BRIEF,STALECK,STANDUP daemon
+    class CC ccnode
+    class MEM,SOUL,TODOS,RULES,LOG,WDOCS,GUIDES,KBQUE,PFACTS,PRULES,PIMPR,STATS,EVI store
 ```
 
 ### Memory tiers
