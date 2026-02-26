@@ -10,8 +10,8 @@
 
 <table><tr>
 <td>
-  <h3>A knowledge sidecar for AI agents</h3>
-  <p>Claude Code gets the full hook stack; every MCP-aware agent can tap the same memory, log, and audit tools.</p>
+  <h3>A knowledge sidecar for AI agents, powered by KingBee</h3>
+  <p>Claude Code gets the full hook stack; every MCP-aware agent can tap the same memory, log, and audit tools. <strong>KingBee</strong> is the background daemon that maintains persistent agent identity, self-improves from session logs, and surfaces insights automatically.</p>
 </td>
 <td align="center">
   <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/mascot.png" width="240" alt="keephive mascot" />
@@ -21,7 +21,7 @@
 ## TLDR
 
 1. **Install**: `curl -fsSL https://raw.githubusercontent.com/joryeugene/keephive/main/install.sh | bash`
-2. **Connect your agent.** Claude Code discovers seven hooks automatically. Any MCP client can run `keephive mcp-serve` and call the same tools.
+2. **Connect your agent.** Claude Code discovers eight hooks automatically. Any MCP client can run `keephive mcp-serve` and call the same tools.
 3. **Look around**: `hive status` (`h s`), `hive log` (`h l`), `hive todo`
 4. **Visual overview**: `hive serve` (`h ws`) opens a browser dashboard at localhost:3847
 5. **Periodic cleanup**: `hive verify` (`h v`), `hive reflect` (`h rf`), `hive audit` (`h a`)
@@ -64,7 +64,7 @@ Keep your agent orientated across platforms. The new <code>hive serve /brain</co
 
 ```console
 $ hive
-keephive v1.2.0
+keephive v1.3.0
   ● hooks  ● mcp  ● data  ● daemon
 
   4 facts (4 ok) | 12 today | 8 yesterday | 2 guides | 48K
@@ -94,7 +94,7 @@ keephive v1.2.0
 curl -fsSL https://raw.githubusercontent.com/joryeugene/keephive/main/install.sh | bash
 ```
 
-One command. Installs keephive, registers 7 hooks and an MCP server, and verifies everything. Requires [uv](https://docs.astral.sh/uv/). Run once; re-run after upgrades.
+One command. Installs keephive, registers 8 hooks and an MCP server, and verifies everything. Requires [uv](https://docs.astral.sh/uv/). Run once; re-run after upgrades.
 
 Or install manually:
 
@@ -219,37 +219,38 @@ The diagram below shows the Claude Code integration path; MCP-only clients reuse
  │  keephive architecture                                                            ← feedback loops →     │
  └─────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
- ⚡ SESSION HOOKS (8)           🗄️  KNOWLEDGE STORE                🐝 KINGBEE DAEMON          📋 ON-DEMAND
+ ⚡ SESSION HOOKS (8)           🗄️  KNOWLEDGE STORE                 🐝 KINGBEE DAEMON          📋 ON-DEMAND
  ──────────────────────────     ──────────────────────────────     ──────────────────────     ────────────────────────
- SessionStart                   ┌── Live State ─────────────┐     soul-update               hive r · t · note
-   context · guides · style ──▶ │ memory.md   30–90d TTL   │ ◀── sonnet · 1h throttle       hive rc  (FTS search)
-                                 │ SOUL.md     ~500 tok      │                          ◀──  hive v   (LLM verify)
- UserPromptSubmit            ──▶ │ TODO.md     open+recur    │ ◀── self-improve                            │
+ SessionStart                    ┌── Live State ─────────────┐     soul-update                hive r · t · note
+   context · guides · style  ──▶ │ memory.md   30–90d TTL    │ ◀── sonnet · 1h throttle       hive rc  (FTS search)
+                                 │ SOUL.md     ~500 tok      │                           ◀──  hive v   (LLM verify)
+ UserPromptSubmit            ──▶ │ TODO.md     open+recur    │ ◀── self-improve                             │
    nudge · @KB · UI queue        │ rules.md    behavioral    │     sonnet · daily             hive improve ◀┘
-                                 └───────────────────────────┘                               hive rf  (reflect+promote)
- PostToolUse                     ┌── Stream ──────────────────┐ ◀── wander                   hive run (autonomous loop)
-   nudge · UI queue         ──▶  │ daily/YYYY-MM-DD.md        │     haiku · WebSearch
-                                 │ wander/*.md                │     14:00 daily              hive serve
- Stop                            │ knowledge/guides/          │                               └──SSE──▶ 🌐 browser
-   turn counter · loop exit2     └────────────────────────────┘ ──▶ morning-briefing              (panel-update events
-                                 ┌── Queues ──────────────────┐     haiku · 07:00               0.5s poll · CRUD forms
- PreCompact              ──────▶ │ .kb-queue   @KB messages   │                                 bookmarklet capture)
+                                 └───────────────────────────┘                                hive rf  (reflect+promote)
+ PostToolUse                     ┌── Stream ─────────────────┐ ◀── wander                     hive run (autonomous loop)
+   nudge · UI queue          ──▶ │ daily/YYYY-MM-DD.md       │     haiku · WebSearch
+                                 │ wander/*.md               │     14:00 daily                hive serve
+ Stop                            │ knowledge/guides/         │                                └──SSE──▶ 🌐 browser
+   turn counter · loop exit      └───────────────────────────┘ ──▶ morning-briefing              (panel-update events
+                                 ┌── Queues ──────────────────┐     haiku · 07:00                 0.5s poll · CRUD forms
+ PreCompact                  ──▶ │ .kb-queue   @KB messages   │                                   bookmarklet capture)
    L1: extract (deterministic)   │ .pending-facts             │ ──▶ stale-check
-   L2: LLM classify      ──────▶ │ .pending-rules             │     haiku · Mon 08:00        hive inbox
-     → queue facts/rules/todos   │ .pending-improvements      │                               (surfaces KingBee output)
-                                 └────────────────────────────┘ ──▶ standup-draft             hive stats · insights
- SessionEnd              ──────▶ ┌── Analytics ───────────────┐     sonnet · 17:00
-   finalize stats                │ .stats.json                │                              ~/.claude/usage-data/
-   spawn daemon tasks       ──▶  │ .evidence.json             │  LLM ROUTING (all tasks)      session-meta
-                                 └────────────────────────────┘  .llm-paused gate ─▶ ∅        facets
- TaskCompleted           ──────▶   daily log                     claude -p   (p10)
- SubagentStop · haiku    ──────▶   daily log                     Anthropic   (p20)
+   L2: LLM classify          ──▶ │ .pending-rules             │     haiku · Mon 08:00         hive inbox
+     → queue facts/rules/todos   │ .pending-improvements      │                                 (surfaces KingBee output)
+                                 └────────────────────────────┘ ──▶ standup-draft                hive stats · insights
+ SessionEnd                  ──▶ ┌── Analytics ───────────────┐     sonnet · 17:00
+   finalize stats                │ .stats.json                │                               ~/.claude/usage-data/
+   spawn daemon tasks        ──▶ │ .evidence.json             │  LLM ROUTING (all tasks)        session-meta
+                                 └────────────────────────────┘  .llm-paused gate ─▶ ∅          facets
+ TaskCompleted               ──▶   daily log                      claude -p   (p10)
+ SubagentStop · haiku        ──▶   daily log                      Anthropic   (p20)
                                                                   Gemini      (p25)
- ── feedback loops (closes the system) ─────────────────          OpenAI      (p30)
-   memory.md ──────────────────────────────────▶ hive v  (stale verify cycle)
+                                                                  OpenAI      (p30)
+ ── feedback loops (closes the system) ─────────────────   
+   memory.md ────────────────────────────────────▶ hive v  (stale verify cycle)
    .pending-improvements ────────────────────────▶ hive improve  (review + install)
-   daily log ──────────────────────────────────────▶ hive rf  (reflect → promote → guides)
-   .kb-queue ──────────────────────────────────────▶ soul-update  (KB message loop)
+   daily log ────────────────────────────────────▶ hive rf  (reflect → promote → guides)
+   .kb-queue ────────────────────────────────────▶ soul-update  (KB message loop)
 ```
 
 ### Memory tiers
@@ -334,6 +335,7 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 | `hive rule learn`       |                   | Learn rules from /insights friction data   |
 | `hive rule review`      |                   | Accept/reject pending rule suggestions     |
 | `hive improve review`   |                   | Review pending identity/skill improvements |
+| `hive improve trust on` |                   | Auto-apply trusted skill/rule proposals    |
 | `hive edit <target>`    | `hive e`          | Edit memory, rules, soul, etc.             |
 | `hive skill`            | `hive sk`         | Manage skill plugins                       |
 | **Maintain**            |                   |                                            |
@@ -453,14 +455,14 @@ Custom prompts resolve by prefix, so `hive go pr-re` finds `pr-review-git-staged
 
 **Task triggers and opt-in status:**
 
-| Task | Trigger | Default | Enable via |
-|------|---------|---------|-----------|
-| `soul-update` | PreCompact hook (throttled 1h) | auto (hook) | — |
-| `self-improve` | Hook-triggered (7d throttle) | auto (hook) | — |
-| `morning-briefing` | Daily tick | disabled | `hive daemon edit` |
-| `stale-check` | Weekly tick | disabled | `hive daemon edit` |
-| `standup-draft` | Weekly tick | disabled | `hive daemon edit` |
-| `wander` | Daily tick (14:00) | disabled | `hive daemon enable wander` |
+| Task | Default | Trigger | Throttle | Enable via |
+|------|---------|---------|----------|-----------|
+| `soul-update` | on | PreCompact hook · manual · daemon daily | 1 hour | — |
+| `self-improve` | on | Daemon daily | 1 day | — |
+| `morning-briefing` | off | 07:00 daily | daily | `hive daemon enable morning-briefing` |
+| `stale-check` | off | Monday 08:00 | weekly | `hive daemon enable stale-check` |
+| `standup-draft` | off | 17:00 daily | daily | `hive daemon enable standup-draft` |
+| `wander` | off | 14:00 daily | daily | `hive daemon enable wander` |
 
 Wander selects a seed (user-queued → cross-pollination → recurring-topic → stale-todo), runs a free-thinking pass, and writes a doc surfaced at `/play`.
 
@@ -521,9 +523,13 @@ hive flow --skip-verify    # skip LLM verify stage (faster for routine queue dra
 
 ```bash
 hive improve review        # interactive accept/defer/dismiss
-hive improve list           # show pending proposals with age
-hive improve clear-stale    # remove proposals older than 30 days
+hive improve list          # show pending proposals with age
+hive improve clear-stale   # remove proposals older than 30 days
+hive improve trust on      # auto-apply trusted skill/rule proposals (no review needed)
+hive improve trust off     # disable auto-apply
 ```
+
+Proposals marked `trusted: true` (generated by `self-improve`) can be applied automatically without interactive review when auto-trust is on. Tasks and edits always require manual review regardless of trust state.
 
 #### Autonomous Loops (`hive run`)
 
