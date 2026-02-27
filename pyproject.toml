@@ -1,6 +1,6 @@
 [project]
 name = "keephive"
-version = "1.4.4"
+version = "1.4.5"
 description = "A knowledge sidecar for Claude Code"
 readme = "README.md"
 license = "MIT"
