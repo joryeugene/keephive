@@ -890,6 +890,65 @@ class TestExecuteTaskTracking:
             _execute_task(task_name)
             assert tracked == [("daemon_tasks", task_name)], f"Failed for {task_name}"
 
+    def test_unknown_task_logs_only_once_per_daemon_lifetime(self, hive_env, monkeypatch):
+        """Unknown task name: WARNING logged on first call, silent on subsequent calls.
+
+        Bug caught: 'wander' enabled in daemon.json before its handler shipped caused
+        90+ identical 'unknown task: wander' log lines per stale session (every tick
+        returned False → no last_run set → re-fired every minute).
+        """
+        import keephive.commands.daemon as daemon_mod
+        from keephive.commands.daemon import _execute_task
+
+        logged: list[str] = []
+        monkeypatch.setattr("keephive.commands.daemon._log_daemon", lambda msg: logged.append(msg))
+
+        # Isolate: clear any state left by previous test runs
+        original_seen = daemon_mod._unknown_tasks_seen.copy()
+        daemon_mod._unknown_tasks_seen.clear()
+        try:
+            _execute_task("ghost-task-xyz")
+            _execute_task("ghost-task-xyz")
+            _execute_task("ghost-task-xyz")
+        finally:
+            daemon_mod._unknown_tasks_seen.clear()
+            daemon_mod._unknown_tasks_seen.update(original_seen)
+
+        warning_logs = [m for m in logged if "ghost-task-xyz" in m]
+        assert len(warning_logs) == 1, (
+            f"Expected exactly 1 warning for unknown task, got {len(warning_logs)}: {warning_logs}"
+        )
+
+    def test_concurrent_same_task_blocked(self, hive_env, monkeypatch):
+        """_execute_task returns False immediately if task is already in _running_tasks.
+
+        Bug caught: self-improve ran twice in one minute (15:10 + 15:11) when daemon
+        restarted while the first run was in flight — second instance overwrote the
+        first's queue writes, losing proposals.
+        """
+        import keephive.commands.daemon as daemon_mod
+        from keephive.commands.daemon import _execute_task
+
+        call_count = 0
+
+        def counting_task() -> bool:
+            nonlocal call_count
+            call_count += 1
+            return True
+
+        monkeypatch.setattr("keephive.commands.daemon._task_wander", counting_task)
+        monkeypatch.setattr("keephive.commands.daemon.track_event", lambda *a: None)
+
+        # Simulate task already running (e.g., in another thread)
+        daemon_mod._running_tasks.add("wander")
+        try:
+            result = _execute_task("wander")
+        finally:
+            daemon_mod._running_tasks.discard("wander")
+
+        assert result is False, "Should return False when task is already in _running_tasks"
+        assert call_count == 0, "Task function must not execute when already running"
+
 
 class TestDaemonPromptTodoFlagging:
     """Daemon prompts cross-reference open TODOs with log evidence."""

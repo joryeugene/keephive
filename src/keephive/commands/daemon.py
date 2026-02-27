@@ -49,6 +49,14 @@ _TASK_DEFAULTS: dict[str, dict] = {
     "reflect-draft": {"enabled": False, "day": "friday", "time": "18:00"},
 }
 
+# Per-process guard sets — live for daemon lifetime, no persistence needed.
+# _unknown_tasks_seen: prevents log spam when daemon.json has a task the running
+#   code doesn't know (e.g. wander enabled before its handler was shipped).
+# _running_tasks: prevents double-execution when a slow task is still in flight
+#   if the daemon loop ticks again (e.g. after a restart race).
+_unknown_tasks_seen: set[str] = set()
+_running_tasks: set[str] = set()
+
 # ── CLI entry point ──────────────────────────────────────────────────
 
 
@@ -346,33 +354,45 @@ def _mark_last_run(task_name: str) -> None:
 
 
 def _execute_task(task_name: str) -> bool:
-    dispatch = {
-        "morning-briefing": _task_morning_briefing,
-        "stale-check": _task_stale_check,
-        "standup-draft": _task_standup_draft,
-        "soul-update": _task_soul_update,
-        "self-improve": _task_self_improve,
-        "wander": _task_wander,
-        "reflect-draft": _task_reflect_draft,
-    }
-    fn = dispatch.get(task_name)
-    if fn:
-        result = fn() or False  # coerce None → False
-        if result:
-            track_event("daemon_tasks", task_name)
-            # After self-improve queues proposals, immediately apply any trusted ones
-            if task_name == "self-improve":
-                try:
-                    from keephive.commands.improve import _run_auto_apply
+    # Bug fix: prevent double-execution if daemon restarts while a slow task is in flight.
+    if task_name in _running_tasks:
+        return False
+    _running_tasks.add(task_name)
+    try:
+        dispatch = {
+            "morning-briefing": _task_morning_briefing,
+            "stale-check": _task_stale_check,
+            "standup-draft": _task_standup_draft,
+            "soul-update": _task_soul_update,
+            "self-improve": _task_self_improve,
+            "wander": _task_wander,
+            "reflect-draft": _task_reflect_draft,
+        }
+        fn = dispatch.get(task_name)
+        if fn:
+            result = fn() or False  # coerce None → False
+            if result:
+                track_event("daemon_tasks", task_name)
+                # After self-improve queues proposals, immediately apply any trusted ones
+                if task_name == "self-improve":
+                    try:
+                        from keephive.commands.improve import _run_auto_apply
 
-                    applied = _run_auto_apply()
-                    if applied:
-                        _log_daemon(f"self-improve: auto-applied {applied} trusted proposal(s)")
-                except Exception as exc:
-                    _log_daemon(f"self-improve: auto-apply error: {exc}")
-        return result
-    _log_daemon(f"unknown task: {task_name}")
-    return False
+                        applied = _run_auto_apply()
+                        if applied:
+                            _log_daemon(f"self-improve: auto-applied {applied} trusted proposal(s)")
+                    except Exception as exc:
+                        _log_daemon(f"self-improve: auto-apply error: {exc}")
+            return result
+        # Bug fix: unknown task — log once per daemon lifetime, skip silently thereafter.
+        if task_name not in _unknown_tasks_seen:
+            _log_daemon(
+                f"WARNING: unknown task '{task_name}' — upgrade code or remove from config"
+            )
+            _unknown_tasks_seen.add(task_name)
+        return False
+    finally:
+        _running_tasks.discard(task_name)
 
 
 def _task_morning_briefing() -> bool:
