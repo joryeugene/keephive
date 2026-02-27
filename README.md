@@ -57,7 +57,7 @@ After a few sessions, `hive` shows what your agent has learned:
   <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/cli-demo.gif" width="700" alt="keephive CLI demo — remember, recall, todo, log, knowledge, stats, inbox" />
 </p>
 
-Keep your agent orientated across platforms. The new <code>hive serve /brain</code> view condenses working memory, rules, TODOs, and platform telemetry into a single high-density dashboard. It highlights the active backend, queued LLM work, and which agents (Claude, Gemini, Codex) are feeding data back into keephive.
+Keep your agent orientated across platforms. The new <code>hive serve /brain</code> view condenses working memory, rules, TODOs, and platform telemetry into a single high-density dashboard. It highlights the active backend, platform health, and which agents (Claude, Gemini, Codex) are feeding data back into keephive.
 
 <details>
 <summary>Text output</summary>

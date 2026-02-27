@@ -343,8 +343,12 @@ def _tick() -> None:
                     _mark_last_run(task_name)
                     _log_daemon(f"completed: {task_name}")
                 else:
+                    # Mark last_run even on skip/failure so daily tasks
+                    # don't retry every tick (retry tomorrow instead).
+                    _mark_last_run(task_name)
                     _log_daemon(f"skipped (no data): {task_name}")
             except Exception as e:
+                _mark_last_run(task_name)
                 _log_daemon(f"task failed: {task_name}: {e}")
 
     # Custom task queue (hive run --at / --tonight)

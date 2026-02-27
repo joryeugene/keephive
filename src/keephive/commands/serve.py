@@ -34,7 +34,6 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from keephive.llm import available_backends, get_backend_state
-from keephive.llm.pending import list_pending, pending_count
 from keephive.platforms import platform_specs, read_hook_manifest
 from keephive.settings import get_setting
 from keephive.skillpack import get_record as get_skill_record
@@ -4044,7 +4043,7 @@ def _get_settings_data() -> dict:
 
 
 def _get_backend_overview() -> dict:
-    """Summarize backend selection, availability, and pending work."""
+    """Summarize backend selection and availability."""
     preferred = get_setting("llm_backend") or "auto"
     env_override = os.environ.get("HIVE_LLM_BACKEND", "")
     state = get_backend_state()
@@ -4068,7 +4067,6 @@ def _get_backend_overview() -> dict:
         "env_override": env_override,
         "state": state,
         "backends": items,
-        "pending": pending_count(),
     }
 
 
@@ -4220,7 +4218,6 @@ def _get_brain_data() -> dict:
         "log": [{"text": line} for line in latest_entries],
         "backend": _get_backend_overview(),
         "platforms": _get_platform_overview(),
-        "pending_llm": list_pending(limit=6),
         "soul": _get_soul_data(),
         "active_loops": _get_active_loops_data(),
         "wander_insights": wander_insights,
@@ -4296,11 +4293,6 @@ def _render_settings_panel(data: dict) -> str:
         )
         + "</div>"
     )
-    pending = backend.get("pending", 0)
-    if pending:
-        backend_rows.append(
-            f'<div class="brain-meta brain-meta-warn">{pending} queued LLM request(s) — hive setup</div>'
-        )
     backend_card = (
         '<div class="card" tabindex="0" role="region" aria-label="Backend status">'
         '<div class="card-header"><span class="card-title">LLM Backend</span></div>'
@@ -4481,11 +4473,6 @@ def _render_brain_panel(data: dict) -> str:
     env_override = backend.get("env_override")
     if env_override:
         backend_rows.append(f'<div class="brain-meta">Env override: {_e(env_override)}</div>')
-    pending_count = backend.get("pending", 0)
-    if pending_count:
-        backend_rows.append(
-            f'<div class="brain-meta brain-meta-warn">{pending_count} queued LLM task(s) — hive setup</div>'
-        )
     backend_card = _brain_card(
         "LLM Backend",
         "".join(backend_rows),
@@ -6733,16 +6720,6 @@ class _HiveHandler(BaseHTTPRequestHandler):
             set_force_cli(True)
             self.send_response(302)
             self.send_header("Location", "/settings")
-            self._cors()
-            self.end_headers()
-            return
-
-        if path == "/clear-queue":
-            from keephive.llm.pending import clear_queue
-
-            clear_queue()
-            self.send_response(302)
-            self.send_header("Location", "/brain")
             self._cors()
             self.end_headers()
             return

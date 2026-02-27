@@ -14,7 +14,6 @@ from rich.text import Text
 from keephive import __version__
 from keephive.clock import get_today
 from keephive.llm import available_backends, get_backend_state
-from keephive.llm.pending import pending_count
 from keephive.output import console
 from keephive.platforms import platform_specs
 from keephive.settings import get_setting
@@ -285,15 +284,10 @@ def _render_status() -> None:
     # Collect warnings for Attention panel
     warnings: list[tuple[str, str]] = []
 
-    queued_requests = pending_count()
-
     if not healthy_backend_found:
         warnings.append(
             ("\u26a0", "No operational LLM backend detected (configure claude CLI or API key)")
         )
-
-    if queued_requests:
-        warnings.append(("\u26a1", f"{queued_requests} queued LLM request(s). Run: hive setup"))
 
     if stale > 0:
         s = "s" if stale != 1 else ""
@@ -446,13 +440,6 @@ def _render_status() -> None:
         status = "[ok]\u25cf[/ok]" if available else "[dim]\u25cb[/dim]"
         suffix = " [dim](tools)[/dim]" if backend.supports_tools else ""
         llm_table.add_row(f"{status} {backend.name}{suffix}", reason or "")
-    if queued_requests:
-        llm_table.add_row(
-            "[warn]pending[/warn]", f"{queued_requests} queued request(s) — hive setup"
-        )
-    else:
-        llm_table.add_row("[dim]pending[/dim]", "no queued requests")
-
     specs = platform_specs()
     for slug, spec in specs.items():
         marker = "[ok]\u25cf[/ok]" if spec.detected else "[dim]\u25cb[/dim]"

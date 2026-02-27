@@ -1,5 +1,71 @@
 # Changelog
 
+## v1.4.5
+
+Remove dead-letter LLM queue and fix daemon retry storm.
+
+### Fixes
+
+- **Dead-letter queue removed**: `llm/pending.py` queued requests in `~/.keephive/pending/llm.jsonl` but no replay mechanism existed. Removed the entire pending queue module, all UI references (status warning, serve dashboard, `/clear-queue` endpoint), and the test file.
+- **Daemon retry storm**: Failed daemon tasks (returning False or raising exceptions) now call `_mark_last_run()`, preventing infinite retries every 60-second tick. A daily task that fails will retry the next day instead of every tick.
+- **Doctor cleanup**: `hive doctor` auto-removes the stale `pending/` directory on first run after upgrade.
+
+## v1.4.4
+
+Actionable commands on all warning messages.
+
+### Fixes
+
+- Every status/checkup/doctor/nudge warning now tells the user what to run. Previously some warnings gave no next step.
+
+## v1.4.3
+
+Fix stale doctor allowlist and checkup task list.
+
+### Fixes
+
+- **Doctor allowlist**: Replaced 22-entry allowlist with complete 38-entry set, added prefix matching for dynamic filenames (`.loop-*`, `.ui-queue-*`).
+- **Checkup task list**: Stage 2 derives from `daemon._TASK_DEFAULTS` instead of a hardcoded 5-task tuple (picks up wander + reflect-draft automatically).
+
+## v1.4.2
+
+Antifragile daemon setup, auto-sync tasks on upgrade.
+
+### Features
+
+- **Antifragile daemon config**: `_DAEMON_DEFAULT_CONFIG` derived from `_TASK_DEFAULTS`, so new tasks appear in fresh installs automatically.
+- **Auto-sync on upgrade**: `_sync_daemon_tasks()` registers missing tasks in existing `daemon.json` without touching user customizations. Called on every `hive setup`.
+- **`hive daemon upgrade`**: Syncs and restarts in one command.
+
+## v1.4.1
+
+Daemon guards: unknown-task spam, self-improve double-run race.
+
+### Fixes
+
+- Guard against unknown task names in daemon tick loop.
+- Fix self-improve double-run race condition.
+
+## v1.4.0
+
+Active-themes guide matching, reflect-draft daemon, structured SOUL.md, auto-fact triage.
+
+### Features
+
+- **Active-themes guide matching**: `extract_active_themes()` feeds `_match_guides()` via tags frontmatter overlap. Guides with matching tags inject into sessions even without a project-name match.
+- **Reflect-draft daemon task**: Picks the highest-frequency uncovered theme, drafts a guide via haiku, queues as `trusted: false` for review via `hive improve`. Friday 18:00, 7-day throttle.
+- **Structured SOUL.md**: `SoulUpdateResponse` emits `[universal]`/`[project]` scope tags per bullet. `read_soul_summary(project_name)` filters to relevant bullets only.
+- **Auto-fact triage**: `auto_triage_pending_facts()` partitions pending facts into promotable vs needs-review (hedge words, trigram similarity, proper-noun checks). Promoted facts get `[auto]` tags.
+- **Floor metrics**: `floor_metrics()` aggregates pipeline health. `hive checkup --json` gains `pipeline_health` key. `hive stats` gains Pipeline Floor panel.
+
+## v1.3.1
+
+KB-queue fix: truncate on clear, filter PreCompact prompt bleed.
+
+### Fixes
+
+- KB queue unbounded growth: truncate on clear, filter PreCompact prompt bleed.
+
 ## v1.3.0
 
 Auto-trust pipeline, SSE tab-focus reconnect, and stale doc fixes.
@@ -180,19 +246,6 @@ Autonomous loops, inbox surfacing, LLM-driven improve review, KB identity channe
 
 - 32 new tests covering KingBee daemon, identity injection, flow orchestration, and improvement review.
 - New: `tests/test_soul.py` (10 tests), `tests/test_daemon.py` (22 tests).
-
-## Unreleased
-
-### Features
-
-- **Keepbee mascot spread**: Dancing robot-bee now flanks the mascot in the README hero (bee | mascot | bee), replaces the SVG hexagon favicon with an animated GIF (lazy-loaded, SVG fallback), and appears on the dashboard settings page header.
-- **Keepbee redesign**: Robot-bee animation rebuilt with component-based rendering (body, arms, wings, antennae per frame). 10 frames, deterministic RNG, pixel-art style. `make_pixel_bee.py` simplified from 524 to 322 lines.
-- **Dashboard data URI consolidation**: Shared `_load_data_uri(filename, mime)` replaces duplicated `importlib.resources` + base64 encoding logic. `_get_favicon()` lazy-caches the GIF favicon on first request.
-
-### Fixes
-
-- **Transfer import crash on corrupt archives**: `tarfile.open()` for non-gzip or corrupt files now caught with `ReadError`/`CompressionError`/`OSError`, prints error and exits cleanly instead of unhandled traceback.
-- **E2E profile delete test under HIVE_HOME**: `test_delete_active_profile` rewritten to test interactive prompt cancellation. The `active_profile()` guard is bypassed in `HIVE_HOME` mode; unit test covers it separately.
 
 ## v0.22.0
 

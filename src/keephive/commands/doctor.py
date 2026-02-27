@@ -364,7 +364,15 @@ def cmd_doctor(args: list[str]) -> None:
     else:
         console.print("  [warn]No daily log yet[/warn]")
 
-    # 5.5. Unexpected files in hive root
+    # 5.5. Clean up stale pending queue directory (removed in v1.4.5)
+    pending_dir = hd.parent / "pending"
+    if pending_dir.exists():
+        shutil.rmtree(pending_dir, ignore_errors=True)
+        console.print()
+        console.print("[bold]Cleanup[/bold]")
+        console.print("  [ok]Removed[/ok] stale pending/ directory (dead-letter LLM queue)")
+
+    # 5.6. Unexpected files in hive root
     console.print()
     console.print("[bold]Hive Root[/bold]")
     unexpected = _check_unexpected_hive_entries(hd)

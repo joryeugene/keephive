@@ -530,13 +530,14 @@ class TestSessionendFiresSoulUpdate:
 
 
 class TestTickSkipBehavior:
-    """_tick only calls _mark_last_run when _execute_task returns True."""
+    """_tick always calls _mark_last_run to prevent retry storms."""
 
-    def test_tick_does_not_mark_last_run_when_execute_returns_false(self, monkeypatch, hive_env):
-        """_tick must not call _mark_last_run when _execute_task returns False.
+    def test_tick_marks_last_run_even_when_execute_returns_false(self, monkeypatch, hive_env):
+        """_tick must call _mark_last_run when _execute_task returns False.
 
-        Bug caught: stale-check was being marked as 'completed' in daemon.log
-        even when it skipped (no memory.md), misleading the audit trail.
+        Without this, daily tasks that fail (e.g. no LLM backend) retry every
+        60s tick instead of waiting until the next day. This caused dead-letter
+        queue accumulation in pending/llm.jsonl.
         """
         import json
 
@@ -564,8 +565,8 @@ class TestTickSkipBehavior:
 
         _tick()
 
-        # _mark_last_run must NOT have been called
-        assert mark_calls == [], f"Expected no _mark_last_run calls, got: {mark_calls}"
+        # _mark_last_run MUST be called to prevent retry storms
+        assert mark_calls == ["stale-check"], f"Expected _mark_last_run, got: {mark_calls}"
 
         # daemon.log must contain "skipped (no data)", NOT "completed"
         log_text = (hive_dir() / "daemon.log").read_text()
@@ -609,6 +610,43 @@ class TestTickSkipBehavior:
         )
         log_text = (hive_dir() / "daemon.log").read_text()
         assert "completed: stale-check" in log_text, f"Expected 'completed' in log: {log_text}"
+
+    def test_tick_marks_last_run_on_exception(self, monkeypatch, hive_env):
+        """_tick must call _mark_last_run even when _execute_task raises.
+
+        Prevents retry storms where an exception-throwing task retries every tick.
+        """
+        import json
+
+        from keephive.commands.daemon import _tick
+        from keephive.storage import daemon_config_file, hive_dir, write_daemon_state
+
+        config = {
+            "tasks": {
+                "stale-check": {
+                    "enabled": True,
+                    "time": "00:00",
+                }
+            }
+        }
+        daemon_config_file().write_text(json.dumps(config))
+        write_daemon_state({})
+
+        mark_calls: list[str] = []
+        monkeypatch.setattr(
+            "keephive.commands.daemon._mark_last_run", lambda t: mark_calls.append(t)
+        )
+
+        def raise_error(task_name):
+            raise RuntimeError("LLM backend unavailable")
+
+        monkeypatch.setattr("keephive.commands.daemon._execute_task", raise_error)
+
+        _tick()
+
+        assert mark_calls == ["stale-check"], f"Expected _mark_last_run on exception, got: {mark_calls}"
+        log_text = (hive_dir() / "daemon.log").read_text()
+        assert "task failed: stale-check" in log_text, f"Expected 'task failed' in log: {log_text}"
 
 
 class TestTaskReturnValues:
