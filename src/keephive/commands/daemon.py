@@ -386,9 +386,7 @@ def _execute_task(task_name: str) -> bool:
             return result
         # Bug fix: unknown task — log once per daemon lifetime, skip silently thereafter.
         if task_name not in _unknown_tasks_seen:
-            _log_daemon(
-                f"WARNING: unknown task '{task_name}' — upgrade code or remove from config"
-            )
+            _log_daemon(f"WARNING: unknown task '{task_name}' — upgrade code or remove from config")
             _unknown_tasks_seen.add(task_name)
         return False
     finally:
