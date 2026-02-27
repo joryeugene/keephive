@@ -644,7 +644,9 @@ class TestTickSkipBehavior:
 
         _tick()
 
-        assert mark_calls == ["stale-check"], f"Expected _mark_last_run on exception, got: {mark_calls}"
+        assert mark_calls == ["stale-check"], (
+            f"Expected _mark_last_run on exception, got: {mark_calls}"
+        )
         log_text = (hive_dir() / "daemon.log").read_text()
         assert "task failed: stale-check" in log_text, f"Expected 'task failed' in log: {log_text}"
 
