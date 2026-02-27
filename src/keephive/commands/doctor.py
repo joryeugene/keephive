@@ -428,14 +428,14 @@ def _data_quality_checks() -> tuple[int, list[str]]:
     # Stale TODOs
     stale = [(d, text) for d, _, text in ot if d < (t - timedelta(days=7)).isoformat()]
     if stale:
-        console.print(f"  [warn]WARN[/warn] {len(stale)} TODO(s) older than 7 days")
+        console.print(f"  [warn]WARN[/warn] {len(stale)} TODO(s) older than 7 days → hive todo")
         findings.append(f"{len(stale)} stale TODO(s) >7d")
     else:
         console.print("  [ok]OK[/ok] No stale TODOs (>7d)")
 
     # Accumulation
     if len(ot) > 10:
-        console.print(f"  [warn]WARN[/warn] {len(ot)} open TODOs. Consider consolidating.")
+        console.print(f"  [warn]WARN[/warn] {len(ot)} open TODOs → hive todo")
         findings.append(f"{len(ot)} open TODOs (high)")
     else:
         console.print(f"  [ok]OK[/ok] {len(ot)} open, {len(dones_set)} done")
@@ -454,7 +454,9 @@ def _data_quality_checks() -> tuple[int, list[str]]:
             )
         ]
         if corrections:
-            console.print(f"  [info]{len(corrections)} hygiene correction(s) logged today[/info]")
+            console.print(
+                f"  [info]{len(corrections)} hygiene correction(s) logged today → hive log[/info]"
+            )
             findings.append(f"{len(corrections)} hygiene correction(s)")
 
     return extra_issues, findings

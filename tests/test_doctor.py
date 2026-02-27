@@ -311,7 +311,7 @@ class TestDoctorStaleAndAccumulation:
         cmd_doctor([])
         out = capsys.readouterr().out
         assert "12 open TODOs" in out, f"Should show count of 12 open TODOs. Output:\n{out}"
-        assert "consolidating" in out.lower(), f"Should recommend consolidating. Output:\n{out}"
+        assert "hive todo" in out, f"Should recommend hive todo. Output:\n{out}"
 
     def test_hygiene_corrections_surfaced(self, hive_env, capsys):
         """Doctor surfaces hygiene corrections from daily log."""

@@ -180,10 +180,7 @@ def _lifecycle_nudge(
             cat = "kb_queue"
             last = recency.get(cat, 0)
             if last == 0 or count - last >= _KB_RECENCY_THRESHOLD:
-                result = (
-                    f"{kb_depth} direct KB message(s) queued. "
-                    "soul_update will process on next compaction."
-                )
+                result = f"{kb_depth} KB message(s) queued. Run: hive inbox"
                 record_surfaced(counter_name, cat, count, session_id)
                 return result
 

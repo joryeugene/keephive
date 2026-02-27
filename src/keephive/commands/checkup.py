@@ -182,7 +182,7 @@ def _print_stage1(data: dict, warnings: list[str]) -> None:
     if calls == 0:
         console.print(f"    [dim]No calls in the last {_HOOK_LOG_DAYS} days[/dim]")
         warnings.append(
-            f"No precompact calls in {_HOOK_LOG_DAYS} days — hooks may not be registered"
+            f"No precompact calls in {_HOOK_LOG_DAYS} days — hooks may not be registered → hive setup"
         )
         return
 
@@ -342,27 +342,28 @@ def _count_md_bullets(path: Path) -> int:
 
 def _print_stage3(data: dict, warnings: list[str]) -> None:
     console.print("\n  [bold]Stage 3: Queue Depths[/bold]")
-    console.print(f"    Pending facts:        {data['facts']}")
-    console.print(f"    Pending rules:        {data['rules']}")
-    console.print(f"    Pending improvements: {data['improvements']}")
+    facts_hint = "  → hive mem review" if data["facts"] > 0 else ""
+    rules_hint = "  → hive rule review" if data["rules"] > 0 else ""
+    impr_hint = "  → hive improve review" if data["improvements"] > 0 else ""
+    console.print(f"    Pending facts:        {data['facts']}{facts_hint}")
+    console.print(f"    Pending rules:        {data['rules']}{rules_hint}")
+    console.print(f"    Pending improvements: {data['improvements']}{impr_hint}")
 
     # KB queue
     kb_depth = data.get("kb_queue", 0)
     if kb_depth > 0:
-        console.print(
-            f"    KB queue:             {kb_depth} unread message(s) — soul_update will process next compaction"
-        )
+        console.print(f"    KB queue:             {kb_depth} unread message(s) → hive inbox")
     else:
         console.print("    KB queue:             0 (clear)")
 
     # Wander activity
     wander_days_ago = data.get("wander_days_ago", -1)
     if wander_days_ago == -1:
-        w = "Wander: no docs found — hive daemon status"
+        w = "Wander: no docs found → hive daemon start"
         console.print(f"    [warn]⚠  {w}[/warn]")
         warnings.append(w)
     elif wander_days_ago > 3:
-        w = f"Wander: last run {wander_days_ago}d ago — daemon may be paused"
+        w = f"Wander: last run {wander_days_ago}d ago — daemon may be paused → hive daemon start"
         console.print(f"    [warn]⚠  {w}[/warn]")
         warnings.append(w)
     else:

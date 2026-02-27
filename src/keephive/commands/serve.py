@@ -4299,7 +4299,7 @@ def _render_settings_panel(data: dict) -> str:
     pending = backend.get("pending", 0)
     if pending:
         backend_rows.append(
-            f'<div class="brain-meta brain-meta-warn">{pending} queued LLM request(s)</div>'
+            f'<div class="brain-meta brain-meta-warn">{pending} queued LLM request(s) — hive setup</div>'
         )
     backend_card = (
         '<div class="card" tabindex="0" role="region" aria-label="Backend status">'
@@ -4484,7 +4484,7 @@ def _render_brain_panel(data: dict) -> str:
     pending_count = backend.get("pending", 0)
     if pending_count:
         backend_rows.append(
-            f'<div class="brain-meta brain-meta-warn">{pending_count} queued LLM task(s)</div>'
+            f'<div class="brain-meta brain-meta-warn">{pending_count} queued LLM task(s) — hive setup</div>'
         )
     backend_card = _brain_card(
         "LLM Backend",

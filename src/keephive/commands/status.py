@@ -293,11 +293,11 @@ def _render_status() -> None:
         )
 
     if queued_requests:
-        warnings.append(("\u26a1", f"{queued_requests} queued LLM request(s) awaiting backend"))
+        warnings.append(("\u26a1", f"{queued_requests} queued LLM request(s). Run: hive setup"))
 
     if stale > 0:
         s = "s" if stale != 1 else ""
-        warnings.append(("\u26a0", f"{stale} stale fact{s} (30+ days)"))
+        warnings.append(("\u26a0", f"{stale} stale fact{s} (30+ days). Run: hive v"))
 
     # Old TODOs
     todos = open_todos()
@@ -309,7 +309,7 @@ def _render_status() -> None:
                 old_todos += 1
     if old_todos > 0:
         s = "s" if old_todos != 1 else ""
-        warnings.append(("\u26a0", f"{old_todos} TODO{s} older than 3 days"))
+        warnings.append(("\u26a0", f"{old_todos} TODO{s} older than 3 days. Run: hive todo"))
 
     # Pending facts
     pending_facts_count = 0
@@ -320,7 +320,9 @@ def _render_status() -> None:
         )
     if pending_facts_count > 0:
         s = "s" if pending_facts_count != 1 else ""
-        warnings.append(("\u26a1", f"{pending_facts_count} fact{s} pending review"))
+        warnings.append(
+            ("\u26a1", f"{pending_facts_count} fact{s} pending review. Run: hive mem review")
+        )
 
     # Pending rules
     pending_rules_count = 0
@@ -331,11 +333,13 @@ def _render_status() -> None:
         )
     if pending_rules_count > 0:
         s = "s" if pending_rules_count != 1 else ""
-        warnings.append(("\u26a1", f"{pending_rules_count} rule suggestion{s} pending"))
+        warnings.append(
+            ("\u26a1", f"{pending_rules_count} rule suggestion{s} pending. Run: hive rule review")
+        )
 
     # Quality pulse
     if pulse_score is not None and pulse_score < 70:
-        warnings.append(("\u2726", f"Quality pulse {pulse_score}/100"))
+        warnings.append(("\u2726", f"Quality pulse {pulse_score}/100. Run: hive a"))
 
     # Guide updates
     try:
@@ -343,7 +347,9 @@ def _render_status() -> None:
 
         _stale_guides = _cbu()
         if _stale_guides > 0:
-            warnings.append(("\u26a1", f"{_stale_guides} bundled guide(s) have updates"))
+            warnings.append(
+                ("\u26a1", f"{_stale_guides} bundled guide(s) have updates. Run: hive setup")
+            )
     except Exception:
         pass
 
@@ -368,7 +374,9 @@ def _render_status() -> None:
                 parts_nudge.append(
                     f"{contra_count} contradiction{'s' if contra_count != 1 else ''}"
                 )
-            warnings.append(("\u26a1", f"reflect: {', '.join(parts_nudge)} ready"))
+            warnings.append(
+                ("\u26a1", f"reflect: {', '.join(parts_nudge)} ready. Run: hive rf apply")
+            )
     except Exception:
         pass
 
@@ -377,7 +385,7 @@ def _render_status() -> None:
     if due:
         for freq, text, overdue in due:
             over_s = f"+{overdue}d overdue" if overdue > 0 else "due today"
-            warnings.append(("\u26a0", f"[{freq}] [{over_s}] {text}"))
+            warnings.append(("\u26a0", f"[{freq}] [{over_s}] {text}. Run: hive recurring done"))
 
     # Unfinished audit action
     try:
@@ -386,7 +394,10 @@ def _render_status() -> None:
         prev_play = _check_previous_play()
         if prev_play and not prev_play["completed"] and prev_play["age_days"] >= 2:
             warnings.append(
-                ("\u26a0", f"Unfinished audit action ({prev_play['date']}): {prev_play['action']}")
+                (
+                    "\u26a0",
+                    f"Unfinished audit action ({prev_play['date']}): {prev_play['action']}. Run: hive a",
+                )
             )
     except Exception:
         pass
@@ -436,7 +447,9 @@ def _render_status() -> None:
         suffix = " [dim](tools)[/dim]" if backend.supports_tools else ""
         llm_table.add_row(f"{status} {backend.name}{suffix}", reason or "")
     if queued_requests:
-        llm_table.add_row("[warn]pending[/warn]", f"{queued_requests} queued request(s)")
+        llm_table.add_row(
+            "[warn]pending[/warn]", f"{queued_requests} queued request(s) — hive setup"
+        )
     else:
         llm_table.add_row("[dim]pending[/dim]", "no queued requests")
 
