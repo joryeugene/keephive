@@ -1165,9 +1165,7 @@ class TestSyncDaemonTasks:
         from keephive.storage import daemon_config_file
 
         # Write a config with only one task present.
-        daemon_config_file().write_text(
-            json.dumps({"tasks": {"soul-update": {"enabled": True}}})
-        )
+        daemon_config_file().write_text(json.dumps({"tasks": {"soul-update": {"enabled": True}}}))
 
         added = _sync_daemon_tasks()
 
@@ -1187,9 +1185,7 @@ class TestSyncDaemonTasks:
         from keephive.storage import daemon_config_file
 
         # Pre-populate all known tasks.
-        full_config = {
-            "tasks": {name: dict(defaults) for name, defaults in _TASK_DEFAULTS.items()}
-        }
+        full_config = {"tasks": {name: dict(defaults) for name, defaults in _TASK_DEFAULTS.items()}}
         daemon_config_file().write_text(json.dumps(full_config))
 
         added = _sync_daemon_tasks()
