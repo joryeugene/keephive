@@ -3158,9 +3158,7 @@ def auto_triage_pending_facts(
 
     # Build normalised memory lines for similarity check
     mem_lines = [
-        ln.strip().lower()
-        for ln in memory_text.splitlines()
-        if ln.strip().startswith("- ")
+        ln.strip().lower() for ln in memory_text.splitlines() if ln.strip().startswith("- ")
     ]
 
     promotable: list[dict] = []

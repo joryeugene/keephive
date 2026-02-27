@@ -2746,7 +2746,7 @@ class TestPromoteFactsToMemory:
 
     def test_appends_auto_tagged_lines(self, hive_env):
         """Promotable facts appear in memory.md with [auto] tag."""
-        from keephive.storage import hive_dir, memory_file
+        from keephive.storage import memory_file
 
         mem = memory_file()
         mem.parent.mkdir(parents=True, exist_ok=True)

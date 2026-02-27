@@ -1056,9 +1056,7 @@ def _task_reflect_draft() -> bool:
     # ── Gather log entries about the chosen topic ──────────────────────
     entries = _gather_topic_entries(topic, days=60)
     if len(entries) < 3:
-        _log_daemon(
-            f"reflect-draft: too few entries for '{topic}' ({len(entries)}) — skipped"
-        )
+        _log_daemon(f"reflect-draft: too few entries for '{topic}' ({len(entries)}) — skipped")
         return True  # ran cleanly, insufficient data
 
     # ── Build LLM prompt ───────────────────────────────────────────────
@@ -1094,9 +1092,7 @@ Do not invent or extrapolate beyond what the entries say.
         "type": "skill",
         "name": topic,
         "content": response.content,
-        "rationale": (
-            f"Auto-drafted from {len(entries)} daily log entries mentioning '{topic}'"
-        ),
+        "rationale": (f"Auto-drafted from {len(entries)} daily log entries mentioning '{topic}'"),
         "trusted": False,
     }
     append_pending_improvements([proposal])

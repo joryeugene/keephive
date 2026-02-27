@@ -998,7 +998,9 @@ class TestReflectDraftTask:
 
         ensure_daily()
         df = daily_file()
-        lines = [f"- [10:0{i}:00] FACT: Important insight about {topic} usage\n" for i in range(count)]
+        lines = [
+            f"- [10:0{i}:00] FACT: Important insight about {topic} usage\n" for i in range(count)
+        ]
         df.write_text("".join(lines))
 
     def test_selects_uncovered_theme(self, hive_env, monkeypatch):
