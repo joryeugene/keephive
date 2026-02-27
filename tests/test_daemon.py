@@ -9,6 +9,8 @@ Covers:
 - _enable_task() / _disable_task() via cmd_daemon enable/disable subcommands
 - sessionend fires non-blocking Popen when soul-update is enabled
 - _execute_task() track_event instrumentation (only fires on True result)
+- _sync_daemon_tasks() adds missing tasks, skips existing, idempotent
+- _DAEMON_DEFAULT_CONFIG covers all tasks in _TASK_DEFAULTS
 """
 
 from __future__ import annotations
@@ -1150,3 +1152,140 @@ class TestReflectDraftTask:
 
         pending = read_pending_improvements()
         assert all(p.get("trusted") is False for p in pending if p.get("type") == "skill")
+
+
+class TestSyncDaemonTasks:
+    """_sync_daemon_tasks() registers missing tasks; never overwrites existing ones."""
+
+    def test_adds_missing_task(self, hive_env):
+        """A task in _TASK_DEFAULTS but absent from daemon.json is added and returned."""
+        import json
+
+        from keephive.commands.daemon import _sync_daemon_tasks
+        from keephive.storage import daemon_config_file
+
+        # Write a config with only one task present.
+        daemon_config_file().write_text(
+            json.dumps({"tasks": {"soul-update": {"enabled": True}}})
+        )
+
+        added = _sync_daemon_tasks()
+
+        # All tasks except the pre-existing soul-update should be added.
+        assert "soul-update" not in added
+        assert len(added) > 0
+
+        config = json.loads(daemon_config_file().read_text())
+        assert "morning-briefing" in config["tasks"]
+        assert "reflect-draft" in config["tasks"]
+
+    def test_skips_existing_tasks(self, hive_env):
+        """Tasks already present in daemon.json are not returned as added."""
+        import json
+
+        from keephive.commands.daemon import _TASK_DEFAULTS, _sync_daemon_tasks
+        from keephive.storage import daemon_config_file
+
+        # Pre-populate all known tasks.
+        full_config = {
+            "tasks": {name: dict(defaults) for name, defaults in _TASK_DEFAULTS.items()}
+        }
+        daemon_config_file().write_text(json.dumps(full_config))
+
+        added = _sync_daemon_tasks()
+
+        assert added == []
+
+    def test_idempotent(self, hive_env):
+        """Calling _sync_daemon_tasks() twice produces the same result."""
+        import json
+
+        from keephive.commands.daemon import _sync_daemon_tasks
+        from keephive.storage import daemon_config_file
+
+        daemon_config_file().write_text(json.dumps({"tasks": {}}))
+
+        first = _sync_daemon_tasks()
+        # First call should have added all known tasks.
+        assert len(first) > 0
+
+        second = _sync_daemon_tasks()
+        # Second call finds all tasks already present — nothing to add.
+        assert second == []
+
+    def test_preserves_user_customizations(self, hive_env):
+        """Existing task entries are never overwritten — user's custom time is kept."""
+        import json
+
+        from keephive.commands.daemon import _sync_daemon_tasks
+        from keephive.storage import daemon_config_file
+
+        daemon_config_file().write_text(
+            json.dumps({"tasks": {"standup-draft": {"enabled": True, "time": "09:30"}}})
+        )
+
+        _sync_daemon_tasks()
+
+        config = json.loads(daemon_config_file().read_text())
+        assert config["tasks"]["standup-draft"]["time"] == "09:30"
+        assert config["tasks"]["standup-draft"]["enabled"] is True
+
+    def test_creates_daemon_json_when_missing(self, hive_env):
+        """_sync_daemon_tasks() works even when daemon.json does not exist yet."""
+        from keephive.commands.daemon import _TASK_DEFAULTS, _sync_daemon_tasks
+        from keephive.storage import daemon_config_file
+
+        assert not daemon_config_file().exists()
+
+        added = _sync_daemon_tasks()
+
+        assert daemon_config_file().exists()
+        assert sorted(added) == sorted(_TASK_DEFAULTS.keys())
+
+
+class TestDaemonDefaultConfig:
+    """_DAEMON_DEFAULT_CONFIG is derived from _TASK_DEFAULTS — they must stay in sync."""
+
+    def test_contains_all_task_defaults(self):
+        """Every key in _TASK_DEFAULTS appears in the parsed _DAEMON_DEFAULT_CONFIG."""
+        import json
+
+        from keephive.commands.daemon import _DAEMON_DEFAULT_CONFIG, _TASK_DEFAULTS
+
+        parsed = json.loads(_DAEMON_DEFAULT_CONFIG)
+        config_tasks = parsed["tasks"]
+
+        for task_name in _TASK_DEFAULTS:
+            assert task_name in config_tasks, (
+                f"_DAEMON_DEFAULT_CONFIG is missing task '{task_name}'. "
+                "Add it to _TASK_DEFAULTS — _DAEMON_DEFAULT_CONFIG is derived automatically."
+            )
+
+    def test_enabled_by_default_tasks_are_enabled(self):
+        """soul-update and self-improve are enabled=True in the default config."""
+        import json
+
+        from keephive.commands.daemon import _DAEMON_DEFAULT_CONFIG, _ENABLED_BY_DEFAULT
+
+        parsed = json.loads(_DAEMON_DEFAULT_CONFIG)
+        for task_name in _ENABLED_BY_DEFAULT:
+            assert parsed["tasks"][task_name]["enabled"] is True, (
+                f"Task '{task_name}' should be enabled by default."
+            )
+
+    def test_non_default_tasks_are_disabled(self):
+        """Tasks not in _ENABLED_BY_DEFAULT start with enabled=False."""
+        import json
+
+        from keephive.commands.daemon import (
+            _DAEMON_DEFAULT_CONFIG,
+            _ENABLED_BY_DEFAULT,
+            _TASK_DEFAULTS,
+        )
+
+        parsed = json.loads(_DAEMON_DEFAULT_CONFIG)
+        for task_name in _TASK_DEFAULTS:
+            if task_name not in _ENABLED_BY_DEFAULT:
+                assert parsed["tasks"][task_name]["enabled"] is False, (
+                    f"Task '{task_name}' should be disabled by default."
+                )

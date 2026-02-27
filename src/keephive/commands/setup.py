@@ -64,20 +64,6 @@ What I know about how you work:
 [Date — what triggered the update]
 """
 
-_DAEMON_DEFAULT_CONFIG = json.dumps(
-    {
-        "tasks": {
-            "morning-briefing": {"enabled": False, "time": "07:00"},
-            "stale-check": {"enabled": False, "day": "monday", "time": "08:00"},
-            "standup-draft": {"enabled": False, "time": "17:00"},
-            "soul-update": {"enabled": True},
-            "self-improve": {"enabled": True},
-            "wander": {"enabled": False, "time": "14:00"},
-        }
-    },
-    indent=2,
-)
-
 
 def _parse_setup_args(args: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(add_help=False)
@@ -206,11 +192,19 @@ def cmd_setup(args: list[str]) -> None:
 
     df = daemon_config_file()
     if not df.exists():
+        from keephive.commands.daemon import _DAEMON_DEFAULT_CONFIG
+
         df.parent.mkdir(parents=True, exist_ok=True)
         df.write_text(_DAEMON_DEFAULT_CONFIG)
         console.print(f"  [ok]✓[/ok] {df}")
     else:
         console.print("  [dim]daemon.json already exists[/dim]")
+
+    from keephive.commands.daemon import _sync_daemon_tasks
+
+    added = _sync_daemon_tasks()
+    if added:
+        console.print(f"  [ok]✓[/ok] daemon synced: {', '.join(sorted(added))}")
 
     console.print()
     console.print("[ok]Setup complete![/ok]")

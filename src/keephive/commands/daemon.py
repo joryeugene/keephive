@@ -49,6 +49,21 @@ _TASK_DEFAULTS: dict[str, dict] = {
     "reflect-draft": {"enabled": False, "day": "friday", "time": "18:00"},
 }
 
+# Tasks enabled in a fresh install. All others start disabled.
+_ENABLED_BY_DEFAULT: frozenset[str] = frozenset({"soul-update", "self-improve"})
+
+# Canonical default config for daemon.json, derived from _TASK_DEFAULTS.
+# setup.py and _edit() both reference this — single source of truth.
+_DAEMON_DEFAULT_CONFIG: str = json.dumps(
+    {
+        "tasks": {
+            name: {**defaults, "enabled": name in _ENABLED_BY_DEFAULT}
+            for name, defaults in _TASK_DEFAULTS.items()
+        }
+    },
+    indent=2,
+)
+
 # Per-process guard sets — live for daemon lifetime, no persistence needed.
 # _unknown_tasks_seen: prevents log spam when daemon.json has a task the running
 #   code doesn't know (e.g. wander enabled before its handler was shipped).
@@ -76,6 +91,7 @@ def cmd_daemon(args: list[str]) -> None:
         "edit": _edit,
         "log": _log,
         "l": _log,
+        "upgrade": _upgrade,
     }
     fn = dispatch.get(sub)
     if fn:
@@ -83,7 +99,7 @@ def cmd_daemon(args: list[str]) -> None:
     else:
         console.print(f"[err]Unknown subcommand: {sub}[/err]")
         console.print(
-            "Usage: hive daemon [start|stop|status|run <task>|enable <task>|disable <task>|edit|log]"
+            "Usage: hive daemon [start|stop|status|run <task>|enable <task>|disable <task>|edit|log|upgrade]"
         )
 
 
@@ -248,8 +264,6 @@ def _edit() -> None:
     editor = os.environ.get("EDITOR", "vi")
     path = daemon_config_file()
     if not path.exists():
-        from keephive.commands.setup import _DAEMON_DEFAULT_CONFIG
-
         path.write_text(_DAEMON_DEFAULT_CONFIG)
     sp.run([editor, str(path)])
 
@@ -262,6 +276,36 @@ def _log() -> None:
     lines = log.read_text().splitlines()
     for line in lines[-50:]:
         console.print(line)
+
+
+def _sync_daemon_tasks() -> list[str]:
+    """Register any tasks from _TASK_DEFAULTS not yet in daemon.json.
+
+    Returns the names of tasks that were added. Existing tasks are never
+    modified — user customizations (e.g. custom time:) are preserved.
+    """
+    config = read_daemon_config()
+    tasks = config.setdefault("tasks", {})
+    added = []
+    for task_name, defaults in _TASK_DEFAULTS.items():
+        if task_name not in tasks:
+            tasks[task_name] = dict(defaults)
+            added.append(task_name)
+    if added:
+        daemon_config_file().write_text(json.dumps(config, indent=2))
+    return added
+
+
+def _upgrade() -> None:
+    """Sync daemon.json with _TASK_DEFAULTS, then restart the daemon."""
+    added = _sync_daemon_tasks()
+    if added:
+        console.print(f"🐝 synced new task(s): {', '.join(sorted(added))}")
+        console.print(f"  hint: hive daemon run {added[0]}")
+    else:
+        console.print("🐝 daemon.json already up to date")
+    _stop()
+    _start()
 
 
 # ── Daemon Loop (internal — not user-facing) ─────────────────────────
