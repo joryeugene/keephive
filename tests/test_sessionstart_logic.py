@@ -165,6 +165,78 @@ class TestMatchGuides:
         result = _match_guides("keephive")
         assert result == ""
 
+    def test_match_guides_uses_active_themes(self, hive_env):
+        """Guide with matching tags: appears when active_themes overlaps."""
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "testing-patterns.md").write_text(
+            "---\ntags: [testing, pytest]\nalways: false\n---\n# Testing Patterns\n\nUse fixtures.\n"
+        )
+
+        from keephive.hooks.sessionstart import _match_guides
+
+        # Without themes: no match (project name doesn't match)
+        result_no_themes = _match_guides("someproject")
+        assert "Testing Patterns" not in result_no_themes
+
+        # With matching theme: guide appears
+        result_with_themes = _match_guides("someproject", active_themes=["testing"])
+        assert "Testing Patterns" in result_with_themes
+
+    def test_match_guides_theme_fills_only_after_project(self, hive_env):
+        """Project-matched guides take priority slots over theme-matched guides."""
+        gd = hive_env / "knowledge" / "guides"
+        # Project guide — matches by filename
+        for i in range(3):
+            (gd / f"myproj-specific-{i}.md").write_text(
+                f"# MyProj Specific {i}\n\n{'content ' * 50}\n"
+            )
+        # Theme guide — only matches via tags
+        (gd / "auth-patterns.md").write_text(
+            "---\ntags: [auth]\nalways: false\n---\n# Auth Patterns\n\nUse tokens.\n"
+        )
+
+        from keephive.hooks.sessionstart import _match_guides
+
+        result = _match_guides("myproj", active_themes=["auth"])
+        # 3 slots filled by project guides; auth guide should not appear
+        assert "Auth Patterns" not in result
+        assert result.count("--- Guide:") == 3
+
+    def test_extract_active_themes_empty_below_threshold(self, hive_env):
+        """Fewer than 5 daily entries returns empty list."""
+        make_daily(
+            hive_env,
+            days_ago=0,
+            entries=[
+                "- [10:00:00] FACT: authentication token expired",
+                "- [10:01:00] FACT: testing took a long time",
+            ],
+        )
+
+        from keephive.hooks.sessionstart import extract_active_themes
+
+        result = extract_active_themes()
+        assert result == []
+
+    def test_extract_active_themes_returns_recurring_words(self, hive_env):
+        """Words appearing >= 2 times across 5+ entries are returned as themes."""
+        entries = [
+            "- [10:00:00] FACT: authentication token needed for every request",
+            "- [10:01:00] FACT: authentication flow uses JWT tokens",
+            "- [10:02:00] FACT: testing the authentication endpoint carefully",
+            "- [10:03:00] FACT: wrote more tests for the endpoint validation",
+            "- [10:04:00] FACT: endpoint testing revealed a timing issue",
+        ]
+        make_daily(hive_env, days_ago=0, entries=entries)
+
+        from keephive.hooks.sessionstart import extract_active_themes
+
+        result = extract_active_themes()
+        assert isinstance(result, list)
+        assert len(result) <= 3
+        # "authentication" and "testing" appear 3 times each — should be in themes
+        assert any("auth" in t for t in result) or any("test" in t for t in result)
+
 
 # ---- build_context integration ----
 
@@ -604,3 +676,53 @@ class TestExtractStyleHint:
 
         result = extract_style_hint()
         assert "~50 chars/entry" in result
+
+
+# ---- guide_hits tracking (Improvement 5) ----
+
+
+class TestGuideHitsTracking:
+    def test_match_guides_tracks_hit_event(self, hive_env):
+        """_match_guides() calls track_event('guide_hits', stem) for each injected guide."""
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "myproj-guide.md").write_text("# MyProj Guide\n\nContent here.\n")
+
+        tracked: list[tuple[str, str]] = []
+
+        def fake_track(cat: str, name: str, **kwargs) -> None:
+            tracked.append((cat, name))
+
+        import keephive.hooks.sessionstart as ss
+        import keephive.storage as _storage
+
+        orig = _storage.track_event
+        try:
+            _storage.track_event = fake_track
+            ss._match_guides("myproj")
+        finally:
+            _storage.track_event = orig
+
+        assert any(cat == "guide_hits" and name == "myproj-guide" for cat, name in tracked)
+
+    def test_no_guide_match_no_hit_tracked(self, hive_env):
+        """When no guide matches, no guide_hits events are emitted."""
+        gd = hive_env / "knowledge" / "guides"
+        (gd / "otherproj-guide.md").write_text("# OtherProj Guide\n\nContent.\n")
+
+        tracked: list[tuple[str, str]] = []
+
+        def fake_track(cat: str, name: str, **kwargs) -> None:
+            tracked.append((cat, name))
+
+        import keephive.hooks.sessionstart as ss
+        import keephive.storage as _storage
+
+        orig_track = _storage.track_event
+        try:
+            _storage.track_event = fake_track
+            ss._match_guides("completely-different-project")
+        finally:
+            _storage.track_event = orig_track
+
+        guide_hits = [t for t in tracked if t[0] == "guide_hits"]
+        assert guide_hits == []

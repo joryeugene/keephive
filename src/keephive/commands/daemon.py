@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 # Daily feedback loop is right for a self-evolving system (see Reflexion, Shinn et al. 2023).
 # The 7-day analysis *window* (for i in range(7)) is orthogonal — that's context depth, not cadence.
 _SELF_IMPROVE_THROTTLE_DAYS = 1
+_REFLECT_DRAFT_THROTTLE_DAYS = 7
 
 _VOICE_DISCIPLINE = """\
 
@@ -45,6 +46,7 @@ _TASK_DEFAULTS: dict[str, dict] = {
     "soul-update": {"enabled": False},
     "self-improve": {"enabled": False},
     "wander": {"enabled": False, "time": "14:00"},
+    "reflect-draft": {"enabled": False, "day": "friday", "time": "18:00"},
 }
 
 # ── CLI entry point ──────────────────────────────────────────────────
@@ -351,6 +353,7 @@ def _execute_task(task_name: str) -> bool:
         "soul-update": _task_soul_update,
         "self-improve": _task_self_improve,
         "wander": _task_wander,
+        "reflect-draft": _task_reflect_draft,
     }
     fn = dispatch.get(task_name)
     if fn:
@@ -583,6 +586,9 @@ If log evidence suggests any TODO is resolved, add a brief ## What Looks Done se
 HARD SIZE CONSTRAINTS — this document must stay bounded:
 - ## Summary: max 300 tokens. Rewrite to reflect what you now know. Dense, specific.
 - ## What I've Learned About How To Help You: max 5 bullet points.
+  Each bullet MUST start with [universal] if it applies across all projects, \
+or [project-name] if specific to one codebase (e.g. [keephive], [nucleus]).
+  Do not omit the scope tag. Example: "- [universal] Always verify field names before use"
 - ## Session Patterns I've Noticed: max 5 entries. UPDATE existing patterns in-place.
 - ## What I've Been Wondering: max 3 bullets (one wander hypothesis per bullet). \
 80 token hard limit. Omit entirely if no wander docs.
@@ -995,6 +1001,107 @@ used_web_search: true if you used WebSearch, false otherwise"""
     except ClaudePipeError as exc:
         _log_daemon(f"wander failed: {exc}")
         return False
+
+
+def _task_reflect_draft() -> bool:
+    """Auto-draft a knowledge guide for the highest-frequency uncovered theme.
+
+    Selects the most-mentioned active theme not yet covered by a guide or pending
+    in the improvement queue. Proposes as a pending improvement (type='skill',
+    trusted=False) — requires human review via `hive improve review`.
+
+    Throttled to once per 7 days. Returns True when a proposal is queued or
+    nothing needed doing; False when throttled or LLM failed.
+    """
+    from keephive.claude import ClaudePipeError, run_claude_pipe
+    from keephive.commands.reflect import _gather_topic_entries
+    from keephive.hooks.sessionstart import extract_active_themes
+    from keephive.models import GuideDraftResponse
+    from keephive.storage import (
+        append_pending_improvements,
+        guides_dir,
+        read_pending_improvements,
+    )
+
+    # ── Throttle: max once per 7 days ─────────────────────────────────
+    state = read_daemon_state()
+    last_run_str = state.get("reflect-draft", {}).get("last_run")
+    if last_run_str:
+        days_since = (datetime.now() - datetime.fromisoformat(last_run_str)).days
+        if days_since < _REFLECT_DRAFT_THROTTLE_DAYS:
+            return False  # silent throttle
+
+    # ── Extract active themes (requires >= 5 daily entries) ───────────
+    themes = extract_active_themes(days=7)
+    if not themes:
+        return False  # not enough log data to pick a theme
+
+    # ── Pick the first theme not already covered ───────────────────────
+    gd = guides_dir()
+    existing_stems = {g.stem.lower() for g in gd.glob("*.md")} if gd.exists() else set()
+    # Also skip topics already queued as pending skill improvements
+    pending = read_pending_improvements()
+    pending_names = {i.get("name", "").lower() for i in pending if i.get("type") == "skill"}
+
+    topic: str | None = None
+    for theme in themes:
+        if theme not in existing_stems and theme not in pending_names:
+            topic = theme
+            break
+
+    if not topic:
+        _log_daemon("reflect-draft: all active themes covered by guides or queue — skipped")
+        return True  # ran cleanly, nothing needed
+
+    # ── Gather log entries about the chosen topic ──────────────────────
+    entries = _gather_topic_entries(topic, days=60)
+    if len(entries) < 3:
+        _log_daemon(
+            f"reflect-draft: too few entries for '{topic}' ({len(entries)}) — skipped"
+        )
+        return True  # ran cleanly, insufficient data
+
+    # ── Build LLM prompt ───────────────────────────────────────────────
+    entry_text = "".join(f"--- {d} ---\n{ctx}\n\n" for d, ctx in entries)
+    prompt = f"""Synthesize these daily log entries about "{topic}" into a knowledge guide.
+
+The guide should be a concise, actionable markdown document. Structure it with:
+- A title (# heading)
+- Key sections with ## headings
+- Bullet points for specific facts and patterns
+- Code examples if relevant entries contain them
+
+Be precise. Only include information that appears in the entries.
+Do not invent or extrapolate beyond what the entries say.
+{_VOICE_DISCIPLINE}"""
+
+    try:
+        response = run_claude_pipe(
+            prompt,
+            GuideDraftResponse,
+            stdin_text=entry_text,
+            timeout=240,
+        )
+    except ClaudePipeError as exc:
+        _log_daemon(f"reflect-draft: LLM failed: {exc}")
+        return False
+
+    if not response or not response.content.strip():
+        return False
+
+    # ── Queue as trusted=False pending improvement ─────────────────────
+    proposal = {
+        "type": "skill",
+        "name": topic,
+        "content": response.content,
+        "rationale": (
+            f"Auto-drafted from {len(entries)} daily log entries mentioning '{topic}'"
+        ),
+        "trusted": False,
+    }
+    append_pending_improvements([proposal])
+    _log_daemon(f"[reflect-draft: proposed guide '{topic}']")
+    return True
 
 
 # ── Custom task queue (hive run --at / --tonight) ─────────────────────────────

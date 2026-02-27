@@ -776,6 +776,81 @@ Do not invent or extrapolate beyond what the entries say."""
         console.print("  [dim]Discarded.[/dim]")
 
 
+def _gather_topic_entries(topic: str, days: int = 60) -> list[tuple[str, str]]:
+    """Return daily log entries relevant to topic from the last N days.
+
+    Returns (date_str, context_block) pairs where context_block includes the
+    matching line plus up to 3 lines of surrounding context. Deduplicates
+    identical context blocks from the same day.
+    """
+    from datetime import timedelta as _timedelta
+
+    dd = daily_dir()
+    if not dd.exists():
+        return []
+
+    topic_lower = topic.lower().replace("-", " ")
+    topic_words = topic_lower.split()
+    cutoff = get_today() - _timedelta(days=days)
+
+    entries: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    for f in sorted(dd.glob("*.md"), reverse=True):
+        try:
+            file_date = datetime.strptime(f.stem, "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        if file_date < cutoff:
+            break
+        lines = f.read_text().splitlines()
+        for j, line in enumerate(lines):
+            line_lower = line.lower()
+            if any(w in line_lower for w in topic_words):
+                start = max(0, j - 3)
+                end = min(len(lines), j + 4)
+                context = "\n".join(lines[start:end])
+                key = f"{f.stem}:{context}"
+                if key not in seen:
+                    seen.add(key)
+                    entries.append((f.stem, context))
+
+    return entries
+
+
+def _promote_facts_to_memory(facts: list[dict]) -> int:
+    """Append auto-triaged facts to memory.md with [auto] tag.
+
+    Skips any fact whose '[auto] ...' line already appears in memory.md.
+    Returns the number of facts actually appended.
+    """
+    if not facts:
+        return 0
+
+    mem_path = memory_file()
+    if not mem_path.exists():
+        return 0
+
+    existing = mem_path.read_text()
+    additions: list[str] = []
+
+    for item in facts:
+        fact_text = item.get("fact", "").strip()
+        if not fact_text:
+            continue
+        line = f"- [auto] {fact_text}"
+        if line not in existing:
+            additions.append(line)
+
+    if not additions:
+        return 0
+
+    with open(mem_path, "a") as fh:
+        fh.write("\n" + "\n".join(additions) + "\n")
+
+    return len(additions)
+
+
 def get_pending_analysis() -> tuple[int, int] | None:
     """Check if there's a recent analysis with pending items.
 

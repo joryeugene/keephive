@@ -50,6 +50,23 @@ A knowledge sidecar for Claude Code. Commands work as both `keephive <cmd>` and 
 | `hive ui-install`      |                   | Print bookmarklet URL (drag to bookmarks bar)                    |
 | `hive ui-clear`        |                   | Discard pending UI feedback                                      |
 
+#### What's New (v1.1–v1.4)
+
+| Command                    | Short       | What it does                                              |
+|----------------------------|-------------|-----------------------------------------------------------|
+| `hive inbox`               | `hive ib`   | Recent KingBee output + pending queue depths              |
+| `hive run "<task>"`        | `hive rn`   | Autonomous iteration loop (background or in-session)      |
+| `hive wander`              |             | Seed selection + show latest wander doc                   |
+| `hive wander seed <text>`  |             | Queue a topic for the next wander run                     |
+| `hive improve trust on`    |             | Enable auto-apply for self-improve trusted proposals      |
+| `hive checkup --snapshot`  |             | Git-snapshot hive state for before/after diffs            |
+| `hive checkup --diff`      |             | Show what changed since last snapshot                     |
+| `hive privacy`             | `hive pv`   | LLM kill switch + force-CLI routing status                |
+| `hive privacy on`          |             | Pause all LLM calls                                       |
+| `hive privacy cli`         |             | Force CLI-only routing (disables direct API)              |
+
+Full command list: `hive --help`
+
 ### Knowledge
 
 | Command                      | Shorthand        | What it does                              |
@@ -132,7 +149,7 @@ When Claude Code compacts a conversation, keephive's PreCompact hook:
 
 ### KingBee (Identity & Maintenance)
 
-KingBee manages a persistent agent identity (`SOUL.md`) and five background tasks.
+KingBee manages a persistent agent identity (`SOUL.md`) and six background tasks.
 
 **SOUL.md** lives at `~/.keephive/hive/working/SOUL.md`. Distilled from session logs,
 injected as `## Agent Identity` (~300 tokens) in every new session. Replaced (not appended)
@@ -148,10 +165,11 @@ on each update. Trigger manually: `hive daemon run soul-update`. Check age: `hiv
 | stale-check       | off     | Monday 08:00        | weekly    |
 | standup-draft     | off     | 17:00               | daily     |
 | wander            | off     | 14:00               | daily     |
+| reflect-draft     | off     | Friday 18:00        | 7 days    |
 
 `hive daemon enable morning-briefing` to activate any off-by-default task.
 `hive daemon log` to inspect background task activity.
-`hive checkup` for a full 6-stage health report (hook pipeline, daemon freshness, queue depths, SOUL.md age, JSON integrity, magic numbers).
+`hive checkup` for a full 7-stage health report (privacy gate, hook pipeline, daemon freshness, queue depths, SOUL.md age, JSON integrity, magic numbers).
 
 ### Smart context injection
 

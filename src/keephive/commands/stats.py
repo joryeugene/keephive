@@ -1298,6 +1298,25 @@ def _display_full(data: dict) -> None:
     except Exception:
         pass
 
+    # Pipeline floor metrics (Improvement 5)
+    try:
+        from keephive.storage import floor_metrics
+
+        fm = floor_metrics()
+        floor_parts = []
+        if fm.get("auto_promoted_facts_7d", 0) > 0:
+            floor_parts.append(f"facts auto-promoted: {fm['auto_promoted_facts_7d']} this wk")
+        if fm.get("guide_hits_7d", 0) > 0:
+            floor_parts.append(f"guides matched: {fm['guide_hits_7d']}")
+        age_p50 = fm.get("pending_improvements_age_p50", 0)
+        if age_p50 > 0:
+            floor_parts.append(f"p50 queue age: {age_p50:.0f}d")
+        if floor_parts:
+            console.print()
+            console.print(f"  [dim]Pipeline floor[/dim]  {' · '.join(floor_parts)}")
+    except Exception:
+        pass
+
     show_hint("hive s", "live status")
 
 

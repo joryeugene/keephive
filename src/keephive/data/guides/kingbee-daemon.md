@@ -4,7 +4,7 @@ tags: [keephive, daemon, soul, kingbee, maintenance]
 
 # KingBee Daemon — Operational Guide
 
-KingBee is the background daemon that manages a persistent agent identity and five
+KingBee is the background daemon that manages a persistent agent identity and six
 scheduled maintenance tasks. This guide is the operational reference for the daemon
 system: SOUL.md, self-improve, checkup, and the full command vocabulary.
 
@@ -23,7 +23,7 @@ system: SOUL.md, self-improve, checkup, and the full command vocabulary.
 | `hive daemon disable <task>`         | Toggle a scheduled task off                       |
 | `hive daemon edit`                   | Open daemon.json in $EDITOR                       |
 | `hive daemon log`                    | Tail last 50 lines of daemon.log                  |
-| `hive checkup`                       | 6-stage production health report                  |
+| `hive checkup`                       | 7-stage production health report                  |
 | `hive checkup --snapshot`            | Git-snapshot hive state (for before/after diffs)  |
 | `hive checkup --diff`                | Show what mutated since last snapshot             |
 | `hive checkup --json`                | Machine-readable health report (scripting/CI)     |
@@ -110,14 +110,15 @@ Edit with `hive daemon edit`.
 
 ### Task schedule defaults
 
-| Task              | Default | Trigger             | Throttle  | Notes                         |
-|-------------------|---------|---------------------|-----------|-------------------------------|
-| soul-update       | on      | PreCompact / manual | 1h        |                               |
-| self-improve      | on      | daily / manual      | 1 day     |                               |
-| morning-briefing  | off     | 07:00               | daily     |                               |
-| stale-check       | off     | Monday 08:00        | weekly    |                               |
-| standup-draft     | off     | 17:00               | daily     |                               |
-| wander            | off     | 14:00               | daily     | WebSearch enabled; 1 doc/day  |
+| Task              | Default | Trigger             | Throttle  | Notes                                    |
+|-------------------|---------|---------------------|-----------|------------------------------------------|
+| soul-update       | on      | PreCompact / manual | 1h        |                                          |
+| self-improve      | on      | daily / manual      | 1 day     |                                          |
+| morning-briefing  | off     | 07:00               | daily     |                                          |
+| stale-check       | off     | Monday 08:00        | weekly    |                                          |
+| standup-draft     | off     | 17:00               | daily     |                                          |
+| wander            | off     | 14:00               | daily     | WebSearch enabled; 1 doc/day             |
+| reflect-draft     | off     | Friday 18:00        | 7 days    | Auto-drafts guide for uncovered theme    |
 
 Tasks marked `off` require explicit opt-in:
 
@@ -129,16 +130,17 @@ hive daemon disable standup-draft     # deactivate (already off by default)
 
 ---
 
-## Checkup — 6-Stage Health Report
+## Checkup — 7-Stage Health Report
 
 `hive checkup` is a read-only diagnostic that inspects the full keephive system.
 No LLM calls, no writes. Runs in under 1 second.
 
-### The 6 stages
+### The 7 stages
 
 | Stage | What it checks                                                        |
 |-------|-----------------------------------------------------------------------|
-| 1     | Hook pipeline — all 7 hooks registered and pointing to current binary |
+| 0     | Privacy gate — `.llm-paused` and `.force-cli` flag state              |
+| 1     | Hook pipeline — all 8 hooks registered and pointing to current binary |
 | 2     | Daemon task freshness — last-run times vs. expected schedule          |
 | 3     | Queue depths — pending facts, pending rules, pending improvements     |
 | 4     | SOUL.md age — days since last soul-update, warns if > 7 days          |
@@ -217,6 +219,7 @@ hive serve               # navigate to /play for the dashboard panel
 | morning-briefing | Daily       | Daemon tick (07:00) | Skip        |
 | stale-check      | Weekly      | Daemon tick (Mon)   | Skip        |
 | wander           | Daily       | Daemon tick (14:00) | Skip        |
+| reflect-draft    | 7 days      | Daemon tick (Fri)   | Silent skip |
 | nudge (prompt)   | Every 5; recency: 15 per category | userpromptsubmit    | No nudge (or fallback) |
 | nudge (tool)     | Every 5; recency: 15 per category | posttooluse         | No nudge (or fallback) |
 | nudge (stop)     | Every 8; recency: 15 per category | stop hook           | No nudge (or fallback) |

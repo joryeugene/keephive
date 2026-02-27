@@ -26,10 +26,10 @@ For direct API backends (`anthropic_api`, `openai_api`, `gemini_api`):
 
 If `hive doctor` reports `No operational backend detected`:
 - **Cause**: You haven't installed the `claude` CLI and haven't provided API keys for direct access.
-- **Fix**: 
+- **Fix**:
   1. Install Claude Code: `npm install -g @anthropic-ai/claude-code`
   2. OR set an API key: `export ANTHROPIC_API_KEY="your-api-key"`
-  3. OR configure a preferred backend: `hive config llm-backend set openai_api`
+  3. To force CLI-only routing (skip direct API): `hive privacy cli`
 
 ---
 

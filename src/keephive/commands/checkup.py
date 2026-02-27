@@ -493,6 +493,14 @@ def _report_json() -> None:
 
     privacy_data = _check_privacy_gate()
 
+    pipeline_health: dict = {}
+    try:
+        from keephive.storage import floor_metrics
+
+        pipeline_health = floor_metrics()
+    except Exception:
+        pass
+
     out = {
         "privacy_paused": privacy_data["paused"],
         "force_cli": privacy_data["force_cli"],
@@ -507,6 +515,7 @@ def _report_json() -> None:
         "queue_depths": queue_data,
         "soul_freshness": soul_data,
         "data_integrity": integrity_data["checks"],
+        "pipeline_health": pipeline_health,
         "warnings": warnings,
     }
     print(json.dumps(out, indent=2))

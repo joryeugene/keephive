@@ -2577,3 +2577,211 @@ class TestCountKingbeeToday:
             f"# Daily Log: {today.isoformat()}\n\n- [10:00:00] FACT: Just a regular entry\n"
         )
         assert count_kingbee_today() == 0
+
+
+# ---- floor_metrics (Improvement 5) ----
+
+
+class TestFloorMetrics:
+    def test_returns_required_keys(self, hive_env):
+        """floor_metrics() returns dict with all expected metric keys."""
+        from keephive.storage import floor_metrics
+
+        result = floor_metrics()
+        expected_keys = {
+            "pending_facts_depth",
+            "pending_improvements_age_p50",
+            "guide_hits_7d",
+            "soul_update_frequency_7d",
+            "auto_promoted_facts_7d",
+            "reflect_draft_proposals_7d",
+        }
+        assert set(result.keys()) == expected_keys
+
+    def test_pending_facts_depth_counts_bullets(self, hive_env):
+        """pending_facts_depth reflects bullet count in .pending-facts.md."""
+        pf = hive_env / ".pending-facts.md"
+        pf.write_text("- [loop:1] First fact\n- [loop:1] Second fact\n- [loop:2] Third fact\n")
+
+        from keephive.storage import floor_metrics
+
+        result = floor_metrics()
+        assert result["pending_facts_depth"] == 3
+
+    def test_pending_facts_depth_zero_when_absent(self, hive_env):
+        """pending_facts_depth is 0 when .pending-facts.md doesn't exist."""
+        from keephive.storage import floor_metrics
+
+        result = floor_metrics()
+        assert result["pending_facts_depth"] == 0
+
+    def test_auto_promoted_facts_counts_auto_tags(self, hive_env):
+        """auto_promoted_facts_7d counts [auto]-tagged lines in memory.md."""
+        mem = hive_env / "working" / "memory.md"
+        mem.write_text(
+            "# Working Memory\n\n"
+            "- [auto] Always verify field names before use\n"
+            "- [auto] Run tests after any schema change\n"
+            "- Regular fact without auto tag\n"
+        )
+
+        from keephive.storage import floor_metrics
+
+        result = floor_metrics()
+        assert result["auto_promoted_facts_7d"] == 2
+
+    def test_guide_hits_7d_sums_recent_days(self, hive_env):
+        """guide_hits_7d sums guide_hits events from last 7 days of .stats.json."""
+        import json
+        from datetime import date, timedelta
+
+        stats_path = hive_env / ".stats.json"
+        today = date.today()
+        days_data = {}
+        # 3 hits today, 2 hits 5 days ago
+        days_data[today.isoformat()] = {"guide_hits": {"my-guide": 3}}
+        days_data[(today - timedelta(days=5)).isoformat()] = {"guide_hits": {"other-guide": 2}}
+        # 1 hit 10 days ago (outside 7d window)
+        days_data[(today - timedelta(days=10)).isoformat()] = {"guide_hits": {"old-guide": 1}}
+        stats_path.write_text(json.dumps({"days": days_data}))
+
+        from keephive.storage import floor_metrics
+
+        result = floor_metrics()
+        assert result["guide_hits_7d"] == 5  # 3 + 2, not 3 + 2 + 1
+
+    def test_empty_stats_returns_zeros(self, hive_env):
+        """Empty .stats.json results in all-zero counters (no crash)."""
+        from keephive.storage import floor_metrics
+
+        result = floor_metrics()
+        assert result["guide_hits_7d"] == 0
+        assert result["soul_update_frequency_7d"] == 0
+
+
+class TestWritePendingFacts:
+    """write_pending_facts() persists a list of fact dicts to .pending-facts.md."""
+
+    def test_roundtrip_with_loop_id(self, hive_env):
+        """Facts written with a loop_id survive a read_pending_facts() round-trip."""
+        from keephive.storage import read_pending_facts, write_pending_facts
+
+        items = [
+            {"fact": "Always verify field names before use", "loop_id": "abc123"},
+            {"fact": "KB queue truncates on clear", "loop_id": "abc123"},
+        ]
+        write_pending_facts(items)
+        result = read_pending_facts()
+        assert len(result) == 2
+        assert result[0]["fact"] == "Always verify field names before use"
+        assert result[0]["loop_id"] == "abc123"
+
+    def test_roundtrip_without_loop_id(self, hive_env):
+        """Facts written without a loop_id come back with empty loop_id."""
+        from keephive.storage import read_pending_facts, write_pending_facts
+
+        items = [{"fact": "No loop attribution fact", "loop_id": ""}]
+        write_pending_facts(items)
+        result = read_pending_facts()
+        assert len(result) == 1
+        assert result[0]["fact"] == "No loop attribution fact"
+        assert result[0]["loop_id"] == ""
+
+    def test_empty_list_removes_file(self, hive_env):
+        """Passing an empty list removes the .pending-facts.md file."""
+        from keephive.storage import pending_facts_file, write_pending_facts
+
+        pf = pending_facts_file()
+        pf.parent.mkdir(parents=True, exist_ok=True)
+        pf.write_text("- some old fact\n")
+        assert pf.exists()
+
+        write_pending_facts([])
+        assert not pf.exists()
+
+
+class TestAutoTriagePendingFacts:
+    """auto_triage_pending_facts() partitions facts by triage criteria."""
+
+    def test_hedge_word_requires_review(self, hive_env):
+        """A fact containing a hedge word is placed in needs_review."""
+        from keephive.storage import append_pending_facts, auto_triage_pending_facts
+
+        append_pending_facts(["This might be important"], "loop1")
+        promotable, needs_review = auto_triage_pending_facts("")
+        assert len(promotable) == 0
+        assert len(needs_review) == 1
+        assert "might" in needs_review[0]["fact"]
+
+    def test_clean_fact_is_promotable(self, hive_env):
+        """A fact with no hedge words and no memory overlap is promotable."""
+        from keephive.storage import append_pending_facts, auto_triage_pending_facts
+
+        append_pending_facts(["Always verify response field names before use"], "loop1")
+        promotable, needs_review = auto_triage_pending_facts("")
+        assert len(promotable) == 1
+        assert len(needs_review) == 0
+
+    def test_duplicate_fact_requires_review(self, hive_env):
+        """A fact too similar to existing memory stays in needs_review."""
+        from keephive.storage import append_pending_facts, auto_triage_pending_facts
+
+        memory = "- Always verify field names before use in API responses"
+        append_pending_facts(["Always verify field names before use in API responses"], "loop1")
+        promotable, needs_review = auto_triage_pending_facts(memory)
+        assert len(promotable) == 0
+        assert len(needs_review) == 1
+
+    def test_empty_pending_returns_empty_lists(self, hive_env):
+        """No pending facts yields ([], [])."""
+        from keephive.storage import auto_triage_pending_facts
+
+        promotable, needs_review = auto_triage_pending_facts("- some existing memory line")
+        assert promotable == []
+        assert needs_review == []
+
+
+class TestPromoteFactsToMemory:
+    """_promote_facts_to_memory() appends [auto]-tagged facts to memory.md."""
+
+    def test_appends_auto_tagged_lines(self, hive_env):
+        """Promotable facts appear in memory.md with [auto] tag."""
+        from keephive.storage import hive_dir, memory_file
+
+        mem = memory_file()
+        mem.parent.mkdir(parents=True, exist_ok=True)
+        mem.write_text("# Memory\n\n- Existing fact\n")
+
+        from keephive.commands.reflect import _promote_facts_to_memory
+
+        count = _promote_facts_to_memory([{"fact": "New clean fact", "loop_id": "x1"}])
+        assert count == 1
+        content = mem.read_text()
+        assert "- [auto] New clean fact" in content
+
+    def test_skips_already_present_fact(self, hive_env):
+        """Facts already in memory.md are silently skipped (no duplicates)."""
+        from keephive.storage import memory_file
+
+        mem = memory_file()
+        mem.parent.mkdir(parents=True, exist_ok=True)
+        mem.write_text("# Memory\n\n- [auto] New clean fact\n")
+
+        from keephive.commands.reflect import _promote_facts_to_memory
+
+        count = _promote_facts_to_memory([{"fact": "New clean fact", "loop_id": "x1"}])
+        assert count == 0
+        # Still only one occurrence
+        assert mem.read_text().count("- [auto] New clean fact") == 1
+
+    def test_returns_zero_when_memory_missing(self, hive_env):
+        """Returns 0 gracefully when memory.md does not exist."""
+        from keephive.storage import memory_file
+
+        # hive_env creates memory.md by default; remove it to test the absent case
+        memory_file().unlink(missing_ok=True)
+
+        from keephive.commands.reflect import _promote_facts_to_memory
+
+        count = _promote_facts_to_memory([{"fact": "Some fact", "loop_id": ""}])
+        assert count == 0

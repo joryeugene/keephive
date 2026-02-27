@@ -489,8 +489,13 @@ def read_soul() -> str:
     return safe_read_text(path) if path.exists() else ""
 
 
-def read_soul_summary() -> str:
-    """Extract ## Summary section only — max ~300 tokens for sessionstart injection.
+def read_soul_summary(project_name: str | None = None) -> str:
+    """Extract ## Summary + filtered ## What I've Learned bullets from SOUL.md.
+
+    If project_name is provided, filters the "What I've Learned" bullets to include
+    only [universal] bullets and bullets tagged [project_name]. Bullets tagged for
+    other projects are omitted. Untagged bullets are treated as [universal] for
+    backward compatibility with pre-v1.4.0 SOUL.md files.
 
     HTML template comments (<!-- ... -->) are stripped before returning.
     Returns empty string if SOUL.md missing or has no ## Summary section.
@@ -498,13 +503,55 @@ def read_soul_summary() -> str:
     content = read_soul()
     if not content:
         return ""
-    for block in content.split("##"):
+
+    blocks = content.split("##")
+    summary_block = ""
+    learned_block = ""
+
+    for block in blocks:
         stripped = block.strip()
         if stripped.lower().startswith("summary"):
             clean = re.sub(r"<!--.*?-->", "", stripped, flags=re.DOTALL)
             lines = [ln for ln in clean.splitlines() if ln.strip()]
-            return "## " + "\n".join(lines).strip()
-    return ""
+            summary_block = "## " + "\n".join(lines).strip()
+        elif re.match(r"what i.ve learned", stripped.lower()):
+            if project_name:
+                proj_lower = project_name.lower()
+                filtered_lines: list[str] = []
+                header_done = False
+                for line in stripped.splitlines():
+                    if not header_done:
+                        filtered_lines.append(line)
+                        header_done = True
+                        continue
+                    if not line.strip().startswith("- "):
+                        filtered_lines.append(line)
+                        continue
+                    # Determine scope tag
+                    scope_match = re.match(r"^- \[([^\]]+)\]", line)
+                    if scope_match:
+                        tag = scope_match.group(1).lower()
+                        if tag == "universal" or tag == proj_lower:
+                            filtered_lines.append(line)
+                        # Else: tagged for another project — skip
+                    else:
+                        # No scope tag: treat as universal (backward compat)
+                        filtered_lines.append(line)
+                if filtered_lines:
+                    clean = re.sub(r"<!--.*?-->", "", "\n".join(filtered_lines), flags=re.DOTALL)
+                    learned_block = "## " + clean.strip()
+            else:
+                clean = re.sub(r"<!--.*?-->", "", stripped, flags=re.DOTALL)
+                lines = [ln for ln in clean.splitlines() if ln.strip()]
+                learned_block = "## " + "\n".join(lines).strip()
+
+    if not summary_block:
+        return ""
+
+    parts = [summary_block]
+    if learned_block:
+        parts.append(learned_block)
+    return "\n\n".join(parts)
 
 
 def daemon_config_file() -> "Path":
@@ -2912,6 +2959,33 @@ def clear_reviewed_facts(indices: list[int]) -> None:
         path.unlink(missing_ok=True)
 
 
+def write_pending_facts(items: list[dict]) -> None:
+    """Overwrite .pending-facts.md with the given list of fact dicts.
+
+    Each dict must have keys 'fact' (str) and optionally 'loop_id' (str).
+    Passing an empty list removes the file.
+    """
+    path = pending_facts_file()
+    if not items:
+        path.unlink(missing_ok=True)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines: list[str] = []
+    for item in items:
+        fact = item.get("fact", "").strip()
+        loop_id = item.get("loop_id", "")
+        if not fact:
+            continue
+        if loop_id:
+            lines.append(f"- [loop:{loop_id}] {fact}")
+        else:
+            lines.append(f"- {fact}")
+    if lines:
+        path.write_text("\n".join(lines) + "\n")
+    else:
+        path.unlink(missing_ok=True)
+
+
 # ── Privacy gate ──────────────────────────────────────────────────────
 
 
@@ -3055,3 +3129,160 @@ def set_force_cli(enabled: bool) -> None:
         f.touch()
     else:
         f.unlink(missing_ok=True)
+
+
+_HEDGE_WORDS = frozenset(
+    {"might", "could", "possibly", "sometimes", "perhaps", "maybe", "probably", "likely"}
+)
+_AUTO_TRIAGE_SIM_THRESHOLD = 0.7
+
+
+def auto_triage_pending_facts(
+    memory_text: str,
+) -> tuple[list[dict], list[dict]]:
+    """Partition pending facts into (auto_promotable, needs_review).
+
+    Auto-promotable criteria (ALL must be true):
+    - No hedge words in the fact text
+    - SequenceMatcher similarity < 0.7 against all existing memory lines
+    - Fact text is not empty after stripping the loop attribution prefix
+
+    Returns (promotable, review_required) without modifying any files.
+    Each item is a dict with keys: fact (str), loop_id (str).
+    """
+    from difflib import SequenceMatcher
+
+    pending = read_pending_facts()
+    if not pending:
+        return [], []
+
+    # Build normalised memory lines for similarity check
+    mem_lines = [
+        ln.strip().lower()
+        for ln in memory_text.splitlines()
+        if ln.strip().startswith("- ")
+    ]
+
+    promotable: list[dict] = []
+    needs_review: list[dict] = []
+
+    for item in pending:
+        fact_text = item.get("fact", "").strip()
+        if not fact_text:
+            needs_review.append(item)
+            continue
+
+        fact_lower = fact_text.lower()
+
+        # Hedge-word check
+        words = set(fact_lower.split())
+        if words & _HEDGE_WORDS:
+            needs_review.append(item)
+            continue
+
+        # Similarity check against existing memory
+        too_similar = False
+        for mem_line in mem_lines:
+            ratio = SequenceMatcher(None, fact_lower, mem_line).ratio()
+            if ratio >= _AUTO_TRIAGE_SIM_THRESHOLD:
+                too_similar = True
+                break
+
+        if too_similar:
+            needs_review.append(item)
+            continue
+
+        promotable.append(item)
+
+    return promotable, needs_review
+
+
+def floor_metrics() -> dict:
+    """Compute pipeline health metrics across all tracked data.
+
+    Pure read — no writes. Safe to call from checkup --json and hive stats.
+    Returns a dict with keys:
+      pending_facts_depth     int   current items in .pending-facts.md
+      pending_improvements_age_p50  float  median age (days) of pending improvements
+      guide_hits_7d           int   total guide injections in last 7 days
+      soul_update_frequency_7d int  how many times SOUL.md was updated this week
+      auto_promoted_facts_7d  int   [auto]-tagged facts added to memory in last 7 days
+      reflect_draft_proposals_7d int daemon-drafted guide proposals in last 7 days
+    """
+    from datetime import datetime as _dt
+
+    try:
+        data = read_stats()
+        days_data = data.get("days", {})
+    except Exception:
+        days_data = {}
+
+    today = get_today()
+    cutoff_7 = (today - timedelta(days=7)).isoformat()
+
+    # guide_hits_7d: sum guide_hits category across last 7 days
+    guide_hits_7d = 0
+    for datestr, day in days_data.items():
+        if datestr >= cutoff_7:
+            gh = day.get("guide_hits", {})
+            guide_hits_7d += sum(gh.values()) if isinstance(gh, dict) else 0
+
+    # soul_update_frequency_7d: count daemon_tasks.soul-update hits in last 7 days
+    soul_update_frequency_7d = 0
+    for datestr, day in days_data.items():
+        if datestr >= cutoff_7:
+            soul_update_frequency_7d += day.get("daemon_tasks", {}).get("soul-update", 0)
+
+    # reflect_draft_proposals_7d: count daemon_tasks.reflect-draft hits in last 7 days
+    reflect_draft_proposals_7d = 0
+    for datestr, day in days_data.items():
+        if datestr >= cutoff_7:
+            reflect_draft_proposals_7d += day.get("daemon_tasks", {}).get("reflect-draft", 0)
+
+    # pending_facts_depth: current bullet count in .pending-facts.md
+    pf_path = pending_facts_file()
+    pending_facts_depth = 0
+    if pf_path.exists():
+        pending_facts_depth = sum(
+            1 for ln in pf_path.read_text().splitlines() if ln.strip().startswith("- ")
+        )
+
+    # pending_improvements_age_p50: median age of items in .pending-improvements.json
+    pending_improvements_age_p50 = 0.0
+    try:
+        items = read_pending_improvements()
+        if items:
+            now_iso = _dt.now().isoformat()
+            ages: list[float] = []
+            for item in items:
+                proposed_at = item.get("proposed_at", now_iso)
+                try:
+                    age_days = (_dt.now() - _dt.fromisoformat(proposed_at)).total_seconds() / 86400
+                    ages.append(age_days)
+                except (ValueError, TypeError):
+                    ages.append(0.0)
+            ages.sort()
+            mid = len(ages) // 2
+            pending_improvements_age_p50 = ages[mid] if ages else 0.0
+    except Exception:
+        pass
+
+    # auto_promoted_facts_7d: count [auto] lines added to memory.md in last 7 days
+    auto_promoted_facts_7d = 0
+    try:
+        mf = memory_file()
+        if mf.exists():
+            for line in mf.read_text().splitlines():
+                if line.startswith("- [auto]"):
+                    auto_promoted_facts_7d += 1
+    except Exception:
+        pass
+
+    return {
+        "pending_facts_depth": pending_facts_depth,
+        "pending_improvements_age_p50": round(pending_improvements_age_p50, 1),
+        "guide_hits_7d": guide_hits_7d,
+        "soul_update_frequency_7d": soul_update_frequency_7d,
+        "auto_promoted_facts_7d": auto_promoted_facts_7d,
+        "reflect_draft_proposals_7d": reflect_draft_proposals_7d,
+    }

@@ -113,3 +113,61 @@ class TestSessionstartSoulInjection:
         assert not soul_file().exists()
         ctx = build_context("/test/project", "project")
         assert "## Agent Identity" not in ctx
+
+
+# ---- read_soul_summary project filtering (Improvement 3) ----
+
+
+class TestReadSoulSummaryProjectFilter:
+    def test_filters_by_project_name(self, hive_env):
+        """read_soul_summary(project_name) omits bullets for other projects."""
+        from keephive.storage import read_soul_summary, soul_file
+
+        soul_file().write_text(
+            "# SOUL.md\n\n"
+            "## Summary\nI know things.\n\n"
+            "## What I've Learned About How To Help You\n"
+            "- [universal] Always verify field names before use\n"
+            "- [keephive] KB queue requires truncation on clear\n"
+            "- [nucleus] Auth token expiry is 24h\n"
+        )
+
+        result = read_soul_summary(project_name="keephive")
+        assert "Always verify field names" in result
+        assert "KB queue requires truncation" in result
+        assert "Auth token expiry" not in result
+
+    def test_no_filter_returns_all_bullets(self, hive_env):
+        """read_soul_summary() with no project_name returns all bullets."""
+        from keephive.storage import read_soul_summary, soul_file
+
+        soul_file().write_text(
+            "# SOUL.md\n\n"
+            "## Summary\nI know things.\n\n"
+            "## What I've Learned About How To Help You\n"
+            "- [universal] Universal tip\n"
+            "- [keephive] Keephive tip\n"
+            "- [nucleus] Nucleus tip\n"
+        )
+
+        result = read_soul_summary()
+        assert "Universal tip" in result
+        assert "Keephive tip" in result
+        assert "Nucleus tip" in result
+
+    def test_untagged_bullets_treated_as_universal(self, hive_env):
+        """Bullets without scope tags are treated as [universal] (backward compat)."""
+        from keephive.storage import read_soul_summary, soul_file
+
+        soul_file().write_text(
+            "# SOUL.md\n\n"
+            "## Summary\nI know things.\n\n"
+            "## What I've Learned About How To Help You\n"
+            "- Untagged fact from older SOUL.md format\n"
+            "- [nucleus] Project-specific fact\n"
+        )
+
+        # Filtering for "keephive" should include untagged (treated as universal)
+        result = read_soul_summary(project_name="keephive")
+        assert "Untagged fact" in result
+        assert "Project-specific fact" not in result

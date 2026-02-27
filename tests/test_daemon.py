@@ -987,3 +987,105 @@ class TestDaemonPromptTodoFlagging:
         assert "TODO item 14" in prompt, (
             "TODO items beyond 500 chars should be included with 1200-char budget"
         )
+
+
+class TestReflectDraftTask:
+    """_task_reflect_draft() selects uncovered themes, drafts via LLM, queues trusted=False."""
+
+    def _make_daily_entries(self, hive_env, topic: str, count: int = 5) -> None:
+        """Seed daily log entries mentioning the given topic word."""
+        from keephive.storage import daily_file, ensure_daily
+
+        ensure_daily()
+        df = daily_file()
+        lines = [f"- [10:0{i}:00] FACT: Important insight about {topic} usage\n" for i in range(count)]
+        df.write_text("".join(lines))
+
+    def test_selects_uncovered_theme(self, hive_env, monkeypatch):
+        """Task picks the first active theme not already covered by a guide."""
+        from keephive.storage import guides_dir, read_pending_improvements
+
+        # Seed themes and an existing guide for the first theme
+        monkeypatch.setattr(
+            "keephive.hooks.sessionstart.extract_active_themes",
+            lambda days=7: ["testing", "auth"],
+        )
+        # "testing.md" guide exists → task should pick "auth"
+        guides_dir().mkdir(parents=True, exist_ok=True)
+        (guides_dir() / "testing.md").write_text("# Testing guide")
+
+        # Seed daily entries for "auth"
+        self._make_daily_entries(hive_env, "auth", count=5)
+
+        captured_prompts = []
+
+        def mock_run_claude(prompt, model_cls, stdin_text="", timeout=60):
+            captured_prompts.append(prompt)
+            from keephive.models import GuideDraftResponse
+
+            return GuideDraftResponse(title="Auth Guide", content="# Auth\n\nContent here.")
+
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", mock_run_claude)
+
+        from keephive.commands.daemon import _task_reflect_draft
+
+        result = _task_reflect_draft()
+        assert result is True
+
+        pending = read_pending_improvements()
+        assert len(pending) == 1
+        assert pending[0]["name"] == "auth"
+        assert pending[0]["type"] == "skill"
+        assert pending[0]["trusted"] is False
+
+    def test_skips_when_all_themes_covered(self, hive_env, monkeypatch):
+        """Returns True (ran cleanly) when every active theme already has a guide."""
+        from keephive.storage import guides_dir
+
+        monkeypatch.setattr(
+            "keephive.hooks.sessionstart.extract_active_themes",
+            lambda days=7: ["testing"],
+        )
+        guides_dir().mkdir(parents=True, exist_ok=True)
+        (guides_dir() / "testing.md").write_text("# Testing")
+
+        from keephive.commands.daemon import _task_reflect_draft
+
+        result = _task_reflect_draft()
+        assert result is True  # ran but nothing to draft
+
+    def test_returns_false_when_no_themes(self, hive_env, monkeypatch):
+        """Returns False when extract_active_themes() returns [] (insufficient data)."""
+        monkeypatch.setattr(
+            "keephive.hooks.sessionstart.extract_active_themes",
+            lambda days=7: [],
+        )
+
+        from keephive.commands.daemon import _task_reflect_draft
+
+        result = _task_reflect_draft()
+        assert result is False
+
+    def test_queues_trusted_false_improvement(self, hive_env, monkeypatch):
+        """Queued improvement always has trusted=False (requires human review)."""
+        from keephive.storage import read_pending_improvements
+
+        monkeypatch.setattr(
+            "keephive.hooks.sessionstart.extract_active_themes",
+            lambda days=7: ["newfeature"],
+        )
+        self._make_daily_entries(hive_env, "newfeature", count=5)
+
+        def mock_run_claude(prompt, model_cls, stdin_text="", timeout=60):
+            from keephive.models import GuideDraftResponse
+
+            return GuideDraftResponse(title="Feature Guide", content="# Feature\n\nDetails.")
+
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", mock_run_claude)
+
+        from keephive.commands.daemon import _task_reflect_draft
+
+        _task_reflect_draft()
+
+        pending = read_pending_improvements()
+        assert all(p.get("trusted") is False for p in pending if p.get("type") == "skill")

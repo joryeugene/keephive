@@ -140,6 +140,58 @@ def _active_draft_hint() -> str:
     return f'slot {slot} · "{preview}" ({words} words)'
 
 
+def extract_active_themes(days: int = 7) -> list[str]:
+    """Return active theme words from the last N days of daily logs.
+
+    Uses the same parsing logic as extract_style_hint(). Returns the top
+    words (appearing >= 2 times, filtered by STOPWORDS) up to 3 items.
+    Returns an empty list when fewer than 5 entries exist or on any error.
+    """
+    import re
+    from collections import Counter
+    from datetime import timedelta
+
+    try:
+        from keephive.commands.wander import STOPWORDS
+    except ImportError:
+        STOPWORDS = frozenset()
+
+    try:
+        today = get_today()
+        cat_re = re.compile(
+            r"^- \[\d{2}:\d{2}:\d{2}\]\s*(FACT|DECISION|INSIGHT|TODO|CORRECTION):\s*(.*)"
+        )
+        entry_count = 0
+        word_counts: Counter[str] = Counter()
+
+        for days_ago in range(days):
+            day_str = (today - timedelta(days=days_ago)).isoformat()
+            df = daily_file(day_str)
+            if not df.exists():
+                continue
+            try:
+                content = safe_read_text(df)
+            except OSError:
+                continue
+            for line in content.splitlines():
+                m = cat_re.match(line)
+                if not m:
+                    continue
+                text = m.group(2).strip()
+                entry_count += 1
+                for word in re.findall(r"[a-z]{4,}", text.lower()):
+                    if word not in STOPWORDS:
+                        word_counts[word] += 1
+
+        if entry_count < 5:
+            return []
+
+        return [w for w, c in word_counts.most_common(10) if c >= 2][:3]
+
+    except Exception:
+        return []
+
+
 def extract_style_hint(days: int = 7) -> str:
     """Compute a one-line writing style hint from recent daily log entries.
 
@@ -296,9 +348,10 @@ def build_context(cwd: str, project_name: str) -> str:
             recurring_lines.append(f"- [{freq}] {text} ({over_s})")
         parts.append("\n".join(recurring_lines))
 
-    # 6. Smart guide injection based on cwd
+    # 6. Smart guide injection based on cwd (with active-themes enrichment)
     if cwd and project_name:
-        guide_text = _match_guides(project_name, cwd)
+        themes = extract_active_themes()
+        guide_text = _match_guides(project_name, cwd, active_themes=themes)
         if guide_text:
             parts.append(guide_text)
 
@@ -321,9 +374,29 @@ def build_context(cwd: str, project_name: str) -> str:
     except Exception:
         pass
 
-    # 7c. Pending facts (auto-captured, awaiting review)
+    # 7c. Pending facts — auto-triage clean ones into memory, count remainder
     try:
+        import time as _time
+
+        from keephive.commands.reflect import _promote_facts_to_memory
+        from keephive.storage import auto_triage_pending_facts, write_pending_facts
+
         pending_facts_path = hive_dir() / ".pending-facts.md"
+        triage_stamp = hive_dir() / ".auto-triage.stamp"
+
+        if pending_facts_path.exists() and pending_facts_path.stat().st_size > 0:
+            # Hourly gate: run at most once per hour to avoid over-aggressiveness
+            last_run = triage_stamp.stat().st_mtime if triage_stamp.exists() else 0
+            if _time.time() - last_run > 3600:
+                memory_text = read_memory()
+                promotable, needs_review = auto_triage_pending_facts(memory_text)
+                if promotable:
+                    promoted_count = _promote_facts_to_memory(promotable)
+                    if promoted_count > 0:
+                        write_pending_facts(needs_review)
+                        triage_stamp.touch()
+
+        # Count remaining pending facts for the nudge
         if pending_facts_path.exists():
             pf_content = pending_facts_path.read_text().strip()
             if pf_content:
@@ -368,11 +441,11 @@ def build_context(cwd: str, project_name: str) -> str:
     except Exception:
         pass
 
-    # 10. Agent identity (KingBee SOUL.md ## Summary — max ~300 tokens)
+    # 10. Agent identity (KingBee SOUL.md ## Summary + filtered learnings)
     try:
         from keephive.storage import read_soul_summary
 
-        soul_summary = read_soul_summary()
+        soul_summary = read_soul_summary(project_name=project_name or None)
         if soul_summary:
             parts.append("## Agent Identity\n" + soul_summary)
     except Exception:
@@ -437,13 +510,17 @@ def _data_quality_warnings() -> list[str]:
     return warnings
 
 
-def _match_guides(project_name: str, cwd: str = "") -> str:
+def _match_guides(
+    project_name: str,
+    cwd: str = "",
+    active_themes: list[str] | None = None,
+) -> str:
     """Find guides matching the current project or working directory path.
 
-    Two-pass approach:
-    1. Collect always-inject guides (``always: true`` in front matter)
-    2. Collect project-matched guides (by tag, path, or filename)
-    Always-inject guides fill slots first; project-matched guides fill remaining slots.
+    Three-pass approach (priority order for slot allocation):
+    1. Always-inject guides (``always: true`` in front matter)
+    2. Project-matched guides (by tags/projects field, paths, or filename)
+    3. Theme-matched guides (``tags:`` overlaps with active_themes)
     Budget: max 3 guides, 1500 words total.
     """
     import re as _re
@@ -454,16 +531,20 @@ def _match_guides(project_name: str, cwd: str = "") -> str:
 
     max_words = 1500
     max_guides = 3
+    _active_themes = [t.lower() for t in (active_themes or [])]
 
     # Intermediate: (guide_path, content_without_frontmatter)
     always_guides: list[tuple[Path, str]] = []
     project_guides: list[tuple[Path, str]] = []
+    theme_guides: list[tuple[Path, str]] = []
 
     for guide in sorted(gd.glob("*.md")):
         text = guide.read_text()
         is_always = False
         matched = False
+        theme_matched = False
         paths_patterns: list[str] = []
+        guide_tags: list[str] = []
 
         # Parse front matter
         if text.startswith("---"):
@@ -488,6 +569,16 @@ def _match_guides(project_name: str, cwd: str = "") -> str:
             if paths_match:
                 paths_patterns = [p.strip().strip("'\"") for p in paths_match.group(1).split(",")]
 
+            # Extract tags: [...] for theme matching
+            if _active_themes:
+                tags_match = _re.search(r"tags:\s*\[([^\]]+)\]", " ".join(fm_lines))
+                if tags_match:
+                    guide_tags = [
+                        t.strip().strip("'\"").lower()
+                        for t in tags_match.group(1).split(",")
+                        if t.strip()
+                    ]
+
         # Check cwd against paths patterns
         if not is_always and not matched and cwd and paths_patterns:
             for pattern in paths_patterns:
@@ -499,7 +590,12 @@ def _match_guides(project_name: str, cwd: str = "") -> str:
         if not is_always and not matched and project_name.lower() in guide.stem.lower():
             matched = True
 
-        if is_always or matched:
+        # Theme match: tags overlap with active_themes (only when not already matched)
+        if not is_always and not matched and guide_tags and _active_themes:
+            if set(guide_tags) & set(_active_themes):
+                theme_matched = True
+
+        if is_always or matched or theme_matched:
             # Strip front matter for injection
             content = text
             if text.startswith("---"):
@@ -513,24 +609,36 @@ def _match_guides(project_name: str, cwd: str = "") -> str:
 
             if is_always:
                 always_guides.append((guide, content))
-            else:
+            elif matched:
                 project_guides.append((guide, content))
+            else:
+                theme_guides.append((guide, content))
 
-    # Fill slots: always guides first, then project-matched
+    # Fill slots: always guides first, then project-matched, then theme-matched
     matched_parts: list[str] = []
+    injected_stems: list[str] = []
     total_words = 0
     count = 0
 
-    for guide, content in always_guides + project_guides:
+    for guide, content in always_guides + project_guides + theme_guides:
         if count >= max_guides:
             break
         words = len(content.split())
         if total_words + words <= max_words:
             matched_parts.append(f"--- Guide: {guide.stem} ---\n{content}")
+            injected_stems.append(guide.stem)
             total_words += words
             count += 1
 
     if matched_parts:
+        # Track guide injection hits for floor metrics
+        try:
+            from keephive.storage import track_event as _track_event
+
+            for stem in injected_stems:
+                _track_event("guide_hits", stem)
+        except Exception:
+            pass
         return "## Relevant Knowledge Guides\n" + "\n".join(matched_parts)
     return ""
 
