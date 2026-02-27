@@ -461,37 +461,49 @@ def _data_quality_checks() -> tuple[int, list[str]]:
 
 
 _EXPECTED_HIVE_ENTRIES = {
-    "memory.md",
-    "SOUL.md",
-    "TODO.md",
-    "rules.md",
-    "daily",
-    "knowledge",
-    "working",
-    "archive",
-    ".stats.json",
-    ".pending-facts.md",
-    ".pending-rules.md",
-    ".pending-improvements.jsonl",
-    ".dismissed-improvements.jsonl",
-    ".daemon-config.json",
-    ".daemon-state.json",
-    ".daemon.pid",
-    "daemon.json",
-    "daemon.log",
-    "telemetry",
-    ".prompt-counter",
-    ".tool-counter",
-    ".stop-counter",
+    # Directories (top-level children of hive_dir)
+    "daily", "archive", "working", "knowledge", "wander", "telemetry",
+    # Core files
+    "memory.md", "SOUL.md", "TODO.md", "rules.md",
+    "daemon.json", "daemon.log",
+    # Counters
+    ".prompt-counter", ".tool-counter", ".stop-counter",
+    # Stats + state
+    ".stats.json", ".stats.lock", ".daemon-state.json", ".daemon.pid",
+    ".settings.json", ".index.json", ".fts.db", ".recall-stats.json",
+    # Queues + pending
+    ".pending-facts.md", ".pending-rules.md",
+    ".pending-improvements.json", ".dismissed-improvements.json",
+    ".kb-queue.md", ".ui-queue",
+    # Privacy + flags
+    ".llm-paused", ".force-cli", ".auto-improve-trusted",
+    # Timestamps
+    ".auto-triage.stamp", ".session-launched", ".last-analyze.json", ".last-reflect-date",
+    # Daemon + tasks
+    ".custom-tasks.json", ".wander-seeds.json",
+    # Hooks
+    ".hook-debug.log",
+    # Snapshot (created by hive checkup --snapshot)
+    ".git", ".gitignore",
 }
+
+# Dynamic filenames that use variable suffixes
+_EXPECTED_HIVE_PREFIXES = (
+    ".loop-",       # .loop-{id}.json, .loop-done-{id}, .loop-prompt-{id}.txt
+    ".ui-queue-",   # .ui-queue-{project}
+)
 
 
 def _check_unexpected_hive_entries(hd: Path) -> list[str]:
     """Return names of top-level hive dir entries not in the expected set."""
     unexpected = []
     for entry in hd.iterdir():
-        if entry.name not in _EXPECTED_HIVE_ENTRIES:
-            unexpected.append(entry.name)
+        name = entry.name
+        if name in _EXPECTED_HIVE_ENTRIES:
+            continue
+        if any(name.startswith(pfx) for pfx in _EXPECTED_HIVE_PREFIXES):
+            continue
+        unexpected.append(name)
     return unexpected
 
 

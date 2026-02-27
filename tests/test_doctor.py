@@ -370,3 +370,122 @@ class TestDoctorModels:
         }
         resp = DoctorDuplicatesResponse.model_validate(data)
         assert len(resp.duplicate_groups) == 2
+
+
+# ---------------------------------------------------------------------------
+# TestHiveEntryAllowlist: allowlist coverage and prefix matching
+# ---------------------------------------------------------------------------
+
+
+class TestHiveEntryAllowlist:
+    def test_known_entries_not_flagged(self, hive_env):
+        """Every entry in _EXPECTED_HIVE_ENTRIES is accepted without warning."""
+        from keephive.commands.doctor import (
+            _EXPECTED_HIVE_ENTRIES,
+            _check_unexpected_hive_entries,
+        )
+
+        # Create every expected entry (as files or dirs depending on name)
+        for name in _EXPECTED_HIVE_ENTRIES:
+            path = hive_env / name
+            if path.exists():
+                continue
+            if "." in name and not name.startswith(".git"):
+                path.write_text("")
+            else:
+                path.mkdir(exist_ok=True)
+
+        unexpected = _check_unexpected_hive_entries(hive_env)
+        assert unexpected == [], f"False positives from allowlist: {unexpected}"
+
+    def test_prefix_matching_accepts_loop_files(self, hive_env):
+        """Dynamic .loop-* files are accepted via prefix matching."""
+        from keephive.commands.doctor import _check_unexpected_hive_entries
+
+        (hive_env / ".loop-abc123.json").write_text("{}")
+        (hive_env / ".loop-done-abc123").write_text("")
+        (hive_env / ".loop-prompt-abc123.txt").write_text("")
+
+        unexpected = _check_unexpected_hive_entries(hive_env)
+        loop_names = [n for n in unexpected if n.startswith(".loop-")]
+        assert loop_names == [], f"Loop files flagged as unexpected: {loop_names}"
+
+    def test_prefix_matching_accepts_ui_queue_project(self, hive_env):
+        """Dynamic .ui-queue-{project} files are accepted via prefix matching."""
+        from keephive.commands.doctor import _check_unexpected_hive_entries
+
+        (hive_env / ".ui-queue-myproject").write_text("")
+
+        unexpected = _check_unexpected_hive_entries(hive_env)
+        assert ".ui-queue-myproject" not in unexpected
+
+    def test_truly_unknown_files_still_flagged(self, hive_env):
+        """Files not in allowlist and not matching any prefix are flagged."""
+        from keephive.commands.doctor import _check_unexpected_hive_entries
+
+        (hive_env / ".mystery-file.json").write_text("{}")
+        (hive_env / "random-dir").mkdir()
+
+        unexpected = _check_unexpected_hive_entries(hive_env)
+        assert ".mystery-file.json" in unexpected
+        assert "random-dir" in unexpected
+
+    def test_storage_dotfiles_covered_by_allowlist(self):
+        """Every dotfile helper in storage.py produces a name in _EXPECTED_HIVE_ENTRIES."""
+        from keephive.commands.doctor import _EXPECTED_HIVE_ENTRIES
+        from keephive.storage import (
+            auto_improve_trusted_file,
+            custom_tasks_file,
+            daemon_config_file,
+            daemon_pid_file,
+            daemon_state_file,
+            dismissed_improvements_file,
+            force_cli_file,
+            hive_dir,
+            index_file,
+            kb_queue_file,
+            llm_paused_file,
+            pending_facts_file,
+            pending_improvements_file,
+            pending_rules_file,
+            recall_stats_file,
+            stats_file,
+        )
+
+        hd = hive_dir()
+        helpers = [
+            auto_improve_trusted_file,
+            custom_tasks_file,
+            daemon_config_file,
+            daemon_pid_file,
+            daemon_state_file,
+            dismissed_improvements_file,
+            force_cli_file,
+            index_file,
+            kb_queue_file,
+            llm_paused_file,
+            pending_facts_file,
+            pending_improvements_file,
+            pending_rules_file,
+            recall_stats_file,
+            stats_file,
+        ]
+
+        missing = []
+        for fn in helpers:
+            path = fn()
+            if path.parent == hd:
+                name = path.name
+                if name not in _EXPECTED_HIVE_ENTRIES:
+                    missing.append(f"{fn.__name__}() -> {name}")
+
+        assert missing == [], f"Storage dotfiles not in allowlist: {missing}"
+
+    def test_checkup_uses_all_daemon_tasks(self):
+        """checkup Stage 2 derives its task list from daemon._TASK_DEFAULTS."""
+        from keephive.commands.daemon import _TASK_DEFAULTS
+
+        expected_tasks = set(_TASK_DEFAULTS.keys())
+        assert "wander" in expected_tasks, "wander must be in _TASK_DEFAULTS"
+        assert "reflect-draft" in expected_tasks, "reflect-draft must be in _TASK_DEFAULTS"
+        assert len(expected_tasks) == 7, f"Expected 7 daemon tasks, got {len(expected_tasks)}"

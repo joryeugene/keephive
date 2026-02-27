@@ -213,7 +213,9 @@ def _check_daemon_tasks(hd: Path) -> dict:
     now = datetime.now()
 
     tasks: dict[str, dict] = {}
-    for task in ("soul-update", "self-improve", "morning-briefing", "stale-check", "standup-draft"):
+    from keephive.commands.daemon import _TASK_DEFAULTS
+
+    for task in _TASK_DEFAULTS:
         last_run_str = state.get(task, {}).get("last_run")
         if last_run_str:
             try:
