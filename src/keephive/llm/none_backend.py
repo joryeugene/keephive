@@ -7,7 +7,7 @@ from typing import Type, TypeVar
 from pydantic import BaseModel
 
 from keephive.llm import Backend
-from keephive.llm.exceptions import ClaudePipeError
+from keephive.llm.exceptions import BackendNotAvailable
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -23,7 +23,7 @@ def _call_structured(
     verbose: bool,
     **_kwargs,
 ) -> T:
-    raise ClaudePipeError(
+    raise BackendNotAvailable(
         "No LLM backend available. "
         "Configure a backend via HIVE_LLM_BACKEND, hive config llm-backend, or install the claude CLI."
     )

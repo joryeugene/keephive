@@ -598,11 +598,34 @@ def read_daemon_state() -> dict:
 
 
 def write_daemon_state(state: dict) -> None:
-    """Atomic write via temp-rename."""
+    """Exclusive-locked atomic write: safe across concurrent daemon processes.
+
+    Uses fcntl.flock (Unix) to serialise concurrent READ-MODIFY-WRITE cycles.
+    Without locking, two processes racing on the same file clobber each other's
+    entries because the last writer wins (atomic rename, no mutual exclusion).
+    The merge (current.update(state)) ensures callers passing a single-task dict
+    don't erase other tasks' last_run entries.
+    """
+    import fcntl
+
     path = daemon_state_file()
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(state, indent=2))
-    tmp.replace(path)
+    lock_path = path.with_suffix(".lock")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a") as lock_f:
+        try:
+            fcntl.flock(lock_f, fcntl.LOCK_EX)
+            current: dict = {}
+            if path.exists():
+                try:
+                    current = json.loads(path.read_text())
+                except (json.JSONDecodeError, OSError):
+                    pass
+            current.update(state)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(current, indent=2))
+            tmp.replace(path)
+        finally:
+            fcntl.flock(lock_f, fcntl.LOCK_UN)
 
 
 def daemon_task_enabled(task_name: str) -> bool:

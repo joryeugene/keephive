@@ -398,6 +398,20 @@ def _mark_last_run(task_name: str) -> None:
     write_daemon_state(state)
 
 
+def _is_no_backend_error(exc: Exception) -> bool:
+    """Return True when no LLM backend is available (permanent daemon condition).
+
+    Daemon processes run outside CC sessions — there is no claude socket.
+    BackendNotAvailable is not transient: retrying every 60 seconds produces a
+    storm (295 failures observed for reflect-draft on 2026-02-27).  Tasks that
+    detect this condition should return True (ran, nothing to retry) rather than
+    False (retry next tick).
+    """
+    from keephive.llm.exceptions import BackendNotAvailable
+
+    return isinstance(exc, BackendNotAvailable)
+
+
 # ── Task Implementations ─────────────────────────────────────────────
 
 
@@ -509,7 +523,7 @@ Write the briefing. Each point on its own line. Include pending queue summary at
             append_to_daily(entry)
     except ClaudePipeError as e:
         _log_daemon(f"morning-briefing failed: {e}")
-        return False
+        return True if _is_no_backend_error(e) else False
     return True
 
 
@@ -541,7 +555,7 @@ Memory:
             append_to_daily(entry)
     except ClaudePipeError as e:
         _log_daemon(f"stale-check failed: {e}")
-        return False
+        return True if _is_no_backend_error(e) else False
     return True
 
 
@@ -563,7 +577,7 @@ def _task_standup_draft() -> bool:
         return False
     except Exception as e:
         _log_daemon(f"standup-draft failed: {e}")
-        return False
+        return True if _is_no_backend_error(e) else False
 
 
 def _task_soul_update() -> bool:
@@ -692,7 +706,7 @@ Return the complete updated SOUL.md content (bounded, distilled, not expanded)."
         return False
     except ClaudePipeError as e:
         _log_daemon(f"soul-update failed: {e}")
-        return False
+        return True if _is_no_backend_error(e) else False
 
 
 def _task_self_improve() -> bool:
@@ -1066,7 +1080,7 @@ used_web_search: true if you used WebSearch, false otherwise"""
         return False
     except ClaudePipeError as exc:
         _log_daemon(f"wander failed: {exc}")
-        return False
+        return True if _is_no_backend_error(exc) else False
 
 
 def _task_reflect_draft() -> bool:
@@ -1148,7 +1162,7 @@ Do not invent or extrapolate beyond what the entries say.
         )
     except ClaudePipeError as exc:
         _log_daemon(f"reflect-draft: LLM failed: {exc}")
-        return False
+        return True if _is_no_backend_error(exc) else False
 
     if not response or not response.content.strip():
         return False

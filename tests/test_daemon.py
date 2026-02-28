@@ -1325,3 +1325,148 @@ class TestDaemonDefaultConfig:
                 assert parsed["tasks"][task_name]["enabled"] is False, (
                     f"Task '{task_name}' should be disabled by default."
                 )
+
+
+# ── Race condition: write_daemon_state merge semantics ────────────────────────
+
+
+class TestWriteDaemonStateMerge:
+    """write_daemon_state must merge with existing state, not replace it.
+
+    Without locking+merge, concurrent daemon processes (tick loop + hook-spawned
+    soul-update) race on READ-MODIFY-WRITE: the last writer wins and silently
+    erases the first writer's entry. This caused reflect-draft to appear in zero
+    entries in .daemon-state.json despite _mark_last_run() being called.
+    """
+
+    def test_second_write_does_not_erase_first_key(self, hive_env):
+        """Simulate the race: process B writes stale state that omits process A's key."""
+        from keephive.storage import read_daemon_state, write_daemon_state
+
+        write_daemon_state({"task-a": {"last_run": "2026-01-01T10:00:00"}})
+        # Process B had a stale read (before task-a was written) — writes only task-b
+        write_daemon_state({"task-b": {"last_run": "2026-01-01T10:01:00"}})
+        state = read_daemon_state()
+        assert "task-a" in state, "task-a was erased by the second write (race condition)"
+        assert "task-b" in state
+
+    def test_merge_preserves_existing_keys_on_update(self, hive_env):
+        """Updating one task must not erase unrelated tasks."""
+        from keephive.storage import read_daemon_state, write_daemon_state
+
+        write_daemon_state(
+            {
+                "soul-update": {"last_run": "2026-01-01T10:00:00"},
+                "stale-check": {"last_run": "2026-01-01T09:00:00"},
+            }
+        )
+        # Simulate soul-update tick: writes only its own key (had stale read)
+        write_daemon_state({"soul-update": {"last_run": "2026-01-01T11:00:00"}})
+        state = read_daemon_state()
+        assert "stale-check" in state, "stale-check erased by soul-update write"
+        assert state["soul-update"]["last_run"] == "2026-01-01T11:00:00"
+
+
+# ── BackendNotAvailable: all daemon tasks must return True, not False ─────────
+
+
+class TestDaemonTaskBackendNotAvailable:
+    """All daemon tasks must return True (not False) when no LLM backend is available.
+
+    BackendNotAvailable is a permanent condition for daemon processes running
+    outside CC sessions — there is no claude socket to connect to. Returning
+    False from a daemon task signals "retry next tick", which caused 295 failures
+    over 6 hours for reflect-draft on 2026-02-27.
+    """
+
+    @staticmethod
+    def _raise_no_backend(*args, **kwargs):
+        from keephive.llm.exceptions import BackendNotAvailable
+
+        raise BackendNotAvailable("No LLM backend available.")
+
+    def test_reflect_draft_returns_true_when_no_backend(self, hive_env):
+        """reflect-draft must not retry-storm when no backend is available."""
+        from unittest.mock import patch
+
+        from keephive.clock import get_today
+        from keephive.commands.daemon import _task_reflect_draft
+        from keephive.storage import daily_file, hive_dir
+
+        # Provide 5+ properly-formatted FACT entries so extract_active_themes
+        # returns themes (requires >= 5 entries matching FACT/DECISION/etc pattern).
+        today = get_today()
+        log_path = daily_file(today.isoformat())
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        entries = "\n".join(
+            f"- [{10 + i:02d}:00:00] FACT: authentication token validates authentication request {i}"
+            for i in range(7)
+        )
+        log_path.write_text(entries + "\n")
+        (hive_dir() / "guides").mkdir(exist_ok=True)
+
+        with patch("keephive.claude.run_claude_pipe", side_effect=self._raise_no_backend):
+            result = _task_reflect_draft()
+        assert result is True, "_task_reflect_draft must return True on BackendNotAvailable"
+
+    def test_morning_briefing_returns_true_when_no_backend(self, hive_env):
+        """morning-briefing must not retry-storm when no backend is available."""
+        from unittest.mock import patch
+
+        from keephive.commands.daemon import _task_morning_briefing
+
+        with patch("keephive.claude.run_claude_pipe", side_effect=self._raise_no_backend):
+            result = _task_morning_briefing()
+        assert result is True, "_task_morning_briefing must return True on BackendNotAvailable"
+
+    def test_stale_check_returns_true_when_no_backend(self, hive_env):
+        """stale-check must not retry-storm when no backend is available."""
+        from unittest.mock import patch
+
+        from keephive.commands.daemon import _task_stale_check
+        from keephive.storage import hive_dir
+
+        (hive_dir() / "memory.md").write_text("FACT: some fact [2026-01-01]\n")
+
+        with patch("keephive.claude.run_claude_pipe", side_effect=self._raise_no_backend):
+            result = _task_stale_check()
+        assert result is True, "_task_stale_check must return True on BackendNotAvailable"
+
+    def test_soul_update_returns_true_when_no_backend(self, hive_env):
+        """soul-update must not retry-storm when no backend is available."""
+        from unittest.mock import patch
+
+        from keephive.clock import get_today
+        from keephive.commands.daemon import _task_soul_update
+        from keephive.storage import daily_file
+
+        # soul_update returns False early when today_log and yesterday_log are both empty.
+        today_path = daily_file(get_today().isoformat())
+        today_path.parent.mkdir(parents=True, exist_ok=True)
+        today_path.write_text("FACT: authentication works correctly\n")
+
+        with patch("keephive.claude.run_claude_pipe", side_effect=self._raise_no_backend):
+            result = _task_soul_update()
+        assert result is True, "_task_soul_update must return True on BackendNotAvailable"
+
+    def test_wander_returns_true_when_no_backend(self, hive_env):
+        """wander must not retry-storm when no backend is available."""
+        from unittest.mock import patch
+
+        from keephive.commands.daemon import _task_wander
+        from keephive.storage import hive_dir
+
+        # Provide 2 memory lines with zero significant-word overlap so
+        # select_wander_seed produces a cross-pollination seed (priority 2).
+        # Lines must NOT share any significant word (len > 3, not in STOPWORDS).
+        # NOTE: read_memory() reads working_dir()/memory.md = hive_dir()/working/memory.md.
+        working = hive_dir() / "working"
+        working.mkdir(exist_ok=True)
+        (working / "memory.md").write_text(
+            "- authentication token validation requires session expiry tracking\n"
+            "- database indexing improves query throughput significantly\n"
+        )
+
+        with patch("keephive.claude.run_claude_pipe", side_effect=self._raise_no_backend):
+            result = _task_wander()
+        assert result is True, "_task_wander must return True on BackendNotAvailable"
