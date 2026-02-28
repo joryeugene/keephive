@@ -171,13 +171,20 @@ def _gather_raw_data() -> dict:
     # PR data (parallel gh calls)
     pr_data = _gather_pr_data()
 
-    # Raw daily text for the last 2 days (for LLM context)
+    # Raw daily text for the last 2 days (for LLM context), noise-filtered
     daily_text = ""
+    _NOISE_PATTERNS = (
+        "[Notification]",
+        "<!-- excerpt-hash",
+        "SUBAGENT-DONE:",
+    )
     if dd.exists():
         yday = t - timedelta(days=1)
         for fpath in sorted(dd.glob("*.md")):
             if fpath.stem >= yday.isoformat():
-                daily_text += f"--- {fpath.stem} ---\n{safe_read_text(fpath)}\n\n"
+                raw = safe_read_text(fpath)
+                lines = [ln for ln in raw.splitlines() if not any(p in ln for p in _NOISE_PATTERNS)]
+                daily_text += f"--- {fpath.stem} ---\n" + "\n".join(lines) + "\n\n"
 
     # KingBee standup draft: scan last 7 days newest-first, stop at first match.
     # Handles Friday draft → Monday standup (3-day gap) and weekend/holiday scenarios.

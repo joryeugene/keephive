@@ -22,8 +22,13 @@ Voice constraints (apply to all output):
 - No "Here is", "Here's", "This is", "I'll", "I will" openers
 - No hedging: not "might", "could", "possibly", "perhaps"
 - No empty affirmations: not "Great!", "Sure!", "Certainly!"
-- Silence is valid. Zero output beats filler output.
 - State facts. Do not narrate your reasoning process."""
+
+_VOICE_DISCIPLINE_SILENCE_OK = (
+    _VOICE_DISCIPLINE
+    + """
+- Silence is valid. Zero output beats filler output."""
+)
 
 from keephive.output import console  # noqa: E402
 from keephive.storage import (  # noqa: E402
@@ -541,7 +546,8 @@ def _task_stale_check() -> bool:
     memory = safe_read_text(memory_path)
     prompt = f"""You are KingBee. Review these memory.md facts for staleness.
 Flag any that are: older than 30 days about fast-moving code, contradictory, or likely outdated.
-Be brief. One line per flagged fact. If nothing is stale, return exactly: "Nothing stale."
+One line per flagged fact. If nothing is stale, write exactly one line: "Memory is clean."
+Always write at least one line of output.
 {_VOICE_DISCIPLINE}
 
 Memory:
@@ -690,12 +696,12 @@ Recent wander hypotheses (last 7 sessions):
 Current SOUL.md:
 {current_soul[:2000] if current_soul else "(empty)"}
 
-{_VOICE_DISCIPLINE}
+{_VOICE_DISCIPLINE_SILENCE_OK}
 
 Return the complete updated SOUL.md content (bounded, distilled, not expanded)."""
 
     try:
-        result = run_claude_pipe(prompt, SoulUpdateResponse, model="sonnet")
+        result = run_claude_pipe(prompt, SoulUpdateResponse, model="sonnet", timeout=180)
         if result and result.content:
             soul_file().write_text(result.content)
             _log_daemon("SOUL.md updated")
@@ -854,6 +860,9 @@ You can propose NEW improvements OR refine existing ones. Propose at most 4 item
 Do NOT propose anything the user has previously dismissed.
 IMPORTANT: All proposals go through hive improve review. You do not act directly.
 
+VALID edit targets (these are the ONLY skills that exist): {", ".join(sorted(skill_excerpts.keys())) if skill_excerpts else "(none)"}
+Do NOT propose edits to skills not in this list.
+
 Existing skills (slug -> excerpt): {skill_excerpts if skill_excerpts else "(none)"}
 Existing daemon tasks: {existing_tasks}
 Note slots with content: {note_summaries if note_summaries else "(all empty)"}
@@ -871,7 +880,7 @@ If nothing warrants a proposal, return all empty lists with summary "No patterns
 """
 
     try:
-        result = run_claude_pipe(prompt, ImprovementResponse, model="sonnet")
+        result = run_claude_pipe(prompt, ImprovementResponse, model="sonnet", timeout=180)
         if result:
             new_items: list[dict] = []
             for skill in result.proposed_skills:
@@ -1018,7 +1027,7 @@ you think. One search is plenty.
 Wander. Follow the thread wherever it goes. Find one unexpected connection to something \
 already in memory. Form one hypothesis. End with one open question.
 
-thinking: 100-200 words, first person, associative
+thinking: HARD LIMIT 150 words. First person, associative. If the connection is obvious, say so in one sentence and move on.
 connections: 1-3 links to specific things in memory
 hypothesis: exactly one sentence
 question: exactly one sentence, worth surfacing next session
@@ -1026,7 +1035,7 @@ action (optional): if this hypothesis suggests a concrete, specific action \
 (e.g. "remove unused skill X", "add rule about Y"), state it in one sentence. \
 Leave empty if exploratory only.
 action_type: "run" | "edit" | "rule" | "none". Set to "none" if action is empty.
-{_VOICE_DISCIPLINE}
+{_VOICE_DISCIPLINE_SILENCE_OK}
 
 used_web_search: true if you used WebSearch, false otherwise"""
 
@@ -1145,13 +1154,14 @@ def _task_reflect_draft() -> bool:
 
 The guide should be a concise, actionable markdown document. Structure it with:
 - A title (# heading)
-- Key sections with ## headings
-- Bullet points for specific facts and patterns
+- 2-4 sections with ## headings (no more than 4)
+- 3-7 bullet points per section
 - Code examples if relevant entries contain them
+- Total length: 300-600 words. Shorter is better.
 
 Be precise. Only include information that appears in the entries.
 Do not invent or extrapolate beyond what the entries say.
-{_VOICE_DISCIPLINE}"""
+{_VOICE_DISCIPLINE_SILENCE_OK}"""
 
     try:
         response = run_claude_pipe(

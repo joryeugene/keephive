@@ -747,7 +747,9 @@ class TestTaskReturnValues:
 
 
 class TestVoiceDisciplineConstant:
-    """_VOICE_DISCIPLINE constant is defined and injected into all daemon prompts."""
+    """_VOICE_DISCIPLINE constants are defined and correctly assigned to daemon prompts."""
+
+    _SILENCE_LINE = "Silence is valid. Zero output beats filler output."
 
     def test_constant_exists_and_is_nonempty(self):
         """_VOICE_DISCIPLINE is importable and non-empty."""
@@ -756,15 +758,32 @@ class TestVoiceDisciplineConstant:
         assert _VOICE_DISCIPLINE
         assert len(_VOICE_DISCIPLINE.strip()) > 20
 
+    def test_silence_ok_variant_exists(self):
+        """_VOICE_DISCIPLINE_SILENCE_OK extends the base with the silence line."""
+        from keephive.commands.daemon import (
+            _VOICE_DISCIPLINE,
+            _VOICE_DISCIPLINE_SILENCE_OK,
+        )
+
+        assert _VOICE_DISCIPLINE_SILENCE_OK
+        assert _VOICE_DISCIPLINE.strip() in _VOICE_DISCIPLINE_SILENCE_OK
+        assert self._SILENCE_LINE in _VOICE_DISCIPLINE_SILENCE_OK
+
+    def test_base_variant_lacks_silence_line(self):
+        """_VOICE_DISCIPLINE (base) does not contain the silence-is-valid line."""
+        from keephive.commands.daemon import _VOICE_DISCIPLINE
+
+        assert self._SILENCE_LINE not in _VOICE_DISCIPLINE
+
     def test_constant_contains_no_opener_constraint(self):
         """Constant includes the opener constraint."""
         from keephive.commands.daemon import _VOICE_DISCIPLINE
 
         assert "Here is" in _VOICE_DISCIPLINE
 
-    def test_constant_injected_in_morning_briefing(self, hive_env, monkeypatch):
-        """_VOICE_DISCIPLINE text appears in the morning_briefing prompt."""
-        from keephive.commands.daemon import _VOICE_DISCIPLINE, _task_morning_briefing
+    def test_morning_briefing_uses_base_not_silence_ok(self, hive_env, monkeypatch):
+        """morning_briefing uses _VOICE_DISCIPLINE (no silence line)."""
+        from keephive.commands.daemon import _task_morning_briefing
 
         captured_prompts = []
 
@@ -776,11 +795,12 @@ class TestVoiceDisciplineConstant:
         _task_morning_briefing()
 
         assert captured_prompts, "Expected run_claude_pipe to be called"
-        assert _VOICE_DISCIPLINE.strip() in captured_prompts[0]
+        assert "Here is" in captured_prompts[0]
+        assert self._SILENCE_LINE not in captured_prompts[0]
 
-    def test_constant_injected_in_stale_check(self, hive_env, monkeypatch):
-        """_VOICE_DISCIPLINE text appears in the stale_check prompt."""
-        from keephive.commands.daemon import _VOICE_DISCIPLINE, _task_stale_check
+    def test_stale_check_uses_base_not_silence_ok(self, hive_env, monkeypatch):
+        """stale_check uses _VOICE_DISCIPLINE (no silence line)."""
+        from keephive.commands.daemon import _task_stale_check
 
         captured_prompts = []
 
@@ -788,7 +808,6 @@ class TestVoiceDisciplineConstant:
             captured_prompts.append(prompt)
             return None
 
-        # Create memory.md so stale_check doesn't return early
         memory_path = hive_env / "memory.md"
         memory_path.write_text("- FACT: test fact [verified:2020-01-01]\n")
 
@@ -796,11 +815,12 @@ class TestVoiceDisciplineConstant:
         _task_stale_check()
 
         assert captured_prompts, "Expected run_claude_pipe to be called"
-        assert _VOICE_DISCIPLINE.strip() in captured_prompts[0]
+        assert "Here is" in captured_prompts[0]
+        assert self._SILENCE_LINE not in captured_prompts[0]
 
-    def test_constant_injected_in_soul_update(self, hive_env, monkeypatch):
-        """_VOICE_DISCIPLINE text appears in the soul_update prompt."""
-        from keephive.commands.daemon import _VOICE_DISCIPLINE, _task_soul_update
+    def test_soul_update_uses_silence_ok(self, hive_env, monkeypatch):
+        """soul_update uses _VOICE_DISCIPLINE_SILENCE_OK (silence is valid)."""
+        from keephive.commands.daemon import _task_soul_update
 
         captured_prompts = []
 
@@ -808,7 +828,6 @@ class TestVoiceDisciplineConstant:
             captured_prompts.append(prompt)
             return None
 
-        # Create today's log so soul_update doesn't return early
         from keephive.clock import get_today
         from keephive.storage import daily_file
 
@@ -821,11 +840,11 @@ class TestVoiceDisciplineConstant:
         _task_soul_update()
 
         assert captured_prompts, "Expected run_claude_pipe to be called"
-        assert _VOICE_DISCIPLINE.strip() in captured_prompts[0]
+        assert self._SILENCE_LINE in captured_prompts[0]
 
-    def test_constant_injected_in_wander(self, hive_env, monkeypatch):
-        """_VOICE_DISCIPLINE text appears in the wander prompt."""
-        from keephive.commands.daemon import _VOICE_DISCIPLINE, _task_wander
+    def test_wander_uses_silence_ok(self, hive_env, monkeypatch):
+        """wander uses _VOICE_DISCIPLINE_SILENCE_OK (silence is valid)."""
+        from keephive.commands.daemon import _task_wander
 
         captured_prompts = []
 
@@ -841,7 +860,86 @@ class TestVoiceDisciplineConstant:
         _task_wander()
 
         assert captured_prompts, "Expected run_claude_pipe to be called"
-        assert _VOICE_DISCIPLINE.strip() in captured_prompts[0]
+        assert self._SILENCE_LINE in captured_prompts[0]
+
+
+class TestPromptContentChanges:
+    """Verify specific prompt content fixes applied to daemon tasks."""
+
+    def test_stale_check_requires_output(self, hive_env, monkeypatch):
+        """stale-check prompt demands at least one line of output."""
+        from keephive.commands.daemon import _task_stale_check
+
+        captured_prompts = []
+
+        def fake_pipe(prompt, *args, **kwargs):
+            captured_prompts.append(prompt)
+            return None
+
+        memory_path = hive_env / "memory.md"
+        memory_path.write_text("- FACT: test fact [verified:2020-01-01]\n")
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", fake_pipe)
+        _task_stale_check()
+
+        assert captured_prompts
+        assert "Always write at least one line" in captured_prompts[0]
+        assert "Memory is clean" in captured_prompts[0]
+
+    def test_self_improve_lists_valid_edit_targets(self, hive_env, monkeypatch):
+        """self-improve prompt explicitly lists valid edit targets."""
+        from keephive.commands.daemon import _task_self_improve
+
+        captured_prompts = []
+
+        def fake_pipe(prompt, *args, **kwargs):
+            captured_prompts.append(prompt)
+            return None
+
+        # Create a guide so skill_excerpts is non-empty
+        gd = hive_env / "knowledge" / "guides"
+        gd.mkdir(parents=True, exist_ok=True)
+        (gd / "test-guide.md").write_text("# Test Guide\nSome content here\n")
+
+        # Seed 7 days of logs so self-improve doesn't skip
+        from datetime import timedelta
+
+        from keephive.clock import get_today
+        from keephive.storage import daily_file
+
+        today = get_today()
+        for i in range(7):
+            d = today - timedelta(days=i)
+            df = daily_file(d.isoformat())
+            df.parent.mkdir(parents=True, exist_ok=True)
+            df.write_text(f"- [10:00:00] FACT: test fact day {i}\n")
+
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", fake_pipe)
+        _task_self_improve()
+
+        assert captured_prompts
+        assert "VALID edit targets" in captured_prompts[0]
+        assert "test-guide" in captured_prompts[0]
+        assert "Do NOT propose edits to skills not in this list" in captured_prompts[0]
+
+    def test_wander_thinking_word_limit(self, hive_env, monkeypatch):
+        """wander prompt enforces thinking word limit."""
+        from keephive.commands.daemon import _task_wander
+
+        captured_prompts = []
+
+        def fake_pipe(prompt, *args, **kwargs):
+            captured_prompts.append(prompt)
+            return None
+
+        monkeypatch.setattr("keephive.claude.run_claude_pipe", fake_pipe)
+        monkeypatch.setattr(
+            "keephive.commands.wander.select_wander_seed",
+            lambda *a, **kw: ("test seed", "user-queued"),
+        )
+        _task_wander()
+
+        assert captured_prompts
+        assert "HARD LIMIT 150 words" in captured_prompts[0]
 
 
 class TestExecuteTaskTracking:

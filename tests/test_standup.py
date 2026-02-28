@@ -213,6 +213,31 @@ class TestStandupDataGathering:
         assert "closed_prs" in data
         assert "open_prs" in data
 
+    def test_daily_text_filters_noise_lines(self, hive_env, monkeypatch):
+        """daily_text strips Notification, SUBAGENT-DONE, and excerpt-hash lines."""
+        monkeypatch.setattr(
+            "subprocess.run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError)
+        )
+        make_daily(
+            hive_env,
+            0,
+            [
+                "- [10:00:00] FACT: Real work happened here",
+                "[Notification] Claude Code: Claude needs your permission",
+                "- SUBAGENT-DONE: Implement auth endpoint",
+                "<!-- excerpt-hash abc123 -->",
+                "- [10:05:00] DECISION: Use JWT for tokens",
+            ],
+        )
+        from keephive.commands.standup import _gather_raw_data
+
+        data = _gather_raw_data()
+        assert "Real work happened" in data["daily_text"]
+        assert "Use JWT" in data["daily_text"]
+        assert "[Notification]" not in data["daily_text"]
+        assert "SUBAGENT-DONE" not in data["daily_text"]
+        assert "excerpt-hash" not in data["daily_text"]
+
 
 # ---------------------------------------------------------------------------
 # TestStandupDisplay: Direct calls to extracted display functions
