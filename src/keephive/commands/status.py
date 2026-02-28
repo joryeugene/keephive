@@ -424,6 +424,11 @@ def _render_status() -> None:
     llm_table.add_column(justify="left")
     llm_table.add_column(justify="left")
     llm_table.add_row("[dim]settings[/dim]", f"[cyan]{settings_pref}[/cyan]")
+    if is_force_cli():
+        llm_table.add_row(
+            "[dim]policy[/dim]",
+            "[cyan]CLI-only[/cyan] [dim](API backends blocked)[/dim]",
+        )
     if env_override:
         llm_table.add_row("[dim]env override[/dim]", env_override)
     if llm_state:

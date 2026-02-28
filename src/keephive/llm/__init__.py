@@ -69,6 +69,26 @@ def _write_state(meta: dict) -> None:
         print(f"[keephive] Failed to write backend state: {exc}", file=sys.stderr)
 
 
+def _log_routing(event: str, backend: str, detail: str = "") -> None:
+    """Append a routing decision to .llm-routing.log (best effort, trims to 500 lines)."""
+    from keephive.storage import routing_log_file
+
+    try:
+        path = routing_log_file()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        suffix = f" — {detail}" if detail else ""
+        line = f"[{ts}] {event}: {backend}{suffix}\n"
+        with path.open("a", encoding="utf-8") as f:
+            f.write(line)
+        # Rolling cap: trim to last 500 lines
+        existing = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        if len(existing) > 500:
+            path.write_text("".join(existing[-500:]), encoding="utf-8")
+    except Exception:
+        pass
+
+
 def get_backend_state() -> dict:
     """Load last persisted backend state (best-effort)."""
     path = _backend_state_path()
@@ -109,6 +129,7 @@ def _auto_select(require_tools: bool, attempted: set[str]) -> tuple[Backend, dic
         if force_cli and backend.name not in ("anthropic_cli", "none"):
             attempted.add(backend.name)
             reason = f"{backend.name}: blocked by CLI-only policy"
+            _log_routing("blocked", backend.name, "CLI-only policy")
             continue
         available, info = backend.detect()
         if available:
@@ -256,11 +277,13 @@ def call_structured(
                 dangerously_skip_permissions=dangerously_skip_permissions,
             )
             meta["status"] = "ok"
+            _log_routing("used", backend.name, meta.get("source", "?"))
             _write_state(meta)
             return result
         except ClaudePipeError as exc:
             meta["status"] = "error"
             meta["error"] = str(exc)
+            _log_routing("failed", backend.name, str(exc)[:80])
             _write_state(meta)
 
             # Timeouts are non-retriable: a different backend would silently

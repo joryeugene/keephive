@@ -18,7 +18,14 @@ Usage:
 from __future__ import annotations
 
 from keephive.output import console
-from keephive.storage import hive_dir, is_force_cli, is_llm_paused, set_force_cli, set_llm_paused
+from keephive.storage import (
+    hive_dir,
+    is_force_cli,
+    is_llm_paused,
+    read_routing_log,
+    set_force_cli,
+    set_llm_paused,
+)
 
 
 def cmd_privacy(args: list[str]) -> None:
@@ -78,3 +85,11 @@ def _print_state() -> None:
             "or [bold]hive privacy cli[/bold] to restrict to claude -p only."
         )
         console.print()
+
+    log_lines = read_routing_log(10)
+    if log_lines:
+        console.print("[dim]Last 10 routing decisions:[/dim]")
+        for line in log_lines:
+            console.print(f"  [dim]{line}[/dim]")
+    else:
+        console.print("  [dim]No routing log yet — log populates on first LLM call.[/dim]")

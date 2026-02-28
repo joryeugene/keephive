@@ -3131,6 +3131,23 @@ def set_force_cli(enabled: bool) -> None:
         f.unlink(missing_ok=True)
 
 
+def routing_log_file() -> Path:
+    """Path to the LLM routing audit log."""
+    return hive_dir() / ".llm-routing.log"
+
+
+def read_routing_log(n: int = 20) -> list[str]:
+    """Return last n lines of the LLM routing log (newest last)."""
+    path = routing_log_file()
+    if not path.exists():
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+        return lines[-n:]
+    except OSError:
+        return []
+
+
 _HEDGE_WORDS = frozenset(
     {"might", "could", "possibly", "sometimes", "perhaps", "maybe", "probably", "likely"}
 )

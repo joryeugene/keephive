@@ -364,3 +364,39 @@ class TestCheckupJsonForceCli:
         cmd_checkup(["--json"])
         data = json.loads(capsys.readouterr().out)
         assert data["force_cli"] is True
+
+
+# ── Routing log helpers ───────────────────────────────────────────────
+
+
+class TestReadRoutingLog:
+    def test_empty_when_file_absent(self, hive_env):
+        from keephive.storage import read_routing_log
+
+        result = read_routing_log()
+        assert result == []
+
+    def test_returns_lines_when_file_present(self, hive_env):
+        from keephive.storage import read_routing_log, routing_log_file
+
+        path = routing_log_file()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "[2026-02-27 12:00:00] blocked: anthropic_api — CLI-only policy\n"
+            "[2026-02-27 12:01:00] used: anthropic_cli — auto\n",
+            encoding="utf-8",
+        )
+        lines = read_routing_log()
+        assert len(lines) == 2
+        assert "blocked: anthropic_api" in lines[0]
+        assert "used: anthropic_cli" in lines[1]
+
+    def test_n_parameter_limits_returned_lines(self, hive_env):
+        from keephive.storage import read_routing_log, routing_log_file
+
+        path = routing_log_file()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(f"line {i}" for i in range(50)) + "\n", encoding="utf-8")
+        lines = read_routing_log(5)
+        assert len(lines) == 5
+        assert lines[-1] == "line 49"  # last line returned, newest last
