@@ -38,7 +38,7 @@ HELP: dict[str, str] = {
         "  edit                 Open daemon.json in $EDITOR\n"
         "  log                  View last 50 lines of daemon.log"
     ),
-    "rule": "Usage: hive rule [rm|review|learn] <text>  (alias: rl = rule learn)\n  Add or remove behavioral rules\n  hive rule <text>      Add rule\n  hive rule rm <pat>    Remove matching rule\n  hive rule review      Review pending rule suggestions\n  hive rule learn       Learn rules from /insights friction data\n  hive rule learn --dry-run   Preview without queuing\n  hive rl               Shortcut for 'hive rule learn'",
+    "rule": "Usage: hive rule [rm|review|learn|try] <text>  (alias: rl = rule learn)\n  Add or remove behavioral rules\n  hive rule <text>      Add rule\n  hive rule rm <pat>    Remove matching rule\n  hive rule review      Review pending rule suggestions\n  hive rule learn       Learn rules from /insights friction data\n  hive rule learn --dry-run   Preview without queuing\n  hive rule try <text> [--days N]  Add experimental rule (auto-expires)\n  hive rl               Shortcut for 'hive rule learn'",
     "session": "Usage: hive go [mode|prompt]\n  Modes: todo, verify, learn, reflect\n  Or load a custom prompt from knowledge/prompts/",
     "skill": "Usage: hive sk [publish <name>|unpublish <name>|sync|find <q>]\n  Manage skill plugins",
     "update": "Usage: hive up\n  Upgrade keephive to the latest version in-place",

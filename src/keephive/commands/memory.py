@@ -10,9 +10,12 @@ from keephive.output import console, prompt_review_item
 from keephive.storage import (
     backup_and_write,
     ensure_dirs,
+    experiment_baselines_file,
     memory_file,
+    read_experiment_baselines,
     rules_file,
     today,
+    write_experiment_baselines,
 )
 
 # ---- Friction-to-rule mapping ----
@@ -254,6 +257,10 @@ def cmd_rule(args: list[str]) -> None:
 
     if args[0] == "rm":
         _remove_line(rules_file(), " ".join(args[1:]), "rules.md")
+        return
+
+    if args[0] == "try":
+        cmd_rule_try(args[1:])
         return
 
     rule_text = " ".join(args)
@@ -529,3 +536,142 @@ def _remove_line(path, pattern: str, filename: str) -> None:
     backup_and_write(path, "".join(new_lines))
     console.print(f"[ok]Removed:[/ok] {removed_line}")
     console.print(f"[dim]Backup: {filename}.bak[/dim]")
+
+
+# ---------------------------------------------------------------------------
+# Experimental rules
+# ---------------------------------------------------------------------------
+
+_EXPERIMENT_TAG_RE = re.compile(r"\[experiment:(\d+)d:(\d{4}-\d{2}-\d{2})\]")
+
+
+def _rule_hash(text: str) -> str:
+    """Stable hash for a rule line (strips tag + whitespace)."""
+    import hashlib
+
+    clean = _EXPERIMENT_TAG_RE.sub("", text).strip().lstrip("- ").strip()
+    return hashlib.sha256(clean.encode()).hexdigest()[:12]
+
+
+def _is_expired(rule_line: str) -> bool:
+    """True if an experiment tag exists and the expiry date has passed."""
+    from keephive.clock import get_today
+
+    m = _EXPERIMENT_TAG_RE.search(rule_line)
+    if not m:
+        return False
+    from datetime import date
+
+    expiry = date.fromisoformat(m.group(2))
+    return get_today() >= expiry
+
+
+def expire_experimental_rules() -> list[str]:
+    """Remove expired experimental rules from rules.md.
+
+    Returns list of expired rule texts (for logging).
+    Cleans up experiment baselines for expired rules.
+    """
+    rf = rules_file()
+    if not rf.exists():
+        return []
+
+    lines = rf.read_text().splitlines(keepends=True)
+    expired: list[str] = []
+    kept: list[str] = []
+
+    for line in lines:
+        if _EXPERIMENT_TAG_RE.search(line) and _is_expired(line):
+            expired.append(line.rstrip())
+        else:
+            kept.append(line)
+
+    if not expired:
+        return []
+
+    backup_and_write(rf, "".join(kept))
+
+    # Clean up baselines for expired rules
+    baselines = read_experiment_baselines()
+    for rule_text in expired:
+        h = _rule_hash(rule_text)
+        baselines.pop(h, None)
+    if baselines or experiment_baselines_file().exists():
+        write_experiment_baselines(baselines)
+
+    return expired
+
+
+def _snapshot_friction_baseline() -> dict[str, int]:
+    """Snapshot current friction counts from /insights facets.
+
+    Returns {friction_type: count} for use as experiment baseline.
+    """
+    friction = _read_facets()
+    return {ftype: fdata["count"] for ftype, fdata in friction.items()}
+
+
+def cmd_rule_try(args: list[str]) -> None:
+    """Add a rule as an experiment with auto-expiry.
+
+    Usage: hive rule try "rule text" [--days N]
+    Default: 7 days, max 30.
+    """
+    from datetime import timedelta
+
+    from keephive.clock import get_today
+
+    days = 7
+    rule_parts: list[str] = []
+
+    i = 0
+    while i < len(args):
+        if args[i] == "--days" and i + 1 < len(args):
+            try:
+                days = min(30, max(1, int(args[i + 1])))
+            except ValueError:
+                console.print("[err]--days requires a number[/err]")
+                return
+            i += 2
+        else:
+            rule_parts.append(args[i])
+            i += 1
+
+    rule_text = " ".join(rule_parts).strip()
+    if not rule_text:
+        console.print("[err]Usage: hive rule try \"rule text\" [--days N][/err]")
+        return
+
+    expiry = get_today() + timedelta(days=days)
+    tag = f"[experiment:{days}d:{expiry.isoformat()}]"
+    full_rule = f"- {rule_text} {tag}"
+
+    ensure_dirs()
+    rf = rules_file()
+    if not rf.exists():
+        rf.write_text("# Working Rules\n\n")
+
+    backup_and_write(rf, rf.read_text())
+    with open(rf, "a") as f:
+        if rf.stat().st_size > 0:
+            with open(rf, "rb") as check:
+                check.seek(-1, 2)
+                if check.read(1) != b"\n":
+                    f.write("\n")
+        f.write(full_rule + "\n")
+
+    # Snapshot friction baseline
+    h = _rule_hash(full_rule)
+    baselines = read_experiment_baselines()
+    baselines[h] = {
+        "rule": rule_text,
+        "added": get_today().isoformat(),
+        "expires": expiry.isoformat(),
+        "days": days,
+        "baseline_friction": _snapshot_friction_baseline(),
+    }
+    write_experiment_baselines(baselines)
+
+    console.print(f"[ok]Experiment added[/ok] ({days}d, expires {expiry.isoformat()})")
+    console.print(f"  {full_rule}")
+    console.print("[dim]Friction baseline saved. Rule auto-expires at session start.[/dim]")

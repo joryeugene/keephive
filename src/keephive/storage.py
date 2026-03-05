@@ -3468,3 +3468,30 @@ def growth_snapshot() -> dict:
         "week_totals": week_totals,
         "prev_week_totals": prev_week_totals,
     }
+
+
+# ---------------------------------------------------------------------------
+# Experiment baselines
+# ---------------------------------------------------------------------------
+
+
+def experiment_baselines_file() -> Path:
+    """Path to .experiment-baselines.json — friction snapshots for experimental rules."""
+    return hive_dir() / ".experiment-baselines.json"
+
+
+def read_experiment_baselines() -> dict:
+    """Read experiment baselines. Returns {rule_hash: {...}} dict."""
+    f = experiment_baselines_file()
+    if not f.exists():
+        return {}
+    try:
+        return json.loads(f.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def write_experiment_baselines(data: dict) -> None:
+    """Write experiment baselines to disk."""
+    f = experiment_baselines_file()
+    f.write_text(json.dumps(data, indent=2) + "\n")

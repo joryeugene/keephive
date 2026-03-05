@@ -281,6 +281,23 @@ def build_context(cwd: str, project_name: str) -> str:
     # 0. Auto-reverify stale facts (deterministic, no LLM, silent)
     _auto_reverify()
 
+    # 0b. Expire experimental rules (deterministic, no LLM)
+    try:
+        from keephive.commands.memory import expire_experimental_rules
+
+        expired = expire_experimental_rules()
+        if expired:
+            from keephive.storage import daily_dir
+
+            dd = daily_dir()
+            dd.mkdir(parents=True, exist_ok=True)
+            log_file = dd / f"{get_today().isoformat()}.md"
+            with open(log_file, "a") as f:
+                for rule_text in expired:
+                    f.write(f"- EXPIRED-RULE: {rule_text}\n")
+    except Exception:
+        pass  # Never crash sessionstart
+
     # 1. Working memory
     mem = read_memory()
     if mem:
