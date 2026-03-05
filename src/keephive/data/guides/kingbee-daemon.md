@@ -230,6 +230,51 @@ expected and frequent; logging them would create noise that obscures real daemon
 
 ---
 
+## Closed-Loop Automation
+
+### Priority Hints
+
+When `reflect-draft` finds an active theme not yet covered by a guide, it writes
+`.daemon-hints.json` with priority boosts:
+
+```json
+{
+  "priority_boost": {"stale-check": 1.5, "soul-update": 1.5},
+  "reason": "reflect-draft found uncovered theme 'testing' (12 entries)",
+  "expires": "2026-03-11"
+}
+```
+
+A boost > 1.0 overrides day-of-week scheduling constraints. A stale-check normally
+restricted to Mondays will run on any day if boosted. Hints expire after 7 days and
+are ignored once past their expiry date. A boost of exactly 1.0 is not treated as active.
+
+### Effectiveness Tracking
+
+Every accepted improvement (via `hive improve review` or auto-apply) is recorded in
+`.improvement-history.json` with type, name, timestamp, and rationale. The file has
+a rolling cap of 200 entries (oldest trimmed on append). This data feeds into the
+`/growth` dashboard view and `hive growth` CLI.
+
+### Experimental Rules
+
+`hive rule try "rule text" --days 7` adds a rule with an `[experiment:Nd:YYYY-MM-DD]`
+tag to `rules.md`. The SessionStart hook calls `_expire_experimental_rules()` on every
+session start and removes expired experiments (deterministic, no LLM). Expired rules
+are logged as `EXPIRED-RULE:` in the daily log.
+
+Friction baselines are captured at creation time in `.experiment-baselines.json` for
+before/after comparison.
+
+### Growth View
+
+`hive growth` (alias: `gr`) shows 30-day compounding trends: knowledge count, guide
+injection rate, recall hit rate, fact freshness, daemon activity, and improvement
+throughput. The `/growth` dashboard view renders the same data with sparkline
+trajectories and week-over-week deltas. No LLM calls.
+
+---
+
 ## KB Identity Channel
 
 Any prompt containing "KingBee", "King Bee", "King B", or "@KB"/"@kb" is detected

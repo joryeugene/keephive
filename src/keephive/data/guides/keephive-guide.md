@@ -64,6 +64,8 @@ A knowledge sidecar for Claude Code. Commands work as both `keephive <cmd>` and 
 | `hive privacy`             | `hive pv`   | LLM kill switch + force-CLI routing status                |
 | `hive privacy on`          |             | Pause all LLM calls                                       |
 | `hive privacy cli`         |             | Force CLI-only routing (disables direct API)              |
+| `hive growth`              | `hive gr`   | 30-day compounding trends (knowledge, guides, recall)     |
+| `hive rule try "<rule>"`   |             | Try a rule for N days with auto-expiry                    |
 
 Full command list: `hive --help`
 
@@ -277,6 +279,21 @@ After finishing work:
 - `hive rule learn` to generate rules from /insights friction data
 - `hive rule review` to accept/reject queued rule suggestions
 - `hive improve review` to review self-improvement proposals
+- `hive growth` to see 30-day compounding trends
+- `hive rule try "rule text" --days 7` to test a rule with auto-expiry
+
+### Experimental Rules
+
+`hive rule try` adds a rule with an `[experiment:Nd:YYYY-MM-DD]` tag. The rule is
+active for the specified duration and removed automatically by the SessionStart hook
+when it expires. Friction baselines are captured at creation for before/after measurement.
+
+### Closed-Loop Automation
+
+The daemon self-tunes based on reflect output. When `reflect-draft` finds uncovered
+themes, it writes priority hints that boost stale-check and soul-update scheduling
+for 7 days. Every accepted improvement is tracked in `.improvement-history.json`
+for effectiveness measurement. The `/growth` view surfaces these trends.
 
 ## Dashboard
 
@@ -292,7 +309,8 @@ After finishing work:
 | Know     | `/know`     | Deep-read knowledge guides                               |
 | Stats    | `/stats`    | Usage patterns, command breakdown                        |
 | Play     | `/play`     | Wander log: free-thinking sessions, hypothesis archive   |
-| Settings | `/settings` | Profile management, agent identity, daemon status        |
+| Growth   | `/growth`   | 30-day compounding trends, knowledge trajectory          |
+| Settings | `/settings` | Profile management, agent identity, daemon status, improve queue |
 
 ### Layout principle
 
@@ -380,14 +398,14 @@ Settings (/settings)    +------------------+
 | soul preview     |    | knowledge guides |
 +------------------+    +------------------+
 
-Play (/play)
-+------------------+
-| wander stats     |
-+------------------+
-| wander log       |
-+------------------+
-| seed queue       |
-+------------------+
+Play (/play)               Growth (/growth)
++------------------+       +------------------+
+| wander stats     |       | growth-trajectory|
++------------------+       +------------------+
+| wander log       |       | growth-impact    |
++------------------+       +------------------+
+| seed queue       |       | growth-story     |
++------------------+       +------------------+
 ```
 
 ## Multi-Backend LLM Routing

@@ -246,7 +246,7 @@ The diagram below shows the Claude Code integration path; MCP-only clients reuse
  SubagentStop · haiku        ──▶   daily log                      Anthropic   (p20)
                                                                   Gemini      (p25)
                                                                   OpenAI      (p30)
- ── feedback loops (closes the system) ─────────────────   
+ ── feedback loops (closes the system) ─────────────────
    memory.md ────────────────────────────────────▶ hive v  (stale verify cycle)
    .pending-improvements ────────────────────────▶ hive improve  (review + install)
    daily log ────────────────────────────────────▶ hive rf  (reflect → promote → guides)
@@ -254,6 +254,9 @@ The diagram below shows the Claude Code integration path; MCP-only clients reuse
    active themes ────────────────────────────────▶ _match_guides()  (active themes inject context)
    .stats.json ──────────────────────────────────▶ hive stats  (floor metrics loop)
    pending-facts ────────────────────────────────▶ memory.md  (auto-triage → [auto])
+   reflect-draft ───▶ .daemon-hints.json ────────▶ _is_task_due()  (priority boost → run sooner)
+   hive improve accept ─────────────────────────▶ .improvement-history.json  (effectiveness)
+   .stats.json + .improvement-history ───────────▶ hive growth  (30-day compounding trends)
 ```
 
 ### Memory tiers
@@ -359,6 +362,8 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 | `hive wander run`       |                   | Run wander task manually                   |
 | `hive run "<task>"`     | `rn`              | Run an autonomous multi-iteration loop     |
 | `hive inbox`            | `ib`              | Surface KingBee output + review queues     |
+| `hive growth`           | `gr`              | 30-day compounding trends (knowledge, guides, recall) |
+| `hive rule try "<rule>"` |                  | Try a rule for N days with auto-expiry     |
 
 </details>
 
@@ -377,7 +382,8 @@ If your agent exposes lifecycle hooks (session start, prompt submit, completion)
 | Wander   | `/play`     | Free-thinking logs, seed queue, hypothesis archive         |
 | Know     | `/know`     | Knowledge guides with markdown rendering                   |
 | Stats    | `/stats`    | Usage: sparkline, heatmap, streak, command breakdown       |
-| Settings | `/settings` | Profile management, agent identity, daemon status          |
+| Growth   | `/growth`   | 30-day compounding trends, knowledge trajectory, impact    |
+| Settings | `/settings` | Profile management, agent identity, daemon status, improve queue |
 
 Real-time SSE push updates (file watcher, no polling), Cmd+K search, split-pane resizing, CRUD forms (remember, add TODO, mark done, append note), log type filters, and zero external dependencies.
 
@@ -470,6 +476,10 @@ Custom prompts resolve by prefix, so `hive go pr-re` finds `pr-review-git-staged
 | `reflect-draft` | off | Friday 18:00 | 7 days | `hive daemon enable reflect-draft` |
 
 Wander selects a seed (user-queued → cross-pollination → recurring-topic → stale-todo), runs a free-thinking pass, and writes a doc surfaced at `/play`.
+
+**Experimental rules:** `hive rule try "Always run tests first" --days 7` adds the rule to `rules.md` with an `[experiment:7d:YYYY-MM-DD]` tag. The SessionStart hook expires rules past their date automatically. Friction baselines are captured at creation for before/after measurement.
+
+**Closed-loop automation:** When `reflect-draft` finds an uncovered theme, it writes priority hints to `.daemon-hints.json`. Boosted tasks (stale-check, soul-update at 1.5x) override their normal day-of-week scheduling for 7 days. Every accepted improvement is recorded in `.improvement-history.json` for effectiveness tracking. The `/growth` dashboard view surfaces these compounding trends.
 
 See [CLAUDE.md](CLAUDE.md#daemon-task-architecture) for daemon task contracts.
 

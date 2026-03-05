@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.5.0
+
+Compounding loop: visible growth, experimental rules, interactive dashboard, closed-loop automation.
+
+### Features
+
+- **Visible compounding (`hive growth`, `/growth` view)**: 30-day trend metrics for knowledge state,
+  guide injection, recall, daemon activity, and fact freshness. CLI renders sparkline trends and
+  week-over-week deltas. Dashboard `/growth` view shows trajectory, impact, and a deterministic
+  growth narrative. No LLM calls.
+
+- **Experimental rules (`hive rule try`)**: Try a behavioral rule for N days with auto-expiry.
+  Rules carry `[experiment:Nd:YYYY-MM-DD]` tags in `rules.md`. The SessionStart hook expires
+  stale experiments on every session start (deterministic, no LLM). Friction baselines are
+  snapshot at creation time for before/after comparison.
+
+- **Interactive dashboard (improve + rules panels)**: Approve, dismiss, or try-as-experiment
+  improvements and pending rules from the `/settings` view in `hive serve`. SSE live updates
+  keep panels current. Replaces the need for `hive improve review` CLI for routine queue drains.
+
+- **Closed-loop automation (daemon priority hints + effectiveness tracking)**: When `reflect-draft`
+  finds an uncovered theme, it writes `.daemon-hints.json` with priority boosts (1.5x for
+  stale-check and soul-update, 7-day expiry). Boosted tasks override day-of-week scheduling
+  constraints. Every accepted improvement is recorded in `.improvement-history.json` (rolling
+  200-item cap) for effectiveness tracking.
+
 ## v1.4.5
 
 Remove dead-letter LLM queue and fix daemon retry storm.
