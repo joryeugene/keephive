@@ -34,18 +34,37 @@ def _strip_verified_tags(text: str) -> str:
     return re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", text).strip()
 
 
+_AUTO_PRUNE_DAYS = 90  # unverified [auto] facts older than this are pruned
+
+
 def normalize_memory(mem_path: Path) -> dict:
     """Clean up known memory.md quality issues. Returns counts.
 
     Fixes: duplicate [verified:] tags, resolved TODOs still present,
-    malformed '- - ' prefixes, and near-duplicate lines.
+    malformed '- - ' prefixes, near-duplicate lines, double [auto] tags,
+    and stale unverified [auto] facts older than _AUTO_PRUNE_DAYS.
     """
     if not mem_path.exists():
-        return {"double_tags": 0, "resolved_todos": 0, "malformed_prefix": 0, "deduped": 0}
+        return {
+            "double_tags": 0,
+            "resolved_todos": 0,
+            "malformed_prefix": 0,
+            "deduped": 0,
+            "pruned": 0,
+        }
 
+    from datetime import date as _date
+
+    today = _date.today()
     lines = mem_path.read_text().splitlines()
     cleaned: list[str] = []
-    stats = {"double_tags": 0, "resolved_todos": 0, "malformed_prefix": 0, "deduped": 0}
+    stats = {
+        "double_tags": 0,
+        "resolved_todos": 0,
+        "malformed_prefix": 0,
+        "deduped": 0,
+        "pruned": 0,
+    }
     seen_normalized: set[str] = set()
 
     for line in lines:
@@ -59,12 +78,31 @@ def normalize_memory(mem_path: Path) -> dict:
             line = "- " + line[4:]
             stats["malformed_prefix"] += 1
 
+        # Collapse double [auto] prefix: "- [auto] [auto] ..." -> "- [auto] ..."
+        if line.startswith("- [auto] [auto]"):
+            line = "- [auto]" + line[len("- [auto] [auto]"):]
+            stats["double_tags"] += 1
+
         # Collapse multiple [verified:] tags to one (keep last date)
         tags = re.findall(r"\[verified:(\d{4}-\d{2}-\d{2})\]", line)
         if len(tags) > 1:
             clean = re.sub(r"\s*\[verified:\d{4}-\d{2}-\d{2}\]", "", line).rstrip()
             line = f"{clean} [verified:{tags[-1]}]"
             stats["double_tags"] += 1
+
+        # Prune stale unverified [auto] facts older than _AUTO_PRUNE_DAYS
+        if line.startswith("- [auto]") and not re.search(
+            r"\[verified:\d{4}-\d{2}-\d{2}\]", line
+        ):
+            m = re.search(r"\[auto:(\d{4}-\d{2}-\d{2})\]", line)
+            if m:
+                try:
+                    captured = _date.fromisoformat(m.group(1))
+                    if (today - captured).days > _AUTO_PRUNE_DAYS:
+                        stats["pruned"] += 1
+                        continue
+                except ValueError:
+                    pass
 
         # Deduplicate by normalized content (strip tags + whitespace)
         if line.startswith("- "):

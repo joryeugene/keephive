@@ -1892,6 +1892,7 @@ class TestNormalizeMemory:
             "resolved_todos": 0,
             "malformed_prefix": 0,
             "deduped": 0,
+            "pruned": 0,
         }
 
 

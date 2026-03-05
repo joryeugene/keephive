@@ -1264,15 +1264,40 @@ _JS = """
   };
 
   // --- Review actions (improve, rules, facts) ---
-  function reviewAction(type,index,action,edit){
-    try{
-      fetch('/api/review',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({type:type,index:index,action:action,edit:edit||null})});
-    }catch(e){console.error('review action failed',e);}
+  function reviewAction(type,index,action,btn){
+    var card=btn&&btn.closest('.review-item');
+    var btns=card?card.querySelectorAll('.review-action-btn'):[];
+    var origText=btn?btn.textContent:'';
+    // immediate loading state
+    btns.forEach(function(b){b.disabled=true;});
+    if(btn){btn.textContent='…';}
+    fetch('/api/review',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({type:type,index:index,action:action})
+    }).then(function(r){return r.json();}).then(function(d){
+      if(d.ok){
+        // Fade the card — SSE will remove it on the next panel update
+        if(card){card.style.transition='opacity .3s';card.style.opacity='0.25';}
+        if(btn){btn.textContent='✓';}
+      }else{
+        // Show error inline, re-enable buttons
+        if(btn){btn.textContent='✗ '+( d.error||'failed');btn.style.color='var(--c-red)';}
+        btns.forEach(function(b){b.disabled=false;});
+        setTimeout(function(){
+          if(btn){btn.textContent=origText;btn.style.color='';}
+        },2500);
+      }
+    }).catch(function(e){
+      console.error('review action failed',e);
+      if(btn){btn.textContent='✗ error';btn.style.color='var(--c-red)';}
+      btns.forEach(function(b){b.disabled=false;});
+      setTimeout(function(){
+        if(btn){btn.textContent=origText;btn.style.color='';}
+      },2500);
+    });
   }
-  window.improveAction=function(i,a){reviewAction('improve',i,a);};
-  window.ruleAction=function(i,a){reviewAction('rules',i,a);};
-  window.factsAction=function(i,a){reviewAction('facts',i,a);};
+  window.improveAction=function(i,a,btn){reviewAction('improve',i,a,btn);};
+  window.ruleAction=function(i,a,btn){reviewAction('rules',i,a,btn);};
+  window.factsAction=function(i,a,btn){reviewAction('facts',i,a,btn);};
 
   // --- Edit modal ---
   var _editType='';var _editName='';var _editSlot=0;
@@ -6245,7 +6270,7 @@ def _render_review_item(
     """Universal composable review card. Used by all queue panels."""
     action_html = " ".join(
         f'<button class="review-action-btn {_e(cls)}" '
-        f'onclick="{_e(queue_type)}Action({index}, \'{_e(action_id)}\')">{_e(label)}</button>'
+        f'onclick="{_e(queue_type)}Action({index}, \'{_e(action_id)}\', this)">{_e(label)}</button>'
         for action_id, label, cls in actions
     )
     return (

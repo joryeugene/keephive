@@ -101,7 +101,7 @@ def test_normalize_preserves_clean_lines(tmp_path: Path):
     )
     mem.write_text(original)
     stats = normalize_memory(mem)
-    assert stats == {"double_tags": 0, "resolved_todos": 0, "malformed_prefix": 0, "deduped": 0}
+    assert stats == {"double_tags": 0, "resolved_todos": 0, "malformed_prefix": 0, "deduped": 0, "pruned": 0}
     # Content preserved (normalize always writes with trailing newline)
     content = mem.read_text()
     assert "clean line" in content
@@ -111,7 +111,7 @@ def test_normalize_preserves_clean_lines(tmp_path: Path):
 def test_normalize_handles_missing_file(tmp_path: Path):
     mem = tmp_path / "nonexistent.md"
     stats = normalize_memory(mem)
-    assert stats == {"double_tags": 0, "resolved_todos": 0, "malformed_prefix": 0, "deduped": 0}
+    assert stats == {"double_tags": 0, "resolved_todos": 0, "malformed_prefix": 0, "deduped": 0, "pruned": 0}
     assert not mem.exists()
 
 
@@ -170,6 +170,48 @@ def test_pending_facts_strips_existing_tag(hive_env):
     # The [verified:] tag from the text should not leak into pending format
     # (pending uses [auto:] tags, not [verified:])
     assert "[auto:" in new_lines[0]
+
+
+def test_normalize_collapses_double_auto_prefix(tmp_path: Path):
+    """Double [auto] prefix from LLM re-extraction cycle is collapsed to one."""
+    mem = tmp_path / "memory.md"
+    mem.write_text(
+        "- [auto] [auto] some fact captured twice [auto:2026-03-01]\n"
+        "- [auto] normal auto fact [auto:2026-03-01]\n"
+    )
+    stats = normalize_memory(mem)
+    assert stats["double_tags"] == 1
+    content = mem.read_text()
+    assert "- [auto] [auto]" not in content
+    assert "- [auto] some fact captured twice" in content
+    assert "- [auto] normal auto fact" in content
+
+
+def test_normalize_prunes_stale_unverified_auto(tmp_path: Path):
+    """[auto] facts with [auto:DATE] older than 90 days and no [verified:] are removed."""
+    mem = tmp_path / "memory.md"
+    mem.write_text(
+        "- [auto] old unverified fact [auto:2020-01-01]\n"
+        "- [auto] old but verified [auto:2020-01-01] [verified:2026-01-15]\n"
+        "- [auto] recent auto fact [auto:2026-03-01]\n"
+        "- manually written fact\n"
+    )
+    stats = normalize_memory(mem)
+    assert stats["pruned"] == 1
+    content = mem.read_text()
+    assert "old unverified fact" not in content
+    assert "old but verified" in content
+    assert "recent auto fact" in content
+    assert "manually written fact" in content
+
+
+def test_normalize_no_date_auto_not_pruned(tmp_path: Path):
+    """[auto] facts without an [auto:DATE] capture date are never pruned."""
+    mem = tmp_path / "memory.md"
+    mem.write_text("- [auto] fact with no capture date\n")
+    stats = normalize_memory(mem)
+    assert stats["pruned"] == 0
+    assert "fact with no capture date" in mem.read_text()
 
 
 def test_correct_in_memory_strips_existing_tag():

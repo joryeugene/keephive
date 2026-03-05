@@ -396,7 +396,11 @@ def build_context(cwd: str, project_name: str) -> str:
         import time as _time
 
         from keephive.commands.reflect import _promote_facts_to_memory
-        from keephive.storage import auto_triage_pending_facts, write_pending_facts
+        from keephive.storage import (
+            auto_triage_pending_facts,
+            normalize_memory,
+            write_pending_facts,
+        )
 
         pending_facts_path = hive_dir() / ".pending-facts.md"
         triage_stamp = hive_dir() / ".auto-triage.stamp"
@@ -412,6 +416,9 @@ def build_context(cwd: str, project_name: str) -> str:
                     if promoted_count > 0:
                         write_pending_facts(needs_review)
                         triage_stamp.touch()
+
+        # Silently prune double-[auto] tags and stale unverified auto facts on every session start
+        normalize_memory(memory_file())
 
         # Count remaining pending facts for the nudge
         if pending_facts_path.exists():

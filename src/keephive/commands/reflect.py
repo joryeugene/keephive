@@ -838,6 +838,8 @@ def _promote_facts_to_memory(facts: list[dict]) -> int:
         fact_text = item.get("fact", "").strip()
         if not fact_text:
             continue
+        # Strip any accidental [auto] prefix the LLM re-extracted from existing memory lines
+        fact_text = re.sub(r"^\[auto\]\s*", "", fact_text)
         line = f"- [auto] {fact_text}"
         if line not in existing:
             additions.append(line)
