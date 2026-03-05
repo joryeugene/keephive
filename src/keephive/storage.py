@@ -1052,7 +1052,10 @@ def capture_budget() -> int:
 
 
 def count_stale_facts() -> int:
-    """Count facts in memory.md with verified dates older than their category threshold."""
+    """Count facts in memory.md with verified dates older than their category threshold.
+
+    Includes unverified auto-captured facts (dark knowledge) in the count.
+    """
     mem = memory_file()
     if not mem.exists():
         return 0
@@ -1061,6 +1064,12 @@ def count_stale_facts() -> int:
     count = 0
 
     for line in mem.read_text().splitlines():
+        # Unverified auto facts are always "stale" (never reviewed)
+        if line.startswith("- [auto]") and not re.search(
+            r"\[verified:\d{4}-\d{2}-\d{2}\]", line
+        ):
+            count += 1
+            continue
         m = re.search(r"\[verified:(\d{4}-\d{2}-\d{2})\]", line)
         if m:
             try:
@@ -1123,6 +1132,30 @@ def get_all_verified_facts() -> list[tuple[int, str, str]]:
                 results.append((i, fact, line))
             except ValueError:
                 pass
+    return results
+
+
+def get_unverified_auto_facts() -> list[tuple[int, str, str]]:
+    """Get auto-captured facts that have never been user-verified (dark knowledge).
+
+    Returns list of (line_number_1based, fact_text, raw_line) for every line
+    starting with "- [auto]" that has no [verified:DATE] tag. These are facts
+    written by auto-triage or daemon tasks that the user has never confirmed.
+
+    fact_text strips the [auto] prefix so the LLM sees a clean fact string.
+    """
+    mem = memory_file()
+    if not mem.exists():
+        return []
+
+    results = []
+    for i, line in enumerate(mem.read_text().splitlines(), 1):
+        if not line.startswith("- [auto]"):
+            continue
+        if re.search(r"\[verified:\d{4}-\d{2}-\d{2}\]", line):
+            continue
+        fact_text = re.sub(r"^\[auto\]\s*", "", line.lstrip("- ").strip())
+        results.append((i, fact_text, line))
     return results
 
 

@@ -19,6 +19,7 @@ from keephive.storage import (
     get_all_verified_facts,
     get_evidence_for_fact,
     get_stale_facts,
+    get_unverified_auto_facts,
     memory_file,
     normalize_memory,
     store_evidence,
@@ -99,8 +100,10 @@ def cmd_verify(args: list[str]) -> None:
             console.print(f"All current ({all_count} facts)")
             sys.exit(0)
 
-    # Main path: verify ALL facts regardless of age
+    # Main path: verify ALL facts regardless of age, plus unverified auto facts
     all_facts = get_all_verified_facts()
+    auto_facts = get_unverified_auto_facts()
+    all_facts = all_facts + auto_facts
     fact_count = len(all_facts)
 
     if fact_count == 0:
@@ -111,6 +114,10 @@ def cmd_verify(args: list[str]) -> None:
         return
 
     console.print(f"[bold]Verifying {fact_count} fact(s) against codebase...[/bold]")
+    if auto_facts:
+        console.print(
+            f"  [dim]({len(auto_facts)} auto-captured, never reviewed)[/dim]"
+        )
     console.print("[dim](This uses claude -p with tool access and takes 10-20 seconds)[/dim]")
     console.print()
 

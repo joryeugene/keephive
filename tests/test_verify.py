@@ -224,3 +224,47 @@ def test_skip_llm_guard(hive_env, capsys):
     cmd_verify([])
     out = capsys.readouterr().out
     assert "Skipping" in out
+
+
+class TestUnverifiedAutoFacts:
+    """get_unverified_auto_facts() surfaces dark knowledge for the verify queue."""
+
+    def test_no_auto_lines_returns_empty(self, hive_env):
+        from keephive.storage import get_unverified_auto_facts
+
+        # hive_env memory.md has only verified facts, no [auto] lines
+        result = get_unverified_auto_facts()
+        assert result == []
+
+    def test_pure_auto_lines_returned(self, hive_env):
+        from keephive.storage import get_unverified_auto_facts
+
+        mem = hive_env / "working" / "memory.md"
+        mem.write_text(
+            "- [auto] keephive uses tmux for e2e tests\n"
+            "- [auto] uv is the package manager\n"
+        )
+        result = get_unverified_auto_facts()
+        assert len(result) == 2
+        line_nums, fact_texts, raw_lines = zip(*result)
+        # fact_text strips the [auto] prefix
+        assert "keephive uses tmux for e2e tests" in fact_texts
+        assert "uv is the package manager" in fact_texts
+        # no [auto] prefix in fact_text
+        assert all("[auto]" not in ft for ft in fact_texts)
+        # raw_line preserves original
+        assert all(rl.startswith("- [auto]") for rl in raw_lines)
+
+    def test_auto_plus_verified_excluded(self, hive_env):
+        """A fact with both [auto] and [verified:DATE] is NOT dark knowledge."""
+        from keephive.storage import get_unverified_auto_facts
+
+        mem = hive_env / "working" / "memory.md"
+        mem.write_text(
+            "- [auto] reviewed fact [verified:2026-03-04]\n"
+            "- [auto] dark fact\n"
+        )
+        result = get_unverified_auto_facts()
+        assert len(result) == 1
+        _, fact_text, _ = result[0]
+        assert fact_text == "dark fact"
