@@ -1124,6 +1124,172 @@ class TestCommandActivity:
         assert result["wander"] == 5
         assert result["soul-update"] == 1
 
+class TestCoverageDisplay:
+    """Coverage bar in _display_full() from comprehension_coverage()."""
+
+    def test_coverage_bar_shown_when_facts_exist(self, hive_env, capsys, monkeypatch):
+        """Coverage line renders with bar and percentage when facts exist."""
+        from keephive.commands import stats as stats_mod
+        from keephive.commands.stats import _display_full
+        from keephive.storage import track_event
+
+        track_event("commands", "status", source="terminal")
+        data = {
+            "days": {
+                date.today().isoformat(): {
+                    "commands": {"status": 1},
+                    "sources": {"terminal": 1},
+                }
+            }
+        }
+        monkeypatch.setattr(
+            stats_mod,
+            "comprehension_coverage",
+            lambda: {
+                "total": 100,
+                "verified": 30,
+                "auto_only": 65,
+                "user_owned": 5,
+                "dark_pct": 65.0,
+                "coverage_pct": 35.0,
+            },
+        )
+        _display_full(data)
+        out = capsys.readouterr().out
+        assert "Coverage" in out
+        assert "35%" in out
+        assert "\u2588" in out  # filled block
+        assert "\u2591" in out  # empty block
+
+    def test_coverage_bar_absent_when_total_zero(self, hive_env, capsys, monkeypatch):
+        """Coverage line is skipped when comprehension_coverage returns total=0."""
+        from keephive.commands import stats as stats_mod
+        from keephive.commands.stats import _display_full
+        from keephive.storage import track_event
+
+        track_event("commands", "status", source="terminal")
+        data = {
+            "days": {
+                date.today().isoformat(): {
+                    "commands": {"status": 1},
+                    "sources": {"terminal": 1},
+                }
+            }
+        }
+        monkeypatch.setattr(
+            stats_mod,
+            "comprehension_coverage",
+            lambda: {
+                "total": 0,
+                "verified": 0,
+                "auto_only": 0,
+                "user_owned": 0,
+                "dark_pct": 0.0,
+                "coverage_pct": 0.0,
+            },
+        )
+        _display_full(data)
+        out = capsys.readouterr().out
+        assert "Coverage" not in out
+
+    def test_dark_hint_shown_when_auto_only_positive(self, hive_env, capsys, monkeypatch):
+        """The 'hive v --dark' hint appears when auto_only > 0."""
+        from keephive.commands import stats as stats_mod
+        from keephive.commands.stats import _display_full
+        from keephive.storage import track_event
+
+        track_event("commands", "status", source="terminal")
+        data = {
+            "days": {
+                date.today().isoformat(): {
+                    "commands": {"status": 1},
+                    "sources": {"terminal": 1},
+                }
+            }
+        }
+        monkeypatch.setattr(
+            stats_mod,
+            "comprehension_coverage",
+            lambda: {
+                "total": 50,
+                "verified": 25,
+                "auto_only": 20,
+                "user_owned": 5,
+                "dark_pct": 40.0,
+                "coverage_pct": 60.0,
+            },
+        )
+        _display_full(data)
+        out = capsys.readouterr().out
+        assert "hive v --dark" in out
+        assert "20 dark" in out
+
+    def test_dark_hint_absent_when_auto_only_zero(self, hive_env, capsys, monkeypatch):
+        """The 'hive v --dark' hint is absent when auto_only == 0."""
+        from keephive.commands import stats as stats_mod
+        from keephive.commands.stats import _display_full
+        from keephive.storage import track_event
+
+        track_event("commands", "status", source="terminal")
+        data = {
+            "days": {
+                date.today().isoformat(): {
+                    "commands": {"status": 1},
+                    "sources": {"terminal": 1},
+                }
+            }
+        }
+        monkeypatch.setattr(
+            stats_mod,
+            "comprehension_coverage",
+            lambda: {
+                "total": 50,
+                "verified": 40,
+                "auto_only": 0,
+                "user_owned": 10,
+                "dark_pct": 0.0,
+                "coverage_pct": 100.0,
+            },
+        )
+        _display_full(data)
+        out = capsys.readouterr().out
+        assert "Coverage" in out
+        assert "100%" in out
+        assert "hive v --dark" not in out
+
+    def test_coverage_color_green_above_70(self, hive_env, capsys, monkeypatch):
+        """Coverage bar uses green markup when pct >= 70."""
+        from keephive.commands import stats as stats_mod
+        from keephive.commands.stats import _display_full
+        from keephive.storage import track_event
+
+        track_event("commands", "status", source="terminal")
+        data = {
+            "days": {
+                date.today().isoformat(): {
+                    "commands": {"status": 1},
+                    "sources": {"terminal": 1},
+                }
+            }
+        }
+        monkeypatch.setattr(
+            stats_mod,
+            "comprehension_coverage",
+            lambda: {
+                "total": 100,
+                "verified": 70,
+                "auto_only": 0,
+                "user_owned": 30,
+                "dark_pct": 0.0,
+                "coverage_pct": 100.0,
+            },
+        )
+        _display_full(data)
+        out = capsys.readouterr().out
+        assert "Coverage" in out
+
+
+class TestSumCountersExtended:
     def test_sum_counters_aggregates_loops_across_days(self, hive_env):
         """_sum_counters correctly totals loops.started and loops.iteration across days."""
         from datetime import timedelta

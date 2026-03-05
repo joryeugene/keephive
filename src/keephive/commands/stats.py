@@ -12,6 +12,7 @@ from rich.table import Table
 from keephive.clock import get_today
 from keephive.output import console, show_hint
 from keephive.storage import (
+    comprehension_coverage,
     count_log_entries_by_prefix,
     count_log_entries_by_prefix_daily,
     memory_file,
@@ -991,6 +992,26 @@ def _display_full(data: dict) -> None:
 
     for line in pipeline_parts:
         console.print(line)
+
+    # Coverage bar
+    try:
+        cov = comprehension_coverage()
+        if cov["total"] > 0:
+            pct = cov["coverage_pct"]
+            filled = round(pct / 10)
+            bar = "\u2588" * filled + "\u2591" * (10 - filled)
+            if pct >= 70:
+                color = "green"
+            elif pct >= 40:
+                color = "yellow"
+            else:
+                color = "red"
+            cov_line = f"  [{color}]Coverage  [{bar}]  {pct:.0f}%[/{color}]"
+            if cov["auto_only"] > 0:
+                cov_line += f"  [dim]({cov['auto_only']} dark \u00b7 hive v --dark --limit 10)[/dim]"
+            console.print(cov_line)
+    except Exception:
+        pass
 
     # Capture section
     if capture["total"] > 0:

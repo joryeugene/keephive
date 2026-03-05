@@ -15,6 +15,7 @@ from keephive.output import console, notify_sound, prompt_yn
 from keephive.storage import (
     append_to_daily,
     backup_and_write,
+    comprehension_coverage,
     ensure_daily,
     get_all_verified_facts,
     get_evidence_for_fact,
@@ -157,6 +158,11 @@ def cmd_verify(args: list[str]) -> None:
     except Exception:
         pre_fresh_pct = None
 
+    try:
+        pre_cov = comprehension_coverage()
+    except Exception:
+        pre_cov = None
+
     # Build the prompt with tool-based investigation
     versions = version_context()
 
@@ -262,6 +268,20 @@ def cmd_verify(args: list[str]) -> None:
             f"[dim]Updated {total_updated} fact(s), refreshed {total_refreshed} in working/memory.md[/dim]"
         )
 
+    # Before/after coverage delta
+    try:
+        post_cov = comprehension_coverage()
+        if pre_cov is not None and post_cov["coverage_pct"] != pre_cov["coverage_pct"]:
+            delta = post_cov["coverage_pct"] - pre_cov["coverage_pct"]
+            console.print(
+                f"  Coverage: {pre_cov['coverage_pct']:.0f}% \u2192 {post_cov['coverage_pct']:.0f}%"
+                f"  (+{delta:.0f}% reviewed)"
+            )
+            if post_cov["auto_only"] > 0:
+                console.print("  [dim]hive v --dark --limit 10 to continue[/dim]")
+    except Exception:
+        pass
+
     # Post-verify cleanup: normalize memory.md quality
     cleanup = normalize_memory(mem)
     cleanup_parts = []
@@ -302,8 +322,9 @@ def apply_verdicts(
     lines = mem_path.read_text().splitlines(keepends=True)
     updated = 0
     refreshed = 0
+    total = len(response.verdicts)
 
-    for v in response.verdicts:
+    for i, v in enumerate(response.verdicts, 1):
         idx = v.index - 1  # 0-based into facts list
         if idx < 0 or idx >= len(facts):
             continue
@@ -314,8 +335,8 @@ def apply_verdicts(
         if target < 0 or target >= len(lines):
             continue
 
-        # Show the fact
-        console.print(f"  [dim]{fact_text}[/dim]")
+        # Show the fact with progress
+        console.print(f"  [{i}/{total}]  [dim]{fact_text}[/dim]")
 
         if v.verdict.value == "VALID":
             console.print(f"    [ok]VALID[/ok]: {v.reason}")

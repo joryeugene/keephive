@@ -409,6 +409,19 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .panel-input button:hover{background:#2ea043}
 .todo-done-btn{background:#0d1117;border:1px solid #30363d;border-radius:3px;color:#7d8590;padding:2px 7px;cursor:pointer;font-size:11px;margin-left:auto;flex-shrink:0;transition:border-color .15s,color .15s,background .15s}
 .todo-done-btn:hover{border-color:#238636;color:#3fb950;background:#0d2818}
+.review-action-btn{border:1px solid var(--c-border);background:var(--c-surface);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;color:var(--c-fg);margin-right:4px;transition:opacity .15s}
+.review-action-btn:hover{opacity:.8}
+.review-action-btn.accept{color:var(--c-green);border-color:var(--c-green)}
+.review-action-btn.dismiss{color:var(--c-red);border-color:var(--c-red)}
+.review-action-btn.skip{color:var(--c-muted)}
+.review-action-btn.try{color:var(--c-yellow);border-color:var(--c-yellow)}
+.review-item{padding:12px;border-bottom:1px solid var(--c-border)}
+.review-item-title{font-weight:600;margin-bottom:4px;font-size:13px}
+.review-item-body{color:var(--c-muted);font-size:12px;margin-bottom:6px}
+.review-item-meta{font-size:11px;color:var(--c-muted);margin-bottom:8px}
+.review-item-actions{display:flex;gap:4px}
+.coverage-ring{width:64px;height:64px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center}
+.coverage-ring-inner{width:48px;height:48px;border-radius:50%;background:var(--c-bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;color:var(--c-fg)}
 #main-content{transition:opacity .12s}
 #main-content.is-loading{opacity:.45;pointer-events:none}
 #search-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:200;background:rgba(0,0,0,0.6);justify-content:center;align-items:flex-start;padding-top:80px}
@@ -1250,20 +1263,16 @@ _JS = """
     reader.readAsArrayBuffer(file);
   };
 
-  // --- Improve + Rules actions ---
-  window.improveAction=function(idx,action){
-    fetch('/api/improve/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:idx})})
-      .then(function(r){return r.json();})
-      .then(function(d){if(d.ok)refresh();});
-  };
-  window.ruleAction=function(idx,action){
-    var url='/api/rules/'+action;
-    var body={index:idx};
-    if(action==='try')body.days=7;
-    fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-      .then(function(r){return r.json();})
-      .then(function(d){if(d.ok)refresh();});
-  };
+  // --- Review actions (improve, rules, facts) ---
+  function reviewAction(type,index,action,edit){
+    try{
+      fetch('/api/review',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({type:type,index:index,action:action,edit:edit||null})});
+    }catch(e){console.error('review action failed',e);}
+  }
+  window.improveAction=function(i,a){reviewAction('improve',i,a);};
+  window.ruleAction=function(i,a){reviewAction('rules',i,a);};
+  window.factsAction=function(i,a){reviewAction('facts',i,a);};
 
   // --- Edit modal ---
   var _editType='';var _editName='';var _editSlot=0;
@@ -6116,7 +6125,7 @@ def _render_growth_state_panel(data: dict) -> str:
             f'<span style="{label_style}">Recall ({rh}/{rt})</span></div>'
         )
 
-    # Comprehension coverage KPIs
+    # Comprehension coverage KPIs + ring
     cov = data.get("comprehension", {})
     cov_total = cov.get("total", 0)
     if cov_total > 0:
@@ -6124,17 +6133,35 @@ def _render_growth_state_panel(data: dict) -> str:
         auto_only = cov.get("auto_only", 0)
         dark_pct = cov.get("dark_pct", 0.0)
 
-        if coverage_pct >= 80:
+        if coverage_pct >= 70:
             cov_color = "var(--c-green, #3fb950)"
-        elif coverage_pct >= 50:
+        elif coverage_pct >= 40:
             cov_color = "var(--c-yellow, #d29922)"
         else:
             cov_color = "var(--c-red, #f85149)"
 
+        # Coverage ring (conic-gradient)
+        ring_angle = round(coverage_pct / 100 * 360)
+        ring_html = (
+            f'<div class="coverage-ring" style="background:conic-gradient('
+            f"{cov_color} {ring_angle}deg, var(--c-surface) 0deg)\">"
+            f'<div class="coverage-ring-inner">{coverage_pct:.0f}%</div>'
+            f"</div>"
+        )
+
+        # Milestone label
+        if coverage_pct >= 90:
+            milestone = "Mastery"
+        elif coverage_pct >= 75:
+            milestone = "Strong"
+        elif coverage_pct >= 50:
+            milestone = "Growing"
+        else:
+            milestone = "Building"
+
         kpis += (
-            f'<div style="{kpi_style}"><span style="{val_style};color:{cov_color}">'
-            f"{coverage_pct:.0f}%</span>"
-            f'<span style="{label_style}">Coverage</span></div>'
+            f'<div style="{kpi_style}">{ring_html}'
+            f'<span style="{label_style}">Coverage ({milestone})</span></div>'
         )
 
         if auto_only > 0:
@@ -6204,7 +6231,31 @@ def _render_growth_delta_panel(data: dict) -> str:
     )
 
 
-# ---- Improve queue + rules pending panels ----
+# ---- Review item primitive + queue panels ----
+
+
+def _render_review_item(
+    index: int,
+    title: str,
+    body: str,
+    meta: str,
+    queue_type: str,
+    actions: list[tuple[str, str, str]],
+) -> str:
+    """Universal composable review card. Used by all queue panels."""
+    action_html = " ".join(
+        f'<button class="review-action-btn {_e(cls)}" '
+        f'onclick="{_e(queue_type)}Action({index}, \'{_e(action_id)}\')">{_e(label)}</button>'
+        for action_id, label, cls in actions
+    )
+    return (
+        f'<div class="review-item" data-index="{index}">'
+        f'<div class="review-item-title">{title}</div>'
+        + (f'<div class="review-item-body">{body}</div>' if body else "")
+        + f'<div class="review-item-meta">{meta}</div>'
+        f'<div class="review-item-actions">{action_html}</div>'
+        f"</div>"
+    )
 
 
 def _get_improve_queue_data() -> dict:
@@ -6231,18 +6282,21 @@ def _render_improve_queue_panel(data: dict) -> str:
         name = _e(item.get("name", "unnamed"))
         rationale = _e((item.get("rationale") or "")[:120])
         trusted = " [auto]" if item.get("trusted") else ""
-        rows += (
-            f'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;'
-            f'border-bottom:1px solid var(--c-border)">'
+        type_badge = (
             f'<span style="font-size:10px;padding:2px 6px;border-radius:3px;'
-            f'background:var(--c-surface);color:var(--c-muted);text-transform:uppercase">{itype}</span>'
-            f'<span style="flex:1;font-size:13px">{name}{trusted}'
-            f'<br><span style="font-size:11px;color:var(--c-muted)">{rationale}</span></span>'
-            f'<button class="todo-done-btn" onclick="improveAction({i},\'accept\')" '
-            f'title="Accept">&#10003;</button>'
-            f'<button class="todo-done-btn" style="color:var(--c-red,#f85149)" '
-            f'onclick="improveAction({i},\'dismiss\')" title="Dismiss">&#10007;</button>'
-            f"</div>"
+            f'background:var(--c-surface);color:var(--c-muted);text-transform:uppercase">'
+            f"{itype}</span> "
+        )
+        rows += _render_review_item(
+            index=i,
+            title=f"{type_badge}{name}{trusted}",
+            body=rationale,
+            meta=f"Type: {itype}",
+            queue_type="improve",
+            actions=[
+                ("accept", "\u2713 Accept", "accept"),
+                ("dismiss", "\u2717 Dismiss", "dismiss"),
+            ],
         )
 
     return (
@@ -6292,18 +6346,17 @@ def _render_rules_pending_panel(data: dict) -> str:
 
     rows = ""
     for i, rule in enumerate(pending):
-        text = _e(rule[:200])
-        rows += (
-            f'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;'
-            f'border-bottom:1px solid var(--c-border)">'
-            f'<span style="flex:1;font-size:13px">{text}</span>'
-            f'<button class="todo-done-btn" onclick="ruleAction({i},\'accept\')" '
-            f'title="Accept">&#10003;</button>'
-            f'<button class="todo-done-btn" onclick="ruleAction({i},\'try\')" '
-            f'title="Try 7d" style="font-size:10px">7d</button>'
-            f'<button class="todo-done-btn" style="color:var(--c-red,#f85149)" '
-            f'onclick="ruleAction({i},\'dismiss\')" title="Dismiss">&#10007;</button>'
-            f"</div>"
+        rows += _render_review_item(
+            index=i,
+            title=_e(rule[:200]),
+            body="",
+            meta="Pending rule",
+            queue_type="rule",
+            actions=[
+                ("accept", "\u2713 Accept", "accept"),
+                ("try", "7d Trial", "try"),
+                ("dismiss", "\u2717 Dismiss", "dismiss"),
+            ],
         )
 
     if experiments:
@@ -6320,6 +6373,57 @@ def _render_rules_pending_panel(data: dict) -> str:
         '<div class="card-header"><span class="card-title">Pending Rules</span>'
         f'<span style="font-size:11px;color:var(--c-muted)"> ({total})</span></div>'
         f'<div class="card-body">{rows}</div></div>'
+    )
+
+
+# ---- Facts pending panel ----
+
+
+def _get_facts_pending_data() -> dict:
+    from keephive.storage import pending_facts_file
+
+    path = pending_facts_file()
+    if not path.exists():
+        return {"items": [], "count": 0}
+    items = []
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if line.startswith("- "):
+            items.append(line[2:].strip())
+    return {"items": items, "count": len(items)}
+
+
+def _render_facts_pending_panel(data: dict) -> str:
+    items = data.get("items", [])
+    if not items:
+        return (
+            '<div class="card" tabindex="0" role="region" aria-label="Facts Pending">'
+            '<div class="card-header"><span class="card-title">Facts Pending</span></div>'
+            '<div class="card-body">'
+            '<div style="color:var(--c-muted);font-size:12px">No pending facts</div>'
+            "</div></div>"
+        )
+
+    cards = ""
+    for i, item in enumerate(items):
+        cards += _render_review_item(
+            index=i,
+            title=_e(item[:80]),
+            body=_e(item[80:160]) if len(item) > 80 else "",
+            meta="Auto-captured \u00b7 needs review",
+            queue_type="facts",
+            actions=[
+                ("accept", "\u2713 Accept", "accept"),
+                ("dismiss", "\u2717 Dismiss", "dismiss"),
+                ("skip", "Skip", "skip"),
+            ],
+        )
+
+    return (
+        '<div class="card" tabindex="0" role="region" aria-label="Facts Pending">'
+        '<div class="card-header"><span class="card-title">Facts Pending</span>'
+        f'<span style="font-size:11px;color:var(--c-muted)"> ({len(items)})</span></div>'
+        f'<div class="card-body">{cards}</div></div>'
     )
 
 
@@ -6374,6 +6478,7 @@ PANELS: dict[str, tuple] = {
     "growth-delta": (_get_growth_data, _render_growth_delta_panel),
     "improve-queue": (_get_improve_queue_data, _render_improve_queue_panel),
     "rules-pending": (_get_rules_pending_data, _render_rules_pending_panel),
+    "facts-pending": (_get_facts_pending_data, _render_facts_pending_panel),
 }
 
 # ---- View definitions ----
@@ -6421,6 +6526,7 @@ VIEWS: dict[str, dict] = {
         "path": "/brain",
         "title": "Brain",
         "rows": [["brain"]],
+        "cols": [["rules-pending", "facts-pending"]],
     },
     "dev": {
         "path": "/dev",
@@ -6436,6 +6542,14 @@ VIEWS: dict[str, dict] = {
         "cols": [
             ["growth-state", "growth-delta"],
             ["growth-trajectory"],
+        ],
+    },
+    "review": {
+        "path": "/review",
+        "title": "Review",
+        "cols": [
+            ["improve-queue"],
+            ["rules-pending", "facts-pending"],
         ],
     },
     "settings": {
@@ -7664,6 +7778,179 @@ class _HiveHandler(BaseHTTPRequestHandler):
                 except Exception as exc:
                     ok = False
                     error = str(exc)
+
+        elif self.path == "/api/review":
+            rtype = (data.get("type") or "").strip()
+            idx = data.get("index")
+            action = (data.get("action") or "").strip()
+            remaining_count = 0
+
+            if not rtype or idx is None or not action:
+                ok = False
+                error = "type, index, and action are required"
+            elif rtype == "improve":
+                try:
+                    from keephive.storage import (
+                        read_pending_improvements,
+                        write_pending_improvements,
+                    )
+
+                    items = read_pending_improvements()
+                    if not isinstance(idx, int) or idx < 0 or idx >= len(items):
+                        ok = False
+                        error = f"invalid index: {idx}"
+                    elif action == "accept":
+                        from keephive.commands.improve import _apply_improvement
+
+                        item = items.pop(idx)
+                        _apply_improvement(item)
+                        write_pending_improvements(items)
+                        remaining_count = len(items)
+                    elif action == "dismiss":
+                        from keephive.clock import get_now
+                        from keephive.storage import append_dismissed_improvements
+
+                        item = items.pop(idx)
+                        append_dismissed_improvements(
+                            [
+                                {
+                                    "type": item.get("type", "?"),
+                                    "name": (item.get("name") or "")[:80],
+                                    "dismissed_at": get_now().isoformat(),
+                                }
+                            ]
+                        )
+                        write_pending_improvements(items)
+                        remaining_count = len(items)
+                    elif action == "skip":
+                        remaining_count = len(items)
+                    else:
+                        ok = False
+                        error = f"unknown action: {action}"
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+            elif rtype == "rules":
+                try:
+                    from keephive.storage import pending_rules_file, rules_file
+
+                    pf = pending_rules_file()
+                    lines = [
+                        ln
+                        for ln in pf.read_text().splitlines()
+                        if ln.strip().startswith("- ")
+                    ]
+                    if not isinstance(idx, int) or idx < 0 or idx >= len(lines):
+                        ok = False
+                        error = f"invalid index: {idx}"
+                    elif action == "accept":
+                        rule_text = lines[idx].lstrip("- ").strip()
+                        rule_text = re.sub(r"\s*\[auto:[^\]]*\]", "", rule_text).strip()
+                        rf = rules_file()
+                        if not rf.exists():
+                            rf.write_text("# Working Rules\n\n")
+                        with rf.open("a") as f:
+                            f.write(f"- {rule_text}\n")
+                        lines.pop(idx)
+                        non_items = [
+                            ln
+                            for ln in pf.read_text().splitlines()
+                            if not ln.strip().startswith("- ")
+                        ]
+                        non_items.extend(lines)
+                        pf.write_text(
+                            "\n".join(non_items) + "\n" if non_items else ""
+                        )
+                        remaining_count = len(lines)
+                    elif action == "try":
+                        rule_text = lines[idx].lstrip("- ").strip()
+                        rule_text = re.sub(r"\s*\[auto:[^\]]*\]", "", rule_text).strip()
+                        from keephive.commands.memory import cmd_rule_try
+
+                        days = data.get("days", 7)
+                        cmd_rule_try([rule_text, "--days", str(days)])
+                        lines.pop(idx)
+                        non_items = [
+                            ln
+                            for ln in pf.read_text().splitlines()
+                            if not ln.strip().startswith("- ")
+                        ]
+                        non_items.extend(lines)
+                        pf.write_text(
+                            "\n".join(non_items) + "\n" if non_items else ""
+                        )
+                        remaining_count = len(lines)
+                    elif action == "dismiss":
+                        lines.pop(idx)
+                        non_items = [
+                            ln
+                            for ln in pf.read_text().splitlines()
+                            if not ln.strip().startswith("- ")
+                        ]
+                        non_items.extend(lines)
+                        pf.write_text(
+                            "\n".join(non_items) + "\n" if non_items else ""
+                        )
+                        remaining_count = len(lines)
+                    elif action == "skip":
+                        remaining_count = len(lines)
+                    else:
+                        ok = False
+                        error = f"unknown action: {action}"
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+            elif rtype == "facts":
+                try:
+                    from keephive.storage import (
+                        memory_file,
+                        read_pending_facts,
+                        write_pending_facts,
+                    )
+
+                    items = read_pending_facts()
+                    if not isinstance(idx, int) or idx < 0 or idx >= len(items):
+                        ok = False
+                        error = f"invalid index: {idx}"
+                    elif action == "accept":
+                        fact_text = items[idx].get("fact", "")
+                        # Append to memory.md as [auto] entry
+                        mf = memory_file()
+                        existing = mf.read_text() if mf.exists() else ""
+                        if not existing.endswith("\n"):
+                            existing += "\n"
+                        mf.write_text(existing + f"- [auto] {fact_text}\n")
+                        items.pop(idx)
+                        write_pending_facts(items)
+                        remaining_count = len(items)
+                    elif action == "dismiss":
+                        items.pop(idx)
+                        write_pending_facts(items)
+                        remaining_count = len(items)
+                    elif action == "skip":
+                        remaining_count = len(items)
+                    else:
+                        ok = False
+                        error = f"unknown action: {action}"
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+            else:
+                ok = False
+                error = f"unknown review type: {rtype}"
+
+            if ok:
+                resp = json.dumps({"ok": True, "remaining": remaining_count}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self._cors()
+                self.send_header("Content-Length", str(len(resp)))
+                self.end_headers()
+                self.wfile.write(resp)
+                return
 
         else:
             self.send_response(404)

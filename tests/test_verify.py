@@ -337,3 +337,136 @@ class TestVerifyFlags:
         assert "dark two" in texts
         assert "dark three" in texts
         assert "dark four" not in texts
+
+
+class TestPostVerifyCoverageDelta:
+    """Post-verify coverage delta prints when coverage changes."""
+
+    def test_delta_printed_when_coverage_changes(self, hive_env, capsys, monkeypatch):
+        """Coverage delta line appears when pre != post coverage."""
+        from keephive.commands import verify as verify_mod
+
+        call_count = {"n": 0}
+
+        def mock_coverage():
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return {
+                    "total": 100,
+                    "verified": 30,
+                    "auto_only": 65,
+                    "user_owned": 5,
+                    "dark_pct": 65.0,
+                    "coverage_pct": 35.0,
+                }
+            return {
+                "total": 100,
+                "verified": 38,
+                "auto_only": 57,
+                "user_owned": 5,
+                "dark_pct": 57.0,
+                "coverage_pct": 43.0,
+            }
+
+        monkeypatch.setattr(verify_mod, "comprehension_coverage", mock_coverage)
+
+        mem_path = hive_env / "working" / "memory.md"
+        today_str = date.today().isoformat()
+
+        # Simulate a verify run: capture pre, apply, capture post
+        pre_cov = verify_mod.comprehension_coverage()
+
+        stale_facts = [(3, "Python is great", "- Python is great [verified:2020-01-01]\n")]
+        response = VerifyResponse(
+            verdicts=[FactVerdict(index=1, verdict=Verdict.VALID, reason="Confirmed")]
+        )
+        apply_verdicts(response, stale_facts, mem_path, today_str)
+
+        # Simulate the post-verify delta printing
+        from keephive.output import console
+
+        post_cov = verify_mod.comprehension_coverage()
+        if pre_cov is not None and post_cov["coverage_pct"] != pre_cov["coverage_pct"]:
+            delta = post_cov["coverage_pct"] - pre_cov["coverage_pct"]
+            console.print(
+                f"  Coverage: {pre_cov['coverage_pct']:.0f}% \u2192 {post_cov['coverage_pct']:.0f}%"
+                f"  (+{delta:.0f}% reviewed)"
+            )
+
+        out = capsys.readouterr().out
+        assert "Coverage: 35%" in out
+        assert "43%" in out
+        assert "+8% reviewed" in out
+
+    def test_delta_skipped_when_coverage_unchanged(self, hive_env, capsys, monkeypatch):
+        """Coverage delta line is absent when pre == post coverage."""
+        from keephive.commands import verify as verify_mod
+
+        stable_cov = {
+            "total": 100,
+            "verified": 50,
+            "auto_only": 40,
+            "user_owned": 10,
+            "dark_pct": 40.0,
+            "coverage_pct": 60.0,
+        }
+        monkeypatch.setattr(verify_mod, "comprehension_coverage", lambda: stable_cov)
+
+        mem_path = hive_env / "working" / "memory.md"
+        today_str = date.today().isoformat()
+
+        pre_cov = verify_mod.comprehension_coverage()
+
+        stale_facts = [(3, "Python is great", "- Python is great [verified:2020-01-01]\n")]
+        response = VerifyResponse(
+            verdicts=[FactVerdict(index=1, verdict=Verdict.VALID, reason="OK")]
+        )
+        apply_verdicts(response, stale_facts, mem_path, today_str)
+
+        from keephive.output import console
+
+        post_cov = verify_mod.comprehension_coverage()
+        if pre_cov is not None and post_cov["coverage_pct"] != pre_cov["coverage_pct"]:
+            delta = post_cov["coverage_pct"] - pre_cov["coverage_pct"]
+            console.print(
+                f"  Coverage: {pre_cov['coverage_pct']:.0f}% \u2192 {post_cov['coverage_pct']:.0f}%"
+                f"  (+{delta:.0f}% reviewed)"
+            )
+
+        out = capsys.readouterr().out
+        assert "Coverage:" not in out
+
+
+class TestApplyVerdictsProgress:
+    """apply_verdicts shows [i/total] progress prefix on each verdict."""
+
+    def test_progress_prefix_in_output(self, hive_env, capsys):
+        """Each verdict line shows [i/total] prefix."""
+        mem_path = hive_env / "working" / "memory.md"
+        mem_path.write_text(
+            "# Working Memory\n\n"
+            "- Fact A [verified:2020-01-01]\n"
+            "- Fact B [verified:2020-01-02]\n"
+            "- Fact C [verified:2020-01-03]\n"
+        )
+        today_str = date.today().isoformat()
+
+        stale_facts = [
+            (3, "Fact A", "- Fact A [verified:2020-01-01]\n"),
+            (4, "Fact B", "- Fact B [verified:2020-01-02]\n"),
+            (5, "Fact C", "- Fact C [verified:2020-01-03]\n"),
+        ]
+
+        response = VerifyResponse(
+            verdicts=[
+                FactVerdict(index=1, verdict=Verdict.VALID, reason="OK"),
+                FactVerdict(index=2, verdict=Verdict.UNCERTAIN, reason="Maybe"),
+                FactVerdict(index=3, verdict=Verdict.STALE, reason="Old", correction="- Fact C v2"),
+            ]
+        )
+
+        apply_verdicts(response, stale_facts, mem_path, today_str)
+        out = capsys.readouterr().out
+        assert "[1/3]" in out
+        assert "[2/3]" in out
+        assert "[3/3]" in out

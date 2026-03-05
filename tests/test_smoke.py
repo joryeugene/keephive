@@ -34,8 +34,9 @@ def test_version():
     assert "keephive v" in r.stdout
 
 
-def test_help():
-    r = _run(["help"])
+def test_help(hive_env):
+    # hive_env has empty stats, forcing the grouped help layout which always includes "verify"
+    r = _run(["help"], hive_home=str(hive_env))
     assert r.returncode == 0
     assert "status" in r.stdout
     assert "verify" in r.stdout

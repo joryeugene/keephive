@@ -3201,6 +3201,7 @@ def test_consolidated_views_exist():
         "know",
         "stats",
         "growth",
+        "review",
         "settings",
         "play",
         "agent",
