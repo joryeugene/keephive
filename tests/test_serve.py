@@ -3200,6 +3200,7 @@ def test_consolidated_views_exist():
         "brain",
         "know",
         "stats",
+        "growth",
         "settings",
         "play",
         "agent",

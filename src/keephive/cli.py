@@ -92,6 +92,7 @@ HELP: dict[str, str] = {
         "  Flag files: .llm-paused (kill switch), .force-cli (CLI-only mode)\n"
         "  `off` clears both flags."
     ),
+    "growth": "Usage: hive growth [--json]\n  How keephive compounds over time: 30-day trends, week-over-week deltas, impact.\n  --json  Machine-readable output",
 }
 
 # Map aliases to canonical names for help lookup
@@ -147,6 +148,8 @@ _CANONICAL: dict[str, str] = {
     "mr": "mem",
     "rr": "rule",
     "pv": "privacy",
+    "gr": "growth",
+    "growth": "growth",
 }
 
 # Command families: (display_label, description, shorthand, tracked_aliases)
@@ -172,6 +175,7 @@ _CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
     ('run "<task>" [--max N]', "Autonomous iteration loop", "rn", {"run", "rn"}),
     ("improve [review]", "Review self-improvement proposals", "im", {"improve", "im"}),
     ("go [mode]", "Launch session", "go", {"go", "sesh", "session"}),
+    ("growth [--json]", "How keephive compounds", "gr", {"gr", "growth"}),
     ("stats [-p path]", "Usage + pipeline health", "st", {"st", "stats"}),
     ("mem [rm] <text>", "Add/remove working memory", "m", {"m", "mem", "mr"}),
     ("serve [port]", "Live web dashboard", "ws", {"ws", "serve"}),
@@ -275,6 +279,7 @@ Usage: hive <command> [args]
     inbox [--days N]  KingBee output + review queue     ib
     run "<task>"      Autonomous iteration loop         rn
     go [mode]         Launch session                    go
+    growth [--json]   How keephive compounds             gr
     stats [-p path]   Usage + pipeline health           st
     log [date]        View daily log                    l
 
@@ -462,6 +467,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "loop-extract": ("keephive.commands.loop", "cmd_loop_extract"),
     "privacy": ("keephive.commands.privacy", "cmd_privacy"),
     "pv": ("keephive.commands.privacy", "cmd_privacy"),
+    "growth": ("keephive.commands.growth", "cmd_growth"),
+    "gr": ("keephive.commands.growth", "cmd_growth"),
 }
 
 

@@ -5993,6 +5993,167 @@ def _render_stats_tokens_panel(data: dict) -> str:
     )
 
 
+# ---- Growth panels ----
+
+
+def _get_growth_data() -> dict:
+    """Growth snapshot for dashboard panels."""
+    from keephive.storage import growth_snapshot
+
+    return growth_snapshot()
+
+
+def _render_growth_trajectory_panel(data: dict) -> str:
+    """30-day sparkline grid showing compounding trends."""
+    trend = data.get("trend_30d", [])
+    if not trend or all(d["log_entries"] == 0 for d in trend):
+        return (
+            '<div class="card" tabindex="0" role="region" aria-label="Growth Trajectory">'
+            '<div class="card-header"><span class="card-title">Growth Trajectory</span></div>'
+            '<div class="card-body"><div class="empty">Not enough data yet. Use keephive for a few days.</div></div>'
+            "</div>"
+        )
+
+    spark_chars = " \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588"
+
+    def spark(values: list[int]) -> str:
+        mx = max(values) if values else 0
+        if mx == 0:
+            return ""
+        return "".join(spark_chars[min(8, round(v / mx * 8))] for v in values)
+
+    metrics = [
+        ("Log entries", [d["log_entries"] for d in trend]),
+        ("Guide hits", [d["guide_hits"] for d in trend]),
+        ("TODOs done", [d["todos_done"] for d in trend]),
+        ("Corrections", [d["corrections"] for d in trend]),
+        ("Daemon runs", [d["daemon_runs"] for d in trend]),
+        ("Commands", [d["commands"] for d in trend]),
+    ]
+
+    rows = ""
+    for label, values in metrics:
+        total = sum(values)
+        if total == 0:
+            continue
+        s = spark(values)
+        rows += (
+            f'<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">'
+            f'<span style="color:var(--c-muted);min-width:100px">{_e(label)}</span>'
+            f'<span style="font-family:monospace;letter-spacing:1px;flex:1;text-align:center">{_e(s)}</span>'
+            f'<span style="color:var(--c-fg);min-width:50px;text-align:right">{total:,}</span>'
+            f"</div>"
+        )
+
+    return (
+        '<div class="card" tabindex="0" role="region" aria-label="Growth Trajectory">'
+        '<div class="card-header"><span class="card-title">Growth Trajectory</span>'
+        '<span class="card-meta">30 days</span></div>'
+        f'<div class="card-body">{rows}</div>'
+        "</div>"
+    )
+
+
+def _render_growth_state_panel(data: dict) -> str:
+    """Current knowledge state snapshot."""
+    fc = data.get("fact_count", 0)
+    ff = data.get("fact_freshness", 0)
+    gc = data.get("guide_count", 0)
+    rr = data.get("recall_rate", 0)
+    rh = data.get("recall_hits", 0)
+    rt = data.get("recall_total", 0)
+
+    if fc == 0 and gc == 0:
+        return (
+            '<div class="card" tabindex="0" role="region" aria-label="Knowledge State">'
+            '<div class="card-header"><span class="card-title">Knowledge State</span></div>'
+            '<div class="card-body"><div class="empty">No facts or guides yet.</div></div>'
+            "</div>"
+        )
+
+    # Freshness color
+    if ff >= 70:
+        ff_color = "var(--c-green, #3fb950)"
+    elif ff >= 40:
+        ff_color = "var(--c-yellow, #d29922)"
+    else:
+        ff_color = "var(--c-red, #f85149)"
+
+    kpi_style = (
+        "text-align:center;padding:8px 4px;"
+        "display:flex;flex-direction:column;align-items:center;gap:2px;flex:1"
+    )
+    val_style = "font-size:1.5em;font-weight:700;color:var(--c-fg)"
+    label_style = "font-size:0.75em;color:var(--c-muted);text-transform:uppercase;letter-spacing:0.5px"
+
+    kpis = (
+        f'<div style="display:flex;gap:8px;justify-content:center">'
+        f'<div style="{kpi_style}"><span style="{val_style}">{fc}</span><span style="{label_style}">Facts</span></div>'
+        f'<div style="{kpi_style}"><span style="{val_style};color:{ff_color}">{ff:.0f}%</span><span style="{label_style}">Fresh</span></div>'
+        f'<div style="{kpi_style}"><span style="{val_style}">{gc}</span><span style="{label_style}">Guides</span></div>'
+    )
+
+    if rt > 0:
+        kpis += (
+            f'<div style="{kpi_style}"><span style="{val_style}">{rr:.0f}%</span>'
+            f'<span style="{label_style}">Recall ({rh}/{rt})</span></div>'
+        )
+
+    kpis += "</div>"
+
+    return (
+        '<div class="card" tabindex="0" role="region" aria-label="Knowledge State">'
+        '<div class="card-header"><span class="card-title">Knowledge State</span></div>'
+        f'<div class="card-body">{kpis}</div>'
+        "</div>"
+    )
+
+
+def _render_growth_delta_panel(data: dict) -> str:
+    """Week-over-week comparison with deltas."""
+    wk = data.get("week_totals", {})
+    prev = data.get("prev_week_totals", {})
+
+    comparisons = [
+        ("Log entries", wk.get("log_entries", 0), prev.get("log_entries", 0)),
+        ("Guide hits", wk.get("guide_hits", 0), prev.get("guide_hits", 0)),
+        ("TODOs done", wk.get("todos_done", 0), prev.get("todos_done", 0)),
+        ("Corrections", wk.get("corrections", 0), prev.get("corrections", 0)),
+        ("Daemon runs", wk.get("daemon_runs", 0), prev.get("daemon_runs", 0)),
+        ("Commands", wk.get("commands", 0), prev.get("commands", 0)),
+    ]
+
+    rows = ""
+    for label, current, previous in comparisons:
+        if current == 0 and previous == 0:
+            continue
+        diff = current - previous
+        if diff > 0:
+            delta_html = f'<span style="color:var(--c-green, #3fb950)">+{diff}</span>'
+        elif diff < 0:
+            delta_html = f'<span style="color:var(--c-red, #f85149)">{diff}</span>'
+        else:
+            delta_html = '<span style="color:var(--c-muted)">0</span>'
+
+        rows += (
+            f'<div style="display:flex;justify-content:space-between;padding:3px 0">'
+            f'<span style="color:var(--c-muted)">{_e(label)}</span>'
+            f'<span>{current}</span>'
+            f'<span>{delta_html}</span>'
+            f"</div>"
+        )
+
+    if not rows:
+        rows = '<div class="empty">No activity this week.</div>'
+
+    return (
+        '<div class="card" tabindex="0" role="region" aria-label="Week over Week">'
+        '<div class="card-header"><span class="card-title">This Week vs Last</span></div>'
+        f'<div class="card-body">{rows}</div>'
+        "</div>"
+    )
+
+
 # ---- Panel registry ----
 
 PANELS: dict[str, tuple] = {
@@ -6039,6 +6200,9 @@ PANELS: dict[str, tuple] = {
     "active-loops": (_get_active_loops_data, _render_active_loops_panel),
     "daemon-status": (_get_daemon_status_data, _render_daemon_status_panel),
     "daemon-log": (_get_daemon_log_data, _render_daemon_log_panel),
+    "growth-trajectory": (_get_growth_data, _render_growth_trajectory_panel),
+    "growth-state": (_get_growth_data, _render_growth_state_panel),
+    "growth-delta": (_get_growth_data, _render_growth_delta_panel),
 }
 
 # ---- View definitions ----
@@ -6093,6 +6257,14 @@ VIEWS: dict[str, dict] = {
         "cols": [
             ["status-brief", "log-brief", "todos-brief", "facts"],
             ["notes-compact", "knowledge-compact"],
+        ],
+    },
+    "growth": {
+        "path": "/growth",
+        "title": "Growth",
+        "cols": [
+            ["growth-state", "growth-delta"],
+            ["growth-trajectory"],
         ],
     },
     "settings": {

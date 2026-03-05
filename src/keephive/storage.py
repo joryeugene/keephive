@@ -3324,3 +3324,147 @@ def floor_metrics() -> dict:
         "auto_promoted_facts_7d": auto_promoted_facts_7d,
         "reflect_draft_proposals_7d": reflect_draft_proposals_7d,
     }
+
+
+def trend_metrics(days: int = 30) -> list[dict]:
+    """Compute per-day growth metrics over a time window.
+
+    Returns a list of dicts (one per day, chronological order):
+      date           str   YYYY-MM-DD
+      guide_hits     int   total guide injections that day
+      daemon_runs    int   total daemon task runs that day
+      commands       int   total CLI command invocations that day
+      log_entries    int   total daily log entries (FACT/DECISION/TODO/etc.)
+      todos_done     int   DONE entries that day
+      corrections    int   CORRECTION entries that day
+
+    Pure read, no writes. Deterministic.
+    """
+    try:
+        data = read_stats()
+        days_data = data.get("days", {})
+    except Exception:
+        days_data = {}
+
+    today = get_today()
+    result: list[dict] = []
+
+    # Pre-count daily log entries per day
+    dd = daily_dir()
+    ts_re = re.compile(
+        r"^- \[\d{2}:\d{2}:\d{2}\]\s*(FACT|DECISION|TODO|INSIGHT|CORRECTION|DONE):"
+    )
+    bare_re = re.compile(r"^- (FACT|DECISION|TODO|INSIGHT|CORRECTION|DONE):")
+
+    for i in range(days - 1, -1, -1):
+        d = today - timedelta(days=i)
+        day_str = d.isoformat()
+        day_data = days_data.get(day_str, {})
+
+        # Stats from .stats.json
+        gh = day_data.get("guide_hits", {})
+        guide_hits = sum(gh.values()) if isinstance(gh, dict) else 0
+
+        dt = day_data.get("daemon_tasks", {})
+        daemon_runs = sum(dt.values()) if isinstance(dt, dict) else 0
+
+        cmds = day_data.get("commands", {})
+        commands = sum(cmds.values()) if isinstance(cmds, dict) else 0
+
+        # Entries from daily log
+        log_entries = 0
+        todos_done = 0
+        corrections = 0
+        log_file = dd / f"{day_str}.md" if dd.exists() else None
+        if log_file and log_file.exists():
+            for line in safe_read_text(log_file).splitlines():
+                m = ts_re.match(line) or bare_re.match(line)
+                if m:
+                    log_entries += 1
+                    cat = m.group(1)
+                    if cat == "DONE":
+                        todos_done += 1
+                    elif cat == "CORRECTION":
+                        corrections += 1
+
+        result.append(
+            {
+                "date": day_str,
+                "guide_hits": guide_hits,
+                "daemon_runs": daemon_runs,
+                "commands": commands,
+                "log_entries": log_entries,
+                "todos_done": todos_done,
+                "corrections": corrections,
+            }
+        )
+
+    return result
+
+
+def growth_snapshot() -> dict:
+    """Compute aggregate growth metrics for display.
+
+    Returns a dict with current-state and trend data:
+      fact_count        int   total facts in memory.md
+      fact_freshness    float 0-100, % of verified facts < 14 days old
+      recall_hits       int   total recall hits
+      recall_total      int   total recall queries
+      recall_rate       float 0-100, hit rate percentage
+      guide_count       int   number of knowledge guides
+      trend_30d         list  output of trend_metrics(30)
+      week_totals       dict  {guide_hits, daemon_runs, commands, log_entries, todos_done, corrections}
+      prev_week_totals  dict  same keys, for the week before (for delta comparison)
+    """
+    # Fact count from memory.md
+    mem = memory_file()
+    fact_count = 0
+    verified_fresh = 0
+    verified_total = 0
+    if mem.exists():
+        for line in mem.read_text().splitlines():
+            if line.startswith("- "):
+                fact_count += 1
+            m = re.search(r"\[verified:(\d{4}-\d{2}-\d{2})\]", line)
+            if m:
+                verified_total += 1
+                age = (get_today() - date.fromisoformat(m.group(1))).days
+                if age < 14:
+                    verified_fresh += 1
+
+    fact_freshness = (verified_fresh / verified_total * 100) if verified_total > 0 else 0.0
+
+    # Recall stats
+    recall_hits, recall_total = get_recall_hit_rate()
+    recall_rate = (recall_hits / recall_total * 100) if recall_total > 0 else 0.0
+
+    # Guide count
+    gd = guides_dir()
+    guide_count = len(list(gd.glob("*.md"))) if gd.exists() else 0
+
+    # 30-day trend
+    trend = trend_metrics(30)
+
+    # Week totals (last 7 days vs previous 7 days)
+    sum_keys = ["guide_hits", "daemon_runs", "commands", "log_entries", "todos_done", "corrections"]
+    week_totals = {k: 0 for k in sum_keys}
+    prev_week_totals = {k: 0 for k in sum_keys}
+
+    for day in trend[-7:]:
+        for k in sum_keys:
+            week_totals[k] += day.get(k, 0)
+    for day in trend[-14:-7]:
+        for k in sum_keys:
+            prev_week_totals[k] += day.get(k, 0)
+
+    return {
+        "fact_count": fact_count,
+        "fact_freshness": round(fact_freshness, 1),
+        "recall_hits": recall_hits,
+        "recall_total": recall_total,
+        "recall_rate": round(recall_rate, 1),
+        "guide_count": guide_count,
+        "trend_30d": trend,
+        "week_totals": week_totals,
+        "prev_week_totals": prev_week_totals,
+    }
