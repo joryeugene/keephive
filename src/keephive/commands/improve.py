@@ -6,6 +6,7 @@ import json
 
 from keephive.output import console
 from keephive.storage import (
+    append_improvement_history,
     daemon_config_file,
     guides_dir,
     hive_dir,
@@ -277,6 +278,22 @@ No preamble, no commentary — output the guide directly."""
         return False
 
 
+def _record_applied(item: dict) -> None:
+    """Record an applied improvement for effectiveness tracking."""
+    from keephive.clock import get_now
+
+    entry = {
+        "type": item.get("type", "?"),
+        "name": (item.get("name") or item.get("rule", ""))[:80],
+        "applied_at": get_now().isoformat(),
+        "rationale": (item.get("rationale") or "")[:120],
+    }
+    try:
+        append_improvement_history(entry)
+    except Exception:
+        pass  # never crash the accept flow
+
+
 def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
     item_type = item.get("type")
 
@@ -398,3 +415,6 @@ def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
                     console.print(
                         f"  [warn]Could not parse task config changes for {target}[/warn]"
                     )
+
+    # Record in improvement history for effectiveness tracking
+    _record_applied(item)

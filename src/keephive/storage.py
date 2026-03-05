@@ -3495,3 +3495,57 @@ def write_experiment_baselines(data: dict) -> None:
     """Write experiment baselines to disk."""
     f = experiment_baselines_file()
     f.write_text(json.dumps(data, indent=2) + "\n")
+
+
+# ---------------------------------------------------------------------------
+# Daemon hints + improvement history
+# ---------------------------------------------------------------------------
+
+
+def daemon_hints_file() -> Path:
+    """Path to .daemon-hints.json — priority boost hints for daemon tasks."""
+    return hive_dir() / ".daemon-hints.json"
+
+
+def read_daemon_hints() -> dict:
+    """Read daemon hints. Returns {priority_boost: {task: float}, reason: str, expires: str}."""
+    f = daemon_hints_file()
+    if not f.exists():
+        return {}
+    try:
+        return json.loads(f.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def write_daemon_hints(data: dict) -> None:
+    """Write daemon hints to disk."""
+    f = daemon_hints_file()
+    f.write_text(json.dumps(data, indent=2) + "\n")
+
+
+def improvement_history_file() -> Path:
+    """Path to .improvement-history.json — effectiveness tracking for applied improvements."""
+    return hive_dir() / ".improvement-history.json"
+
+
+def read_improvement_history() -> list[dict]:
+    """Read improvement history. Returns list of {type, name, applied_at, ...} dicts."""
+    f = improvement_history_file()
+    if not f.exists():
+        return []
+    try:
+        data = json.loads(f.read_text())
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def append_improvement_history(entry: dict) -> None:
+    """Append an entry to improvement history with rolling 200-item cap."""
+    history = read_improvement_history()
+    history.append(entry)
+    if len(history) > 200:
+        history = history[-200:]
+    f = improvement_history_file()
+    f.write_text(json.dumps(history, indent=2) + "\n")

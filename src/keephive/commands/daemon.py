@@ -383,7 +383,9 @@ def _is_task_due(task_name: str, config: dict, state: dict, now: datetime) -> bo
         }
         target_weekday = day_map.get(target_day, 0)
         if now.weekday() != target_weekday:
-            return False
+            # Priority boost can override day-of-week constraint
+            if not _has_priority_boost(task_name):
+                return False
 
     task_time_today = now.replace(hour=task_hour, minute=task_minute, second=0, microsecond=0)
     if now < task_time_today:
@@ -395,6 +397,30 @@ def _is_task_due(task_name: str, config: dict, state: dict, now: datetime) -> bo
             return False
 
     return True
+
+
+def _has_priority_boost(task_name: str) -> bool:
+    """Check if a task has an active (non-expired) priority boost from daemon hints."""
+    from keephive.clock import get_today
+    from keephive.storage import read_daemon_hints
+
+    hints = read_daemon_hints()
+    if not hints:
+        return False
+
+    # Check expiry
+    expires_str = hints.get("expires", "")
+    if expires_str:
+        from datetime import date
+
+        try:
+            if get_today() > date.fromisoformat(expires_str):
+                return False
+        except ValueError:
+            return False
+
+    boosts = hints.get("priority_boost", {})
+    return boosts.get(task_name, 1.0) > 1.0
 
 
 def _mark_last_run(task_name: str) -> None:
@@ -1187,7 +1213,32 @@ Do not invent or extrapolate beyond what the entries say.
     }
     append_pending_improvements([proposal])
     _log_daemon(f"[reflect-draft: proposed guide '{topic}']")
+
+    # Write daemon hints: active theme generation implies knowledge drift
+    _write_reflect_hints(topic, len(entries))
     return True
+
+
+def _write_reflect_hints(topic: str, entry_count: int) -> None:
+    """Write priority hints after reflect-draft finds an active uncovered theme.
+
+    When a theme has enough log entries to generate a guide, it signals knowledge
+    drift — boost stale-check and soul-update to catch up faster.
+    """
+    from keephive.clock import get_today
+    from keephive.storage import write_daemon_hints
+
+    expires = (get_today() + timedelta(days=7)).isoformat()
+    hints = {
+        "priority_boost": {
+            "stale-check": 1.5,
+            "soul-update": 1.5,
+        },
+        "reason": f"reflect-draft found uncovered theme '{topic}' ({entry_count} entries)",
+        "expires": expires,
+    }
+    write_daemon_hints(hints)
+    _log_daemon(f"reflect-draft: wrote priority hints (expires {expires})")
 
 
 # ── Custom task queue (hive run --at / --tonight) ─────────────────────────────
