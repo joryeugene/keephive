@@ -1250,6 +1250,21 @@ _JS = """
     reader.readAsArrayBuffer(file);
   };
 
+  // --- Improve + Rules actions ---
+  window.improveAction=function(idx,action){
+    fetch('/api/improve/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:idx})})
+      .then(function(r){return r.json();})
+      .then(function(d){if(d.ok)refresh();});
+  };
+  window.ruleAction=function(idx,action){
+    var url='/api/rules/'+action;
+    var body={index:idx};
+    if(action==='try')body.days=7;
+    fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+      .then(function(r){return r.json();})
+      .then(function(d){if(d.ok)refresh();});
+  };
+
   // --- Edit modal ---
   var _editType='';var _editName='';var _editSlot=0;
   var _previewDebounce=null;
@@ -6154,6 +6169,125 @@ def _render_growth_delta_panel(data: dict) -> str:
     )
 
 
+# ---- Improve queue + rules pending panels ----
+
+
+def _get_improve_queue_data() -> dict:
+    from keephive.storage import read_pending_improvements
+
+    items = read_pending_improvements()
+    return {"items": items}
+
+
+def _render_improve_queue_panel(data: dict) -> str:
+    items = data.get("items", [])
+    if not items:
+        return (
+            '<div class="card" tabindex="0" role="region" aria-label="Improve Queue">'
+            '<div class="card-header"><span class="card-title">Improve Queue</span></div>'
+            '<div class="card-body">'
+            '<div style="color:var(--c-muted);font-size:12px">No pending improvements</div>'
+            "</div></div>"
+        )
+
+    rows = ""
+    for i, item in enumerate(items):
+        itype = _e(item.get("type", "?"))
+        name = _e(item.get("name", "unnamed"))
+        rationale = _e((item.get("rationale") or "")[:120])
+        trusted = " [auto]" if item.get("trusted") else ""
+        rows += (
+            f'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;'
+            f'border-bottom:1px solid var(--c-border)">'
+            f'<span style="font-size:10px;padding:2px 6px;border-radius:3px;'
+            f'background:var(--c-surface);color:var(--c-muted);text-transform:uppercase">{itype}</span>'
+            f'<span style="flex:1;font-size:13px">{name}{trusted}'
+            f'<br><span style="font-size:11px;color:var(--c-muted)">{rationale}</span></span>'
+            f'<button class="todo-done-btn" onclick="improveAction({i},\'accept\')" '
+            f'title="Accept">&#10003;</button>'
+            f'<button class="todo-done-btn" style="color:var(--c-red,#f85149)" '
+            f'onclick="improveAction({i},\'dismiss\')" title="Dismiss">&#10007;</button>'
+            f"</div>"
+        )
+
+    return (
+        '<div class="card" tabindex="0" role="region" aria-label="Improve Queue">'
+        '<div class="card-header"><span class="card-title">Improve Queue</span>'
+        f'<span style="font-size:11px;color:var(--c-muted)"> ({len(items)})</span></div>'
+        f'<div class="card-body">{rows}</div></div>'
+    )
+
+
+def _get_rules_pending_data() -> dict:
+    from keephive.storage import pending_rules_file, rules_file
+
+    pending: list[str] = []
+    pf = pending_rules_file()
+    if pf.exists():
+        for ln in pf.read_text().splitlines():
+            ln = ln.strip()
+            if ln.startswith("- "):
+                pending.append(ln[2:])
+
+    # Also gather experimental rules from rules.md
+    experiments: list[str] = []
+    rf = rules_file()
+    if rf.exists():
+        from keephive.commands.memory import _EXPERIMENT_TAG_RE
+
+        for ln in rf.read_text().splitlines():
+            if _EXPERIMENT_TAG_RE.search(ln):
+                experiments.append(ln.lstrip("- ").strip())
+
+    return {"pending": pending, "experiments": experiments}
+
+
+def _render_rules_pending_panel(data: dict) -> str:
+    pending = data.get("pending", [])
+    experiments = data.get("experiments", [])
+
+    if not pending and not experiments:
+        return (
+            '<div class="card" tabindex="0" role="region" aria-label="Pending Rules">'
+            '<div class="card-header"><span class="card-title">Pending Rules</span></div>'
+            '<div class="card-body">'
+            '<div style="color:var(--c-muted);font-size:12px">No pending rules or active experiments</div>'
+            "</div></div>"
+        )
+
+    rows = ""
+    for i, rule in enumerate(pending):
+        text = _e(rule[:200])
+        rows += (
+            f'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;'
+            f'border-bottom:1px solid var(--c-border)">'
+            f'<span style="flex:1;font-size:13px">{text}</span>'
+            f'<button class="todo-done-btn" onclick="ruleAction({i},\'accept\')" '
+            f'title="Accept">&#10003;</button>'
+            f'<button class="todo-done-btn" onclick="ruleAction({i},\'try\')" '
+            f'title="Try 7d" style="font-size:10px">7d</button>'
+            f'<button class="todo-done-btn" style="color:var(--c-red,#f85149)" '
+            f'onclick="ruleAction({i},\'dismiss\')" title="Dismiss">&#10007;</button>'
+            f"</div>"
+        )
+
+    if experiments:
+        rows += '<div style="margin-top:8px;font-size:11px;color:var(--c-muted)">Active experiments:</div>'
+        for exp in experiments:
+            rows += (
+                f'<div style="padding:4px 0;font-size:12px;color:var(--c-fg)">'
+                f"&#9881; {_e(exp[:200])}</div>"
+            )
+
+    total = len(pending) + len(experiments)
+    return (
+        '<div class="card" tabindex="0" role="region" aria-label="Pending Rules">'
+        '<div class="card-header"><span class="card-title">Pending Rules</span>'
+        f'<span style="font-size:11px;color:var(--c-muted)"> ({total})</span></div>'
+        f'<div class="card-body">{rows}</div></div>'
+    )
+
+
 # ---- Panel registry ----
 
 PANELS: dict[str, tuple] = {
@@ -6203,6 +6337,8 @@ PANELS: dict[str, tuple] = {
     "growth-trajectory": (_get_growth_data, _render_growth_trajectory_panel),
     "growth-state": (_get_growth_data, _render_growth_state_panel),
     "growth-delta": (_get_growth_data, _render_growth_delta_panel),
+    "improve-queue": (_get_improve_queue_data, _render_improve_queue_panel),
+    "rules-pending": (_get_rules_pending_data, _render_rules_pending_panel),
 }
 
 # ---- View definitions ----
@@ -6271,8 +6407,8 @@ VIEWS: dict[str, dict] = {
         "path": "/settings",
         "title": "Settings",
         "cols": [
-            ["settings"],
-            ["profiles", "transfer"],
+            ["settings", "improve-queue"],
+            ["profiles", "rules-pending", "transfer"],
         ],
     },
 }
@@ -6622,6 +6758,33 @@ class _HiveHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            return
+
+        if path == "/api/improve/queue":
+            try:
+                from keephive.storage import read_pending_improvements
+
+                items = read_pending_improvements()
+                resp_data = json.dumps({"items": items}).encode()
+            except Exception as exc:
+                resp_data = json.dumps({"items": [], "error": str(exc)}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._cors()
+            self.send_header("Content-Length", str(len(resp_data)))
+            self.end_headers()
+            self.wfile.write(resp_data)
+            return
+
+        if path == "/api/rules/pending":
+            data = _get_rules_pending_data()
+            resp_data = json.dumps(data).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._cors()
+            self.send_header("Content-Length", str(len(resp_data)))
+            self.end_headers()
+            self.wfile.write(resp_data)
             return
 
         if path == "/api/panel/log-dated":
@@ -7300,6 +7463,144 @@ class _HiveHandler(BaseHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(resp_body)
                     return
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/improve/accept":
+            idx = data.get("index")
+            if idx is None:
+                ok = False
+                error = "index required"
+            else:
+                try:
+                    from keephive.commands.improve import _apply_improvement
+                    from keephive.storage import read_pending_improvements, write_pending_improvements
+
+                    items = read_pending_improvements()
+                    if not isinstance(idx, int) or idx < 0 or idx >= len(items):
+                        ok = False
+                        error = f"invalid index: {idx}"
+                    else:
+                        item = items.pop(idx)
+                        _apply_improvement(item)
+                        write_pending_improvements(items)
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/improve/dismiss":
+            idx = data.get("index")
+            if idx is None:
+                ok = False
+                error = "index required"
+            else:
+                try:
+                    from keephive.clock import get_now
+                    from keephive.storage import (
+                        append_dismissed_improvements,
+                        read_pending_improvements,
+                        write_pending_improvements,
+                    )
+
+                    items = read_pending_improvements()
+                    if not isinstance(idx, int) or idx < 0 or idx >= len(items):
+                        ok = False
+                        error = f"invalid index: {idx}"
+                    else:
+                        item = items.pop(idx)
+                        append_dismissed_improvements([{
+                            "type": item.get("type", "?"),
+                            "name": (item.get("name") or "")[:80],
+                            "dismissed_at": get_now().isoformat(),
+                        }])
+                        write_pending_improvements(items)
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/rules/accept":
+            idx = data.get("index")
+            if idx is None:
+                ok = False
+                error = "index required"
+            else:
+                try:
+                    from keephive.storage import pending_rules_file, rules_file
+
+                    pf = pending_rules_file()
+                    lines = [ln for ln in pf.read_text().splitlines() if ln.strip().startswith("- ")]
+                    if not isinstance(idx, int) or idx < 0 or idx >= len(lines):
+                        ok = False
+                        error = f"invalid index: {idx}"
+                    else:
+                        rule_text = lines[idx].lstrip("- ").strip()
+                        # Remove auto tags before adding to rules
+                        rule_text = re.sub(r"\s*\[auto:[^\]]*\]", "", rule_text).strip()
+                        # Add to rules.md
+                        rf = rules_file()
+                        if not rf.exists():
+                            rf.write_text("# Working Rules\n\n")
+                        with rf.open("a") as f:
+                            f.write(f"- {rule_text}\n")
+                        # Remove from pending
+                        lines.pop(idx)
+                        remaining = [ln for ln in pf.read_text().splitlines() if not ln.strip().startswith("- ")]
+                        remaining.extend(lines)
+                        pf.write_text("\n".join(remaining) + "\n" if remaining else "")
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/rules/dismiss":
+            idx = data.get("index")
+            if idx is None:
+                ok = False
+                error = "index required"
+            else:
+                try:
+                    from keephive.storage import pending_rules_file
+
+                    pf = pending_rules_file()
+                    lines = [ln for ln in pf.read_text().splitlines() if ln.strip().startswith("- ")]
+                    if not isinstance(idx, int) or idx < 0 or idx >= len(lines):
+                        ok = False
+                        error = f"invalid index: {idx}"
+                    else:
+                        lines.pop(idx)
+                        remaining = [ln for ln in pf.read_text().splitlines() if not ln.strip().startswith("- ")]
+                        remaining.extend(lines)
+                        pf.write_text("\n".join(remaining) + "\n" if remaining else "")
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/rules/try":
+            idx = data.get("index")
+            days = data.get("days", 7)
+            if idx is None:
+                ok = False
+                error = "index required"
+            else:
+                try:
+                    from keephive.storage import pending_rules_file
+
+                    pf = pending_rules_file()
+                    lines = [ln for ln in pf.read_text().splitlines() if ln.strip().startswith("- ")]
+                    if not isinstance(idx, int) or idx < 0 or idx >= len(lines):
+                        ok = False
+                        error = f"invalid index: {idx}"
+                    else:
+                        rule_text = lines[idx].lstrip("- ").strip()
+                        rule_text = re.sub(r"\s*\[auto:[^\]]*\]", "", rule_text).strip()
+                        from keephive.commands.memory import cmd_rule_try
+
+                        cmd_rule_try([rule_text, "--days", str(days)])
+                        # Remove from pending
+                        lines.pop(idx)
+                        remaining = [ln for ln in pf.read_text().splitlines() if not ln.strip().startswith("- ")]
+                        remaining.extend(lines)
+                        pf.write_text("\n".join(remaining) + "\n" if remaining else "")
                 except Exception as exc:
                     ok = False
                     error = str(exc)
