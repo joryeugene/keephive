@@ -3351,9 +3351,7 @@ def trend_metrics(days: int = 30) -> list[dict]:
 
     # Pre-count daily log entries per day
     dd = daily_dir()
-    ts_re = re.compile(
-        r"^- \[\d{2}:\d{2}:\d{2}\]\s*(FACT|DECISION|TODO|INSIGHT|CORRECTION|DONE):"
-    )
+    ts_re = re.compile(r"^- \[\d{2}:\d{2}:\d{2}\]\s*(FACT|DECISION|TODO|INSIGHT|CORRECTION|DONE):")
     bare_re = re.compile(r"^- (FACT|DECISION|TODO|INSIGHT|CORRECTION|DONE):")
 
     for i in range(days - 1, -1, -1):

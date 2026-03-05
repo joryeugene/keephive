@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
-from pathlib import Path
-
-import pytest
 
 from keephive.storage import growth_snapshot, trend_metrics
 
@@ -78,11 +75,7 @@ class TestTrendMetrics:
         stats_path = hive_env / ".stats.json"
         stats_path.write_text(
             json.dumps(
-                {
-                    "days": {
-                        "2026-03-04": {"commands": {"remember": 10, "recall": 5, "verify": 2}}
-                    }
-                }
+                {"days": {"2026-03-04": {"commands": {"remember": 10, "recall": 5, "verify": 2}}}}
             )
         )
         result = trend_metrics(days=1)
@@ -141,8 +134,7 @@ class TestGrowthSnapshot:
         monkeypatch.setenv("HIVE_DATE", "2026-03-04")
         mem = hive_env / "working" / "memory.md"
         mem.write_text(
-            "- FACT: recent [verified:2026-03-01]\n"
-            "- FACT: also recent [verified:2026-03-03]\n"
+            "- FACT: recent [verified:2026-03-01]\n- FACT: also recent [verified:2026-03-03]\n"
         )
         snap = growth_snapshot()
         assert snap["fact_freshness"] == 100.0
@@ -150,10 +142,7 @@ class TestGrowthSnapshot:
     def test_fact_freshness_mixed(self, hive_env, monkeypatch):
         monkeypatch.setenv("HIVE_DATE", "2026-03-04")
         mem = hive_env / "working" / "memory.md"
-        mem.write_text(
-            "- FACT: recent [verified:2026-03-01]\n"
-            "- FACT: old [verified:2025-01-01]\n"
-        )
+        mem.write_text("- FACT: recent [verified:2026-03-01]\n- FACT: old [verified:2025-01-01]\n")
         snap = growth_snapshot()
         assert snap["fact_freshness"] == 50.0  # 1 of 2 fresh
 
@@ -187,8 +176,7 @@ class TestCmdGrowth:
         monkeypatch.setenv("HIVE_DATE", "2026-03-04")
         daily = hive_env / "daily"
         (daily / "2026-03-04.md").write_text(
-            "- [09:00:00] FACT: something\n"
-            "- [09:01:00] TODO: do this\n"
+            "- [09:00:00] FACT: something\n- [09:01:00] TODO: do this\n"
         )
         stats_path = hive_env / ".stats.json"
         stats_path.write_text(

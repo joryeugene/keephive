@@ -62,7 +62,9 @@ def cmd_growth(args: list[str]) -> None:
     trend = snap["trend_30d"]
 
     if not trend or all(d["log_entries"] == 0 for d in trend):
-        console.print("[dim]Not enough data yet. Use keephive for a few days to see growth trends.[/dim]")
+        console.print(
+            "[dim]Not enough data yet. Use keephive for a few days to see growth trends.[/dim]"
+        )
         return
 
     # Header
@@ -75,7 +77,9 @@ def cmd_growth(args: list[str]) -> None:
     console.print(f"  Fact freshness      {_pct_str(snap['fact_freshness'])}")
     console.print(f"  Knowledge guides    {snap['guide_count']}")
     if snap["recall_total"] > 0:
-        console.print(f"  Recall hit rate     {_pct_str(snap['recall_rate'])}  ({snap['recall_hits']}/{snap['recall_total']})")
+        console.print(
+            f"  Recall hit rate     {_pct_str(snap['recall_rate'])}  ({snap['recall_hits']}/{snap['recall_total']})"
+        )
     console.print()
 
     # 30-day sparklines

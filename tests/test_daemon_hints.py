@@ -37,7 +37,9 @@ class TestImprovementHistoryStorage:
         assert read_improvement_history() == []
 
     def test_append_and_read(self, hive_env):
-        append_improvement_history({"type": "skill", "name": "test-guide", "applied_at": "2026-03-04T12:00:00"})
+        append_improvement_history(
+            {"type": "skill", "name": "test-guide", "applied_at": "2026-03-04T12:00:00"}
+        )
         history = read_improvement_history()
         assert len(history) == 1
         assert history[0]["name"] == "test-guide"
@@ -65,10 +67,12 @@ class TestHasPriorityBoost:
         from keephive.commands.daemon import _has_priority_boost
 
         monkeypatch.setenv("HIVE_DATE", "2026-03-04")
-        write_daemon_hints({
-            "priority_boost": {"stale-check": 1.5},
-            "expires": "2026-03-11",
-        })
+        write_daemon_hints(
+            {
+                "priority_boost": {"stale-check": 1.5},
+                "expires": "2026-03-11",
+            }
+        )
         assert _has_priority_boost("stale-check") is True
         assert _has_priority_boost("soul-update") is False
 
@@ -76,20 +80,24 @@ class TestHasPriorityBoost:
         from keephive.commands.daemon import _has_priority_boost
 
         monkeypatch.setenv("HIVE_DATE", "2026-03-15")
-        write_daemon_hints({
-            "priority_boost": {"stale-check": 1.5},
-            "expires": "2026-03-11",
-        })
+        write_daemon_hints(
+            {
+                "priority_boost": {"stale-check": 1.5},
+                "expires": "2026-03-11",
+            }
+        )
         assert _has_priority_boost("stale-check") is False
 
     def test_boost_of_one_not_a_boost(self, hive_env, monkeypatch):
         from keephive.commands.daemon import _has_priority_boost
 
         monkeypatch.setenv("HIVE_DATE", "2026-03-04")
-        write_daemon_hints({
-            "priority_boost": {"stale-check": 1.0},
-            "expires": "2026-03-11",
-        })
+        write_daemon_hints(
+            {
+                "priority_boost": {"stale-check": 1.0},
+                "expires": "2026-03-11",
+            }
+        )
         assert _has_priority_boost("stale-check") is False
 
     def test_no_expiry_field_still_works(self, hive_env):
@@ -120,10 +128,12 @@ class TestIsTaskDueWithBoost:
         from keephive.commands.daemon import _is_task_due
 
         monkeypatch.setenv("HIVE_DATE", "2026-03-04")
-        write_daemon_hints({
-            "priority_boost": {"stale-check": 1.5},
-            "expires": "2026-03-11",
-        })
+        write_daemon_hints(
+            {
+                "priority_boost": {"stale-check": 1.5},
+                "expires": "2026-03-11",
+            }
+        )
         now = datetime(2026, 3, 4, 10, 0, 0)  # Wednesday
         config = {"day": "monday", "time": "08:00"}
         state = {}
@@ -135,10 +145,12 @@ class TestIsTaskDueWithBoost:
         from keephive.commands.daemon import _is_task_due
 
         monkeypatch.setenv("HIVE_DATE", "2026-03-04")
-        write_daemon_hints({
-            "priority_boost": {"stale-check": 2.0},
-            "expires": "2026-03-11",
-        })
+        write_daemon_hints(
+            {
+                "priority_boost": {"stale-check": 2.0},
+                "expires": "2026-03-11",
+            }
+        )
         now = datetime(2026, 3, 4, 10, 0, 0)
         config = {"day": "monday", "time": "08:00"}
         state = {"stale-check": {"last_run": "2026-03-04T09:00:00"}}
@@ -174,7 +186,9 @@ class TestRecordApplied:
         from keephive.commands.improve import _record_applied
 
         monkeypatch.setenv("HIVE_DATE", "2026-03-04")
-        _record_applied({"type": "rule", "rule": "Always run tests first", "rationale": "Fewer bugs"})
+        _record_applied(
+            {"type": "rule", "rule": "Always run tests first", "rationale": "Fewer bugs"}
+        )
         history = read_improvement_history()
         assert len(history) == 1
         assert history[0]["name"] == "Always run tests first"
@@ -194,7 +208,12 @@ class TestApplyImprovementRecordsHistory:
     def test_skill_install_records_history(self, hive_env):
         from keephive.commands.improve import _apply_improvement
 
-        item = {"type": "skill", "name": "test-guide", "content": "# Test\n\nContent here.", "rationale": "helpful"}
+        item = {
+            "type": "skill",
+            "name": "test-guide",
+            "content": "# Test\n\nContent here.",
+            "rationale": "helpful",
+        }
         _apply_improvement(item)
         history = read_improvement_history()
         assert len(history) == 1

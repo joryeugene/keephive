@@ -6099,7 +6099,9 @@ def _render_growth_state_panel(data: dict) -> str:
         "display:flex;flex-direction:column;align-items:center;gap:2px;flex:1"
     )
     val_style = "font-size:1.5em;font-weight:700;color:var(--c-fg)"
-    label_style = "font-size:0.75em;color:var(--c-muted);text-transform:uppercase;letter-spacing:0.5px"
+    label_style = (
+        "font-size:0.75em;color:var(--c-muted);text-transform:uppercase;letter-spacing:0.5px"
+    )
 
     kpis = (
         f'<div style="display:flex;gap:8px;justify-content:center">'
@@ -6153,8 +6155,8 @@ def _render_growth_delta_panel(data: dict) -> str:
         rows += (
             f'<div style="display:flex;justify-content:space-between;padding:3px 0">'
             f'<span style="color:var(--c-muted)">{_e(label)}</span>'
-            f'<span>{current}</span>'
-            f'<span>{delta_html}</span>'
+            f"<span>{current}</span>"
+            f"<span>{delta_html}</span>"
             f"</div>"
         )
 
@@ -7475,7 +7477,10 @@ class _HiveHandler(BaseHTTPRequestHandler):
             else:
                 try:
                     from keephive.commands.improve import _apply_improvement
-                    from keephive.storage import read_pending_improvements, write_pending_improvements
+                    from keephive.storage import (
+                        read_pending_improvements,
+                        write_pending_improvements,
+                    )
 
                     items = read_pending_improvements()
                     if not isinstance(idx, int) or idx < 0 or idx >= len(items):
@@ -7509,11 +7514,15 @@ class _HiveHandler(BaseHTTPRequestHandler):
                         error = f"invalid index: {idx}"
                     else:
                         item = items.pop(idx)
-                        append_dismissed_improvements([{
-                            "type": item.get("type", "?"),
-                            "name": (item.get("name") or "")[:80],
-                            "dismissed_at": get_now().isoformat(),
-                        }])
+                        append_dismissed_improvements(
+                            [
+                                {
+                                    "type": item.get("type", "?"),
+                                    "name": (item.get("name") or "")[:80],
+                                    "dismissed_at": get_now().isoformat(),
+                                }
+                            ]
+                        )
                         write_pending_improvements(items)
                 except Exception as exc:
                     ok = False
@@ -7529,7 +7538,9 @@ class _HiveHandler(BaseHTTPRequestHandler):
                     from keephive.storage import pending_rules_file, rules_file
 
                     pf = pending_rules_file()
-                    lines = [ln for ln in pf.read_text().splitlines() if ln.strip().startswith("- ")]
+                    lines = [
+                        ln for ln in pf.read_text().splitlines() if ln.strip().startswith("- ")
+                    ]
                     if not isinstance(idx, int) or idx < 0 or idx >= len(lines):
                         ok = False
                         error = f"invalid index: {idx}"
@@ -7545,7 +7556,11 @@ class _HiveHandler(BaseHTTPRequestHandler):
                             f.write(f"- {rule_text}\n")
                         # Remove from pending
                         lines.pop(idx)
-                        remaining = [ln for ln in pf.read_text().splitlines() if not ln.strip().startswith("- ")]
+                        remaining = [
+                            ln
+                            for ln in pf.read_text().splitlines()
+                            if not ln.strip().startswith("- ")
+                        ]
                         remaining.extend(lines)
                         pf.write_text("\n".join(remaining) + "\n" if remaining else "")
                 except Exception as exc:
@@ -7562,13 +7577,19 @@ class _HiveHandler(BaseHTTPRequestHandler):
                     from keephive.storage import pending_rules_file
 
                     pf = pending_rules_file()
-                    lines = [ln for ln in pf.read_text().splitlines() if ln.strip().startswith("- ")]
+                    lines = [
+                        ln for ln in pf.read_text().splitlines() if ln.strip().startswith("- ")
+                    ]
                     if not isinstance(idx, int) or idx < 0 or idx >= len(lines):
                         ok = False
                         error = f"invalid index: {idx}"
                     else:
                         lines.pop(idx)
-                        remaining = [ln for ln in pf.read_text().splitlines() if not ln.strip().startswith("- ")]
+                        remaining = [
+                            ln
+                            for ln in pf.read_text().splitlines()
+                            if not ln.strip().startswith("- ")
+                        ]
                         remaining.extend(lines)
                         pf.write_text("\n".join(remaining) + "\n" if remaining else "")
                 except Exception as exc:
@@ -7586,7 +7607,9 @@ class _HiveHandler(BaseHTTPRequestHandler):
                     from keephive.storage import pending_rules_file
 
                     pf = pending_rules_file()
-                    lines = [ln for ln in pf.read_text().splitlines() if ln.strip().startswith("- ")]
+                    lines = [
+                        ln for ln in pf.read_text().splitlines() if ln.strip().startswith("- ")
+                    ]
                     if not isinstance(idx, int) or idx < 0 or idx >= len(lines):
                         ok = False
                         error = f"invalid index: {idx}"
@@ -7598,7 +7621,11 @@ class _HiveHandler(BaseHTTPRequestHandler):
                         cmd_rule_try([rule_text, "--days", str(days)])
                         # Remove from pending
                         lines.pop(idx)
-                        remaining = [ln for ln in pf.read_text().splitlines() if not ln.strip().startswith("- ")]
+                        remaining = [
+                            ln
+                            for ln in pf.read_text().splitlines()
+                            if not ln.strip().startswith("- ")
+                        ]
                         remaining.extend(lines)
                         pf.write_text("\n".join(remaining) + "\n" if remaining else "")
                 except Exception as exc:

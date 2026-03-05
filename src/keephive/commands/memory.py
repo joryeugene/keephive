@@ -639,7 +639,7 @@ def cmd_rule_try(args: list[str]) -> None:
 
     rule_text = " ".join(rule_parts).strip()
     if not rule_text:
-        console.print("[err]Usage: hive rule try \"rule text\" [--days N][/err]")
+        console.print('[err]Usage: hive rule try "rule text" [--days N][/err]')
         return
 
     expiry = get_today() + timedelta(days=days)

@@ -21,10 +21,17 @@ class TestImproveQueuePanel:
     def test_with_items(self, hive_env):
         from keephive.commands.serve import _get_improve_queue_data, _render_improve_queue_panel
 
-        write_pending_improvements([
-            {"type": "skill", "name": "test-guide", "rationale": "Makes things better"},
-            {"type": "rule", "name": "new-rule", "rationale": "Prevents mistakes", "trusted": True},
-        ])
+        write_pending_improvements(
+            [
+                {"type": "skill", "name": "test-guide", "rationale": "Makes things better"},
+                {
+                    "type": "rule",
+                    "name": "new-rule",
+                    "rationale": "Prevents mistakes",
+                    "trusted": True,
+                },
+            ]
+        )
         data = _get_improve_queue_data()
         html = _render_improve_queue_panel(data)
         assert "test-guide" in html
@@ -66,9 +73,11 @@ class TestRulesPendingPanel:
 
 class TestImproveEndpoints:
     def test_accept_improvement(self, hive_env):
-        write_pending_improvements([
-            {"type": "rule", "name": "test", "rule": "Always verify"},
-        ])
+        write_pending_improvements(
+            [
+                {"type": "rule", "name": "test", "rule": "Always verify"},
+            ]
+        )
         # Simulate accept by calling the same logic the endpoint uses
         from keephive.commands.improve import _apply_improvement
 
@@ -86,16 +95,22 @@ class TestImproveEndpoints:
     def test_dismiss_improvement(self, hive_env):
         from keephive.storage import append_dismissed_improvements, read_dismissed_improvements
 
-        write_pending_improvements([
-            {"type": "skill", "name": "test-guide", "content": "# Test"},
-        ])
+        write_pending_improvements(
+            [
+                {"type": "skill", "name": "test-guide", "content": "# Test"},
+            ]
+        )
         items = read_pending_improvements()
         item = items.pop(0)
-        append_dismissed_improvements([{
-            "type": item.get("type", "?"),
-            "name": (item.get("name") or "")[:80],
-            "dismissed_at": "2026-03-04T12:00:00",
-        }])
+        append_dismissed_improvements(
+            [
+                {
+                    "type": item.get("type", "?"),
+                    "name": (item.get("name") or "")[:80],
+                    "dismissed_at": "2026-03-04T12:00:00",
+                }
+            ]
+        )
         write_pending_improvements(items)
 
         assert read_pending_improvements() == []
