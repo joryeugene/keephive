@@ -135,9 +135,7 @@ def cmd_verify(args: list[str]) -> None:
     else:
         console.print(f"[bold]Verifying {fact_count} fact(s) against codebase...[/bold]")
         if auto_facts and limit is None:
-            console.print(
-                f"  [dim]({len(auto_facts)} auto-captured, never reviewed)[/dim]"
-            )
+            console.print(f"  [dim]({len(auto_facts)} auto-captured, never reviewed)[/dim]")
     console.print("[dim](This uses claude -p with tool access and takes 10-20 seconds)[/dim]")
     console.print()
 

@@ -6169,7 +6169,7 @@ def _render_growth_state_panel(data: dict) -> str:
         ring_angle = round(coverage_pct / 100 * 360)
         ring_html = (
             f'<div class="coverage-ring" style="background:conic-gradient('
-            f"{cov_color} {ring_angle}deg, var(--c-surface) 0deg)\">"
+            f'{cov_color} {ring_angle}deg, var(--c-surface) 0deg)">'
             f'<div class="coverage-ring-inner">{coverage_pct:.0f}%</div>'
             f"</div>"
         )
@@ -6190,11 +6190,7 @@ def _render_growth_state_panel(data: dict) -> str:
         )
 
         if auto_only > 0:
-            dark_color = (
-                "var(--c-red, #f85149)"
-                if dark_pct > 50
-                else "var(--c-yellow, #d29922)"
-            )
+            dark_color = "var(--c-red, #f85149)" if dark_pct > 50 else "var(--c-yellow, #d29922)"
             kpis += (
                 f'<div style="{kpi_style}"><span style="{val_style};color:{dark_color}">'
                 f"{auto_only}</span>"
@@ -6270,7 +6266,7 @@ def _render_review_item(
     """Universal composable review card. Used by all queue panels."""
     action_html = " ".join(
         f'<button class="review-action-btn {_e(cls)}" '
-        f'onclick="{_e(queue_type)}Action({index}, \'{_e(action_id)}\', this)">{_e(label)}</button>'
+        f"onclick=\"{_e(queue_type)}Action({index}, '{_e(action_id)}', this)\">{_e(label)}</button>"
         for action_id, label, cls in actions
     )
     return (
@@ -7862,9 +7858,7 @@ class _HiveHandler(BaseHTTPRequestHandler):
 
                     pf = pending_rules_file()
                     lines = [
-                        ln
-                        for ln in pf.read_text().splitlines()
-                        if ln.strip().startswith("- ")
+                        ln for ln in pf.read_text().splitlines() if ln.strip().startswith("- ")
                     ]
                     if not isinstance(idx, int) or idx < 0 or idx >= len(lines):
                         ok = False
@@ -7884,9 +7878,7 @@ class _HiveHandler(BaseHTTPRequestHandler):
                             if not ln.strip().startswith("- ")
                         ]
                         non_items.extend(lines)
-                        pf.write_text(
-                            "\n".join(non_items) + "\n" if non_items else ""
-                        )
+                        pf.write_text("\n".join(non_items) + "\n" if non_items else "")
                         remaining_count = len(lines)
                     elif action == "try":
                         rule_text = lines[idx].lstrip("- ").strip()
@@ -7902,9 +7894,7 @@ class _HiveHandler(BaseHTTPRequestHandler):
                             if not ln.strip().startswith("- ")
                         ]
                         non_items.extend(lines)
-                        pf.write_text(
-                            "\n".join(non_items) + "\n" if non_items else ""
-                        )
+                        pf.write_text("\n".join(non_items) + "\n" if non_items else "")
                         remaining_count = len(lines)
                     elif action == "dismiss":
                         lines.pop(idx)
@@ -7914,9 +7904,7 @@ class _HiveHandler(BaseHTTPRequestHandler):
                             if not ln.strip().startswith("- ")
                         ]
                         non_items.extend(lines)
-                        pf.write_text(
-                            "\n".join(non_items) + "\n" if non_items else ""
-                        )
+                        pf.write_text("\n".join(non_items) + "\n" if non_items else "")
                         remaining_count = len(lines)
                     elif action == "skip":
                         remaining_count = len(lines)

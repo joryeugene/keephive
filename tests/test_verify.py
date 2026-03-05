@@ -241,8 +241,7 @@ class TestUnverifiedAutoFacts:
 
         mem = hive_env / "working" / "memory.md"
         mem.write_text(
-            "- [auto] keephive uses tmux for e2e tests\n"
-            "- [auto] uv is the package manager\n"
+            "- [auto] keephive uses tmux for e2e tests\n- [auto] uv is the package manager\n"
         )
         result = get_unverified_auto_facts()
         assert len(result) == 2
@@ -260,10 +259,7 @@ class TestUnverifiedAutoFacts:
         from keephive.storage import get_unverified_auto_facts
 
         mem = hive_env / "working" / "memory.md"
-        mem.write_text(
-            "- [auto] reviewed fact [verified:2026-03-04]\n"
-            "- [auto] dark fact\n"
-        )
+        mem.write_text("- [auto] reviewed fact [verified:2026-03-04]\n- [auto] dark fact\n")
         result = get_unverified_auto_facts()
         assert len(result) == 1
         _, fact_text, _ = result[0]

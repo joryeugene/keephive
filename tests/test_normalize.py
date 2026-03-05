@@ -101,7 +101,13 @@ def test_normalize_preserves_clean_lines(tmp_path: Path):
     )
     mem.write_text(original)
     stats = normalize_memory(mem)
-    assert stats == {"double_tags": 0, "resolved_todos": 0, "malformed_prefix": 0, "deduped": 0, "pruned": 0}
+    assert stats == {
+        "double_tags": 0,
+        "resolved_todos": 0,
+        "malformed_prefix": 0,
+        "deduped": 0,
+        "pruned": 0,
+    }
     # Content preserved (normalize always writes with trailing newline)
     content = mem.read_text()
     assert "clean line" in content
@@ -111,7 +117,13 @@ def test_normalize_preserves_clean_lines(tmp_path: Path):
 def test_normalize_handles_missing_file(tmp_path: Path):
     mem = tmp_path / "nonexistent.md"
     stats = normalize_memory(mem)
-    assert stats == {"double_tags": 0, "resolved_todos": 0, "malformed_prefix": 0, "deduped": 0, "pruned": 0}
+    assert stats == {
+        "double_tags": 0,
+        "resolved_todos": 0,
+        "malformed_prefix": 0,
+        "deduped": 0,
+        "pruned": 0,
+    }
     assert not mem.exists()
 
 

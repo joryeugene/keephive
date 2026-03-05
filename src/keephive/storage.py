@@ -80,7 +80,7 @@ def normalize_memory(mem_path: Path) -> dict:
 
         # Collapse double [auto] prefix: "- [auto] [auto] ..." -> "- [auto] ..."
         if line.startswith("- [auto] [auto]"):
-            line = "- [auto]" + line[len("- [auto] [auto]"):]
+            line = "- [auto]" + line[len("- [auto] [auto]") :]
             stats["double_tags"] += 1
 
         # Collapse multiple [verified:] tags to one (keep last date)
@@ -91,9 +91,7 @@ def normalize_memory(mem_path: Path) -> dict:
             stats["double_tags"] += 1
 
         # Prune stale unverified [auto] facts older than _AUTO_PRUNE_DAYS
-        if line.startswith("- [auto]") and not re.search(
-            r"\[verified:\d{4}-\d{2}-\d{2}\]", line
-        ):
+        if line.startswith("- [auto]") and not re.search(r"\[verified:\d{4}-\d{2}-\d{2}\]", line):
             m = re.search(r"\[auto:(\d{4}-\d{2}-\d{2})\]", line)
             if m:
                 try:
@@ -1103,9 +1101,7 @@ def count_stale_facts() -> int:
 
     for line in mem.read_text().splitlines():
         # Unverified auto facts are always "stale" (never reviewed)
-        if line.startswith("- [auto]") and not re.search(
-            r"\[verified:\d{4}-\d{2}-\d{2}\]", line
-        ):
+        if line.startswith("- [auto]") and not re.search(r"\[verified:\d{4}-\d{2}-\d{2}\]", line):
             count += 1
             continue
         m = re.search(r"\[verified:(\d{4}-\d{2}-\d{2})\]", line)

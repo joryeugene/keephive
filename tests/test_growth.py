@@ -215,11 +215,7 @@ class TestComprehensionCoverage:
         from keephive.storage import comprehension_coverage
 
         mem = hive_env / "working" / "memory.md"
-        mem.write_text(
-            "- [auto] fact one\n"
-            "- [auto] fact two\n"
-            "- [auto] fact three\n"
-        )
+        mem.write_text("- [auto] fact one\n- [auto] fact two\n- [auto] fact three\n")
         result = comprehension_coverage()
         assert result["total"] == 3
         assert result["auto_only"] == 3
@@ -249,10 +245,7 @@ class TestComprehensionCoverage:
         from keephive.storage import comprehension_coverage
 
         mem = hive_env / "working" / "memory.md"
-        mem.write_text(
-            "- manually written fact one\n"
-            "- manually written fact two\n"
-        )
+        mem.write_text("- manually written fact one\n- manually written fact two\n")
         result = comprehension_coverage()
         assert result["total"] == 2
         assert result["user_owned"] == 2
@@ -265,9 +258,7 @@ class TestComprehensionCoverage:
 
         mem = hive_env / "working" / "memory.md"
         mem.write_text(
-            "- [auto] dark fact\n"
-            "- verified fact [verified:2026-03-04]\n"
-            "- manually written fact\n"
+            "- [auto] dark fact\n- verified fact [verified:2026-03-04]\n- manually written fact\n"
         )
         result = comprehension_coverage()
         assert result["total"] == 3
@@ -282,13 +273,10 @@ class TestComprehensionCoverage:
         from keephive.storage import comprehension_coverage
 
         mem = hive_env / "working" / "memory.md"
-        mem.write_text(
-            "- [auto] fact one [verified:2026-03-04]\n"
-            "- [auto] fact two\n"
-        )
+        mem.write_text("- [auto] fact one [verified:2026-03-04]\n- [auto] fact two\n")
         result = comprehension_coverage()
         assert result["total"] == 2
-        assert result["verified"] == 1   # auto+verified → verified bucket
+        assert result["verified"] == 1  # auto+verified → verified bucket
         assert result["auto_only"] == 1  # auto-only → dark knowledge
         assert result["user_owned"] == 0
         assert result["dark_pct"] == 50.0

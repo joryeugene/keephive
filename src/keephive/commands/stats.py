@@ -1008,7 +1008,9 @@ def _display_full(data: dict) -> None:
                 color = "red"
             cov_line = f"  [{color}]Coverage  [{bar}]  {pct:.0f}%[/{color}]"
             if cov["auto_only"] > 0:
-                cov_line += f"  [dim]({cov['auto_only']} dark \u00b7 hive v --dark --limit 10)[/dim]"
+                cov_line += (
+                    f"  [dim]({cov['auto_only']} dark \u00b7 hive v --dark --limit 10)[/dim]"
+                )
             console.print(cov_line)
     except Exception:
         pass

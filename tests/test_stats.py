@@ -1124,6 +1124,7 @@ class TestCommandActivity:
         assert result["wander"] == 5
         assert result["soul-update"] == 1
 
+
 class TestCoverageDisplay:
     """Coverage bar in _display_full() from comprehension_coverage()."""
 
