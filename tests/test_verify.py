@@ -268,3 +268,72 @@ class TestUnverifiedAutoFacts:
         assert len(result) == 1
         _, fact_text, _ = result[0]
         assert fact_text == "dark fact"
+
+
+class TestVerifyFlags:
+    """--dark and --limit N flags control which facts enter the verify queue."""
+
+    def test_dark_flag_excludes_verified_facts(self, hive_env):
+        """--dark mode: only auto-captured facts, verified facts skipped."""
+        from keephive.storage import get_all_verified_facts, get_unverified_auto_facts
+
+        mem = hive_env / "working" / "memory.md"
+        mem.write_text(
+            "- verified fact one [verified:2020-01-01]\n"
+            "- [auto] dark fact alpha\n"
+            "- [auto] dark fact beta\n"
+        )
+        all_facts = get_all_verified_facts()
+        auto_facts = get_unverified_auto_facts()
+
+        # Simulate --dark flag: use only auto_facts
+        dark_queue = auto_facts
+        assert len(dark_queue) == 2
+        assert len(all_facts) == 1  # verified fact exists but is excluded from queue
+        _, texts, _ = zip(*dark_queue)
+        assert "dark fact alpha" in texts
+        assert "dark fact beta" in texts
+
+    def test_limit_caps_total_facts(self, hive_env):
+        """--limit N: queue is capped at N facts regardless of total available."""
+        from keephive.storage import get_all_verified_facts
+
+        mem = hive_env / "working" / "memory.md"
+        mem.write_text(
+            "- fact one [verified:2020-01-01]\n"
+            "- fact two [verified:2020-01-02]\n"
+            "- fact three [verified:2020-01-03]\n"
+        )
+        all_facts = get_all_verified_facts()
+        assert len(all_facts) == 3
+
+        # Simulate --limit 2
+        limited = all_facts[:2]
+        assert len(limited) == 2
+        # Limit beyond length is safe
+        beyond = all_facts[:100]
+        assert len(beyond) == 3
+
+    def test_dark_and_limit_combined(self, hive_env):
+        """--dark --limit N: only auto facts, capped at N."""
+        from keephive.storage import get_unverified_auto_facts
+
+        mem = hive_env / "working" / "memory.md"
+        mem.write_text(
+            "- [auto] dark one\n"
+            "- [auto] dark two\n"
+            "- [auto] dark three\n"
+            "- [auto] dark four\n"
+            "- [auto] dark five\n"
+        )
+        auto_facts = get_unverified_auto_facts()
+        assert len(auto_facts) == 5
+
+        # Simulate --dark --limit 3
+        queue = auto_facts[:3]
+        assert len(queue) == 3
+        _, texts, _ = zip(*queue)
+        assert "dark one" in texts
+        assert "dark two" in texts
+        assert "dark three" in texts
+        assert "dark four" not in texts

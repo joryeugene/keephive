@@ -73,6 +73,12 @@ def cmd_verify(args: list[str]) -> None:
     json_mode = "--json" in args
     check_mode = "--check" in args
     verbose = "--verbose" in args
+    dark_mode = "--dark" in args
+    limit_arg = next(
+        (args[i + 1] for i, a in enumerate(args) if a == "--limit" and i + 1 < len(args)),
+        None,
+    )
+    limit = int(limit_arg) if limit_arg else None
 
     if os.environ.get("HIVE_SKIP_LLM"):
         if check_mode:
@@ -100,10 +106,18 @@ def cmd_verify(args: list[str]) -> None:
             console.print(f"All current ({all_count} facts)")
             sys.exit(0)
 
-    # Main path: verify ALL facts regardless of age, plus unverified auto facts
+    # Main path: verified facts + unverified auto facts (dark knowledge)
     all_facts = get_all_verified_facts()
     auto_facts = get_unverified_auto_facts()
-    all_facts = all_facts + auto_facts
+
+    if dark_mode:
+        all_facts = auto_facts  # skip re-verifying already-verified facts
+    else:
+        all_facts = all_facts + auto_facts
+
+    if limit is not None:
+        all_facts = all_facts[:limit]
+
     fact_count = len(all_facts)
 
     if fact_count == 0:
@@ -113,11 +127,16 @@ def cmd_verify(args: list[str]) -> None:
             console.print("[dim]No verified facts to check[/dim]")
         return
 
-    console.print(f"[bold]Verifying {fact_count} fact(s) against codebase...[/bold]")
-    if auto_facts:
+    if dark_mode:
         console.print(
-            f"  [dim]({len(auto_facts)} auto-captured, never reviewed)[/dim]"
+            f"[bold]Verifying {fact_count} unreviewed fact(s) (dark knowledge only)...[/bold]"
         )
+    else:
+        console.print(f"[bold]Verifying {fact_count} fact(s) against codebase...[/bold]")
+        if auto_facts and limit is None:
+            console.print(
+                f"  [dim]({len(auto_facts)} auto-captured, never reviewed)[/dim]"
+            )
     console.print("[dim](This uses claude -p with tool access and takes 10-20 seconds)[/dim]")
     console.print()
 
