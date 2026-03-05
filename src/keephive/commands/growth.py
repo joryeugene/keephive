@@ -82,6 +82,9 @@ def cmd_growth(args: list[str]) -> None:
         )
     console.print()
 
+    # Comprehension coverage
+    _print_comprehension_section(console, snap.get("comprehension", {}))
+
     # 30-day sparklines
     console.print("[bold]30-Day Trends[/bold]")
     metrics = [
@@ -125,6 +128,40 @@ def cmd_growth(args: list[str]) -> None:
     _print_growth_story(console, snap)
 
 
+def _dark_str(dark_pct: float) -> str:
+    """Format dark knowledge percentage with color coding (inverse of coverage)."""
+    if dark_pct == 0:
+        return "[green]0%[/green]"
+    elif dark_pct < 20:
+        return f"[green]{dark_pct:.0f}%[/green] dark"
+    elif dark_pct <= 50:
+        return f"[yellow]{dark_pct:.0f}%[/yellow] dark"
+    return f"[red]{dark_pct:.0f}%[/red] dark"
+
+
+def _print_comprehension_section(console: Console, cov: dict) -> None:
+    """Print the Comprehension Coverage section."""
+    total = cov.get("total", 0)
+    if total == 0:
+        return
+
+    verified = cov.get("verified", 0)
+    auto_only = cov.get("auto_only", 0)
+    user_owned = cov.get("user_owned", 0)
+    dark_pct = cov.get("dark_pct", 0.0)
+    coverage_pct = cov.get("coverage_pct", 0.0)
+
+    console.print("[bold]Comprehension Coverage[/bold]")
+    console.print(f"  Total facts         {total}")
+    console.print(f"  Verified            {verified:<4d}  [dim](user-confirmed)[/dim]")
+    if auto_only > 0:
+        console.print(f"  Auto-captured       {auto_only:<4d}  {_dark_str(dark_pct)}")
+    if user_owned > 0:
+        console.print(f"  User-owned          {user_owned:<4d}  [dim](manually written)[/dim]")
+    console.print(f"  Coverage            {_pct_str(coverage_pct)}")
+    console.print()
+
+
 def _print_growth_story(console: Console, snap: dict) -> None:
     """Print a deterministic growth narrative from template patterns."""
     observations: list[str] = []
@@ -158,6 +195,21 @@ def _print_growth_story(console: Console, snap: dict) -> None:
         observations.append("Fact freshness is high. Verification cycle is healthy.")
     elif snap["fact_freshness"] < 40 and snap["fact_count"] > 10:
         observations.append("Many facts are aging. Consider running hive verify.")
+
+    # Comprehension debt
+    cov = snap.get("comprehension", {})
+    dark_pct = cov.get("dark_pct", 0.0)
+    auto_only = cov.get("auto_only", 0)
+    if dark_pct > 50:
+        observations.append(
+            "More than half your knowledge is auto-captured and unreviewed."
+            " Run hive verify to close the comprehension gap."
+        )
+    elif dark_pct > 0 and dark_pct < 20:
+        observations.append(
+            f"Auto-captured facts are mostly reviewed ({auto_only} unverified)."
+            " Low comprehension debt."
+        )
 
     if observations:
         console.print("[bold]Growth Story[/bold]")

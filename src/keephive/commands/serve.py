@@ -6116,6 +6116,39 @@ def _render_growth_state_panel(data: dict) -> str:
             f'<span style="{label_style}">Recall ({rh}/{rt})</span></div>'
         )
 
+    # Comprehension coverage KPIs
+    cov = data.get("comprehension", {})
+    cov_total = cov.get("total", 0)
+    if cov_total > 0:
+        coverage_pct = cov.get("coverage_pct", 0.0)
+        auto_only = cov.get("auto_only", 0)
+        dark_pct = cov.get("dark_pct", 0.0)
+
+        if coverage_pct >= 80:
+            cov_color = "var(--c-green, #3fb950)"
+        elif coverage_pct >= 50:
+            cov_color = "var(--c-yellow, #d29922)"
+        else:
+            cov_color = "var(--c-red, #f85149)"
+
+        kpis += (
+            f'<div style="{kpi_style}"><span style="{val_style};color:{cov_color}">'
+            f"{coverage_pct:.0f}%</span>"
+            f'<span style="{label_style}">Coverage</span></div>'
+        )
+
+        if auto_only > 0:
+            dark_color = (
+                "var(--c-red, #f85149)"
+                if dark_pct > 50
+                else "var(--c-yellow, #d29922)"
+            )
+            kpis += (
+                f'<div style="{kpi_style}"><span style="{val_style};color:{dark_color}">'
+                f"{auto_only}</span>"
+                f'<span style="{label_style}">Dark ({dark_pct:.0f}%)</span></div>'
+            )
+
     kpis += "</div>"
 
     return (

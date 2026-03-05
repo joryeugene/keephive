@@ -3465,6 +3465,58 @@ def growth_snapshot() -> dict:
         "trend_30d": trend,
         "week_totals": week_totals,
         "prev_week_totals": prev_week_totals,
+        "comprehension": comprehension_coverage(),
+    }
+
+
+def comprehension_coverage() -> dict:
+    """Parse memory.md facts into comprehension buckets.
+
+    Three mutually exclusive categories covering all bullet-point lines:
+      verified   — line contains [verified:DATE] (user ran hive verify)
+      auto_only  — line starts with "- [auto]" and has no [verified:] tag
+                   (auto-captured, never reviewed) → dark knowledge
+      user_owned — line starts with "- " (not "- [auto]") and has no [verified:]
+                   (manually written, implicitly owned)
+
+    Returns:
+      total         int   all bullet-point lines
+      verified      int   user-confirmed entries
+      auto_only     int   dark knowledge entries
+      user_owned    int   manually written entries
+      dark_pct      float auto_only / total * 100
+      coverage_pct  float (verified + user_owned) / total * 100
+    """
+    mem = memory_file()
+    total = 0
+    verified = 0
+    auto_only = 0
+    user_owned = 0
+
+    if mem.exists():
+        for line in mem.read_text().splitlines():
+            if not line.startswith("- "):
+                continue
+            total += 1
+            has_verified = bool(re.search(r"\[verified:\d{4}-\d{2}-\d{2}\]", line))
+            is_auto = line.startswith("- [auto]")
+            if has_verified:
+                verified += 1
+            elif is_auto:
+                auto_only += 1
+            else:
+                user_owned += 1
+
+    dark_pct = round(auto_only / total * 100, 1) if total > 0 else 0.0
+    coverage_pct = round((verified + user_owned) / total * 100, 1) if total > 0 else 0.0
+
+    return {
+        "total": total,
+        "verified": verified,
+        "auto_only": auto_only,
+        "user_owned": user_owned,
+        "dark_pct": dark_pct,
+        "coverage_pct": coverage_pct,
     }
 
 

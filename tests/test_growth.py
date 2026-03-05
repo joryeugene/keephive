@@ -193,6 +193,137 @@ class TestCmdGrowth:
         assert "Growth Story" in out
 
 
+class TestComprehensionCoverage:
+    """comprehension_coverage() classifies memory.md entries into three buckets."""
+
+    def test_empty_memory_returns_zeros(self, hive_env):
+        from keephive.storage import comprehension_coverage
+
+        # hive_env seeds memory.md with 3 facts — clear it to test empty state
+        mem = hive_env / "working" / "memory.md"
+        mem.unlink()
+
+        result = comprehension_coverage()
+        assert result["total"] == 0
+        assert result["verified"] == 0
+        assert result["auto_only"] == 0
+        assert result["user_owned"] == 0
+        assert result["dark_pct"] == 0.0
+        assert result["coverage_pct"] == 0.0
+
+    def test_all_auto_is_100_percent_dark(self, hive_env):
+        from keephive.storage import comprehension_coverage
+
+        mem = hive_env / "working" / "memory.md"
+        mem.write_text(
+            "- [auto] fact one\n"
+            "- [auto] fact two\n"
+            "- [auto] fact three\n"
+        )
+        result = comprehension_coverage()
+        assert result["total"] == 3
+        assert result["auto_only"] == 3
+        assert result["verified"] == 0
+        assert result["user_owned"] == 0
+        assert result["dark_pct"] == 100.0
+        assert result["coverage_pct"] == 0.0
+
+    def test_all_verified_is_zero_dark(self, hive_env):
+        from keephive.storage import comprehension_coverage
+
+        mem = hive_env / "working" / "memory.md"
+        mem.write_text(
+            "- fact one [verified:2026-03-04]\n"
+            "- fact two [verified:2026-03-01]\n"
+            "- fact three [verified:2026-02-20]\n"
+        )
+        result = comprehension_coverage()
+        assert result["total"] == 3
+        assert result["verified"] == 3
+        assert result["auto_only"] == 0
+        assert result["user_owned"] == 0
+        assert result["dark_pct"] == 0.0
+        assert result["coverage_pct"] == 100.0
+
+    def test_user_owned_counts_as_covered(self, hive_env):
+        from keephive.storage import comprehension_coverage
+
+        mem = hive_env / "working" / "memory.md"
+        mem.write_text(
+            "- manually written fact one\n"
+            "- manually written fact two\n"
+        )
+        result = comprehension_coverage()
+        assert result["total"] == 2
+        assert result["user_owned"] == 2
+        assert result["auto_only"] == 0
+        assert result["dark_pct"] == 0.0
+        assert result["coverage_pct"] == 100.0
+
+    def test_mixed_entries_split_correctly(self, hive_env):
+        from keephive.storage import comprehension_coverage
+
+        mem = hive_env / "working" / "memory.md"
+        mem.write_text(
+            "- [auto] dark fact\n"
+            "- verified fact [verified:2026-03-04]\n"
+            "- manually written fact\n"
+        )
+        result = comprehension_coverage()
+        assert result["total"] == 3
+        assert result["auto_only"] == 1
+        assert result["verified"] == 1
+        assert result["user_owned"] == 1
+        assert result["dark_pct"] == round(1 / 3 * 100, 1)
+        assert result["coverage_pct"] == round(2 / 3 * 100, 1)
+
+    def test_auto_then_verified_counts_as_verified_not_dark(self, hive_env):
+        """An auto-captured fact that was later verified is NOT dark knowledge."""
+        from keephive.storage import comprehension_coverage
+
+        mem = hive_env / "working" / "memory.md"
+        mem.write_text(
+            "- [auto] fact one [verified:2026-03-04]\n"
+            "- [auto] fact two\n"
+        )
+        result = comprehension_coverage()
+        assert result["total"] == 2
+        assert result["verified"] == 1   # auto+verified → verified bucket
+        assert result["auto_only"] == 1  # auto-only → dark knowledge
+        assert result["user_owned"] == 0
+        assert result["dark_pct"] == 50.0
+        assert result["coverage_pct"] == 50.0
+
+    def test_non_bullet_lines_ignored(self, hive_env):
+        """Headers, blank lines, and section titles don't inflate counts."""
+        from keephive.storage import comprehension_coverage
+
+        mem = hive_env / "working" / "memory.md"
+        mem.write_text(
+            "# Working Memory\n"
+            "\n"
+            "## Auto-Captured\n"
+            "- [auto] real fact\n"
+            "\n"
+            "## User Preferences\n"
+            "- manually written\n"
+        )
+        result = comprehension_coverage()
+        assert result["total"] == 2
+        assert result["auto_only"] == 1
+        assert result["user_owned"] == 1
+
+    def test_growth_snapshot_includes_comprehension_key(self, hive_env):
+        """growth_snapshot() includes comprehension sub-dict with expected keys."""
+        from keephive.storage import growth_snapshot
+
+        snap = growth_snapshot()
+        assert "comprehension" in snap
+        cov = snap["comprehension"]
+        for key in ("total", "verified", "auto_only", "user_owned", "dark_pct", "coverage_pct"):
+            assert key in cov, f"missing key: {key}"
+
+
 class TestGrowthPanels:
     """Serve.py growth panels render correctly."""
 
