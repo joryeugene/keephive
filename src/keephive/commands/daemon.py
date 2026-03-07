@@ -223,6 +223,13 @@ def _run_task(task_name: str) -> None:
         console.print("[err]Usage: hive daemon run <task-name>[/err]")
         return
 
+    # Bypass per-task throttle for manual invocations.
+    # The throttle guards the automatic tick loop, not explicit user commands.
+    state = read_daemon_state()
+    if task_name in state and "last_run" in state[task_name]:
+        del state[task_name]["last_run"]
+        write_daemon_state(state)
+
     status_msg = f"🐝 KingBee: {task_name} in progress..."
     if task_name == "soul-update":
         status_msg = "🐝 KingBee: distilling session patterns into SOUL.md..."
@@ -238,7 +245,7 @@ def _run_task(task_name: str) -> None:
         _mark_last_run(task_name)
         console.print(f"🐝 Done: {task_name}")
     else:
-        console.print(f"🐝 {task_name}: skipped (throttled or no data)")
+        console.print(f"🐝 {task_name}: skipped (no data)")
 
 
 # ── Enable / Disable tasks ───────────────────────────────────────────
