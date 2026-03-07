@@ -228,7 +228,11 @@ def _run_task(task_name: str) -> None:
         status_msg = "🐝 KingBee: distilling session patterns into SOUL.md..."
 
     with console.status(status_msg, spinner="dots"):
-        did_work = _execute_task(task_name)
+        try:
+            did_work = _execute_task(task_name)
+        except Exception:
+            _mark_last_run(task_name)  # stamp even on failure - prevents infinite retry
+            raise
 
     if did_work:
         _mark_last_run(task_name)
@@ -547,7 +551,7 @@ Write the briefing. Each point on its own line. Include pending queue summary at
 {_VOICE_DISCIPLINE}"""
 
     try:
-        result = run_claude_pipe(prompt, MorningBriefingResponse, model="haiku")
+        result = run_claude_pipe(prompt, MorningBriefingResponse, model="haiku", timeout=240)
         if result and result.content:
             ts = get_now().strftime("%H:%M")
             entry = f"\n[🐝 KingBee {ts}] morning briefing\n{result.content}\n"
@@ -580,7 +584,7 @@ Memory:
 {memory[:3000]}"""
 
     try:
-        result = run_claude_pipe(prompt, StaleCheckResponse, model="haiku")
+        result = run_claude_pipe(prompt, StaleCheckResponse, model="haiku", timeout=240)
         if result and result.content:
             ts = get_now().strftime("%H:%M")
             entry = f"\n[🐝 KingBee {ts}] stale-check\n{result.content}\n"
@@ -727,7 +731,7 @@ Current SOUL.md:
 Return the complete updated SOUL.md content (bounded, distilled, not expanded)."""
 
     try:
-        result = run_claude_pipe(prompt, SoulUpdateResponse, model="sonnet", timeout=180)
+        result = run_claude_pipe(prompt, SoulUpdateResponse, model="sonnet", timeout=480)
         if result and result.content:
             soul_file().write_text(result.content)
             _log_daemon("SOUL.md updated")
@@ -906,7 +910,7 @@ If nothing warrants a proposal, return all empty lists with summary "No patterns
 """
 
     try:
-        result = run_claude_pipe(prompt, ImprovementResponse, model="sonnet", timeout=180)
+        result = run_claude_pipe(prompt, ImprovementResponse, model="sonnet", timeout=480)
         if result:
             new_items: list[dict] = []
             for skill in result.proposed_skills:
