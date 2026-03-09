@@ -94,6 +94,11 @@ def hook_userpromptsubmit(args: list[str]) -> None:
     except Exception:
         pass
 
+    # Empty prompts: track but do not inject nudges or context — they are
+    # continuations / enter-key submits, not meaningful user turns.
+    if not prompt_text:
+        return
+
     # Session prompt counting removed: Claude Code session-meta provides
     # accurate user_message_count. Hook invocations overcount (~71x) due to
     # sub-agent spawns and tool continuations.
