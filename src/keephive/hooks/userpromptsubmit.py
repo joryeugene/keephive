@@ -85,8 +85,9 @@ def hook_userpromptsubmit(args: list[str]) -> None:
         return
 
     prompt_text = input_data.get("prompt", "").strip()
+    cwd = input_data.get("cwd", "")
 
-    # Track usage (before UI queue check — prompt happened regardless)
+    # Track usage. Fires on every submit including empty prompts.
     try:
         from keephive.storage import track_event
 
@@ -94,8 +95,20 @@ def hook_userpromptsubmit(args: list[str]) -> None:
     except Exception:
         pass
 
-    # Empty prompts: track but do not inject nudges or context — they are
-    # continuations / enter-key submits, not meaningful user turns.
+    # UI feedback queue: drain on every prompt submit, even empty ones.
+    # Pending UI context must flush as soon as the next turn arrives.
+    try:
+        from keephive.storage import drain_ui_queue
+
+        result = drain_ui_queue(cwd, event_name="UserPromptSubmit")
+        if result:
+            sys.stdout.write(result)
+            sys.stdout.flush()
+            return  # Queue consumed; skip nudge this turn
+    except Exception:
+        pass  # Never block the prompt
+
+    # Empty prompts (enter-key continuations) do not get nudges or KB context.
     if not prompt_text:
         return
 
@@ -114,9 +127,9 @@ def hook_userpromptsubmit(args: list[str]) -> None:
         except Exception:
             pass
 
-    # KB detection — queue direct messages and inject context block.
+    # KB detection: queue direct messages and inject context block.
     # System-generated content (loop banners, daemon prompts) is filtered out first.
-    if prompt_text and not _is_system_message(prompt_text) and _KB_PATTERN.search(prompt_text):
+    if not _is_system_message(prompt_text) and _KB_PATTERN.search(prompt_text):
         try:
             from keephive.nudge import build_nudge_output
             from keephive.storage import append_kb_message, kb_queue_depth
@@ -135,18 +148,6 @@ def hook_userpromptsubmit(args: list[str]) -> None:
             return  # KB message handled; skip nudge this turn
         except Exception:
             pass  # Never block the prompt
-
-    # Check UI feedback queue — inject before nudge, persist to daily log
-    try:
-        from keephive.storage import drain_ui_queue
-
-        result = drain_ui_queue(input_data.get("cwd", ""), event_name="UserPromptSubmit")
-        if result:
-            sys.stdout.write(result)
-            sys.stdout.flush()
-            return  # Queue consumed; skip nudge this turn
-    except Exception:
-        pass  # Never block the prompt
 
     try:
         from keephive.nudge import build_nudge_output, get_prompt_nudge, should_nudge
