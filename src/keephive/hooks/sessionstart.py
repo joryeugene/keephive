@@ -252,6 +252,38 @@ def extract_style_hint(days: int = 7) -> str:
         return ""
 
 
+def _filter_memory_by_project(mem: str, project_name: str) -> str:
+    """Return memory.md content filtered to the current project.
+
+    Lines tagged ``[project:X]`` where X does not match project_name are dropped.
+    Lines with no project tag (global facts, headers, blank lines) are kept.
+    When project_name is empty, the full memory is returned unchanged.
+    """
+    import re
+
+    if not project_name or not mem:
+        return mem
+
+    project_tag_re = re.compile(r"\[project:([^\]]+)\]")
+    current = project_name.lower()
+    result_lines: list[str] = []
+
+    for line in mem.splitlines(keepends=True):
+        tags = project_tag_re.findall(line)
+        if tags:
+            # Keep only if at least one tag matches the current project
+            if any(t.lower() == current for t in tags):
+                result_lines.append(line)
+            # else: foreign-project line — drop it
+        else:
+            result_lines.append(line)
+
+    # Collapse runs of 3+ blank lines into 2
+    text = "".join(result_lines)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 def build_context(cwd: str, project_name: str) -> str:
     """Build the context string injected into Claude Code.
 
@@ -297,8 +329,8 @@ def build_context(cwd: str, project_name: str) -> str:
     except Exception:
         pass  # Never crash sessionstart
 
-    # 1. Working memory
-    mem = read_memory()
+    # 1. Working memory (filtered to current project — foreign-project facts excluded)
+    mem = _filter_memory_by_project(read_memory(), project_name)
     if mem:
         parts.append(mem)
 

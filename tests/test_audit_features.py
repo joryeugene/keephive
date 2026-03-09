@@ -363,3 +363,67 @@ class TestContextInjectionDiet:
         # hive_env fixture has a fact from 2020-01-01 which is stale
         ctx = build_context("/tmp/test", "test")
         assert "unverified 30+ days" in ctx.lower()
+
+
+# ---- Feature H: Project-scoped memory filtering ----
+
+
+class TestMemoryProjectFilter:
+    def test_foreign_project_facts_excluded(self):
+        """Facts tagged [project:other] are dropped when current project differs."""
+        from keephive.hooks.sessionstart import _filter_memory_by_project
+
+        mem = (
+            "# Working Memory\n\n"
+            "- Global fact [verified:2026-01-01]\n"
+            "- Foreign fact [project:dadbod-grip.nvim] [auto:2026-03-01]\n"
+            "- Current fact [project:keephive] [auto:2026-03-01]\n"
+        )
+        result = _filter_memory_by_project(mem, "keephive")
+        assert "Global fact" in result
+        assert "Current fact" in result
+        assert "Foreign fact" not in result
+
+    def test_current_project_facts_included(self):
+        """Facts tagged with the current project name are kept."""
+        from keephive.hooks.sessionstart import _filter_memory_by_project
+
+        mem = "- keephive fact [project:keephive] [auto:2026-03-01]\n"
+        result = _filter_memory_by_project(mem, "keephive")
+        assert "keephive fact" in result
+
+    def test_global_facts_always_included(self):
+        """Facts with no [project:X] tag are kept regardless of current project."""
+        from keephive.hooks.sessionstart import _filter_memory_by_project
+
+        mem = "- User prefers uv [verified:2026-01-01]\n"
+        result = _filter_memory_by_project(mem, "some-project")
+        assert "User prefers uv" in result
+
+    def test_empty_project_name_returns_full_memory(self):
+        """When project_name is empty (no cwd), the full memory is returned."""
+        from keephive.hooks.sessionstart import _filter_memory_by_project
+
+        mem = (
+            "- Global fact\n"
+            "- Foreign fact [project:dadbod-grip.nvim]\n"
+        )
+        result = _filter_memory_by_project(mem, "")
+        assert "Global fact" in result
+        assert "Foreign fact" in result
+
+    def test_build_context_filters_foreign_facts(self, hive_env):
+        """build_context excludes foreign-project facts from injected memory."""
+        mem_path = hive_env / "working" / "memory.md"
+        mem_path.write_text(
+            "# Working Memory\n\n"
+            "- keephive core fact [verified:2026-01-01]\n"
+            "- [auto] FACT: dadbod thing [project:dadbod-grip.nvim] [auto:2026-03-01]\n"
+            "- [auto] FACT: nucleus thing [project:nucleus2] [auto:2026-03-01]\n"
+        )
+        from keephive.hooks.sessionstart import build_context
+
+        ctx = build_context("/home/dev/keephive", "keephive")
+        assert "keephive core fact" in ctx
+        assert "dadbod thing" not in ctx
+        assert "nucleus thing" not in ctx
