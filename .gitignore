@@ -42,3 +42,4 @@ server_output.log
 
 # Git worktrees (local dev only)
 .worktrees/
+.grip

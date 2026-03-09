@@ -23,7 +23,6 @@ from keephive.storage import (
     guides_dir,
     hive_dir,
     memory_file,
-    open_todos,
     read_memory,
     read_rules,
     safe_read_text,
@@ -327,29 +326,6 @@ def build_context(cwd: str, project_name: str) -> str:
     stale = count_stale_facts()
     if stale > 0:
         parts.append(f"Warning: {stale} fact(s) unverified 30+ days. Run: hive v")
-
-    # 4. Open TODOs
-    todos = open_todos()
-    if todos:
-        from datetime import date
-
-        t = get_today()
-        todo_lines = ["## Open TODOs"]
-        for d, ts, text in reversed(todos[-5:]):
-            try:
-                td = date.fromisoformat(d)
-                age = (t - td).days
-                if age == 0:
-                    age_s = "today"
-                elif age == 1:
-                    age_s = "1d"
-                else:
-                    age_s = f"{age}d"
-                time_part = f" {ts}" if ts else ""
-                todo_lines.append(f"- [{age_s}{time_part}] {text}")
-            except ValueError:
-                todo_lines.append(f"- [?] {text}")
-        parts.append("\n".join(todo_lines))
 
     # 4b. Active draft hint
     draft_hint = _active_draft_hint()

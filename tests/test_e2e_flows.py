@@ -454,13 +454,14 @@ class TestFullHookChain:
         # The fixture has a fact from 2020-01-01
         assert "unverified 30+ days" in ctx.lower()
 
-    def test_sessionstart_includes_open_todos(self, hive_env):
+    def test_sessionstart_excludes_todos(self, hive_env):
+        """TODOs are not injected into session context (they derail agents)."""
         from keephive.commands.remember import cmd_remember
         from keephive.hooks.sessionstart import build_context
 
         cmd_remember(["TODO: deploy to staging"])
         ctx = build_context("/test/project", "project")
-        assert "deploy to staging" in ctx
+        assert "deploy to staging" not in ctx
 
     def test_sessionstart_includes_due_recurring(self, hive_env):
         from keephive.commands.recurring import cmd_recurring

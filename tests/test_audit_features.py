@@ -293,8 +293,8 @@ class TestContextInjectionDiet:
         assert "Working Memory" in ctx
         assert "When You Learn Something New" in ctx
 
-    def test_todos_still_injected(self, hive_env):
-        """Open TODOs are still injected into context."""
+    def test_todos_not_injected(self, hive_env):
+        """Open TODOs are NOT injected into context (they derail agents)."""
         make_daily(
             hive_env,
             days_ago=0,
@@ -303,8 +303,8 @@ class TestContextInjectionDiet:
         from keephive.hooks.sessionstart import build_context
 
         ctx = build_context("/tmp/test", "test")
-        assert "Open TODO" in ctx
-        assert "Important task to do" in ctx
+        assert "Open TODO" not in ctx
+        assert "Important task to do" not in ctx
 
     def test_quality_pulse_not_injected(self, hive_env):
         """Quality Pulse score is NOT in session context (moved to status)."""

@@ -947,16 +947,16 @@ class TestSessionStartOutput:
         assert "unverified 30+ days" in ctx.lower()
         assert "hive v" in ctx
 
-    def test_todos_injected_with_age(self, hive_env):
-        """SessionStart context includes TODO items with age labels."""
+    def test_todos_not_injected(self, hive_env):
+        """TODOs are not injected into SessionStart context."""
         today_str = date.today().isoformat()
         daily = hive_env / "daily" / f"{today_str}.md"
         daily.write_text(f"# Daily Log: {today_str}\n\n- [10:00:00] TODO: Test task\n")
         from keephive.hooks.sessionstart import build_context
 
         ctx = build_context("/tmp/test", "test")
-        assert "TODO" in ctx
-        assert "today" in ctx
+        assert "Test task" not in ctx
+        assert "Open TODOs" not in ctx
 
     def test_workflows_section_not_statically_injected(self, hive_env):
         """Workflows section removed from static injection to cut token bloat.

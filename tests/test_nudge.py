@@ -140,8 +140,8 @@ class TestShouldNudge:
 class TestLifecycleNudge:
     """Test the priority-based lifecycle nudge state machine."""
 
-    def test_todo_nudge_highest_priority(self, hive_env):
-        """Open TODOs produce a specific TODO nudge (priority 1)."""
+    def test_todos_not_nudged(self, hive_env):
+        """Open TODOs do not surface in nudges (they derail agents)."""
         from keephive.storage import append_to_daily, ensure_daily
 
         ensure_daily()
@@ -150,8 +150,8 @@ class TestLifecycleNudge:
         from keephive.nudge import _lifecycle_nudge
 
         result = _lifecycle_nudge("prompt")
-        assert "Deploy the staging environment" in result
-        assert "hive td" in result
+        assert "Deploy the staging environment" not in result
+        assert "hive td" not in result
 
     def test_stale_facts_priority_two(self, hive_env):
         """Stale facts trigger verification nudge when no TODOs exist."""
@@ -264,8 +264,8 @@ class TestLifecycleNudge:
         result = _lifecycle_nudge("stop")
         assert "hive_remember" in result
 
-    def test_long_todo_truncated_in_nudge(self, hive_env):
-        """TODOs longer than 60 chars are truncated with ellipsis."""
+    def test_long_todo_not_in_nudge(self, hive_env):
+        """TODOs do not appear in nudges regardless of length."""
         from keephive.storage import append_to_daily, ensure_daily
 
         ensure_daily()
@@ -275,8 +275,7 @@ class TestLifecycleNudge:
         from keephive.nudge import _lifecycle_nudge
 
         result = _lifecycle_nudge("prompt")
-        assert "..." in result
-        assert len(result) < 200
+        assert long_todo[:10] not in result
 
 
 class TestUnreflectedLogCount:

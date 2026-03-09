@@ -151,28 +151,20 @@ def _lifecycle_nudge(
     """Return the most actionable nudge based on current hive state.
 
     Priority order (highest first):
-    1. Specific open TODO not addressed in current session
+    1. KB queue -- direct messages pending soul_update processing
     2. Stale facts needing verification
     3. Pending facts needing review
     4. Daily logs accumulated (7+) needing reflection
+    4.5. Review lag (no v/a/mem in >1 day)
     5. Context-specific capture/recall reminder (NEVER gated)
+
+    TODOs are intentionally excluded: they belong in `hive todo` for human
+    review, not in agent context where they cause cross-project derailment.
     """
     try:
-        from keephive.storage import count_stale_facts, kb_queue_depth, last_cmd_date, open_todos
+        from keephive.storage import count_stale_facts, kb_queue_depth, last_cmd_date
 
         recency = read_recency(counter_name, session_id)
-
-        # Priority 1: Specific TODO nudge
-        todos = open_todos()
-        if todos:
-            cat = "todos"
-            last = recency.get(cat, 0)
-            if last == 0 or count - last >= _RECENCY_THRESHOLD:
-                _, _, text = todos[0]
-                short = text[:60] + "..." if len(text) > 60 else text
-                result = f'Open TODO: "{short}" - resolved? `hive td`'
-                record_surfaced(counter_name, cat, count, session_id)
-                return result
 
         # Priority 1.5: KB queue — direct messages pending soul_update processing
         kb_depth = kb_queue_depth()
