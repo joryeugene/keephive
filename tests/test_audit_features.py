@@ -404,10 +404,7 @@ class TestMemoryProjectFilter:
         """When project_name is empty (no cwd), the full memory is returned."""
         from keephive.hooks.sessionstart import _filter_memory_by_project
 
-        mem = (
-            "- Global fact\n"
-            "- Foreign fact [project:dadbod-grip.nvim]\n"
-        )
+        mem = "- Global fact\n- Foreign fact [project:dadbod-grip.nvim]\n"
         result = _filter_memory_by_project(mem, "")
         assert "Global fact" in result
         assert "Foreign fact" in result
