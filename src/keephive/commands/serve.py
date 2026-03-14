@@ -1456,7 +1456,7 @@ _JS = """
     // g-prefix handler
     if(_gPending){
       _clearG();
-      if(_VIEW_KEYS[k]){window.location.href=_VIEW_KEYS[k];e.preventDefault();}
+      if(_VIEW_KEYS[k]){_navigateTo(_VIEW_KEYS[k],true);e.preventDefault();}
       else if(k==='g'){_setFocus(0);window.scrollTo(0,0);e.preventDefault();}
       return;
     }
@@ -1716,6 +1716,80 @@ _JS = """
       .then(function(r){return r.json();})
       .catch(function(){});
   };
+
+  // --- SPA navigation: swap fragments instead of full page reloads ---
+  var _VIEW_PATHS={};
+  document.querySelectorAll('nav .nav-tab').forEach(function(a){
+    var p=a.getAttribute('href');
+    if(p)_VIEW_PATHS[p]=a.textContent.trim();
+  });
+
+  function _navigateTo(path,push){
+    var mc=document.getElementById('main-content');
+    if(!mc)return;
+    // Derive view name from path
+    // Map path to view name (/ -> home, /stats -> stats, etc.)
+    var vn='home';
+    if(path!=='/'){
+      var seg=path.slice(1);
+      var aliases={'daily':'home','simple':'home','mem':'brain','notes':'brain','wander':'play'};
+      vn=aliases[seg]||seg;
+    }
+
+    mc.style.opacity='0.5';
+    fetch('/api/fragment?view='+encodeURIComponent(vn))
+      .then(function(r){return r.text();})
+      .then(function(html){
+        mc.innerHTML=html;
+        mc.style.opacity='1';
+        view=vn;
+        document.body.dataset.view=vn;
+        // Update active tab
+        document.querySelectorAll('nav .nav-tab').forEach(function(a){
+          a.classList.toggle('active',a.getAttribute('href')===path);
+        });
+        // Update title
+        var title=_VIEW_PATHS[path]||vn;
+        document.title='hive \u2014 '+title;
+        // Reconnect SSE for new view panels
+        _connectSSE();
+        // Re-run restoreState for filter persistence
+        restoreState();
+        // Reset focus
+        _focusIdx=-1;_innerMode=false;_innerIdx=-1;
+        window.scrollTo(0,0);
+        if(push)history.pushState({view:vn},'',path);
+      })
+      .catch(function(){
+        mc.style.opacity='1';
+        window.location.href=path;
+      });
+  }
+
+  // Intercept nav tab clicks
+  document.querySelector('nav').addEventListener('click',function(e){
+    var a=e.target.closest('.nav-tab');
+    if(!a)return;
+    var href=a.getAttribute('href');
+    if(!href)return;
+    e.preventDefault();
+    _navigateTo(href,true);
+  });
+
+  // Handle browser back/forward
+  window.addEventListener('popstate',function(e){
+    _navigateTo(window.location.pathname,false);
+  });
+
+  // Update keyboard nav to use SPA
+  var _origViewKeys=_VIEW_KEYS;
+  _VIEW_KEYS={};
+  for(var vk in _origViewKeys){_VIEW_KEYS[vk]=_origViewKeys[vk];}
+  // Override the keyboard handler to use SPA navigation
+  var _oldKeyHandler=document.onkeydown;
+  // Patch: g+key view navigation now uses _navigateTo
+  window._spaNavigate=function(path){_navigateTo(path,true);};
+
 })();
 """
 

@@ -3668,8 +3668,18 @@ def append_improvement_history(entry: dict) -> None:
     f.write_text(json.dumps(history, indent=2) + "\n")
 
 
+# TTL cache for read_session_transcripts (parsing 3.5 GB of JSONL is ~12s).
+# Cache is keyed by (days_back, projects_dir) and expires after 60 seconds.
+_transcript_cache: dict[tuple, tuple[float, list[dict]]] = {}
+_transcript_cache_lock = threading.Lock()
+_TRANSCRIPT_TTL = 60.0  # seconds
+
+
 def read_session_transcripts(days_back: int = 7) -> list[dict]:
     """Parse raw JSONL transcripts to extract signals not in session-meta.
+
+    Results are cached for 60 seconds to avoid re-parsing gigabytes of JSONL
+    on every dashboard refresh.
 
     Reads ``~/.claude/projects/**/*.jsonl`` and extracts per-session:
 
@@ -3689,7 +3699,16 @@ def read_session_transcripts(days_back: int = 7) -> list[dict]:
 
     Returns a list of session dicts, one per JSONL file processed.
     """
+    import time
+
     env_dir = os.environ.get("HIVE_CC_PROJECTS_DIR")
+    cache_key = (days_back, env_dir or "")
+    now = time.monotonic()
+    with _transcript_cache_lock:
+        if cache_key in _transcript_cache:
+            cached_at, cached_results = _transcript_cache[cache_key]
+            if now - cached_at < _TRANSCRIPT_TTL:
+                return cached_results
     projects_dir = Path(env_dir) if env_dir else Path.home() / ".claude" / "projects"
     if not projects_dir.exists():
         return []
@@ -3766,4 +3785,6 @@ def read_session_transcripts(days_back: int = 7) -> list[dict]:
 
         results.append(session)
 
+    with _transcript_cache_lock:
+        _transcript_cache[cache_key] = (now, results)
     return results
