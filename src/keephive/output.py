@@ -11,18 +11,19 @@ import os
 from rich.console import Console
 from rich.theme import Theme
 
-# Custom theme matching the bash version's color scheme
+# Amber Terminal theme: warm tinted colors derived from keephive's honey/hive identity
 _theme = Theme(
     {
-        "ok": "green",
-        "warn": "yellow",
-        "err": "red",
-        "info": "cyan",
-        "dim": "dim",
-        "tier.working": "green",
-        "tier.knowledge": "blue",
-        "tier.daily": "cyan",
-        "tier.archive": "dim",
+        "ok": "#4CB060",
+        "warn": "#C9A030",
+        "err": "#D05040",
+        "info": "#5E9EC4",
+        "dim": "#766E63",
+        "accent": "#D4A04A",
+        "tier.working": "#4CB060",
+        "tier.knowledge": "#5E9EC4",
+        "tier.daily": "#D4A04A",
+        "tier.archive": "#766E63",
     }
 )
 

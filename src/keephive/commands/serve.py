@@ -206,24 +206,40 @@ def render_md(text: str) -> str:
 # ---- CSS + JS ----
 
 _CSS = """
+:root{
+--hive-primary:#D4A04A;--hive-primary-dim:#9A7235;--hive-primary-bright:#E8C882;--hive-primary-bg:#2D2518;
+--hive-bg:#1A1714;--hive-surface:#23201B;--hive-surface-2:#2C2823;--hive-surface-3:#36312A;
+--hive-hover:#282420;--hive-border:#403930;--hive-border-subtle:#332E27;
+--hive-text:#D9CFC0;--hive-text-bright:#E8E0D4;--hive-text-secondary:#9E9486;--hive-text-tertiary:#766E63;--hive-text-dim:#5E5549;
+--hive-ok:#4CB060;--hive-ok-dim:#3A8548;--hive-ok-bg:#152B1A;--hive-ok-bright:#60B870;
+--hive-warn:#C9A030;--hive-warn-dim:#A88020;--hive-warn-bg:#2D2710;
+--hive-err:#D05040;--hive-err-dim:#8A3028;--hive-err-bg:#2E1510;--hive-err-bright:#E06858;
+--hive-info:#5E9EC4;--hive-info-bg:#152028;
+--hive-correction:#D08050;--hive-correction-bg:#2E1D10;
+--hive-decision:#C490D0;--hive-decision-bg:#2A1E30;
+--hive-fact:#D4A04A;--hive-fact-bg:#2D2518;
+--c-bg:var(--hive-bg);--c-surface:var(--hive-surface);--c-border:var(--hive-border);--c-fg:var(--hive-text-bright);
+--c-muted:var(--hive-text-secondary);--c-ok:var(--hive-ok);--c-warn:var(--hive-warn);--c-danger:var(--hive-err);
+--c-green:var(--hive-ok);--c-yellow:var(--hive-warn-dim);--c-red:var(--hive-err);--c-accent:var(--hive-primary)
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;font-size:13px;line-height:1.6;letter-spacing:-0.006em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
-nav{background:#161b22;border-bottom:1px solid #30363d;padding:0 16px;display:flex;align-items:center;gap:2px;position:sticky;top:0;z-index:100}
-.nav-brand{color:#f0f6fc;font-weight:700;font-size:14px;padding:10px 10px 10px 0;margin-right:10px;border-right:1px solid #30363d;text-decoration:none;display:flex;align-items:center;gap:6px}
+body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--hive-bg);color:var(--hive-text);font-size:13px;line-height:1.6;letter-spacing:-0.006em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+nav{background:var(--hive-surface);border-bottom:1px solid var(--hive-border);padding:0 16px;display:flex;align-items:center;gap:2px;position:sticky;top:0;z-index:100}
+.nav-brand{color:var(--hive-text-bright);font-weight:700;font-size:14px;padding:10px 10px 10px 0;margin-right:10px;border-right:1px solid var(--hive-border);text-decoration:none;display:flex;align-items:center;gap:6px}
 .nav-logo{width:28px;height:28px;image-rendering:pixelated}
-.profile-badge{color:#58a6ff;font-size:11px;font-weight:400;padding:2px 6px;border:1px solid #30363d;border-radius:3px;margin-left:4px;vertical-align:middle}
-.nav-tab{color:#8b949e;text-decoration:none;padding:10px 10px;border-bottom:2px solid transparent;font-size:12px;white-space:nowrap;transition:color .1s}
-.nav-tab:hover{color:#c9d1d9}.nav-tab.active{color:#f0f6fc;border-bottom-color:#58a6ff;font-weight:600}
+.profile-badge{color:var(--hive-primary);font-size:11px;font-weight:400;padding:2px 6px;border:1px solid var(--hive-border);border-radius:3px;margin-left:4px;vertical-align:middle}
+.nav-tab{color:var(--hive-text-secondary);text-decoration:none;padding:10px 10px;border-bottom:2px solid transparent;font-size:12px;white-space:nowrap;transition:color .1s}
+.nav-tab:hover{color:var(--hive-text)}.nav-tab.active{color:var(--hive-text-bright);border-bottom-color:var(--hive-primary);font-weight:600}
 .nav-right{margin-left:auto;display:flex;align-items:center;gap:8px;padding-left:12px}
-#refresh-ts{color:#6e7681;font-size:11px;min-width:60px;text-align:right}
-#search-input{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:3px 8px;border-radius:4px;font-size:12px;width:140px;outline:none}
-#search-input:focus{border-color:#58a6ff}
-#search-input::placeholder{color:#6e7681}
+#refresh-ts{color:var(--hive-text-tertiary);font-size:11px;min-width:60px;text-align:right}
+#search-input{background:var(--hive-border-subtle);border:1px solid var(--hive-border);color:var(--hive-text);padding:3px 8px;border-radius:4px;font-size:12px;width:140px;outline:none}
+#search-input:focus{border-color:var(--hive-primary)}
+#search-input::placeholder{color:var(--hive-text-tertiary)}
 .privacy-banner{display:block;width:100%}
-.privacy-banner.active{background:#f59e0b;color:#1c1917;font-size:12px;font-weight:600;padding:6px 16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:12px}
-.privacy-banner.cli-only{background:#0e7490;color:#fff;font-size:12px;font-weight:600;padding:6px 16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:12px}
-.privacy-banner a{color:#1c1917;font-weight:700;text-decoration:underline}
-.privacy-banner.cli-only a{color:#cffafe;font-weight:700;text-decoration:underline}
+.privacy-banner.active{background:var(--hive-primary);color:var(--hive-bg);font-size:12px;font-weight:600;padding:6px 16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:12px}
+.privacy-banner.cli-only{background:var(--hive-info);color:var(--hive-bg);font-size:12px;font-weight:600;padding:6px 16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:12px}
+.privacy-banner a{color:var(--hive-bg);font-weight:700;text-decoration:underline}
+.privacy-banner.cli-only a{color:var(--hive-text-bright);font-weight:700;text-decoration:underline}
 main{max-width:1400px;margin:0 auto;padding:16px}
 .grid-row{display:grid;gap:12px;margin-bottom:12px;align-items:start}
 .grid-cols-1{grid-template-columns:1fr}
@@ -239,176 +255,176 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 @media(max-width:900px){.masonry{column-count:1!important}}
 .masonry-item{display:inline-block;width:100%;margin:0 0 12px;break-inside:avoid;vertical-align:top}
 .masonry-item .card{width:100%}
-.card{background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:hidden;margin-bottom:12px;transition:border-color .1s}
-.card-header{padding:7px 14px;background:#1e252e;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.card-title{font-weight:600;font-size:13px;color:#f0f6fc}
-.card-meta{color:#6e7681;font-size:12px}
+.card{background:var(--hive-surface);border:1px solid var(--hive-border);border-radius:8px;overflow:hidden;margin-bottom:12px;transition:border-color .1s}
+.card-header{padding:7px 14px;background:var(--hive-surface-3);border-bottom:1px solid var(--hive-border);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.card-title{font-weight:600;font-size:13px;color:var(--hive-text-bright)}
+.card-meta{color:var(--hive-text-tertiary);font-size:12px}
 .card-body{padding:10px 14px}
 .stat-row{display:flex;gap:16px 24px;flex-wrap:wrap;margin-bottom:8px;justify-content:center}
 .stat-item{display:flex;flex-direction:column;gap:2px;align-items:center;text-align:center;min-width:64px}
-.stat-value{font-size:22px;font-weight:700;color:#f0f6fc}
-.stat-value.warn{color:#e3b341}.stat-value.err{color:#f85149}.stat-value.ok{color:#3fb950}
-.stat-label{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap}
+.stat-value{font-size:22px;font-weight:700;color:var(--hive-text-bright)}
+.stat-value.warn{color:var(--hive-warn)}.stat-value.err{color:var(--hive-err)}.stat-value.ok{color:var(--hive-ok)}
+.stat-label{font-size:11px;color:var(--hive-text-secondary);text-transform:uppercase;letter-spacing:.02em;white-space:nowrap}
 .pulse-hero .card-body{padding:16px 24px}
 .pulse-kpi{display:flex;flex-direction:column;align-items:center;gap:2px}
-.pulse-kpi-val{font-size:16px;font-weight:700;color:#e6edf3}
-.pulse-kpi-label{font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap}
-.metric-hero{font-size:36px;font-weight:700;color:#f0f6fc;line-height:1}
-.metric-hero-unit{font-size:16px;color:#484f58;font-weight:400}
+.pulse-kpi-val{font-size:16px;font-weight:700;color:var(--hive-text-bright)}
+.pulse-kpi-label{font-size:10px;color:var(--hive-text-secondary);text-transform:uppercase;letter-spacing:.02em;white-space:nowrap}
+.metric-hero{font-size:36px;font-weight:700;color:var(--hive-text-bright);line-height:1}
+.metric-hero-unit{font-size:16px;color:var(--hive-text-dim);font-weight:400}
 .metric-hero-delta{font-size:14px;margin-left:4px}
-.metric-hero-delta.up{color:#3fb950}
-.metric-hero-delta.down{color:#f85149}
-.metric-hero-delta.flat{color:#484f58}
+.metric-hero-delta.up{color:var(--hive-ok)}
+.metric-hero-delta.down{color:var(--hive-err)}
+.metric-hero-delta.flat{color:var(--hive-text-dim)}
 .kpi-row{display:flex;justify-content:center;gap:20px;flex-wrap:wrap;margin:8px 0}
 .kpi-item{text-align:center;min-width:48px}
-.kpi-value{font-size:18px;font-weight:700;color:#e6edf3;line-height:1.2}
-.kpi-label{font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.kpi-value{font-size:18px;font-weight:700;color:var(--hive-text-bright);line-height:1.2}
+.kpi-label{font-size:10px;color:var(--hive-text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
 .gauge-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
-.gauge-label{font-size:11px;color:#8b949e;width:110px;text-align:right;flex-shrink:0}
-.gauge-track{flex:1;height:6px;border-radius:3px;background:#21262d}
-.gauge-fill{height:100%;border-radius:3px;background:#3fb950;transition:width .3s ease}
-.gauge-pct{font-size:11px;color:#8b949e;width:36px;text-align:right;flex-shrink:0}
-.sparkline-unicode{font-family:monospace;font-size:14px;letter-spacing:1px;color:#58a6ff}
-.sparkline-axis{display:flex;justify-content:space-between;font-size:9px;color:#484f58;margin-top:1px}
+.gauge-label{font-size:11px;color:var(--hive-text-secondary);width:110px;text-align:right;flex-shrink:0}
+.gauge-track{flex:1;height:6px;border-radius:3px;background:var(--hive-border-subtle)}
+.gauge-fill{height:100%;border-radius:3px;background:var(--hive-ok);transition:width .3s ease}
+.gauge-pct{font-size:11px;color:var(--hive-text-secondary);width:36px;text-align:right;flex-shrink:0}
+.sparkline-unicode{font-family:monospace;font-size:14px;letter-spacing:1px;color:var(--hive-primary)}
+.sparkline-axis{display:flex;justify-content:space-between;font-size:9px;color:var(--hive-text-dim);margin-top:1px}
 .health-dots{display:flex;gap:6px;align-items:center}
 .health-dot{width:6px;height:6px;border-radius:50%;display:inline-block}
-.health-dot.ok{background:#3fb950}
-.health-dot.warn{background:#e3b341}
-.health-dot.off{background:#484f58}
+.health-dot.ok{background:var(--hive-ok)}
+.health-dot.warn{background:var(--hive-warn)}
+.health-dot.off{background:var(--hive-text-dim)}
 .action-timeline{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
 .action-item{font-size:11px;display:flex;align-items:center;gap:4px}
 .action-dot{width:8px;height:8px;border-radius:50%}
-.action-dot.recent{background:#3fb950}
-.action-dot.overdue{background:#e3b341;border:1px solid #e3b34155}
-.action-dot.never{background:none;border:1px solid #484f58}
-.action-label{color:#8b949e}
-.action-ago{color:#484f58;font-size:10px}
+.action-dot.recent{background:var(--hive-ok)}
+.action-dot.overdue{background:var(--hive-warn);border:1px solid rgba(201,160,48,0.33)}
+.action-dot.never{background:none;border:1px solid var(--hive-text-dim)}
+.action-label{color:var(--hive-text-secondary)}
+.action-ago{color:var(--hive-text-dim);font-size:10px}
 .health-row{display:flex;gap:12px;margin-top:6px;justify-content:center}
-.dot-ok{color:#3fb950}.dot-off{color:#6e7681}
-.health-label{font-size:12px;color:#8b949e}
+.dot-ok{color:var(--hive-ok)}.dot-off{color:var(--hive-text-tertiary)}
+.health-label{font-size:12px;color:var(--hive-text-secondary)}
 .stale-accordion{margin-top:8px}
-.stale-summary{cursor:pointer;color:#e3b341;font-size:12px;list-style:none;padding:2px 0}
+.stale-summary{cursor:pointer;color:var(--hive-warn);font-size:12px;list-style:none;padding:2px 0}
 .stale-summary::-webkit-details-marker{display:none}
 .stale-summary::marker{display:none}
-.status-divider{border-top:1px solid #21262d;margin:6px 0}
-.status-brief{font-size:12px;color:#8b949e;padding:4px 0}
-.status-brief span{color:#c9d1d9;font-weight:600}
+.status-divider{border-top:1px solid var(--hive-border-subtle);margin:6px 0}
+.status-brief{font-size:12px;color:var(--hive-text-secondary);padding:4px 0}
+.status-brief span{color:var(--hive-text);font-weight:600}
 .log-date-nav{display:flex;align-items:center;gap:4px}
-.date-nav-btn{background:none;border:1px solid #30363d;color:#8b949e;padding:1px 6px;border-radius:3px;cursor:pointer;font-size:14px;line-height:1.4}
-.date-nav-btn:hover:not([disabled]){color:#c9d1d9;border-color:#58a6ff}
+.date-nav-btn{background:none;border:1px solid var(--hive-border);color:var(--hive-text-secondary);padding:1px 6px;border-radius:3px;cursor:pointer;font-size:14px;line-height:1.4}
+.date-nav-btn:hover:not([disabled]){color:var(--hive-text);border-color:var(--hive-primary)}
 .date-nav-btn:disabled{opacity:0.3;cursor:default}
-.log-date-label{font-size:12px;color:#6e7681;min-width:82px;text-align:center}
-.log-entry{display:flex;gap:8px;padding:5px 10px;border-bottom:1px solid #21262d;font-size:12px;border-radius:4px;transition:background .1s}
+.log-date-label{font-size:12px;color:var(--hive-text-tertiary);min-width:82px;text-align:center}
+.log-entry{display:flex;gap:8px;padding:5px 10px;border-bottom:1px solid var(--hive-border-subtle);font-size:12px;border-radius:4px;transition:background .1s}
 .log-entry:last-child{border-bottom:none}
-.log-entry:hover{background:#1c2128}
-.log-time{color:#6e7681;font-family:monospace;min-width:52px;flex-shrink:0}
-.log-text{flex:1;color:#c9d1d9;word-break:break-word}
+.log-entry:hover{background:var(--hive-hover)}
+.log-time{color:var(--hive-text-tertiary);font-family:monospace;min-width:52px;flex-shrink:0}
+.log-text{flex:1;color:var(--hive-text);word-break:break-word}
 .log-tag{display:inline-block;padding:0 5px;border-radius:3px;font-size:10px;font-weight:600;letter-spacing:.03em;margin-right:5px;vertical-align:middle;line-height:1.6}
-.log-tag-fact{background:#1c3552;color:#79c0ff}
-.log-tag-decision{background:#2c1f52;color:#d2a8ff}
-.log-tag-insight{background:#0d2e1a;color:#56d364}
-.log-tag-todo{background:#3d2e00;color:#e3b341}
-.log-tag-correction{background:#3d1a00;color:#ffa657}
-.log-tag-done{background:#0d2e1a;color:#3fb950}
-.log-tag-auto{background:#1c2128;color:#8b949e}
-.fact{color:#79c0ff}.decision{color:#d2a8ff}.insight{color:#56d364}
-.todo-color{color:#e3b341}.correction{color:#ffa657}.done-cat{color:#3fb950}.auto-cat{color:#8b949e}
-.log-see-more{display:block;padding:6px 0;font-size:12px;color:#58a6ff;text-decoration:none;text-align:center}
-.log-see-more:hover{color:#79c0ff}
+.log-tag-fact{background:var(--hive-fact-bg);color:var(--hive-fact)}
+.log-tag-decision{background:var(--hive-decision-bg);color:var(--hive-decision)}
+.log-tag-insight{background:var(--hive-ok-bg);color:var(--hive-ok-bright)}
+.log-tag-todo{background:var(--hive-warn-bg);color:var(--hive-warn)}
+.log-tag-correction{background:var(--hive-correction-bg);color:var(--hive-correction)}
+.log-tag-done{background:var(--hive-ok-bg);color:var(--hive-ok)}
+.log-tag-auto{background:var(--hive-hover);color:var(--hive-text-secondary)}
+.fact{color:var(--hive-fact)}.decision{color:var(--hive-decision)}.insight{color:var(--hive-ok-bright)}
+.todo-color{color:var(--hive-warn)}.correction{color:var(--hive-correction)}.done-cat{color:var(--hive-ok)}.auto-cat{color:var(--hive-text-secondary)}
+.log-see-more{display:block;padding:6px 0;font-size:12px;color:var(--hive-primary);text-decoration:none;text-align:center}
+.log-see-more:hover{color:var(--hive-primary-bright)}
 .log-show-more{display:flex;gap:8px;justify-content:center;padding:8px 0 4px}
-.log-show-more button{font-size:11px;padding:3px 10px;border-radius:10px;cursor:pointer;border:1px solid #30363d;background:#21262d;color:#8b949e;transition:border-color .1s,color .1s}
-.log-show-more button:hover{border-color:#58a6ff;color:#c9d1d9}
-.todo-item{padding:5px 10px;border-bottom:1px solid #21262d;display:flex;gap:8px;align-items:baseline;font-size:12px;border-radius:4px;transition:background .1s}
+.log-show-more button{font-size:11px;padding:3px 10px;border-radius:10px;cursor:pointer;border:1px solid var(--hive-border);background:var(--hive-border-subtle);color:var(--hive-text-secondary);transition:border-color .1s,color .1s}
+.log-show-more button:hover{border-color:var(--hive-primary);color:var(--hive-text)}
+.todo-item{padding:5px 10px;border-bottom:1px solid var(--hive-border-subtle);display:flex;gap:8px;align-items:baseline;font-size:12px;border-radius:4px;transition:background .1s}
 .todo-item:last-child{border-bottom:none}
-.todo-item:hover{background:#1c2128}
-.todo-age{color:#6e7681;font-size:11px;min-width:36px;text-align:right;flex-shrink:0}
-.todo-age.old{color:#e3b341}.todo-age.vold{color:#f85149}
-.todo-text{flex:1;color:#c9d1d9}
-.recurring-item{display:flex;gap:8px;padding:6px 10px;border-bottom:1px solid #21262d;font-size:12px;border-radius:4px;transition:background .15s}
+.todo-item:hover{background:var(--hive-hover)}
+.todo-age{color:var(--hive-text-tertiary);font-size:11px;min-width:36px;text-align:right;flex-shrink:0}
+.todo-age.old{color:var(--hive-warn)}.todo-age.vold{color:var(--hive-err)}
+.todo-text{flex:1;color:var(--hive-text)}
+.recurring-item{display:flex;gap:8px;padding:6px 10px;border-bottom:1px solid var(--hive-border-subtle);font-size:12px;border-radius:4px;transition:background .15s}
 .recurring-item:last-child{border-bottom:none}
-.recurring-item:hover{background:#1c2128}
-.recurring-freq{color:#8b949e;font-family:monospace;min-width:54px;flex-shrink:0}
-.recurring-text{flex:1;color:#c9d1d9}
-.recurring-due{color:#e3b341;font-size:11px}.recurring-due.overdue{color:#f85149}
-.accordion{border:1px solid #30363d;border-radius:6px;overflow:hidden;margin-bottom:8px}
-.acc-header{padding:8px 12px;background:#1c2128;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px;color:#c9d1d9;user-select:none}
-.acc-header:hover{background:#262c36}
-.acc-toggle{color:#6e7681;font-size:10px;width:10px;flex-shrink:0;display:inline-block;transition:transform .15s}
+.recurring-item:hover{background:var(--hive-hover)}
+.recurring-freq{color:var(--hive-text-secondary);font-family:monospace;min-width:54px;flex-shrink:0}
+.recurring-text{flex:1;color:var(--hive-text)}
+.recurring-due{color:var(--hive-warn);font-size:11px}.recurring-due.overdue{color:var(--hive-err)}
+.accordion{border:1px solid var(--hive-border);border-radius:6px;overflow:hidden;margin-bottom:8px}
+.acc-header{padding:8px 12px;background:var(--hive-hover);cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--hive-text);user-select:none}
+.acc-header:hover{background:var(--hive-surface-2)}
+.acc-toggle{color:var(--hive-text-tertiary);font-size:10px;width:10px;flex-shrink:0;display:inline-block;transition:transform .15s}
 .acc-header.open .acc-toggle{transform:rotate(90deg)}
-.acc-name{flex:0 0 auto}.acc-preview{flex:1;font-size:11px;color:#6e7681;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 4px}.acc-header.open .acc-preview{display:none}
-.acc-meta{font-size:11px;color:#6e7681}
-.acc-type{font-size:10px;padding:1px 6px;border-radius:10px;background:#21262d;color:#8b949e}
+.acc-name{flex:0 0 auto}.acc-preview{flex:1;font-size:11px;color:var(--hive-text-tertiary);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 4px}.acc-header.open .acc-preview{display:none}
+.acc-meta{font-size:11px;color:var(--hive-text-tertiary)}
+.acc-type{font-size:10px;padding:1px 6px;border-radius:10px;background:var(--hive-border-subtle);color:var(--hive-text-secondary)}
 .acc-body{padding:12px 14px;display:none;font-size:13px}
 .acc-body.open{display:block}
-.acc-body.md{max-height:480px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#30363d #1c2128}
-.know-item{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:12px;border-bottom:1px solid #21262d;border-radius:4px;cursor:pointer;transition:background .15s}
+.acc-body.md{max-height:480px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--hive-border) var(--hive-hover)}
+.know-item{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:12px;border-bottom:1px solid var(--hive-border-subtle);border-radius:4px;cursor:pointer;transition:background .15s}
 .know-item:last-child{border-bottom:none}
-.know-item:hover{background:#1c2128}
-.know-name{color:#c9d1d9}
-.know-divider{padding:5px 12px 3px;font-size:10px;color:#6e7681;text-transform:uppercase;letter-spacing:.05em;background:#0d1117;border-top:1px solid #21262d;margin-top:2px}
+.know-item:hover{background:var(--hive-hover)}
+.know-name{color:var(--hive-text)}
+.know-divider{padding:5px 12px 3px;font-size:10px;color:var(--hive-text-tertiary);text-transform:uppercase;letter-spacing:.05em;background:var(--hive-bg);border-top:1px solid var(--hive-border-subtle);margin-top:2px}
 .know-divider:first-child{border-top:none;margin-top:0}
 .note-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));grid-auto-flow:dense;gap:10px}
-.note-tile{padding:12px 16px;font-size:12px;background:#1c2128;border:1px solid #30363d;border-radius:6px;cursor:pointer;transition:border-color .15s,background .15s}
-.note-tile:hover{border-color:#58a6ff;background:#1a2332}
-.note-tile.active{border-color:#58a6ff;background:#1c2230}
+.note-tile{padding:12px 16px;font-size:12px;background:var(--hive-hover);border:1px solid var(--hive-border);border-radius:6px;cursor:pointer;transition:border-color .15s,background .15s}
+.note-tile:hover{border-color:var(--hive-primary);background:var(--hive-primary-bg)}
+.note-tile.active{border-color:var(--hive-primary);background:var(--hive-primary-bg)}
 .note-tile.expanded{grid-column:1/-1;order:-1;cursor:default}
 .note-tile.expanded .note-tile-header{cursor:pointer}
 .note-tile-header{display:flex;align-items:center;gap:8px}
-.note-tile-slot{font-weight:700;color:#58a6ff;min-width:14px;font-size:13px}
-.note-tile-preview{color:#c9d1d9;font-size:12px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.note-tile-slot{font-weight:700;color:var(--hive-primary);min-width:14px;font-size:13px}
+.note-tile-preview{color:var(--hive-text);font-size:12px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .note-tile.expanded .note-tile-preview{display:none}
-.note-tile-meta{color:#6e7681;font-size:11px;white-space:nowrap}
-.note-tile-body{display:none;padding:8px 0 0;border-top:1px solid #30363d;margin-top:8px;max-height:480px;overflow-y:auto}
+.note-tile-meta{color:var(--hive-text-tertiary);font-size:11px;white-space:nowrap}
+.note-tile-body{display:none;padding:8px 0 0;border-top:1px solid var(--hive-border);margin-top:8px;max-height:480px;overflow-y:auto}
 .note-tile.expanded .note-tile-body{display:block}
-.md h1,.md h2,.md h3,.md h4{color:#f0f6fc;margin:10px 0 5px}
-.md h1{font-size:16px}.md h2{font-size:14px;padding-bottom:4px;border-bottom:1px solid #30363d}
-.md h3{font-size:13px;color:#c9d1d9}.md p{margin-bottom:7px;color:#c9d1d9}
-.md ul{padding-left:18px;margin-bottom:7px}.md li{margin-bottom:2px;color:#c9d1d9}
-.md code{background:#21262d;padding:1px 5px;border-radius:3px;font-family:monospace;font-size:12px;color:#ffa657}
-.md pre.code-block{background:#21262d;padding:10px 12px;border-radius:5px;overflow-x:auto;margin-bottom:8px}
-.md pre.code-block code{background:none;padding:0;color:#c9d1d9;font-size:12px}
+.md h1,.md h2,.md h3,.md h4{color:var(--hive-text-bright);margin:10px 0 5px}
+.md h1{font-size:16px}.md h2{font-size:14px;padding-bottom:4px;border-bottom:1px solid var(--hive-border)}
+.md h3{font-size:13px;color:var(--hive-text)}.md p{margin-bottom:7px;color:var(--hive-text)}
+.md ul{padding-left:18px;margin-bottom:7px}.md li{margin-bottom:2px;color:var(--hive-text)}
+.md code{background:var(--hive-border-subtle);padding:1px 5px;border-radius:3px;font-family:monospace;font-size:12px;color:var(--hive-correction)}
+.md pre.code-block{background:var(--hive-border-subtle);padding:10px 12px;border-radius:5px;overflow-x:auto;margin-bottom:8px}
+.md pre.code-block code{background:none;padding:0;color:var(--hive-text);font-size:12px}
 .md table.md-table{border-collapse:collapse;width:100%;margin-bottom:8px;font-size:12px}
-.md table.md-table th,.md table.md-table td{padding:5px 10px;border:1px solid #30363d;text-align:left}
-.md table.md-table th{background:#1c2128;color:#f0f6fc;font-weight:600}
-.md hr{border:none;border-top:1px solid #30363d;margin:10px 0}
-.md a{color:#58a6ff;text-decoration:none}.md a:hover{text-decoration:underline}
-.md strong{color:#f0f6fc}.md em{font-style:italic}
+.md table.md-table th,.md table.md-table td{padding:5px 10px;border:1px solid var(--hive-border);text-align:left}
+.md table.md-table th{background:var(--hive-hover);color:var(--hive-text-bright);font-weight:600}
+.md hr{border:none;border-top:1px solid var(--hive-border);margin:10px 0}
+.md a{color:var(--hive-primary);text-decoration:none}.md a:hover{text-decoration:underline}
+.md strong{color:var(--hive-text-bright)}.md em{font-style:italic}
 .ps-item{display:flex;gap:8px;align-items:center;padding:3px 0;font-size:12px}
-.ps-dot{color:#3fb950;font-size:9px}
-.ps-name{flex:1;color:#c9d1d9}.ps-name.current{color:#f0f6fc;font-weight:600}
-.ps-meta{color:#6e7681}
-.slot-badge{display:inline-flex;align-items:center;gap:4px;background:#1c2128;border:1px solid #30363d;border-radius:3px;padding:1px 6px;font-size:11px;color:#8b949e}
-.slot-badge.active{color:#58a6ff;border-color:#58a6ff}
+.ps-dot{color:var(--hive-ok);font-size:9px}
+.ps-name{flex:1;color:var(--hive-text)}.ps-name.current{color:var(--hive-text-bright);font-weight:600}
+.ps-meta{color:var(--hive-text-tertiary)}
+.slot-badge{display:inline-flex;align-items:center;gap:4px;background:var(--hive-hover);border:1px solid var(--hive-border);border-radius:3px;padding:1px 6px;font-size:11px;color:var(--hive-text-secondary)}
+.slot-badge.active{color:var(--hive-primary);border-color:var(--hive-primary)}
 .stats-table{width:100%;border-collapse:collapse;font-size:12px}
-.stats-table th{color:#8b949e;font-weight:500;text-align:left;padding:4px 8px;border-bottom:1px solid #30363d}
-.stats-table td{padding:4px 8px;border-bottom:1px solid #21262d;color:#c9d1d9}
-.stats-table td:last-child{text-align:right;color:#58a6ff;font-weight:600}
-.mem-line{padding:3px 0;font-size:12px;border-bottom:1px solid #21262d;font-family:monospace;white-space:pre-wrap;word-break:break-word;color:#c9d1d9}
-.stats-platform-table td.ok{color:#3fb950}
-.stats-platform-table td.warn{color:#e3b341}
+.stats-table th{color:var(--hive-text-secondary);font-weight:500;text-align:left;padding:4px 8px;border-bottom:1px solid var(--hive-border)}
+.stats-table td{padding:4px 8px;border-bottom:1px solid var(--hive-border-subtle);color:var(--hive-text)}
+.stats-table td:last-child{text-align:right;color:var(--hive-primary);font-weight:600}
+.mem-line{padding:3px 0;font-size:12px;border-bottom:1px solid var(--hive-border-subtle);font-family:monospace;white-space:pre-wrap;word-break:break-word;color:var(--hive-text)}
+.stats-platform-table td.ok{color:var(--hive-ok)}
+.stats-platform-table td.warn{color:var(--hive-warn)}
 
 .mem-line:last-child{border-bottom:none}
-.fact-item{padding:6px 10px;border-bottom:1px solid #21262d;font-size:12px;border-radius:4px;transition:background .15s}
+.fact-item{padding:6px 10px;border-bottom:1px solid var(--hive-border-subtle);font-size:12px;border-radius:4px;transition:background .15s}
 .fact-item:last-child{border-bottom:none}
-.fact-item:hover{background:#1c2128}
-.fact-date{color:#6e7681;font-size:11px}
-.fact-text{color:#c9d1d9}
-.empty{color:#8b949e;font-size:12px;padding:16px 20px;font-style:italic;text-align:center;background:#0d1117;border:1px dashed #30363d;border-radius:6px;margin:4px 0;min-height:80px;display:flex;align-items:center;justify-content:center}
-.cmd-hints{display:flex;flex-wrap:wrap;gap:5px;padding:6px 12px;border-bottom:1px solid #21262d;background:#0a0e13}
-.cmd-hint{font-family:monospace;font-size:11px;color:#8b949e;background:#161b22;border:1px solid #30363d;border-radius:3px;padding:2px 7px;cursor:default;user-select:all;transition:border-color .15s,background .15s}
-.cmd-hint:hover{border-color:#58a6ff;color:#c9d1d9;background:#1c2128}
+.fact-item:hover{background:var(--hive-hover)}
+.fact-date{color:var(--hive-text-tertiary);font-size:11px}
+.fact-text{color:var(--hive-text)}
+.empty{color:var(--hive-text-secondary);font-size:12px;padding:16px 20px;font-style:italic;text-align:center;background:var(--hive-bg);border:1px dashed var(--hive-border);border-radius:6px;margin:4px 0;min-height:80px;display:flex;align-items:center;justify-content:center}
+.cmd-hints{display:flex;flex-wrap:wrap;gap:5px;padding:6px 12px;border-bottom:1px solid var(--hive-border-subtle);background:var(--hive-bg)}
+.cmd-hint{font-family:monospace;font-size:11px;color:var(--hive-text-secondary);background:var(--hive-surface);border:1px solid var(--hive-border);border-radius:3px;padding:2px 7px;cursor:default;user-select:all;transition:border-color .15s,background .15s}
+.cmd-hint:hover{border-color:var(--hive-primary);color:var(--hive-text);background:var(--hive-hover)}
 .standup-section{margin-bottom:8px}
-.standup-label{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px}
-.standup-item{font-size:12px;color:#c9d1d9;padding:2px 0}
-.done-item{color:#3fb950}.pr-item{color:#79c0ff}
-.panel-input{display:flex;gap:6px;padding:8px 12px 4px;border-top:1px solid #21262d}
-.panel-input input{flex:1;background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:5px 8px;color:#e6edf3;font-size:12px;outline:none}
-.panel-input input:focus{border-color:#58a6ff}
-.panel-input input.input-error{border-color:#f85149}
-.panel-input button{background:#238636;border:none;border-radius:4px;color:#fff;padding:5px 10px;cursor:pointer;font-size:13px;font-weight:600}
-.panel-input button:hover{background:#2ea043}
-.todo-done-btn{background:#0d1117;border:1px solid #30363d;border-radius:3px;color:#7d8590;padding:2px 7px;cursor:pointer;font-size:11px;margin-left:auto;flex-shrink:0;transition:border-color .15s,color .15s,background .15s}
-.todo-done-btn:hover{border-color:#238636;color:#3fb950;background:#0d2818}
+.standup-label{font-size:11px;color:var(--hive-text-secondary);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px}
+.standup-item{font-size:12px;color:var(--hive-text);padding:2px 0}
+.done-item{color:var(--hive-ok)}.pr-item{color:var(--hive-primary-bright)}
+.panel-input{display:flex;gap:6px;padding:8px 12px 4px;border-top:1px solid var(--hive-border-subtle)}
+.panel-input input{flex:1;background:var(--hive-bg);border:1px solid var(--hive-border);border-radius:4px;padding:5px 8px;color:var(--hive-text-bright);font-size:12px;outline:none}
+.panel-input input:focus{border-color:var(--hive-primary)}
+.panel-input input.input-error{border-color:var(--hive-err)}
+.panel-input button{background:var(--hive-ok-dim);border:none;border-radius:4px;color:#fff;padding:5px 10px;cursor:pointer;font-size:13px;font-weight:600}
+.panel-input button:hover{background:var(--hive-ok)}
+.todo-done-btn{background:var(--hive-bg);border:1px solid var(--hive-border);border-radius:3px;color:var(--hive-text-secondary);padding:2px 7px;cursor:pointer;font-size:11px;margin-left:auto;flex-shrink:0;transition:border-color .15s,color .15s,background .15s}
+.todo-done-btn:hover{border-color:var(--hive-ok-dim);color:var(--hive-ok);background:var(--hive-ok-bg)}
 .review-action-btn{border:1px solid var(--c-border);background:var(--c-surface);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;color:var(--c-fg);margin-right:4px;transition:opacity .15s}
 .review-action-btn:hover{opacity:.8}
 .review-action-btn.accept{color:var(--c-green);border-color:var(--c-green)}
@@ -424,198 +440,198 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .coverage-ring-inner{width:48px;height:48px;border-radius:50%;background:var(--c-bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;color:var(--c-fg)}
 #main-content{transition:opacity .12s}
 #main-content.is-loading{opacity:.45;pointer-events:none}
-#search-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:200;background:rgba(0,0,0,0.6);justify-content:center;align-items:flex-start;padding-top:80px}
-.search-panel{background:#161b22;border:1px solid #30363d;border-radius:8px;width:600px;max-width:92vw;max-height:70vh;overflow-y:auto}
-.search-header{padding:10px 14px;border-bottom:1px solid #30363d;display:flex;justify-content:space-between;align-items:center}
-.search-title{color:#f0f6fc;font-weight:600;font-size:13px}
-.search-close{background:none;border:none;color:#8b949e;font-size:16px;cursor:pointer;padding:0 4px;line-height:1}
-.search-close:hover{color:#c9d1d9}
+#search-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:200;background:rgba(20,18,14,0.7);justify-content:center;align-items:flex-start;padding-top:80px}
+.search-panel{background:var(--hive-surface);border:1px solid var(--hive-border);border-radius:8px;width:600px;max-width:92vw;max-height:70vh;overflow-y:auto}
+.search-header{padding:10px 14px;border-bottom:1px solid var(--hive-border);display:flex;justify-content:space-between;align-items:center}
+.search-title{color:var(--hive-text-bright);font-weight:600;font-size:13px}
+.search-close{background:none;border:none;color:var(--hive-text-secondary);font-size:16px;cursor:pointer;padding:0 4px;line-height:1}
+.search-close:hover{color:var(--hive-text)}
 .search-body{padding:12px 14px}
-.search-result{padding:8px 10px;border-bottom:1px solid #21262d;font-size:12px;border-radius:4px;transition:background .15s}
+.search-result{padding:8px 10px;border-bottom:1px solid var(--hive-border-subtle);font-size:12px;border-radius:4px;transition:background .15s}
 .search-result:last-child{border-bottom:none}
-.search-result:hover{background:#1c2128}
-.search-date{color:#6e7681;font-size:11px;margin-right:8px;font-family:monospace}
-.search-line{color:#c9d1d9;word-break:break-word}
-.sparkline-wrap{padding:4px 12px 0;border-bottom:1px solid #21262d}
+.search-result:hover{background:var(--hive-hover)}
+.search-date{color:var(--hive-text-tertiary);font-size:11px;margin-right:8px;font-family:monospace}
+.search-line{color:var(--hive-text);word-break:break-word}
+.sparkline-wrap{padding:4px 12px 0;border-bottom:1px solid var(--hive-border-subtle)}
 .sparkline{display:flex;align-items:flex-end;gap:2px;height:56px;padding:4px 0 0}
-.spark-bar{flex:1;border-radius:2px 2px 0 0;min-height:2px;background:#30363d;cursor:default;transition:opacity .15s}
+.spark-bar{flex:1;border-radius:2px 2px 0 0;min-height:2px;background:var(--hive-border);cursor:default;transition:opacity .15s}
 .spark-bar:hover{opacity:.65}
-.spark-bar.today{background:#3fb950}
-.spark-bar.weekend{background:hsl(265,30%,42%)}
+.spark-bar.today{background:var(--hive-primary)}
+.spark-bar.weekend{background:hsl(30,25%,38%)}
 .spark-labels{display:flex;gap:2px;padding:2px 0 4px}
-.spark-labels span{flex:1;text-align:center;font-size:9px;color:#6e7681}
-.spark-labels span.weekend{color:#8b7bb5}
+.spark-labels span{flex:1;text-align:center;font-size:9px;color:var(--hive-text-tertiary)}
+.spark-labels span.weekend{color:var(--hive-text-tertiary)}
 .heatmap-wrap{padding:4px 12px 0}
 .heatmap{display:flex;align-items:flex-end;gap:1px;height:32px}
 .heat-bar{flex:1;border-radius:1px 1px 0 0;min-height:2px;cursor:default;transition:opacity .15s}
 .heat-bar:hover{opacity:.65}
-.heat-bar.current{box-shadow:0 0 0 1px #58a6ff}
+.heat-bar.current{box-shadow:0 0 0 1px var(--hive-primary)}
 .heat-labels{display:flex;gap:1px;padding:1px 0 4px}
-.heat-labels span{flex:1;text-align:center;font-size:8px;color:#6e7681}
+.heat-labels span{flex:1;text-align:center;font-size:8px;color:var(--hive-text-tertiary)}
 .summary-stats{display:flex;gap:12px 20px;padding:6px 12px;justify-content:center;flex-wrap:wrap}
 .summary-stat{text-align:center;min-width:56px}
-.summary-stat .stat-value{font-size:18px;font-weight:700;color:#e6edf3;display:block}
-.summary-stat .stat-label{font-size:10px;color:#8b949e;white-space:nowrap}
-.summary-link{display:block;text-align:center;padding:8px 12px;font-size:12px;color:#58a6ff;text-decoration:none;border-top:1px solid #21262d;background:#111820;font-weight:500;letter-spacing:.02em;transition:background .15s,color .15s}
-.summary-link:hover{color:#79c0ff;background:#122131}
-.log-filter{display:flex;gap:4px;padding:5px 12px;border-bottom:1px solid #21262d;flex-wrap:wrap}
-.log-filter-btn{font-size:11px;padding:1px 7px;border-radius:10px;cursor:pointer;border:1px solid #30363d;background:#21262d;color:#8b949e}
-.log-filter-btn.active{border-color:#58a6ff;color:#fff;background:#1a3a5c;font-weight:600}
-.log-filter-btn:hover:not(.active){border-color:#6e7681;color:#c9d1d9}
+.summary-stat .stat-value{font-size:18px;font-weight:700;color:var(--hive-text-bright);display:block}
+.summary-stat .stat-label{font-size:10px;color:var(--hive-text-secondary);white-space:nowrap}
+.summary-link{display:block;text-align:center;padding:8px 12px;font-size:12px;color:var(--hive-primary);text-decoration:none;border-top:1px solid var(--hive-border-subtle);background:var(--hive-primary-bg);font-weight:500;letter-spacing:.02em;transition:background .15s,color .15s}
+.summary-link:hover{color:var(--hive-primary-bright);background:var(--hive-primary-bg)}
+.log-filter{display:flex;gap:4px;padding:5px 12px;border-bottom:1px solid var(--hive-border-subtle);flex-wrap:wrap}
+.log-filter-btn{font-size:11px;padding:1px 7px;border-radius:10px;cursor:pointer;border:1px solid var(--hive-border);background:var(--hive-border-subtle);color:var(--hive-text-secondary)}
+.log-filter-btn.active{border-color:var(--hive-primary);color:#fff;background:var(--hive-primary-bg);font-weight:600}
+.log-filter-btn:hover:not(.active){border-color:var(--hive-text-tertiary);color:var(--hive-text)}
 .log-entry.filtered{display:none}
-.slot-switcher{display:flex;gap:4px;padding:5px 12px;border-bottom:1px solid #21262d}
-.slot-btn{background:#21262d;border:1px solid #30363d;border-radius:3px;color:#8b949e;padding:1px 7px;cursor:pointer;font-size:11px}
-.slot-btn.active{border-color:#58a6ff;color:#58a6ff}
-.slot-btn:hover:not(.active){border-color:#6e7681;color:#c9d1d9}
+.slot-switcher{display:flex;gap:4px;padding:5px 12px;border-bottom:1px solid var(--hive-border-subtle)}
+.slot-btn{background:var(--hive-border-subtle);border:1px solid var(--hive-border);border-radius:3px;color:var(--hive-text-secondary);padding:1px 7px;cursor:pointer;font-size:11px}
+.slot-btn.active{border-color:var(--hive-primary);color:var(--hive-primary)}
+.slot-btn:hover:not(.active){border-color:var(--hive-text-tertiary);color:var(--hive-text)}
 a.know-item{text-decoration:none;color:inherit;display:flex}
-mark{background:#3d2e00;color:#e3b341;padding:0 2px;border-radius:2px}
-.hive-focus{box-shadow:inset 0 0 0 1px #58a6ff,0 0 0 1px rgba(88,166,255,0.25)}
-.todo-item.hive-focus,.log-entry.hive-focus{background:#1c2230;box-shadow:inset 2px 0 0 #58a6ff}
-.accordion.hive-focus>.acc-header{background:#1a2332}
-.note-tile.hive-focus{border-color:#58a6ff;background:#1a2332}
-.setting-row.hive-focus{background:#1c2230;box-shadow:inset 2px 0 0 #58a6ff}
-.session-item.hive-focus{background:#1c2230;box-shadow:inset 2px 0 0 #58a6ff}
-.card.hive-focus{border-color:#58a6ff}
-#g-prefix{position:fixed;bottom:16px;right:16px;background:#161b22;border:1px solid #58a6ff;border-radius:6px;padding:4px 10px;font-family:monospace;font-size:14px;color:#58a6ff;z-index:300;display:none;pointer-events:none}
-#help-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:400;background:rgba(0,0,0,0.7);justify-content:center;align-items:center}
+mark{background:var(--hive-warn-bg);color:var(--hive-warn);padding:0 2px;border-radius:2px}
+.hive-focus{box-shadow:inset 0 0 0 1px var(--hive-primary),0 0 0 1px rgba(212,160,74,0.25)}
+.todo-item.hive-focus,.log-entry.hive-focus{background:var(--hive-primary-bg);box-shadow:inset 2px 0 0 var(--hive-primary)}
+.accordion.hive-focus>.acc-header{background:var(--hive-primary-bg)}
+.note-tile.hive-focus{border-color:var(--hive-primary);background:var(--hive-primary-bg)}
+.setting-row.hive-focus{background:var(--hive-primary-bg);box-shadow:inset 2px 0 0 var(--hive-primary)}
+.session-item.hive-focus{background:var(--hive-primary-bg);box-shadow:inset 2px 0 0 var(--hive-primary)}
+.card.hive-focus{border-color:var(--hive-primary)}
+#g-prefix{position:fixed;bottom:16px;right:16px;background:var(--hive-surface);border:1px solid var(--hive-primary);border-radius:6px;padding:4px 10px;font-family:monospace;font-size:14px;color:var(--hive-primary);z-index:300;display:none;pointer-events:none}
+#help-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:400;background:rgba(20,18,14,0.8);justify-content:center;align-items:center}
 #help-overlay.open{display:flex}
-.help-panel{background:#161b22;border:1px solid #30363d;border-radius:8px;width:640px;max-width:92vw;max-height:80vh;overflow-y:auto;padding:20px 24px}
-.help-panel h2{color:#f0f6fc;font-size:15px;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid #30363d}
-.help-panel h3{color:#c9d1d9;font-size:12px;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em}
+.help-panel{background:var(--hive-surface);border:1px solid var(--hive-border);border-radius:8px;width:640px;max-width:92vw;max-height:80vh;overflow-y:auto;padding:20px 24px}
+.help-panel h2{color:var(--hive-text-bright);font-size:15px;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--hive-border)}
+.help-panel h3{color:var(--hive-text);font-size:12px;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em}
 .help-keys{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:12px}
-.help-key{color:#58a6ff;font-family:monospace;font-weight:600;text-align:right;padding:1px 0}
-.help-desc{color:#8b949e;padding:1px 0}
+.help-key{color:var(--hive-primary);font-family:monospace;font-weight:600;text-align:right;padding:1px 0}
+.help-desc{color:var(--hive-text-secondary);padding:1px 0}
 .search-tier{display:inline-block;padding:0 5px;border-radius:3px;font-size:10px;font-weight:600;margin-right:6px}
-.search-tier-working{background:#1c3552;color:#79c0ff}
-.search-tier-knowledge{background:#0d2e1a;color:#56d364}
-.search-tier-daily{background:#3d2e00;color:#e3b341}
-.search-tier-archive{background:#21262d;color:#8b949e}
-.search-context{font-size:11px;color:#6e7681;padding:2px 0 0 24px}
+.search-tier-working{background:var(--hive-fact-bg);color:var(--hive-fact)}
+.search-tier-knowledge{background:var(--hive-ok-bg);color:var(--hive-ok-bright)}
+.search-tier-daily{background:var(--hive-warn-bg);color:var(--hive-warn)}
+.search-tier-archive{background:var(--hive-border-subtle);color:var(--hive-text-secondary)}
+.search-context{font-size:11px;color:var(--hive-text-tertiary);padding:2px 0 0 24px}
 .search-actions{display:flex;gap:4px;margin-top:4px;padding-left:24px}
-.search-action-btn{font-size:10px;padding:1px 6px;border:1px solid #30363d;border-radius:3px;background:#21262d;color:#8b949e;cursor:pointer}
-.search-action-btn:hover{border-color:#58a6ff;color:#c9d1d9}
-#edit-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:350;background:rgba(0,0,0,0.8)}
+.search-action-btn{font-size:10px;padding:1px 6px;border:1px solid var(--hive-border);border-radius:3px;background:var(--hive-border-subtle);color:var(--hive-text-secondary);cursor:pointer}
+.search-action-btn:hover{border-color:var(--hive-primary);color:var(--hive-text)}
+#edit-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:350;background:rgba(20,18,14,0.85)}
 #edit-overlay.open{display:flex}
-.edit-modal{width:100%;height:100%;display:flex;flex-direction:column;background:#0d1117}
-.edit-toolbar{display:flex;align-items:center;gap:8px;padding:8px 16px;background:#161b22;border-bottom:1px solid #30363d}
-.edit-toolbar-title{color:#f0f6fc;font-weight:600;font-size:13px;flex:1}
-.edit-btn{padding:4px 12px;border-radius:4px;font-size:12px;cursor:pointer;border:1px solid #30363d;background:#21262d;color:#c9d1d9}
-.edit-btn:hover{border-color:#58a6ff;color:#f0f6fc}
-.edit-btn-save{background:#238636;border-color:#238636;color:#fff}
-.edit-btn-save:hover{background:#2ea043}
+.edit-modal{width:100%;height:100%;display:flex;flex-direction:column;background:var(--hive-bg)}
+.edit-toolbar{display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--hive-surface);border-bottom:1px solid var(--hive-border)}
+.edit-toolbar-title{color:var(--hive-text-bright);font-weight:600;font-size:13px;flex:1}
+.edit-btn{padding:4px 12px;border-radius:4px;font-size:12px;cursor:pointer;border:1px solid var(--hive-border);background:var(--hive-border-subtle);color:var(--hive-text)}
+.edit-btn:hover{border-color:var(--hive-primary);color:var(--hive-text-bright)}
+.edit-btn-save{background:var(--hive-ok-dim);border-color:var(--hive-ok-dim);color:#fff}
+.edit-btn-save:hover{background:var(--hive-ok)}
 .edit-panes{display:flex;flex:1;overflow:hidden}
-.edit-panes textarea{flex:1;background:#0d1117;color:#e6edf3;border:none;border-right:1px solid #30363d;padding:12px 16px;font-family:'SF Mono',Monaco,Consolas,monospace;font-size:13px;line-height:1.6;resize:none;outline:none;tab-size:2}
+.edit-panes textarea{flex:1;background:var(--hive-bg);color:var(--hive-text-bright);border:none;border-right:1px solid var(--hive-border);padding:12px 16px;font-family:'JetBrains Mono','SF Mono',Monaco,Consolas,monospace;font-size:13px;line-height:1.6;resize:none;outline:none;tab-size:2}
 .edit-preview{flex:1;padding:12px 16px;overflow-y:auto;font-size:13px}
-.know-cmd{color:#6e7681;font-family:monospace;font-size:11px;margin-left:auto}
-.tab-bar{display:flex;gap:0;border-bottom:1px solid #30363d;background:#161b22}
-.tab-btn{padding:8px 16px;font-size:12px;color:#8b949e;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:color .1s}
-.tab-btn:hover{color:#c9d1d9}
-.tab-btn.active{color:#f0f6fc;border-bottom-color:#58a6ff;font-weight:600}
+.know-cmd{color:var(--hive-text-tertiary);font-family:monospace;font-size:11px;margin-left:auto}
+.tab-bar{display:flex;gap:0;border-bottom:1px solid var(--hive-border);background:var(--hive-surface)}
+.tab-btn{padding:8px 16px;font-size:12px;color:var(--hive-text-secondary);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:color .1s}
+.tab-btn:hover{color:var(--hive-text)}
+.tab-btn.active{color:var(--hive-text-bright);border-bottom-color:var(--hive-primary);font-weight:600}
 .tab-content{display:none}
 .tab-content.active{display:block}
-.setting-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #21262d}
+.setting-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--hive-border-subtle)}
 .setting-row:last-child{border-bottom:none}
-.profile-row{display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid #21262d}
+.profile-row{display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid var(--hive-border-subtle)}
 .profile-row:last-child{border-bottom:none}
 .profile-option{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
-.profile-radio{accent-color:#58a6ff;width:14px;height:14px;cursor:pointer}
-.profile-name{color:#e6edf3;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.profile-radio{accent-color:var(--hive-primary);width:14px;height:14px;cursor:pointer}
+.profile-name{color:var(--hive-text-bright);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
 .profile-actions{margin-left:auto;display:inline-flex;align-items:center;gap:8px;flex-shrink:0;font-size:11px;white-space:nowrap}
-.profile-status{color:#3fb950;text-transform:uppercase;letter-spacing:.08em}
-.profile-meta{color:#6e7681}
+.profile-status{color:var(--hive-ok);text-transform:uppercase;letter-spacing:.08em}
+.profile-meta{color:var(--hive-text-tertiary)}
 .profile-availability{text-transform:uppercase;letter-spacing:.08em}
-.profile-switch{background:none;border:1px solid #30363d;border-radius:999px;color:#8b949e;font-size:10px;padding:2px 8px;cursor:pointer;transition:border-color .15s,background .15s,color .15s;line-height:1}
-.profile-switch:hover{border-color:#58a6ff;color:#58a6ff}
-.profile-delete{background:none;border:1px solid #30363d;border-radius:999px;color:#f85149;font-size:10px;padding:2px 6px;cursor:pointer;transition:border-color .15s,background .15s,color .15s;line-height:1}
-.profile-delete:hover{border-color:#f85149;background:#2f1517;color:#ff7b72}
+.profile-switch{background:none;border:1px solid var(--hive-border);border-radius:999px;color:var(--hive-text-secondary);font-size:10px;padding:2px 8px;cursor:pointer;transition:border-color .15s,background .15s,color .15s;line-height:1}
+.profile-switch:hover{border-color:var(--hive-primary);color:var(--hive-primary)}
+.profile-delete{background:none;border:1px solid var(--hive-border);border-radius:999px;color:var(--hive-err);font-size:10px;padding:2px 6px;cursor:pointer;transition:border-color .15s,background .15s,color .15s;line-height:1}
+.profile-delete:hover{border-color:var(--hive-err);background:var(--hive-err-bg);color:var(--hive-err-bright)}
 .setting-label{font-weight:500;min-width:80px}
-.setting-desc{color:#8b949e;font-size:12px;flex:1}
+.setting-desc{color:var(--hive-text-secondary);font-size:12px;flex:1}
 .setting-toggle{position:relative;width:36px;height:20px;display:inline-block}
 .setting-toggle input{opacity:0;width:0;height:0}
-.setting-toggle .slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#30363d;border-radius:10px;transition:.2s}
-.setting-toggle .slider:before{content:'';position:absolute;height:14px;width:14px;left:3px;bottom:3px;background:#c9d1d9;border-radius:50%;transition:.2s}
-.setting-toggle input:checked+.slider{background:#238636}
+.setting-toggle .slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:var(--hive-border);border-radius:10px;transition:.2s}
+.setting-toggle .slider:before{content:'';position:absolute;height:14px;width:14px;left:3px;bottom:3px;background:var(--hive-text);border-radius:50%;transition:.2s}
+.setting-toggle input:checked+.slider{background:var(--hive-ok-dim)}
 .setting-toggle input:checked+.slider:before{transform:translateX(16px)}
-.setting-select{background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
-.setting-select:focus{border-color:#58a6ff;outline:none}
-.sound-test-btn{background:none;border:1px solid #30363d;border-radius:6px;color:#8b949e;cursor:pointer;padding:2px 8px;font-size:14px;line-height:1;transition:.2s}
-.sound-test-btn:hover{border-color:#58a6ff;color:#58a6ff}
-.sound-test-btn.playing{color:#3fb950;border-color:#3fb950}
-.trend-up{color:#3fb950}.trend-down{color:#f85149}.trend-flat{color:#6e7681}
-.trend-row{display:flex;align-items:center;gap:12px;padding:4px 0;border-bottom:1px solid #21262d;font-size:12px}
+.setting-select{background:var(--hive-surface);color:var(--hive-text);border:1px solid var(--hive-border);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
+.setting-select:focus{border-color:var(--hive-primary);outline:none}
+.sound-test-btn{background:none;border:1px solid var(--hive-border);border-radius:6px;color:var(--hive-text-secondary);cursor:pointer;padding:2px 8px;font-size:14px;line-height:1;transition:.2s}
+.sound-test-btn:hover{border-color:var(--hive-primary);color:var(--hive-primary)}
+.sound-test-btn.playing{color:var(--hive-ok);border-color:var(--hive-ok)}
+.trend-up{color:var(--hive-ok)}.trend-down{color:var(--hive-err)}.trend-flat{color:var(--hive-text-tertiary)}
+.trend-row{display:flex;align-items:center;gap:12px;padding:4px 0;border-bottom:1px solid var(--hive-border-subtle);font-size:12px}
 .trend-row:last-child{border-bottom:none}
-.trend-label{width:90px;flex:none;color:#8b949e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.trend-val{min-width:40px;text-align:right;color:#c9d1d9;font-weight:600}
-.trend-delta{font-size:10px;min-width:44px;text-align:right;color:#6e7681}
-.cmd-bar{display:inline-block;height:12px;border-radius:2px;background:#1a3a5c;vertical-align:middle}
+.trend-label{width:90px;flex:none;color:var(--hive-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trend-val{min-width:40px;text-align:right;color:var(--hive-text);font-weight:600}
+.trend-delta{font-size:10px;min-width:44px;text-align:right;color:var(--hive-text-tertiary)}
+.cmd-bar{display:inline-block;height:12px;border-radius:2px;background:var(--hive-primary-bg);vertical-align:middle}
 .prompt-hist{display:flex;align-items:flex-end;gap:3px;height:80px;padding:8px 12px 0}
-.prompt-hist-bar{flex:1;border-radius:2px 2px 0 0;background:#238636;min-width:18px;position:relative;cursor:default}
-.prompt-hist-bar span{position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:10px;color:#8b949e}
+.prompt-hist-bar{flex:1;border-radius:2px 2px 0 0;background:var(--hive-ok-dim);min-width:18px;position:relative;cursor:default}
+.prompt-hist-bar span{position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--hive-text-secondary)}
 .prompt-hist-labels{display:flex;gap:3px;padding:2px 12px 6px}
-.prompt-hist-labels span{flex:1;text-align:center;font-size:10px;color:#6e7681;min-width:18px}
-.session-list{max-height:180px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#30363d #161b22}
-.session-item{display:flex;gap:8px;align-items:center;padding:4px 10px;border-bottom:1px solid #21262d;font-size:12px}
+.prompt-hist-labels span{flex:1;text-align:center;font-size:10px;color:var(--hive-text-tertiary);min-width:18px}
+.session-list{max-height:180px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--hive-border) var(--hive-surface)}
+.session-item{display:flex;gap:8px;align-items:center;padding:4px 10px;border-bottom:1px solid var(--hive-border-subtle);font-size:12px}
 .session-item:last-child{border-bottom:none}
-.session-time{color:#6e7681;font-family:monospace;min-width:44px;flex-shrink:0}
-.session-prompts{color:#58a6ff;font-weight:600;min-width:20px;text-align:right}
-.session-proj{color:#8b949e;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.session-tools{color:#6e7681;font-size:11px;flex-shrink:0}
-.session-live{display:inline-block;font-size:10px;font-weight:700;color:#3fb950;background:#0d2e1a;padding:1px 5px;border-radius:3px;margin-right:4px;letter-spacing:.5px;animation:pulse-live 2s ease-in-out infinite}
+.session-time{color:var(--hive-text-tertiary);font-family:monospace;min-width:44px;flex-shrink:0}
+.session-prompts{color:var(--hive-primary);font-weight:600;min-width:20px;text-align:right}
+.session-proj{color:var(--hive-text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.session-tools{color:var(--hive-text-tertiary);font-size:11px;flex-shrink:0}
+.session-live{display:inline-block;font-size:10px;font-weight:700;color:var(--hive-ok);background:var(--hive-ok-bg);padding:1px 5px;border-radius:3px;margin-right:4px;letter-spacing:.5px;animation:pulse-live 2s ease-in-out infinite}
 @keyframes pulse-live{0%,100%{opacity:1}50%{opacity:.6}}
-.session-live-item{border-left:2px solid #3fb950}
-.session-duration{color:#3fb950;font-size:11px;font-family:monospace;flex-shrink:0}
+.session-live-item{border-left:2px solid var(--hive-ok)}
+.session-duration{color:var(--hive-ok);font-size:11px;font-family:monospace;flex-shrink:0}
 .session-item.session-filtered{display:none}
 .session-mode{display:inline-block;font-size:9px;font-weight:700;padding:1px 4px;border-radius:2px;margin-right:3px;letter-spacing:.4px;flex-shrink:0}
-.session-mode-plan{color:#f0a500;background:#2d1f00}
-.session-mode-auto{color:#20b2aa;background:#0d2e2e}
-.session-mode-bypass{color:#f85149;background:#2d0f0f}
+.session-mode-plan{color:var(--hive-warn);background:var(--hive-warn-bg)}
+.session-mode-auto{color:var(--hive-info);background:var(--hive-info-bg)}
+.session-mode-bypass{color:var(--hive-err);background:var(--hive-err-bg)}
 .source-row{display:flex;align-items:center;gap:8px;padding:3px 0}
-.source-label{min-width:100px;text-align:right;color:#8b949e;font-size:12px}
-.source-bar-track{flex:1;background:#161b22;border-radius:2px;height:14px;overflow:hidden}
-.source-bar-fill{height:100%;border-radius:2px;background:#1a3a5c}
-.source-pct{min-width:35px;text-align:right;font-size:12px;color:#8b949e}
+.source-label{min-width:100px;text-align:right;color:var(--hive-text-secondary);font-size:12px}
+.source-bar-track{flex:1;background:var(--hive-surface);border-radius:2px;height:14px;overflow:hidden}
+.source-bar-fill{height:100%;border-radius:2px;background:var(--hive-primary-bg)}
+.source-pct{min-width:35px;text-align:right;font-size:12px;color:var(--hive-text-secondary)}
 
-.card.brain-card{border-color:#262b33}
-.card.brain-card.brain-card-emphasis{border-color:#3fb950}
+.card.brain-card{border-color:var(--hive-border-subtle)}
+.card.brain-card.brain-card-emphasis{border-color:var(--hive-ok)}
 .card.brain-card .card-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.card.brain-card .card-body{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#c9d1d9}
+.card.brain-card .card-body{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--hive-text)}
 .brain-line{display:flex;align-items:center;gap:8px;justify-content:space-between}
-.brain-line .brain-text{flex:1;color:#c9d1d9}
-.brain-line .brain-detail{color:#6e7681;font-size:11px;white-space:nowrap}
-.brain-chip{display:inline-flex;align-items:center;justify-content:center;padding:1px 5px;border-radius:4px;font-size:10px;font-weight:500;background:#21262d;color:#8b949e;border:1px solid #30363d;letter-spacing:.01em;white-space:nowrap}
-.brain-chip-ok{background:#122d4a;color:#58a6ff;border-color:#1f4882}
-.brain-chip-warn{background:#2a1212;color:#f85149;border-color:#6b1a1a}
-.brain-chip-dim{background:#1c2128;color:#6e7681;border-color:#2d333b}
-.brain-meta{font-size:11px;color:#8b949e}
-.brain-meta-warn{color:#fdaeb7}
-.brain-empty{font-size:12px;color:#8b949e;margin:6px 0}
-.brain-hint{font-size:11px;color:#58a6ff;margin-top:4px}
-.platform-row{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px;color:#c9d1d9}
+.brain-line .brain-text{flex:1;color:var(--hive-text)}
+.brain-line .brain-detail{color:var(--hive-text-tertiary);font-size:11px;white-space:nowrap}
+.brain-chip{display:inline-flex;align-items:center;justify-content:center;padding:1px 5px;border-radius:4px;font-size:10px;font-weight:500;background:var(--hive-surface-2);color:var(--hive-text-secondary);border:1px solid var(--hive-border);letter-spacing:.01em;white-space:nowrap}
+.brain-chip-ok{background:var(--hive-info-bg);color:var(--hive-info);border-color:var(--hive-info)}
+.brain-chip-warn{background:var(--hive-err-bg);color:var(--hive-err);border-color:var(--hive-err-dim)}
+.brain-chip-dim{background:var(--hive-surface);color:var(--hive-text-tertiary);border-color:var(--hive-border-subtle)}
+.brain-meta{font-size:11px;color:var(--hive-text-secondary)}
+.brain-meta-warn{color:var(--hive-err-bright)}
+.brain-empty{font-size:12px;color:var(--hive-text-secondary);margin:6px 0}
+.brain-hint{font-size:11px;color:var(--hive-primary);margin-top:4px}
+.platform-row{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px;color:var(--hive-text)}
 .platform-title{font-weight:600;flex:1}
-.platform-meta{color:#8b949e;font-size:11px}
-.wander-card{border:1px solid #30363d;border-radius:6px;padding:12px;margin-bottom:8px}
+.platform-meta{color:var(--hive-text-secondary);font-size:11px}
+.wander-card{border:1px solid var(--hive-border);border-radius:6px;padding:12px;margin-bottom:8px}
 .wander-card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px}
-.wander-title{font-weight:600;color:#c9d1d9;font-size:13px}
-.wander-meta{display:flex;gap:6px;align-items:center;flex-shrink:0;font-size:11px;color:#8b949e}
-.wander-thinking{font-size:12px;color:#484f58;font-style:italic;margin-bottom:8px}
-.wander-connections{font-size:12px;color:#8b949e;margin:0 0 8px 0;padding-left:16px}
-.wander-hypothesis{background:#1a2332;border-left:3px solid #58a6ff;padding:6px 10px;border-radius:0 4px 4px 0;font-size:13px;color:#c9d1d9;margin-bottom:6px}
-.wander-question{font-size:12px;color:#8b949e;font-style:italic}
+.wander-title{font-weight:600;color:var(--hive-text);font-size:13px}
+.wander-meta{display:flex;gap:6px;align-items:center;flex-shrink:0;font-size:11px;color:var(--hive-text-secondary)}
+.wander-thinking{font-size:12px;color:var(--hive-text-dim);font-style:italic;margin-bottom:8px}
+.wander-connections{font-size:12px;color:var(--hive-text-secondary);margin:0 0 8px 0;padding-left:16px}
+.wander-hypothesis{background:var(--hive-primary-bg);border-left:3px solid var(--hive-primary);padding:6px 10px;border-radius:0 4px 4px 0;font-size:13px;color:var(--hive-text);margin-bottom:6px}
+.wander-question{font-size:12px;color:var(--hive-text-secondary);font-style:italic}
 .badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:500}
-.badge-success{background:#0d2b1a;color:#3fb950}
-.badge-warn{background:#2a1f0a;color:#e3b341}
-.badge-error{background:#2a0d0d;color:#f85149}
-.badge-info{background:#1a2e44;color:#58a6ff}
-.badge-secondary{background:#21262d;color:#8b949e}
-.badge-user-queued{background:#1a3a2a;color:#3fb950}
-.badge-cross-pollination{background:#1a2632;color:#58a6ff}
-.badge-recurring-topic{background:#2a2a1a;color:#e3b341}
-.badge-stale-todo{background:#2a1a1a;color:#f85149}
-.badge-pending{background:#2a1f0a;color:#d29922}
-.chip{display:inline-flex;align-items:center;gap:4px;background:#21262d;border:1px solid #30363d;border-radius:999px;padding:2px 8px;font-size:11px;color:#c9d1d9;margin:2px}
-.chip-num{color:#484f58;font-size:10px;margin-right:2px}
-.chip-remove{border:none;background:none;color:#484f58;cursor:pointer;padding:0 2px;font-size:12px;line-height:1}
-.chip-remove:hover{color:#f85149}
+.badge-success{background:var(--hive-ok-bg);color:var(--hive-ok)}
+.badge-warn{background:var(--hive-warn-bg);color:var(--hive-warn)}
+.badge-error{background:var(--hive-err-bg);color:var(--hive-err)}
+.badge-info{background:var(--hive-info-bg);color:var(--hive-info)}
+.badge-secondary{background:var(--hive-surface-2);color:var(--hive-text-secondary)}
+.badge-user-queued{background:var(--hive-ok-bg);color:var(--hive-ok)}
+.badge-cross-pollination{background:var(--hive-info-bg);color:var(--hive-info)}
+.badge-recurring-topic{background:var(--hive-warn-bg);color:var(--hive-warn)}
+.badge-stale-todo{background:var(--hive-err-bg);color:var(--hive-err)}
+.badge-pending{background:var(--hive-warn-bg);color:var(--hive-warn-dim)}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--hive-surface-2);border:1px solid var(--hive-border);border-radius:999px;padding:2px 8px;font-size:11px;color:var(--hive-text);margin:2px}
+.chip-num{color:var(--hive-text-dim);font-size:10px;margin-right:2px}
+.chip-remove{border:none;background:none;color:var(--hive-text-dim);cursor:pointer;padding:0 2px;font-size:12px;line-height:1}
+.chip-remove:hover{color:var(--hive-err)}
 .chip-row{display:flex;flex-wrap:wrap;gap:2px}
 """
 _JS = """
@@ -806,7 +822,7 @@ _JS = """
     var el=document.getElementById('refresh-ts');
     if(!el)return;
     var age=Math.floor((Date.now()-lastSuccess)/1000);
-    el.style.color='#6e7681';
+    el.style.color='var(--hive-text-tertiary)';
     el.textContent=age<60?'updated '+age+'s ago':'updated '+Math.floor(age/60)+'m ago';
   }
 
@@ -929,7 +945,7 @@ _JS = """
       }).catch(function(){
         if(mc)mc.classList.remove('is-loading');
         var el=document.getElementById('refresh-ts');
-        if(el){el.style.color='#f85149';el.textContent='\u25cf offline';}
+        if(el){el.style.color='var(--hive-err)';el.textContent='\u25cf offline';}
       });
   }
   // --- SSE live updates ---
@@ -961,12 +977,12 @@ _JS = """
     });
     _sse.onerror=function(){
       var el=document.getElementById('refresh-ts');
-      if(el){el.style.color='#e3b341';el.textContent='reconnecting\u2026';}
+      if(el){el.style.color='var(--hive-warn)';el.textContent='reconnecting\u2026';}
     };
     _sse.onopen=function(){
       lastSuccess=Date.now();
       var el=document.getElementById('refresh-ts');
-      if(el){el.style.color='#6e7681';el.textContent='live';}
+      if(el){el.style.color='var(--hive-text-tertiary)';el.textContent='live';}
     };
   }
   _connectSSE();
@@ -1978,7 +1994,7 @@ def _render_soul_panel(data: dict) -> str:
     if pending_count:
         pending_hint = (
             f'<div class="kpi-row" style="margin-top:6px">'
-            f'<span style="color:#f0883e">🐝 {pending_count} '
+            f'<span style="color:var(--hive-primary)">🐝 {pending_count} '
             f"improvement{'s' if pending_count != 1 else ''} pending</span>"
             f'<code style="margin-left:8px">hive improve review</code>'
             f"</div>"
@@ -2254,12 +2270,12 @@ def _render_status_panel(data: dict) -> str:
             f'<div class="gauge-row" style="margin-top:6px">'
             f'<span class="gauge-label" style="width:60px">freshness</span>'
             f'<div class="gauge-track">'
-            f'<div class="gauge-fill" style="width:{fp_clamped:.0f}%;background:#3fb950"></div></div>'
+            f'<div class="gauge-fill" style="width:{fp_clamped:.0f}%;background:var(--hive-ok)"></div></div>'
             f'<span class="gauge-pct">{fresh_pct:.0f}%</span>'
             f"</div>"
-            f'<div style="font-size:11px;color:#8b949e;margin-top:2px">'
-            f'<span style="color:#58a6ff">{capture_recall:.0f}%</span> recall'
-            f' &middot; <a href="/stats" style="color:#484f58;text-decoration:none">details &rarr;</a></div>'
+            f'<div style="font-size:11px;color:var(--hive-text-secondary);margin-top:2px">'
+            f'<span style="color:var(--hive-primary)">{capture_recall:.0f}%</span> recall'
+            f' &middot; <a href="/stats" style="color:var(--hive-text-dim);text-decoration:none">details &rarr;</a></div>'
         )
 
     # Stale facts (inline)
@@ -2282,7 +2298,7 @@ def _render_status_panel(data: dict) -> str:
     if pending_rules_count > 0:
         s = "s" if pending_rules_count != 1 else ""
         pending_html = (
-            f'<div style="margin-top:4px;padding:3px 8px;border-radius:4px;background:#e3b34122;border:1px solid #e3b34144;font-size:11px;color:#e3b341">'
+            f'<div style="margin-top:4px;padding:3px 8px;border-radius:4px;background:var(--hive-warn-bg);border:1px solid rgba(201,160,48,0.27);font-size:11px;color:var(--hive-warn)">'
             f"{pending_rules_count} pending rule{s} &rarr; <code>hive rule review</code></div>"
         )
 
@@ -2332,7 +2348,7 @@ def _render_status_brief_panel(data: dict) -> str:
     activity_today = data.get("activity_today", 0)
     fresh_pct = data.get("fresh_pct", 0)
     capture_recall = data.get("capture_recall", 0)
-    stale_str = f' <span style="color:#e3b341">({stale} stale)</span>' if stale > 0 else ""
+    stale_str = f' <span style="color:var(--hive-warn)">({stale} stale)</span>' if stale > 0 else ""
     activity_str = (
         f" &nbsp;|&nbsp; <span>{activity_today}</span> commands today" if activity_today > 0 else ""
     )
@@ -2647,7 +2663,7 @@ def _render_knowledge_panel(data: dict) -> str:
         else:
             body = ""
             toggle = "&#8212;"
-            toggle_style = ' style="color:#30363d"'
+            toggle_style = ' style="color:var(--hive-border)"'
         rows += (
             f'<div class="accordion" tabindex="0" role="button" aria-expanded="false" aria-label="{_e(name)} skill">'
             f'<div class="acc-header">'
@@ -2849,7 +2865,7 @@ def _render_hourly_heatmap(hours: dict[str, int]) -> str:
         ratio = v / mx if v > 0 else 0
         sat = 30 + round(ratio * 50)
         lum = 20 + round(ratio * 25)
-        bg = f"hsl(185,{sat}%,{lum}%)" if v > 0 else "#161b22"
+        bg = f"hsl(40,{sat}%,{lum}%)" if v > 0 else "var(--hive-surface)"
         ht = max(2, round(ratio * 28))
         cur_cls = " current" if hk == current_hour else ""
         bars += f'<div class="heat-bar{cur_cls}" style="height:{ht}px;background:{bg}" title="{hk}:00 — {v} events"></div>'
@@ -2920,9 +2936,9 @@ def _render_stats_panel(data: dict) -> str:
                     ratio = count / max_c
                     sat = 50 + round(ratio * 30)
                     lum = 25 + round(ratio * 20)
-                    extra_bg = f";background:hsl(215,{sat}%,{lum}%)"
+                    extra_bg = f";background:hsl(40,{sat}%,{lum}%)"
                 else:
-                    extra_bg = ";background:#161b22"
+                    extra_bg = ";background:var(--hive-surface)"
 
             # Enrich tooltip with top commands for that day
             spark_title = f"{_e(label)}: {count} cmds"
@@ -2964,7 +2980,7 @@ def _render_stats_panel(data: dict) -> str:
     quality_html = ""
     if insights or decisions or corrections or todos_done or standups:
         quality_html = (
-            f'<div style="border-top:1px solid #21262d;margin-top:10px;padding-top:8px">'
+            f'<div style="border-top:1px solid var(--hive-border-subtle);margin-top:10px;padding-top:8px">'
             f'<div class="stat-row">'
             f'<div class="stat-item"><span class="stat-value">{insights}</span><span class="stat-label">insights</span></div>'
             f'<div class="stat-item"><span class="stat-value">{decisions}</span><span class="stat-label">decisions</span></div>'
@@ -3054,12 +3070,12 @@ def _render_stats_commands_panel(data: dict) -> str:
             w = week_map.get(name, 0)
             bar_w = max(2, round(total / max_count * 100))
             today_badge = (
-                f'<span style="font-size:10px;color:#8b949e;white-space:nowrap"> · {t} today</span>'
+                f'<span style="font-size:10px;color:var(--hive-text-secondary);white-space:nowrap"> · {t} today</span>'
                 if t
                 else ""
             )
             week_badge = (
-                f'<span style="font-size:10px;color:#484f58;white-space:nowrap"> · {w} wk</span>'
+                f'<span style="font-size:10px;color:var(--hive-text-dim);white-space:nowrap"> · {w} wk</span>'
                 if w and not t
                 else ""
             )
@@ -3067,11 +3083,11 @@ def _render_stats_commands_panel(data: dict) -> str:
                 f'<div style="display:flex;align-items:center;gap:8px;margin:2px 0"'
                 f' title="{_e(name)}: {total} all-time, {t} today, {w} this week">'
                 f'<span style="min-width:80px;max-width:80px;overflow:hidden;text-overflow:ellipsis'
-                f';white-space:nowrap;color:#c9d1d9;font-size:12px">{_e(name)}</span>'
-                f'<div style="flex:1;background:#161b22;border-radius:2px;height:12px">'
-                f'<div style="width:{bar_w}%;background:#1f6feb;border-radius:2px;height:100%"></div>'
+                f';white-space:nowrap;color:var(--hive-text);font-size:12px">{_e(name)}</span>'
+                f'<div style="flex:1;background:var(--hive-surface);border-radius:2px;height:12px">'
+                f'<div style="width:{bar_w}%;background:var(--hive-primary);border-radius:2px;height:100%"></div>'
                 f"</div>"
-                f'<span style="min-width:34px;text-align:right;font-size:12px;color:#58a6ff'
+                f'<span style="min-width:34px;text-align:right;font-size:12px;color:var(--hive-primary)'
                 f';white-space:nowrap">{total}</span>'
                 f"{today_badge}{week_badge}"
                 f"</div>"
@@ -3091,27 +3107,27 @@ def _render_stats_commands_panel(data: dict) -> str:
             bar_w = max(2, round(count / max_tool * 100))
             trend_str = tool_trends.get(tool, "")
             if trend_str:
-                trend_color = "#3fb950" if "\u25b2" in trend_str else "#f85149"
+                trend_color = "var(--hive-ok)" if "\u25b2" in trend_str else "var(--hive-err)"
                 trend_inner = (
                     f'<span style="font-size:11px;color:{trend_color}">{_e(trend_str)}</span>'
                 )
             else:
-                trend_inner = '<span style="font-size:11px;color:#484f58">\u25ac</span>'
+                trend_inner = '<span style="font-size:11px;color:var(--hive-text-dim)">\u25ac</span>'
             trend_html = f'<span style="min-width:42px;display:inline-block;text-align:right">{trend_inner}</span>'
             tool_title = f"{_e(tool)}: {count} uses ({pct}% of total)"
             if trend_str:
                 tool_title += f", {_e(trend_str)} vs last week"
             tool_rows += (
                 f'<div style="display:flex;align-items:center;gap:8px;margin:2px 0" title="{tool_title}">'
-                f'<span style="min-width:160px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#8b949e;font-size:12px">{_e(tool)}</span>'
+                f'<span style="min-width:160px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:var(--hive-text-secondary);font-size:12px">{_e(tool)}</span>'
                 f"{trend_html}"
-                f'<div style="flex:1;background:#161b22;border-radius:2px;height:14px">'
-                f'<div style="width:{bar_w}%;background:#238636;border-radius:2px;height:100%"></div>'
+                f'<div style="flex:1;background:var(--hive-surface);border-radius:2px;height:14px">'
+                f'<div style="width:{bar_w}%;background:var(--hive-ok-dim);border-radius:2px;height:100%"></div>'
                 f"</div>"
-                f'<span style="min-width:40px;text-align:right;font-size:12px;color:#8b949e;white-space:nowrap">{pct}%</span>'
+                f'<span style="min-width:40px;text-align:right;font-size:12px;color:var(--hive-text-secondary);white-space:nowrap">{pct}%</span>'
                 f"</div>"
             )
-        tools_html = f'<div style="margin-top:12px"><div style="font-size:11px;color:#484f58;margin-bottom:4px">Tool usage (from sessions)</div>{tool_rows}</div>'
+        tools_html = f'<div style="margin-top:12px"><div style="font-size:11px;color:var(--hive-text-dim);margin-bottom:4px">Tool usage (from sessions)</div>{tool_rows}</div>'
 
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="What You Use">'
@@ -3395,8 +3411,8 @@ def _render_stats_summary_panel(data: dict) -> str:
         last_label = labels[-1] if labels else ""
         spark_html = (
             f'<div style="margin:8px 0 4px">'
-            f'<div style="font-family:monospace;font-size:14px;letter-spacing:1px;color:#58a6ff">{chars}</div>'
-            f'<div style="display:flex;justify-content:space-between;font-size:9px;color:#484f58">'
+            f'<div style="font-family:monospace;font-size:14px;letter-spacing:1px;color:var(--hive-primary)">{chars}</div>'
+            f'<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--hive-text-dim)">'
             f"<span>{first_label}</span><span>{last_label}</span></div></div>"
         )
 
@@ -3473,13 +3489,13 @@ def _render_knowledge_tabbed_panel(data: dict) -> str:
         mem_badge = f" ({total_facts})"
         # Freshness header for memory tab
         memory_health_header = (
-            f'<div style="padding:8px 12px;border-bottom:1px solid #21262d">'
-            f'<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:#21262d;margin-bottom:4px">'
-            f'<div style="width:{fp:.0f}%;background:#3fb950"></div>'
-            f'<div style="width:{ap:.0f}%;background:#e3b341"></div>'
-            f'<div style="width:{sp:.0f}%;background:#f85149"></div>'
+            f'<div style="padding:8px 12px;border-bottom:1px solid var(--hive-border-subtle)">'
+            f'<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--hive-border-subtle);margin-bottom:4px">'
+            f'<div style="width:{fp:.0f}%;background:var(--hive-ok)"></div>'
+            f'<div style="width:{ap:.0f}%;background:var(--hive-warn)"></div>'
+            f'<div style="width:{sp:.0f}%;background:var(--hive-err)"></div>'
             f"</div>"
-            f'<div style="font-size:11px;color:#8b949e">'
+            f'<div style="font-size:11px;color:var(--hive-text-secondary)">'
             f"{fresh_count} fresh &middot; {aging_count} aging &middot; {stale_count} stale"
             f"</div></div>"
         )
@@ -3652,11 +3668,11 @@ def _render_sessions_panel(data: dict) -> str:
         git_commits_wk = data.get("git_commits_week", 0)
         if lines_add or lines_rm or git_commits_wk:
             hero_section = (
-                f'<div style="text-align:center;padding:6px 0 8px;border-bottom:1px solid #21262d;margin-bottom:8px">'
+                f'<div style="text-align:center;padding:6px 0 8px;border-bottom:1px solid var(--hive-border-subtle);margin-bottom:8px">'
                 f'<div class="kpi-label" style="letter-spacing:1px;margin-bottom:2px">CODE VELOCITY</div>'
-                f'<span class="metric-hero" style="font-size:28px;color:#3fb950">+{lines_add:,}</span>'
-                f'<span class="metric-hero" style="font-size:28px;color:#6e7681">/</span>'
-                f'<span class="metric-hero" style="font-size:28px;color:#f85149">-{lines_rm:,}</span>'
+                f'<span class="metric-hero" style="font-size:28px;color:var(--hive-ok)">+{lines_add:,}</span>'
+                f'<span class="metric-hero" style="font-size:28px;color:var(--hive-text-tertiary)">/</span>'
+                f'<span class="metric-hero" style="font-size:28px;color:var(--hive-err)">-{lines_rm:,}</span>'
                 f'<span class="metric-hero-unit"> lines</span>'
                 f'<div class="kpi-row" style="margin-top:6px">'
                 f'<div class="kpi-item"><div class="kpi-value">{git_commits_wk}</div><div class="kpi-label">commits</div></div>'
@@ -3693,7 +3709,7 @@ def _render_sessions_panel(data: dict) -> str:
             labels += f"<span>{_e(label)}</span>"
         hist_label = "Messages per session" if use_cc else "Prompts per session"
         hist_html = (
-            f'<div style="font-size:11px;color:#484f58;padding:6px 12px 0">{hist_label}</div>'
+            f'<div style="font-size:11px;color:var(--hive-text-dim);padding:6px 12px 0">{hist_label}</div>'
             f'<div class="prompt-hist">{bars}</div>'
             f'<div class="prompt-hist-labels">{labels}</div>'
         )
@@ -4018,11 +4034,11 @@ def _render_trends_panel(data: dict) -> str:
         # Gauge color: % KPIs use health-based color; others use trend direction
         if suffix == "%":
             gauge_color = (
-                "#3fb950" if kpi["this"] >= 80 else "#e3b341" if kpi["this"] >= 50 else "#f85149"
+                "var(--hive-ok)" if kpi["this"] >= 80 else "var(--hive-warn)" if kpi["this"] >= 50 else "var(--hive-err)"
             )
         else:
-            gauge_color = {"up": "#3fb950", "down": "#f85149", "flat": "#484f58"}.get(
-                kpi["trend"], "#484f58"
+            gauge_color = {"up": "var(--hive-ok)", "down": "var(--hive-err)", "flat": "var(--hive-text-dim)"}.get(
+                kpi["trend"], "var(--hive-text-dim)"
             )
         gauge_html = (
             f'<div class="gauge-track" style="flex:1;margin:0 6px">'
@@ -4061,11 +4077,11 @@ def _render_trends_panel(data: dict) -> str:
             src_rows += (
                 f'<div class="gauge-row">'
                 f'<span class="gauge-label">{_e(src)}</span>'
-                f'<div class="gauge-track"><div class="gauge-fill" style="width:{bar_w}%;background:#58a6ff"></div></div>'
+                f'<div class="gauge-track"><div class="gauge-fill" style="width:{bar_w}%;background:var(--hive-primary)"></div></div>'
                 f'<span class="gauge-pct">{pct}%</span>'
                 f"</div>"
             )
-        sources_html = f'<div style="margin-top:10px"><div style="font-size:11px;color:#484f58;margin-bottom:4px">Sources</div>{src_rows}</div>'
+        sources_html = f'<div style="margin-top:10px"><div style="font-size:11px;color:var(--hive-text-dim);margin-bottom:4px">Sources</div>{src_rows}</div>'
 
     return (
         f'<div class="card" tabindex="0" role="region" aria-label="Trends">'
@@ -4384,7 +4400,7 @@ def _render_settings_panel(data: dict) -> str:
     if paused:
         state_badge = '<span class="brain-chip brain-chip-warn">🔒 Kill Switch ON</span>'
     elif force_cli_on:
-        state_badge = '<span class="brain-chip" style="background:#0a2030;color:#22d3ee;border-color:#0e4f6a">🔐 CLI-Only ON</span>'
+        state_badge = '<span class="brain-chip" style="background:var(--hive-info-bg);color:var(--hive-info);border-color:var(--hive-info)">🔐 CLI-Only ON</span>'
     else:
         state_badge = '<span class="brain-chip brain-chip-ok">🔓 Off</span>'
 
@@ -4398,7 +4414,7 @@ def _render_settings_panel(data: dict) -> str:
         f" &nbsp;·&nbsp; "
         f'<a href="/privacy-off" class="action-link">Disable</a>'
         f"</div>"
-        f'<div class="brain-meta" style="color:#6e7681;font-size:11px;margin-top:.25rem">'
+        f'<div class="brain-meta" style="color:var(--hive-text-tertiary);font-size:11px;margin-top:.25rem">'
         f"Kill switch blocks all LLM calls. CLI-only forces claude&nbsp;-p, ignores API keys."
         f"</div>"
     )
@@ -4606,7 +4622,7 @@ def _render_brain_panel(data: dict) -> str:
                 '<div class="brain-line" style="flex-direction:column;align-items:flex-start;gap:2px">'
                 f'<span><span class="badge badge-info">{_e(date_disp)}</span>'
                 f' <span class="brain-chip">{_e(seed_label)}</span></span>'
-                f'<span class="brain-text" style="color:#8b949e;font-size:11px">{_e(hyp)}</span>'
+                f'<span class="brain-text" style="color:var(--hive-text-secondary);font-size:11px">{_e(hyp)}</span>'
                 "</div>"
             )
         wander_body = "".join(wander_rows)
@@ -4720,12 +4736,12 @@ def _render_pulse_panel(data: dict) -> str:
     # Component breakdown (expandable, uses gauge-row classes)
     components = pulse.get("components", {})
     comp_defs = [
-        ("freshness", "Freshness", "#3fb950", "Memory freshness (25% weight)"),
-        ("recall", "Recall", "#58a6ff", "Capture-recall ratio (20% weight)"),
-        ("depth", "Depth", "#a371f7", "Session depth quality (20% weight)"),
-        ("todo_rate", "TODO", "#e3b341", "TODO completion rate (15% weight)"),
-        ("verify", "Verify", "#d2a8ff", "Verification cadence (10% weight)"),
-        ("streak", "Streak", "#39d353", "Usage streak (10% weight)"),
+        ("freshness", "Freshness", "var(--hive-ok)", "Memory freshness (25% weight)"),
+        ("recall", "Recall", "var(--hive-primary)", "Capture-recall ratio (20% weight)"),
+        ("depth", "Depth", "var(--hive-decision)", "Session depth quality (20% weight)"),
+        ("todo_rate", "TODO", "var(--hive-warn)", "TODO completion rate (15% weight)"),
+        ("verify", "Verify", "var(--hive-decision)", "Verification cadence (10% weight)"),
+        ("streak", "Streak", "var(--hive-ok-bright)", "Usage streak (10% weight)"),
     ]
     comp_bars = ""
     for key, label, color, tooltip in comp_defs:
@@ -4741,8 +4757,8 @@ def _render_pulse_panel(data: dict) -> str:
         )
     comp_details = (
         f'<details style="margin-top:10px;text-align:left">'
-        f'<summary style="font-size:11px;color:#484f58;cursor:pointer;text-align:center;list-style:none">'
-        f'<span style="border-bottom:1px dotted #484f58">Component Breakdown</span></summary>'
+        f'<summary style="font-size:11px;color:var(--hive-text-dim);cursor:pointer;text-align:center;list-style:none">'
+        f'<span style="border-bottom:1px dotted var(--hive-text-dim)">Component Breakdown</span></summary>'
         f'<div style="margin-top:8px;padding:0 16px">{comp_bars}</div>'
         f"</details>"
     )
@@ -4869,7 +4885,7 @@ def _render_pipeline_panel(data: dict) -> str:
     if aging > 0:
         detail_parts.append(f"{aging} aging")
     if stale > 0:
-        detail_parts.append(f'<span style="color:#f85149">{stale} stale</span>')
+        detail_parts.append(f'<span style="color:var(--hive-err)">{stale} stale</span>')
     detail_str = ", ".join(detail_parts)
 
     # Tier 1: Hero metric (pulse score)
@@ -4916,18 +4932,18 @@ def _render_pipeline_panel(data: dict) -> str:
 
     # Build gauges for each transparent metric
     gauges_html = '<div style="margin-bottom:8px">'
-    gauges_html += _gauge_bar("memory freshness", fresh_pct, "#3fb950")
-    gauges_html += _gauge_bar("recall rate", capture_recall, "#58a6ff")
-    gauges_html += _gauge_bar("fact survival", survival, "#a371f7")
+    gauges_html += _gauge_bar("memory freshness", fresh_pct, "var(--hive-ok)")
+    gauges_html += _gauge_bar("recall rate", capture_recall, "var(--hive-primary)")
+    gauges_html += _gauge_bar("fact survival", survival, "var(--hive-decision)")
     todo_rate = components.get("todo_rate", 0)
     streak_score = components.get("streak", 0)
     if todo_rate > 0:
-        gauges_html += _gauge_bar("todo completion", todo_rate, "#e3b341")
+        gauges_html += _gauge_bar("todo completion", todo_rate, "var(--hive-warn)")
     if streak_score > 0:
-        gauges_html += _gauge_bar("usage streak", streak_score, "#39d353")
+        gauges_html += _gauge_bar("usage streak", streak_score, "var(--hive-ok-bright)")
     if corrected_wk > 0:
         gauges_html += (
-            f'<div style="font-size:10px;color:#484f58;text-align:right;margin-top:2px">'
+            f'<div style="font-size:10px;color:var(--hive-text-dim);text-align:right;margin-top:2px">'
             f"{corrected_wk} corrected this week</div>"
         )
     gauges_html += "</div>"
@@ -4935,11 +4951,11 @@ def _render_pipeline_panel(data: dict) -> str:
     # Capture mix pills (compact)
     capture_counts = capture.get("counts", {})
     cat_colors = {
-        "FACT": "#3fb950",
-        "DECISION": "#a371f7",
-        "INSIGHT": "#58a6ff",
-        "TODO": "#e3b341",
-        "DONE": "#484f58",
+        "FACT": "var(--hive-ok)",
+        "DECISION": "var(--hive-decision)",
+        "INSIGHT": "var(--hive-primary)",
+        "TODO": "var(--hive-warn)",
+        "DONE": "var(--hive-text-dim)",
     }
     pills_html = ""
     cap_total = capture.get("total", 0)
@@ -4948,7 +4964,7 @@ def _render_pipeline_panel(data: dict) -> str:
         for cat_name in ("FACT", "DECISION", "INSIGHT", "TODO", "DONE"):
             c = capture_counts.get(cat_name, 0)
             if c > 0:
-                color = cat_colors.get(cat_name, "#484f58")
+                color = cat_colors.get(cat_name, "var(--hive-text-dim)")
                 pills += (
                     f'<span style="display:inline-block;padding:1px 6px;border-radius:8px;'
                     f"font-size:10px;margin-right:4px;background:{color}22;color:{color};border:1px solid {color}33"
@@ -4999,7 +5015,7 @@ def _render_pipeline_panel(data: dict) -> str:
                 f"</div>"
             )
         actions_html = (
-            f'<div class="action-timeline" style="padding-top:8px;border-top:1px solid #21262d">'
+            f'<div class="action-timeline" style="padding-top:8px;border-top:1px solid var(--hive-border-subtle)">'
             f"{action_items}</div>"
         )
 
@@ -5021,14 +5037,14 @@ def _render_pipeline_panel(data: dict) -> str:
             items += (
                 f'<div style="display:flex;justify-content:space-between;align-items:center;'
                 f'padding:2px 0;font-size:10px">'
-                f'<span style="color:#8b949e;flex:1;overflow:hidden;text-overflow:ellipsis;'
+                f'<span style="color:var(--hive-text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;'
                 f'white-space:nowrap">{text}</span>'
-                f'<span style="color:#58a6ff;margin-left:8px;font-weight:600">{count}&times;</span>'
+                f'<span style="color:var(--hive-primary);margin-left:8px;font-weight:600">{count}&times;</span>'
                 f"</div>"
             )
         recalled_html = (
-            f'<div style="margin-top:6px;padding-top:6px;border-top:1px solid #21262d">'
-            f'<div style="font-size:9px;color:#484f58;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Recalled</div>'
+            f'<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--hive-border-subtle)">'
+            f'<div style="font-size:9px;color:var(--hive-text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Recalled</div>'
             f"{items}</div>"
         )
 
@@ -5037,8 +5053,8 @@ def _render_pipeline_panel(data: dict) -> str:
         f'<div class="card-header"><span class="card-title">Pipeline Health</span>'
         f'<span class="card-meta">{total} facts ({detail_str})</span></div>'
         f'<div class="card-body">{hero_html}{kpi_items}'
-        f'<details style="margin-top:4px"><summary style="font-size:11px;color:#484f58;cursor:pointer;list-style:none">'
-        f'<span style="border-bottom:1px dotted #484f58">Gauges</span></summary>'
+        f'<details style="margin-top:4px"><summary style="font-size:11px;color:var(--hive-text-dim);cursor:pointer;list-style:none">'
+        f'<span style="border-bottom:1px dotted var(--hive-text-dim)">Gauges</span></summary>'
         f'<div style="margin-top:6px">{gauges_html}</div></details>'
         f"{pills_html}{actions_html}{recalled_html}</div>"
         f"</div>"
@@ -5069,19 +5085,19 @@ def _render_capture_panel(data: dict) -> str:
 
     # Color-coded category pills
     cat_colors = {
-        "FACT": "#3fb950",
-        "DECISION": "#a371f7",
-        "INSIGHT": "#58a6ff",
-        "TODO": "#e3b341",
-        "DONE": "#484f58",
-        "CORRECTION": "#f85149",
+        "FACT": "var(--hive-ok)",
+        "DECISION": "var(--hive-decision)",
+        "INSIGHT": "var(--hive-primary)",
+        "TODO": "var(--hive-warn)",
+        "DONE": "var(--hive-text-dim)",
+        "CORRECTION": "var(--hive-err)",
     }
 
     pills_html = ""
     for cat_name in ("FACT", "DECISION", "INSIGHT", "TODO", "DONE"):
         c = counts.get(cat_name, 0)
         if c > 0:
-            color = cat_colors.get(cat_name, "#484f58")
+            color = cat_colors.get(cat_name, "var(--hive-text-dim)")
             pills_html += (
                 f'<span style="display:inline-block;padding:2px 8px;border-radius:10px;'
                 f"font-size:11px;margin:2px;background:{color}22;color:{color};border:1px solid {color}44"
@@ -5091,7 +5107,7 @@ def _render_capture_panel(data: dict) -> str:
     consistency_html = ""
     if consistency > 0:
         consistency_html = (
-            f'<div style="font-size:11px;color:#484f58;margin-top:6px">'
+            f'<div style="font-size:11px;color:var(--hive-text-dim);margin-top:6px">'
             f"consistency: {consistency}%</div>"
         )
 
@@ -5146,10 +5162,10 @@ def _render_recalled_panel(data: dict) -> str:
         count = r.get("count", 0)
         items_html += (
             f'<div style="display:flex;justify-content:space-between;align-items:center;'
-            f'padding:4px 0;border-bottom:1px solid #21262d;font-size:12px">'
-            f'<span style="color:#c9d1d9;flex:1;overflow:hidden;text-overflow:ellipsis;'
+            f'padding:4px 0;border-bottom:1px solid var(--hive-border-subtle);font-size:12px">'
+            f'<span style="color:var(--hive-text);flex:1;overflow:hidden;text-overflow:ellipsis;'
             f'white-space:nowrap">{text}</span>'
-            f'<span style="color:#58a6ff;margin-left:8px;white-space:nowrap;font-weight:600">{count}&times;</span>'
+            f'<span style="color:var(--hive-primary);margin-left:8px;white-space:nowrap;font-weight:600">{count}&times;</span>'
             f"</div>"
         )
 
@@ -5263,8 +5279,8 @@ def _render_profiles_panel(data: dict) -> str:
     create_form = (
         '<div style="margin-top:12px;display:flex;gap:6px;align-items:center">'
         '<input type="text" id="profile-name" placeholder="new profile name" '
-        'style="background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:4px 8px;border-radius:4px;flex:1;font-size:12px">'
-        '<label style="font-size:11px;color:#8b949e;display:flex;align-items:center;gap:4px">'
+        'style="background:var(--hive-bg);border:1px solid var(--hive-border);color:var(--hive-text-bright);padding:4px 8px;border-radius:4px;flex:1;font-size:12px">'
+        '<label style="font-size:11px;color:var(--hive-text-secondary);display:flex;align-items:center;gap:4px">'
         '<input type="checkbox" id="profile-seed"> seed</label>'
         '<button class="todo-done-btn" onclick="profileCreate()">Create</button>'
         "</div>"
@@ -5295,13 +5311,13 @@ def _render_transfer_panel(data: dict) -> str:
         f'<div class="card-header"><span class="card-title">Data Transfer</span></div>'
         f'<div class="card-body">'
         f'<div style="margin-bottom:12px">'
-        f'<div style="font-size:11px;color:#8b949e;margin-bottom:6px">Export current profile as archive</div>'
+        f'<div style="font-size:11px;color:var(--hive-text-secondary);margin-bottom:6px">Export current profile as archive</div>'
         f'<button class="todo-done-btn" onclick="transferExport()">Export &ldquo;{profile}&rdquo; &#8595;</button>'
         f"</div>"
         f"<div>"
-        f'<div style="font-size:11px;color:#8b949e;margin-bottom:6px">Import from archive file</div>'
+        f'<div style="font-size:11px;color:var(--hive-text-secondary);margin-bottom:6px">Import from archive file</div>'
         f'<input type="file" id="import-file" accept=".tar.gz,.tgz" '
-        f'style="font-size:11px;color:#8b949e;background:none;border:none">'
+        f'style="font-size:11px;color:var(--hive-text-secondary);background:none;border:none">'
         f'<button class="todo-done-btn" onclick="transferImport()" style="margin-left:6px">Import</button>'
         f"</div>"
         f"</div>"
@@ -5385,7 +5401,7 @@ def _render_wander_list_panel(data: dict) -> str:
     # Show pending (queued but not yet wandered) seeds at the top
     for seed_text in pending_seeds:
         cards += (
-            f'<div class="wander-card" style="border-left:3px solid #e3b341;opacity:.85">'
+            f'<div class="wander-card" style="border-left:3px solid var(--hive-warn);opacity:.85">'
             f'<div class="wander-card-head">'
             f'<span class="wander-title">{_e(seed_text)}</span>'
             f'<span class="wander-meta">'
@@ -5547,8 +5563,8 @@ def _render_wander_stats_panel(data: dict) -> str:
             f'<div class="card" tabindex="0" role="region" aria-label="Wander stats">'
             f'<div class="card-header"><span class="card-title">Wander Stats</span></div>'
             f'<div class="card-body">'
-            f'<div class="empty" style="color:#f85149">Failed to load wander data: {err_msg}<br>'
-            f'<small style="color:#8b949e">Check: <code>hive wander list</code> or daemon.log for details.</small>'
+            f'<div class="empty" style="color:var(--hive-err)">Failed to load wander data: {err_msg}<br>'
+            f'<small style="color:var(--hive-text-secondary)">Check: <code>hive wander list</code> or daemon.log for details.</small>'
             f"</div>"
             f"</div></div>"
         )
@@ -5571,7 +5587,7 @@ def _render_wander_stats_panel(data: dict) -> str:
         labels = ""
         for i, (label, count, _iso) in enumerate(spark):
             h = max(2, round(count / max_c * 52)) if count else 2
-            extra_bg = "" if count else ";background:#161b22"
+            extra_bg = "" if count else ";background:var(--hive-surface)"
             bars += f'<div class="spark-bar" style="height:{h}px{extra_bg}" title="{_e(label)}: {count}"></div>'
             # Show label only for first and last entries to avoid crowding
             lbl_text = label[:3] if (i == 0 or i == len(spark) - 1) else ""
@@ -5876,15 +5892,15 @@ def _render_daemon_status_panel(data: dict) -> str:
         badge_cls = "badge-success" if enabled else "badge-secondary"
         badge_text = "ON" if enabled else "OFF"
         output_snippet = (
-            f'<span style="color:#8b949e;overflow:hidden;text-overflow:ellipsis;'
+            f'<span style="color:var(--hive-text-secondary);overflow:hidden;text-overflow:ellipsis;'
             f'white-space:nowrap" title="{_e(last_output)}">{_e(last_output)}</span>'
             if last_output
-            else '<span style="color:#484f58">—</span>'
+            else '<span style="color:var(--hive-text-dim)">—</span>'
         )
         cells += (
-            f'<span style="font-weight:500;color:#e6edf3;white-space:nowrap;'
+            f'<span style="font-weight:500;color:var(--hive-text-bright);white-space:nowrap;'
             f'overflow:hidden;text-overflow:ellipsis">{_e(task)}</span>'
-            f'<span style="color:#8b949e;text-align:right">{_e(last_run)}</span>'
+            f'<span style="color:var(--hive-text-secondary);text-align:right">{_e(last_run)}</span>'
             f'<span class="badge {badge_cls}" style="justify-self:center">{badge_text}</span>'
             f'<button class="search-action-btn" style="padding:2px 6px;font-size:0.82em" '
             f"onclick=\"toggleDaemon('{_e(task)}')\">"
@@ -6295,11 +6311,11 @@ def _render_growth_state_panel(data: dict) -> str:
 
     # Freshness color
     if ff >= 70:
-        ff_color = "var(--c-green, #3fb950)"
+        ff_color = "var(--hive-ok)"
     elif ff >= 40:
-        ff_color = "var(--c-yellow, #d29922)"
+        ff_color = "var(--hive-warn)"
     else:
-        ff_color = "var(--c-red, #f85149)"
+        ff_color = "var(--hive-err)"
 
     kpi_style = (
         "text-align:center;padding:8px 4px;"
@@ -6332,11 +6348,11 @@ def _render_growth_state_panel(data: dict) -> str:
         dark_pct = cov.get("dark_pct", 0.0)
 
         if coverage_pct >= 70:
-            cov_color = "var(--c-green, #3fb950)"
+            cov_color = "var(--hive-ok)"
         elif coverage_pct >= 40:
-            cov_color = "var(--c-yellow, #d29922)"
+            cov_color = "var(--hive-warn)"
         else:
-            cov_color = "var(--c-red, #f85149)"
+            cov_color = "var(--hive-err)"
 
         # Coverage ring (conic-gradient)
         ring_angle = round(coverage_pct / 100 * 360)
@@ -6363,7 +6379,7 @@ def _render_growth_state_panel(data: dict) -> str:
         )
 
         if auto_only > 0:
-            dark_color = "var(--c-red, #f85149)" if dark_pct > 50 else "var(--c-yellow, #d29922)"
+            dark_color = "var(--hive-err)" if dark_pct > 50 else "var(--hive-warn)"
             kpis += (
                 f'<div style="{kpi_style}"><span style="{val_style};color:{dark_color}">'
                 f"{auto_only}</span>"
@@ -6400,9 +6416,9 @@ def _render_growth_delta_panel(data: dict) -> str:
             continue
         diff = current - previous
         if diff > 0:
-            delta_html = f'<span style="color:var(--c-green, #3fb950)">+{diff}</span>'
+            delta_html = f'<span style="color:var(--hive-ok)">+{diff}</span>'
         elif diff < 0:
-            delta_html = f'<span style="color:var(--c-red, #f85149)">{diff}</span>'
+            delta_html = f'<span style="color:var(--hive-err)">{diff}</span>'
         else:
             delta_html = '<span style="color:var(--c-muted)">0</span>'
 
@@ -6712,10 +6728,10 @@ VIEWS: dict[str, dict] = {
         "path": "/stats",
         "title": "Stats",
         "cols": [
-            ["stats", "stats-transcripts", "stats-pipeline", "stats-capture"],
-            ["sessions", "stats-commands", "stats-tokens", "stats-platforms"],
+            ["stats", "stats-pipeline", "stats-capture"],
+            ["sessions", "stats-commands", "stats-transcripts"],
         ],
-        "rows": [["stats-trends"]],
+        "rows": [["stats-tokens", "stats-platforms"], ["stats-trends"]],
     },
     "brain": {
         "path": "/brain",
@@ -6926,9 +6942,9 @@ def render_page(view_name: str, port: int) -> str:
       <span class="help-key">Esc</span><span class="help-desc">Exit inner mode / clear focus</span>
     </div>
     <h3>Tridactyl</h3>
-    <p style="font-size:12px;color:#8b949e;margin-top:4px">
-      Add to tridactylrc: <code style="background:#21262d;padding:1px 5px;border-radius:3px;color:#ffa657">autocmd DocStart http://localhost:3847 mode ignore</code><br>
-      <span style="color:#6e7681">Shift+Escape re-enters tridactyl normal mode.</span>
+    <p style="font-size:12px;color:var(--hive-text-secondary);margin-top:4px">
+      Add to tridactylrc: <code style="background:var(--hive-surface-2);padding:1px 5px;border-radius:3px;color:var(--hive-primary-bright)">autocmd DocStart http://localhost:3847 mode ignore</code><br>
+      <span style="color:var(--hive-text-tertiary)">Shift+Escape re-enters tridactyl normal mode.</span>
     </p>
   </div>
 </div>

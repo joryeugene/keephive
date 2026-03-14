@@ -2045,7 +2045,7 @@ def test_what_you_use_panel_has_tools(hive_env):
     # Commands render as flex bars (not a table)
     assert "cmd-bar" not in html
     assert "stats-table" not in html
-    assert "#1f6feb" in html  # blue bar color for commands
+    assert "var(--hive-primary)" in html  # amber bar color for commands
     assert "remember" in html
     # Today badge appears for commands used today
     assert "5 today" in html
@@ -2330,7 +2330,7 @@ def test_trends_gauge_prev_zero_fills_bar(hive_env):
     html = _render_trends_panel(data)
     # prev=0 means this/max(this, 0) = 100%, not 0%
     assert "width:100%" in html
-    assert "#3fb950" in html  # green for "up" trend
+    assert "var(--hive-ok)" in html  # green for "up" trend
 
 
 def test_trends_gauge_suffix_m_fills_bar(hive_env):
@@ -2374,9 +2374,9 @@ def test_trends_gauge_flat_pct_uses_health_color(hive_env):
     }
     html = _render_trends_panel(data)
     # 100% freshness with flat trend should be green (health-based), not grey
-    assert "#3fb950" in html  # green for >= 80%
+    assert "var(--hive-ok)" in html  # green for >= 80%
     # The gauge-fill specifically should use green, not grey
-    assert "background:#3fb950" in html
+    assert "background:var(--hive-ok)" in html
 
 
 def test_sessions_shows_live_badge(hive_env):
@@ -3099,7 +3099,7 @@ def test_stats_commands_panel_renders(hive_env):
     html = _render_stats_commands_panel(data)
     assert "What You Use" in html
     assert "stats-table" not in html
-    assert "#1f6feb" in html  # blue bar color for commands
+    assert "var(--hive-primary)" in html  # amber bar color for commands
     assert "status" in html
     assert "remember" in html
 
