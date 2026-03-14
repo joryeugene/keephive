@@ -141,7 +141,7 @@ def cmd_doctor(args: list[str]) -> None:
 
     if state:
         console.print(
-            f"  Last selection: [cyan]{state.get('selected', '?')}[/cyan] "
+            f"  Last selection: [info]{state.get('selected', '?')}[/info] "
             f"(source: {state.get('source', 'auto')}, reason: {state.get('reason', '')})"
         )
     else:

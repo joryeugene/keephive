@@ -34,19 +34,19 @@ def _delta_str(current: int, previous: int) -> str:
     """Format a week-over-week delta as +N or -N with color."""
     diff = current - previous
     if diff > 0:
-        return f"[green]+{diff}[/green]"
+        return f"[ok]+{diff}[/ok]"
     elif diff < 0:
-        return f"[red]{diff}[/red]"
+        return f"[err]{diff}[/err]"
     return "[dim]0[/dim]"
 
 
 def _pct_str(value: float) -> str:
     """Format a percentage with color coding."""
     if value >= 70:
-        return f"[green]{value:.0f}%[/green]"
+        return f"[ok]{value:.0f}%[/ok]"
     elif value >= 40:
-        return f"[yellow]{value:.0f}%[/yellow]"
-    return f"[red]{value:.0f}%[/red]"
+        return f"[warn]{value:.0f}%[/warn]"
+    return f"[err]{value:.0f}%[/err]"
 
 
 def cmd_growth(args: list[str]) -> None:
@@ -131,12 +131,12 @@ def cmd_growth(args: list[str]) -> None:
 def _dark_str(dark_pct: float) -> str:
     """Format dark knowledge percentage with color coding (inverse of coverage)."""
     if dark_pct == 0:
-        return "[green]0%[/green]"
+        return "[ok]0%[/ok]"
     elif dark_pct < 20:
-        return f"[green]{dark_pct:.0f}%[/green] dark"
+        return f"[ok]{dark_pct:.0f}%[/ok] dark"
     elif dark_pct <= 50:
-        return f"[yellow]{dark_pct:.0f}%[/yellow] dark"
-    return f"[red]{dark_pct:.0f}%[/red] dark"
+        return f"[warn]{dark_pct:.0f}%[/warn] dark"
+    return f"[err]{dark_pct:.0f}%[/err] dark"
 
 
 def _print_comprehension_section(console: Console, cov: dict) -> None:

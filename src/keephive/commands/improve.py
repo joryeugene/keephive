@@ -34,7 +34,7 @@ def cmd_improve(args: list[str]) -> None:
         if flag == "on":
             set_auto_improve_trusted(True)
             console.print(
-                "  [green]✓[/green] Auto-apply enabled for trusted improvements (skill + rule types)."
+                "  [ok]✓[/ok] Auto-apply enabled for trusted improvements (skill + rule types)."
             )
             console.print("  KingBee will apply low-risk proposals without manual review.")
         elif flag == "off":
@@ -161,7 +161,7 @@ def _improve_clear_stale() -> None:
         console.print("[dim]No stale improvements to remove.[/dim]")
         return
     write_pending_improvements(fresh)
-    console.print(f"  [green]✓[/green] Removed {removed} stale item(s). {len(fresh)} remaining.")
+    console.print(f"  [ok]✓[/ok] Removed {removed} stale item(s). {len(fresh)} remaining.")
 
 
 def _improve_review() -> None:
@@ -307,7 +307,7 @@ def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
         gd.mkdir(parents=True, exist_ok=True)
         skill_path = gd / f"{name}.md"
         skill_path.write_text(content)
-        console.print(f"  [green]✓[/green] Installed → {skill_path}")
+        console.print(f"  [ok]✓[/ok] Installed → {skill_path}")
         from keephive.commands.skill import _skill_sync
 
         _skill_sync()
@@ -323,7 +323,7 @@ def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
         cfg_path = daemon_config_file()
         cfg_path.write_text(json.dumps(daemon_cfg, indent=2))
         status = "enabled" if config.get("enabled") else "disabled"
-        console.print(f"  [green]✓[/green] Added task '{name}' to daemon.json ({status})")
+        console.print(f"  [ok]✓[/ok] Added task '{name}' to daemon.json ({status})")
         if not config.get("enabled"):
             console.print("  Enable with [dim]hive daemon edit[/dim]")
 
@@ -335,7 +335,7 @@ def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
         pending_rules = hive_dir() / ".pending-rules.md"
         with pending_rules.open("a") as f:
             f.write(f"- {rule_text} [auto:proposed-by-kingbee]\n")
-        console.print("  [green]✓[/green] Rule queued → run [dim]hive rule review[/dim] to apply")
+        console.print("  [ok]✓[/ok] Rule queued → run [dim]hive rule review[/dim] to apply")
 
     elif item_type == "edit":
         action = item.get("action", "edit")
@@ -352,20 +352,20 @@ def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
                 skill_path = guides_dir() / f"{target}.md"
                 if skill_path.exists():
                     skill_path.unlink()
-                    console.print(f"  [green]✓[/green] Pruned skill: {target}")
+                    console.print(f"  [ok]✓[/ok] Pruned skill: {target}")
                 else:
                     console.print(f"  [dim]Skill not found: {target}[/dim]")
             elif target_type == "task":
                 daemon_cfg = read_daemon_config()
                 daemon_cfg.get("tasks", {}).pop(target, None)
                 daemon_config_file().write_text(json.dumps(daemon_cfg, indent=2))
-                console.print(f"  [green]✓[/green] Removed task: {target}")
+                console.print(f"  [ok]✓[/ok] Removed task: {target}")
             elif target_type == "rule":
                 pending_rules = hive_dir() / ".pending-rules.md"
                 with pending_rules.open("a") as f:
                     f.write(f"- REMOVE: {target} [auto:kingbee-prune]\n")
                 console.print(
-                    "  [green]✓[/green] Rule removal queued → run [dim]hive rule review[/dim]"
+                    "  [ok]✓[/ok] Rule removal queued → run [dim]hive rule review[/dim]"
                 )
 
         elif action in ("edit", "merge"):
@@ -393,13 +393,13 @@ def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
                 merge_note = (
                     f" (merged with {item.get('merge_with')})" if item.get("merge_with") else ""
                 )
-                console.print(f"  [green]✓[/green] Updated skill: {target}{merge_note}")
+                console.print(f"  [ok]✓[/ok] Updated skill: {target}{merge_note}")
                 if item.get("merge_with"):
                     merged_path = gd / f"{item['merge_with']}.md"
                     if merged_path.exists():
                         merged_path.unlink()
                         console.print(
-                            f"  [green]✓[/green] Removed merged-in skill: {item['merge_with']}"
+                            f"  [ok]✓[/ok] Removed merged-in skill: {item['merge_with']}"
                         )
                 from keephive.commands.skill import _skill_sync
 
@@ -410,7 +410,7 @@ def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
                     new_config = json.loads(changes) if changes else {}
                     daemon_cfg.setdefault("tasks", {})[target] = new_config
                     daemon_config_file().write_text(json.dumps(daemon_cfg, indent=2))
-                    console.print(f"  [green]✓[/green] Updated task config: {target}")
+                    console.print(f"  [ok]✓[/ok] Updated task config: {target}")
                 except (json.JSONDecodeError, ValueError):
                     console.print(
                         f"  [warn]Could not parse task config changes for {target}[/warn]"

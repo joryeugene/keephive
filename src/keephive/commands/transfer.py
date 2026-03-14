@@ -40,7 +40,7 @@ def cmd_export(args: list[str]) -> None:
 
     source = hive_dir()
     if not source.exists():
-        console.print(f"[red]No data found at {source}[/red]")
+        console.print(f"[err]No data found at {source}[/err]")
         sys.exit(1)
 
     # Build manifest
@@ -76,7 +76,7 @@ def cmd_export(args: list[str]) -> None:
                 tar.add(str(fpath), arcname=dotfile)
 
     size_kb = os.path.getsize(output_path) / 1024
-    console.print(f"[green]Exported: {output_path} ({size_kb:.1f} KB)[/green]")
+    console.print(f"[ok]Exported: {output_path} ({size_kb:.1f} KB)[/ok]")
     console.print(f"[dim]Profile: {profile}  |  Source: {source}[/dim]")
     show_hint(f"hive transfer import {output_path}")
 
@@ -84,12 +84,12 @@ def cmd_export(args: list[str]) -> None:
 def cmd_import(args: list[str]) -> None:
     """Import data from a tar.gz archive."""
     if not args:
-        console.print("[red]Usage: hive import <path.tar.gz> [--profile name][/red]")
+        console.print("[err]Usage: hive import <path.tar.gz> [--profile name][/err]")
         sys.exit(1)
 
     archive_path = args[0]
     if not os.path.exists(archive_path):
-        console.print(f"[red]File not found: {archive_path}[/red]")
+        console.print(f"[err]File not found: {archive_path}[/err]")
         sys.exit(1)
 
     # Parse --profile flag
@@ -106,13 +106,13 @@ def cmd_import(args: list[str]) -> None:
     try:
         tar_ctx = tarfile.open(archive_path, "r:gz")
     except (tarfile.ReadError, tarfile.CompressionError, OSError) as exc:
-        console.print(f"[red]Cannot read archive: {exc}[/red]")
+        console.print(f"[err]Cannot read archive: {exc}[/err]")
         sys.exit(1)
 
     with tar_ctx as tar:
         for member in tar.getmembers():
             if member.name.startswith("/") or ".." in member.name:
-                console.print(f"[red]Security: archive contains unsafe path: {member.name}[/red]")
+                console.print(f"[err]Security: archive contains unsafe path: {member.name}[/err]")
                 sys.exit(1)
 
         # Read manifest if present
@@ -128,7 +128,7 @@ def cmd_import(args: list[str]) -> None:
     if target_profile:
         target = profile_dir(target_profile)
         if target.exists():
-            console.print(f"[yellow]Profile '{target_profile}' already exists[/yellow]")
+            console.print(f"[warn]Profile '{target_profile}' already exists[/warn]")
             from keephive.output import prompt_yn
 
             if not prompt_yn(f"Overwrite data in {target}?"):
@@ -167,6 +167,6 @@ def cmd_import(args: list[str]) -> None:
                     dest.write_bytes(src.read())
 
     source_profile = manifest.get("profile", "unknown")
-    console.print(f"[green]Imported from: {archive_path}[/green]")
+    console.print(f"[ok]Imported from: {archive_path}[/ok]")
     console.print(f"[dim]Source profile: {source_profile}  |  Target: {target}[/dim]")
     show_hint("hive s", "see imported data")

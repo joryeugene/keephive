@@ -22,10 +22,10 @@ def _show_overview() -> None:
     current = get_setting("llm_backend") or "auto"
     state = get_backend_state()
     console.print("[bold]LLM backend configuration[/bold]")
-    console.print(f"  Preferred setting: [cyan]{current}[/cyan]")
+    console.print(f"  Preferred setting: [info]{current}[/info]")
     if state:
         console.print(
-            f"  Last selection: [green]{state.get('selected', '?')}[/green] "
+            f"  Last selection: [ok]{state.get('selected', '?')}[/ok] "
             f"(source: {state.get('source', '?')}, reason: {state.get('reason', '')})"
         )
     console.print()

@@ -80,7 +80,7 @@ def cmd_seed(args: list[str]) -> None:
     _seed_pending_rules()
     _seed_soul()
 
-    console.print(f"[green]Seeded {days} days of demo data[/green]")
+    console.print(f"[ok]Seeded {days} days of demo data[/ok]")
     console.print(f"[dim]Data: {target}[/dim]")
     show_hint("hive s", "see seeded data")
 

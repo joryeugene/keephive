@@ -103,7 +103,7 @@ def _report() -> None:
         for w in warnings:
             console.print(f"    · {w}")
     else:
-        console.print("\n  [green]✓ System healthy[/green]")
+        console.print("\n  [ok]✓ System healthy[/ok]")
     console.print()
 
 
@@ -121,7 +121,7 @@ def _print_stage0(data: dict, warnings: list[str]) -> None:
         warnings.append(w)
         console.print("    [warn]⚠  Privacy gate: ON — .llm-paused present[/warn]")
     else:
-        console.print("    [green]✓ Privacy gate: OFF (LLM calls enabled)[/green]")
+        console.print("    [ok]✓ Privacy gate: OFF (LLM calls enabled)[/ok]")
     if data.get("force_cli"):
         console.print(
             "    [bold cyan]🔐 CLI-only: ON[/bold cyan] — API backends blocked "
@@ -201,7 +201,7 @@ def _print_stage1(data: dict, warnings: list[str]) -> None:
         warnings.append(w)
         console.print(f"    [warn]⚠  {w}[/warn]")
     else:
-        console.print("    [green]✓ Hook pipeline healthy[/green]")
+        console.print("    [ok]✓ Hook pipeline healthy[/ok]")
 
 
 # ── Stage 2: Daemon tasks ─────────────────────────────────────────────
@@ -282,7 +282,7 @@ def _print_stage2(data: dict, warnings: list[str]) -> None:
         warnings.append(w)
         console.print(f"    [warn]⚠  {w}[/warn]")
     else:
-        console.print("    [green]✓ soul-update running[/green]")
+        console.print("    [ok]✓ soul-update running[/ok]")
 
     if data["recent_failures"]:
         n = len(data["recent_failures"])
@@ -367,7 +367,7 @@ def _print_stage3(data: dict, warnings: list[str]) -> None:
         console.print(f"    [warn]⚠  {w}[/warn]")
         warnings.append(w)
     else:
-        console.print(f"    Wander:               last run {wander_days_ago}d ago [green]✓[/green]")
+        console.print(f"    Wander:               last run {wander_days_ago}d ago [ok]✓[/ok]")
 
     overflowed = [
         k
@@ -380,7 +380,7 @@ def _print_stage3(data: dict, warnings: list[str]) -> None:
             warnings.append(w)
         console.print(f"    [warn]⚠  Queue overflow: {', '.join(overflowed)}[/warn]")
     elif kb_depth == 0 and wander_days_ago != -1 and wander_days_ago <= 3:
-        console.print("    [green]✓ All queues healthy[/green]")
+        console.print("    [ok]✓ All queues healthy[/ok]")
 
 
 # ── Stage 4: SOUL.md freshness ────────────────────────────────────────
@@ -416,7 +416,7 @@ def _print_stage4(data: dict, warnings: list[str]) -> None:
         warnings.append(w)
         console.print(f"    [warn]⚠  {w}[/warn]")
     else:
-        console.print("    [green]✓ SOUL.md is fresh[/green]")
+        console.print("    [ok]✓ SOUL.md is fresh[/ok]")
 
 
 # ── Stage 5: Data integrity ───────────────────────────────────────────
@@ -446,7 +446,7 @@ def _print_stage5(data: dict, warnings: list[str]) -> None:
 
     corrupt = []
     for fname, ok in checks.items():
-        status = "[green]✓ valid[/green]" if ok else "[err]✗ corrupt JSON[/err]"
+        status = "[ok]✓ valid[/ok]" if ok else "[err]✗ corrupt JSON[/err]"
         console.print(f"    {fname:<28s} {status}")
         if not ok:
             corrupt.append(fname)
@@ -585,7 +585,7 @@ def _snapshot() -> None:
                 "daily/\n"
                 "archive/\n"
             )
-        console.print("  [green]✓ Initialized git repo in hive dir[/green]")
+        console.print("  [ok]✓ Initialized git repo in hive dir[/ok]")
         console.print("  [dim]daily/ excluded by default (.gitignore). Remove to include.[/dim]")
 
     # Stage all files
@@ -607,7 +607,7 @@ def _snapshot() -> None:
         text=True,
     )
     if result.returncode == 0:
-        console.print("  [green]✓ Snapshot committed[/green]")
+        console.print("  [ok]✓ Snapshot committed[/ok]")
         console.print("  Run 'hive checkup --diff' after testing to see mutations.")
     else:
         console.print(f"[err]git commit failed: {result.stderr.strip()}[/err]")
@@ -655,7 +655,7 @@ def _diff() -> None:
         console.print("\n  [bold]Diff:[/bold]")
         for line in diff.stdout.splitlines():
             if line.startswith("+") and not line.startswith("+++"):
-                console.print(f"  [green]{line}[/green]")
+                console.print(f"  [ok]{line}[/ok]")
             elif line.startswith("-") and not line.startswith("---"):
                 console.print(f"  [err]{line}[/err]")
             else:

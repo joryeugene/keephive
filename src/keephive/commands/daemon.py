@@ -171,7 +171,7 @@ def _status() -> None:
 
     console.print("\n  🐝 [bold]KingBee Daemon[/bold]")
     if running:
-        console.print(f"  Status: [green]{status_str}[/green]{pid_str}\n")
+        console.print(f"  Status: [ok]{status_str}[/ok]{pid_str}\n")
     else:
         console.print(f"  Status: [dim]{status_str}[/dim]{pid_str}\n")
 

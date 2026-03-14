@@ -174,7 +174,7 @@ def _list_wander() -> None:
         hypothesis = doc.get("hypothesis", "")
         question = doc.get("question", "")
         web_note = " [web]" if doc.get("used_web_search") else ""
-        console.print(f"  [dim]{date_str}[/dim]  [[cyan]{source}[/cyan]]{web_note}")
+        console.print(f"  [dim]{date_str}[/dim]  [[info]{source}[/info]]{web_note}")
         if hypothesis:
             console.print(f"    {hypothesis}")
         if question:

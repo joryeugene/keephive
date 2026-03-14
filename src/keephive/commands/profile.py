@@ -43,18 +43,18 @@ def cmd_profile(args: list[str]) -> None:
         _list_profiles()
     elif sub == "use":
         if len(args) < 2:
-            console.print("[red]Usage: hive profile use <name>[/red]")
+            console.print("[err]Usage: hive profile use <name>[/err]")
             sys.exit(1)
         _use_profile(args[1])
     elif sub == "create":
         if len(args) < 2:
-            console.print("[red]Usage: hive profile create <name> [--seed][/red]")
+            console.print("[err]Usage: hive profile create <name> [--seed][/err]")
             sys.exit(1)
         seed = "--seed" in args
         _create_profile(args[1], seed=seed)
     elif sub == "delete":
         if len(args) < 2:
-            console.print("[red]Usage: hive profile delete <name>[/red]")
+            console.print("[err]Usage: hive profile delete <name>[/err]")
             sys.exit(1)
         _delete_profile(args[1])
     else:
@@ -67,7 +67,7 @@ def _list_profiles() -> None:
     profiles = list_profiles()
     console.print("[bold]Profiles[/bold]")
     for p in profiles:
-        marker = " [green]*[/green]" if p["active"] else "  "
+        marker = " [ok]*[/ok]" if p["active"] else "  "
         exists = "" if p["exists"] else " [dim](not created)[/dim]"
         console.print(f"{marker} {p['name']}{exists}")
 
@@ -86,22 +86,22 @@ def _use_profile(name: str) -> None:
     """Switch to a profile."""
     err = _validate_name(name)
     if err:
-        console.print(f"[red]{err}[/red]")
+        console.print(f"[err]{err}[/err]")
         sys.exit(1)
 
     if name == "default":
         set_active_profile(None)
-        console.print("[green]Switched to default profile[/green]")
+        console.print("[ok]Switched to default profile[/ok]")
         console.print(f"[dim]Data: {hive_dir()}[/dim]")
         return
 
     if not profile_exists(name):
-        console.print(f"[red]Profile '{name}' does not exist. Create it first:[/red]")
+        console.print(f"[err]Profile '{name}' does not exist. Create it first:[/err]")
         console.print(f"  hive profile create {name}")
         sys.exit(1)
 
     set_active_profile(name)
-    console.print(f"[green]Switched to profile: {name}[/green]")
+    console.print(f"[ok]Switched to profile: {name}[/ok]")
     console.print(f"[dim]Data: {hive_dir()}[/dim]")
 
 
@@ -109,16 +109,16 @@ def _create_profile(name: str, seed: bool = False) -> None:
     """Create a new profile directory."""
     err = _validate_name(name)
     if err:
-        console.print(f"[red]{err}[/red]")
+        console.print(f"[err]{err}[/err]")
         sys.exit(1)
 
     if name == "default":
-        console.print("[red]Cannot create 'default' profile (it already exists)[/red]")
+        console.print("[err]Cannot create 'default' profile (it already exists)[/err]")
         sys.exit(1)
 
     if profile_exists(name):
         target = profile_dir(name)
-        console.print(f"[yellow]Profile '{name}' already exists at {target}[/yellow]")
+        console.print(f"[warn]Profile '{name}' already exists at {target}[/warn]")
         return
 
     target = profile_dir(name)
@@ -133,7 +133,7 @@ def _create_profile(name: str, seed: bool = False) -> None:
         # Restore previous profile
         set_active_profile(old_profile)
 
-    console.print(f"[green]Created profile: {name}[/green]")
+    console.print(f"[ok]Created profile: {name}[/ok]")
     console.print(f"[dim]Data: {target}[/dim]")
     show_hint(f"hive profile use {name}")
 
@@ -147,31 +147,31 @@ def _create_profile(name: str, seed: bool = False) -> None:
                 cmd_seed(["--force"])
             finally:
                 set_active_profile(old_profile)
-            console.print("[green]Seeded with demo data[/green]")
+            console.print("[ok]Seeded with demo data[/ok]")
         except ImportError:
-            console.print("[yellow]Seed module not available[/yellow]")
+            console.print("[warn]Seed module not available[/warn]")
 
 
 def _delete_profile(name: str) -> None:
     """Delete a profile and its data."""
     err = _validate_name(name)
     if err:
-        console.print(f"[red]{err}[/red]")
+        console.print(f"[err]{err}[/err]")
         sys.exit(1)
 
     if name == "default":
-        console.print("[red]Cannot delete the default profile[/red]")
+        console.print("[err]Cannot delete the default profile[/err]")
         sys.exit(1)
 
     current = active_profile()
     if current == name:
-        console.print(f"[red]Cannot delete active profile '{name}'. Switch first:[/red]")
+        console.print(f"[err]Cannot delete active profile '{name}'. Switch first:[/err]")
         console.print("  hive profile use default")
         sys.exit(1)
 
     target = profile_dir(name)
     if not target.exists():
-        console.print(f"[yellow]Profile '{name}' does not exist[/yellow]")
+        console.print(f"[warn]Profile '{name}' does not exist[/warn]")
         return
 
     from keephive.output import prompt_yn
@@ -181,4 +181,4 @@ def _delete_profile(name: str) -> None:
         return
 
     shutil.rmtree(target)
-    console.print(f"[green]Deleted profile: {name}[/green]")
+    console.print(f"[ok]Deleted profile: {name}[/ok]")
