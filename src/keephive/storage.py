@@ -3666,3 +3666,104 @@ def append_improvement_history(entry: dict) -> None:
         history = history[-200:]
     f = improvement_history_file()
     f.write_text(json.dumps(history, indent=2) + "\n")
+
+
+def read_session_transcripts(days_back: int = 7) -> list[dict]:
+    """Parse raw JSONL transcripts to extract signals not in session-meta.
+
+    Reads ``~/.claude/projects/**/*.jsonl`` and extracts per-session:
+
+    - ``stop_hook_timings``: list of ``{command, duration_ms}`` from
+      ``type="system" subtype="stop_hook_summary"`` entries (Stop hook only).
+    - ``cache_hits``: sum of ``cache_read_input_tokens`` across assistant turns.
+    - ``cache_created``: sum of ``cache_creation_input_tokens`` across assistant turns.
+    - ``cache_fresh``: sum of plain ``input_tokens`` (non-cached, non-written) across turns.
+    - ``model_counts``: ``{model_id: count}`` from assistant turns.
+    - ``turn_durations_ms``: list of per-turn ``durationMs`` from
+      ``type="system" subtype="turn_duration"`` entries.
+
+    Agent sidechain files (names starting with ``agent-``) are skipped; only
+    root session files are parsed. Sessions whose first timestamp falls outside
+    the ``days_back`` window are skipped. Errors in individual files are
+    silently swallowed to never break callers.
+
+    Returns a list of session dicts, one per JSONL file processed.
+    """
+    env_dir = os.environ.get("HIVE_CC_PROJECTS_DIR")
+    projects_dir = Path(env_dir) if env_dir else Path.home() / ".claude" / "projects"
+    if not projects_dir.exists():
+        return []
+
+    cutoff = datetime.now() - timedelta(days=days_back)
+    results: list[dict] = []
+
+    for jsonl_path in projects_dir.glob("**/*.jsonl"):
+        # Skip agent sidechain files — they share a session_id with their parent
+        if jsonl_path.stem.startswith("agent-"):
+            continue
+
+        # Quick recency check via mtime before opening the file
+        try:
+            mtime = jsonl_path.stat().st_mtime
+        except OSError:
+            continue
+        if mtime < cutoff.timestamp():
+            continue
+
+        session: dict = {
+            "session_id": jsonl_path.stem,
+            "stop_hook_timings": [],
+            "cache_hits": 0,  # cache_read_input_tokens across all turns
+            "cache_created": 0,  # cache_creation_input_tokens across all turns
+            "cache_fresh": 0,  # input_tokens (non-cached, non-written) across all turns
+            "output_tokens": 0,  # output_tokens across all turns
+            "model_counts": {},
+            "turn_durations_ms": [],
+        }
+
+        try:
+            with open(jsonl_path, encoding="utf-8", errors="replace") as fh:
+                for raw_line in fh:
+                    raw_line = raw_line.strip()
+                    if not raw_line:
+                        continue
+                    try:
+                        entry = json.loads(raw_line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    etype = entry.get("type", "")
+
+                    if etype == "assistant":
+                        msg = entry.get("message", {})
+                        usage = msg.get("usage", {})
+                        session["cache_hits"] += usage.get("cache_read_input_tokens", 0)
+                        session["cache_created"] += usage.get("cache_creation_input_tokens", 0)
+                        session["cache_fresh"] += usage.get("input_tokens", 0)
+                        session["output_tokens"] += usage.get("output_tokens", 0)
+                        model = msg.get("model", "")
+                        if model:
+                            session["model_counts"][model] = (
+                                session["model_counts"].get(model, 0) + 1
+                            )
+
+                    elif etype == "system":
+                        subtype = entry.get("subtype", "")
+                        if subtype == "stop_hook_summary":
+                            for info in entry.get("hookInfos", []):
+                                dur = info.get("durationMs")
+                                cmd = info.get("command", "")
+                                if dur is not None:
+                                    session["stop_hook_timings"].append(
+                                        {"command": cmd, "duration_ms": dur}
+                                    )
+                        elif subtype == "turn_duration":
+                            dur = entry.get("durationMs")
+                            if dur is not None:
+                                session["turn_durations_ms"].append(dur)
+        except OSError:
+            continue
+
+        results.append(session)
+
+    return results

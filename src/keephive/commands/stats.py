@@ -881,6 +881,83 @@ _DAEMON_TASK_ORDER = [
 ]
 
 
+def _hook_display_key(command: str) -> str:
+    """Return a stable display name for a hook command regardless of binary name.
+
+    For keephive-style commands (``/any/path/binary hook-stop``), the hook
+    argument is returned (``hook-stop``) — immune to binary rename accidents.
+    For plugin scripts, the filename is returned (``stop-hook.sh``).
+    """
+    import re
+
+    # Match any binary followed by a "hook-xxx" argument
+    m = re.search(r"\bhook-\S+", command)
+    if m:
+        return m.group(0)
+    # Fall back to last path component, first word
+    parts = command.replace("${CLAUDE_PLUGIN_ROOT}", "plugin").split("/")
+    return parts[-1].split()[0]
+
+
+def _display_transcript_signals(days_back: int = 7) -> None:
+    """Display signals extracted from raw JSONL transcripts: cache efficiency, model mix, hook perf.
+
+    Silently skips if transcripts are unavailable or parsing fails.
+    """
+    try:
+        from keephive.storage import read_session_transcripts
+
+        sessions = read_session_transcripts(days_back=days_back)
+        if not sessions:
+            return
+
+        # Cache efficiency ─────────────────────────────────────
+        total_hits = sum(s["cache_hits"] for s in sessions)
+        total_input = sum(s["cache_hits"] + s["cache_created"] + s["cache_fresh"] for s in sessions)
+        if total_input > 0:
+            pct = int(100 * total_hits / total_input)
+            hits_b = total_hits / 1_000_000_000
+            total_b = total_input / 1_000_000_000
+            console.print(
+                f"  cache efficiency  [bold]{pct}%[/bold]"
+                f"  [dim]({hits_b:.1f}B / {total_b:.1f}B tokens, {len(sessions)} sessions)[/dim]"
+            )
+
+        # Model mix ─────────────────────────────────────────────
+        all_models: dict[str, int] = {}
+        for s in sessions:
+            for m, c in s["model_counts"].items():
+                if not m.startswith("<"):  # skip <synthetic> etc.
+                    all_models[m] = all_models.get(m, 0) + c
+        total_calls = sum(all_models.values())
+        if total_calls > 0:
+            parts = []
+            for model, count in sorted(all_models.items(), key=lambda x: -x[1]):
+                short = model.replace("claude-", "").replace("-20", " ").split("-")[0]
+                pct = int(100 * count / total_calls)
+                parts.append(f"{short} {pct}%")
+            console.print(f"  model mix         {' · '.join(parts)}")
+
+        # Stop hook performance ──────────────────────────────────
+        stop_timings = [t for s in sessions for t in s["stop_hook_timings"]]
+        if stop_timings:
+            by_hook: dict[str, list[int]] = {}
+            for t in stop_timings:
+                # Extract the executable name as the display key
+                key = _hook_display_key(t["command"])
+                by_hook.setdefault(key, []).append(t["duration_ms"])
+            console.print()
+            console.print(f"[dim]Stop Hook Performance ({days_back}d)[/dim]")
+            for hook_key, durations in sorted(by_hook.items()):
+                avg_ms = sum(durations) // len(durations)
+                max_ms = max(durations)
+                alert = " [warn]⚠[/warn]" if avg_ms > 500 else ""
+                console.print(f"  {hook_key:<24}  avg {avg_ms:>4}ms  max {max_ms:>5}ms{alert}")
+
+    except Exception:
+        pass  # Never break stats display
+
+
 def _display_command_activity(data: dict, days: int = 7) -> None:
     """Display command activity: top commands, daemon task runs, loop stats."""
     days_data = data.get("days", {})
@@ -1112,6 +1189,7 @@ def _display_full(data: dict) -> None:
             f"  tokens: {output_tok // 1000}K out · {input_tok // 1000}K in"
             f" ({ratio:.1f}x read:write) [dim]session-meta only[/dim]"
         )
+    _display_transcript_signals(days_back=7)
 
     # Session Quality (from /insights facets data)
     try:

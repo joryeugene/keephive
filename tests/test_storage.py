@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -1209,6 +1210,186 @@ class TestLiveSessions:
 
         result = read_live_sessions(active_dirs=[cwd], recency_minutes=9999)
         assert result == []
+
+
+# ---- JSONL transcript parsing ----
+
+
+class TestReadSessionTranscripts:
+    """Unit tests for read_session_transcripts().
+
+    Each test writes a minimal JSONL fixture into a temp projects_dir and
+    asserts the parsed signals match expectations. Uses HIVE_CC_PROJECTS_DIR
+    for isolation — no real ~/.claude/projects is touched.
+    """
+
+    def _write_jsonl(self, projects_dir, session_id: str, records: list[dict]) -> None:
+        """Write records as a JSONL file at projects_dir/<session_id>.jsonl."""
+        proj_dir = projects_dir / "-test-project"
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        path = proj_dir / f"{session_id}.jsonl"
+        path.write_text("\n".join(json.dumps(r) for r in records) + "\n")
+
+    def test_returns_empty_when_no_projects_dir(self, hive_env, tmp_path, monkeypatch):
+        """Missing projects dir returns empty list without crashing."""
+        from keephive.storage import read_session_transcripts
+
+        monkeypatch.setenv("HIVE_CC_PROJECTS_DIR", str(tmp_path / "nonexistent"))
+        assert read_session_transcripts() == []
+
+    def test_skips_agent_sidechain_files(self, hive_env, tmp_path, monkeypatch):
+        """Files named agent-* are skipped — they share a session_id with root session."""
+        from keephive.storage import read_session_transcripts
+
+        projects_dir = tmp_path / "cc-projects"
+        monkeypatch.setenv("HIVE_CC_PROJECTS_DIR", str(projects_dir))
+
+        proj_dir = projects_dir / "-test-project"
+        proj_dir.mkdir(parents=True)
+        (proj_dir / "agent-abc123.jsonl").write_text(
+            json.dumps({"type": "assistant", "message": {"model": "claude-sonnet-4-6", "usage": {"input_tokens": 10, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}}}
+            ) + "\n"
+        )
+        result = read_session_transcripts(days_back=365)
+        assert result == []
+
+    def test_extracts_cache_tokens(self, hive_env, tmp_path, monkeypatch):
+        """cache_hits, cache_created, cache_fresh, output_tokens sum across all assistant turns."""
+        from keephive.storage import read_session_transcripts
+
+        projects_dir = tmp_path / "cc-projects"
+        monkeypatch.setenv("HIVE_CC_PROJECTS_DIR", str(projects_dir))
+
+        records = [
+            {
+                "type": "assistant",
+                "message": {
+                    "model": "claude-sonnet-4-6",
+                    "usage": {
+                        "input_tokens": 100,
+                        "cache_read_input_tokens": 5000,
+                        "cache_creation_input_tokens": 2000,
+                        "output_tokens": 300,
+                    },
+                },
+            },
+            {
+                "type": "assistant",
+                "message": {
+                    "model": "claude-sonnet-4-6",
+                    "usage": {
+                        "input_tokens": 50,
+                        "cache_read_input_tokens": 8000,
+                        "cache_creation_input_tokens": 0,
+                        "output_tokens": 150,
+                    },
+                },
+            },
+        ]
+        self._write_jsonl(projects_dir, "sess-cache", records)
+        result = read_session_transcripts(days_back=365)
+        assert len(result) == 1
+        s = result[0]
+        assert s["cache_hits"] == 13000    # 5000 + 8000
+        assert s["cache_fresh"] == 150     # 100 + 50
+        assert s["cache_created"] == 2000  # 2000 + 0
+        assert s["output_tokens"] == 450   # 300 + 150
+
+    def test_extracts_model_counts(self, hive_env, tmp_path, monkeypatch):
+        """model_counts counts each model ID across all assistant turns."""
+        from keephive.storage import read_session_transcripts
+
+        projects_dir = tmp_path / "cc-projects"
+        monkeypatch.setenv("HIVE_CC_PROJECTS_DIR", str(projects_dir))
+
+        records = [
+            {"type": "assistant", "message": {"model": "claude-haiku-4-5", "usage": {"input_tokens": 1, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}}},
+            {"type": "assistant", "message": {"model": "claude-haiku-4-5", "usage": {"input_tokens": 1, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}}},
+            {"type": "assistant", "message": {"model": "claude-sonnet-4-6", "usage": {"input_tokens": 1, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}}},
+        ]
+        self._write_jsonl(projects_dir, "sess-models", records)
+        result = read_session_transcripts(days_back=365)
+        s = result[0]
+        assert s["model_counts"]["claude-haiku-4-5"] == 2
+        assert s["model_counts"]["claude-sonnet-4-6"] == 1
+
+    def test_extracts_stop_hook_timings(self, hive_env, tmp_path, monkeypatch):
+        """stop_hook_timings comes from type=system subtype=stop_hook_summary hookInfos."""
+        from keephive.storage import read_session_transcripts
+
+        projects_dir = tmp_path / "cc-projects"
+        monkeypatch.setenv("HIVE_CC_PROJECTS_DIR", str(projects_dir))
+
+        records = [
+            {
+                "type": "system",
+                "subtype": "stop_hook_summary",
+                "hookCount": 2,
+                "hookInfos": [
+                    {"command": "/usr/local/bin/keephive hook-stop", "durationMs": 120},
+                    {"command": "/usr/local/bin/plugin/stop-hook.sh", "durationMs": 45},
+                ],
+            }
+        ]
+        self._write_jsonl(projects_dir, "sess-hooks", records)
+        result = read_session_transcripts(days_back=365)
+        s = result[0]
+        assert len(s["stop_hook_timings"]) == 2
+        assert s["stop_hook_timings"][0] == {"command": "/usr/local/bin/keephive hook-stop", "duration_ms": 120}
+        assert s["stop_hook_timings"][1]["duration_ms"] == 45
+
+    def test_extracts_turn_durations(self, hive_env, tmp_path, monkeypatch):
+        """turn_durations_ms comes from type=system subtype=turn_duration durationMs."""
+        from keephive.storage import read_session_transcripts
+
+        projects_dir = tmp_path / "cc-projects"
+        monkeypatch.setenv("HIVE_CC_PROJECTS_DIR", str(projects_dir))
+
+        records = [
+            {"type": "system", "subtype": "turn_duration", "durationMs": 12345},
+            {"type": "system", "subtype": "turn_duration", "durationMs": 67890},
+        ]
+        self._write_jsonl(projects_dir, "sess-turns", records)
+        result = read_session_transcripts(days_back=365)
+        s = result[0]
+        assert s["turn_durations_ms"] == [12345, 67890]
+
+    def test_ignores_non_hook_system_entries(self, hive_env, tmp_path, monkeypatch):
+        """System entries with other subtypes (compact_boundary, local_command) produce no data."""
+        from keephive.storage import read_session_transcripts
+
+        projects_dir = tmp_path / "cc-projects"
+        monkeypatch.setenv("HIVE_CC_PROJECTS_DIR", str(projects_dir))
+
+        records = [
+            {"type": "system", "subtype": "compact_boundary", "content": "Conversation compacted"},
+            {"type": "system", "subtype": "local_command", "content": ""},
+        ]
+        self._write_jsonl(projects_dir, "sess-other-sys", records)
+        result = read_session_transcripts(days_back=365)
+        s = result[0]
+        assert s["stop_hook_timings"] == []
+        assert s["turn_durations_ms"] == []
+        assert s["cache_hits"] == 0
+
+    def test_tolerates_corrupt_lines(self, hive_env, tmp_path, monkeypatch):
+        """Corrupt JSONL lines are skipped; valid lines in same file still parse."""
+        from keephive.storage import read_session_transcripts
+
+        projects_dir = tmp_path / "cc-projects"
+        monkeypatch.setenv("HIVE_CC_PROJECTS_DIR", str(projects_dir))
+
+        proj_dir = projects_dir / "-test-project"
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        path = proj_dir / "sess-corrupt.jsonl"
+        path.write_text(
+            "not valid json\n"
+            + json.dumps({"type": "system", "subtype": "turn_duration", "durationMs": 999})
+            + "\n{broken line\n"
+        )
+        result = read_session_transcripts(days_back=365)
+        assert len(result) == 1
+        assert result[0]["turn_durations_ms"] == [999]
 
 
 # ---- Memory decay ----

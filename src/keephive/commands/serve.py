@@ -393,7 +393,7 @@ main{max-width:1400px;margin:0 auto;padding:16px}
 .fact-item:hover{background:#1c2128}
 .fact-date{color:#6e7681;font-size:11px}
 .fact-text{color:#c9d1d9}
-.empty{color:#8b949e;font-size:12px;padding:16px 20px;font-style:italic;text-align:center;background:#0d1117;border:1px dashed #30363d;border-radius:6px;margin:4px 0}
+.empty{color:#8b949e;font-size:12px;padding:16px 20px;font-style:italic;text-align:center;background:#0d1117;border:1px dashed #30363d;border-radius:6px;margin:4px 0;min-height:80px;display:flex;align-items:center;justify-content:center}
 .cmd-hints{display:flex;flex-wrap:wrap;gap:5px;padding:6px 12px;border-bottom:1px solid #21262d;background:#0a0e13}
 .cmd-hint{font-family:monospace;font-size:11px;color:#8b949e;background:#161b22;border:1px solid #30363d;border-radius:3px;padding:2px 7px;cursor:default;user-select:all;transition:border-color .15s,background .15s}
 .cmd-hint:hover{border-color:#58a6ff;color:#c9d1d9;background:#1c2128}
@@ -5944,7 +5944,7 @@ def _render_daemon_log_panel(data: dict) -> str:
 
 
 def _get_stats_tokens_data() -> dict:
-    """Token usage data from Claude Code session-meta (last 30 days)."""
+    """Token usage data from Claude Code session-meta (last 30 days), with JSONL fallback."""
     from keephive.storage import session_metrics
 
     try:
@@ -5963,6 +5963,8 @@ def _get_stats_tokens_data() -> dict:
 
     today = get_today()
     week_days: list[dict] = []
+    jsonl_fallback = False
+
     try:
         sessions = read_cc_sessions(days_back=30)
         for offset in range(6, -1, -1):
@@ -5976,10 +5978,26 @@ def _get_stats_tokens_data() -> dict:
     except Exception:
         week_days = []
 
+    # Fallback: session-meta may be absent (CC stopped writing it). Read JSONL transcripts instead.
+    if input_tok == 0 and output_tok == 0:
+        try:
+            from keephive.storage import read_session_transcripts
+
+            transcripts = read_session_transcripts(days_back=30)
+            if transcripts:
+                input_tok = sum(
+                    s["cache_hits"] + s["cache_created"] + s["cache_fresh"] for s in transcripts
+                )
+                output_tok = sum(s["output_tokens"] for s in transcripts)
+                jsonl_fallback = True
+        except Exception:
+            pass
+
     return {
         "total_input_tokens": input_tok,
         "total_output_tokens": output_tok,
         "week_days": week_days,
+        "from_jsonl": jsonl_fallback,
     }
 
 
@@ -5988,12 +6006,14 @@ def _render_stats_tokens_panel(data: dict) -> str:
     input_tok = data.get("total_input_tokens", 0)
     output_tok = data.get("total_output_tokens", 0)
     week_days = data.get("week_days", [])
+    from_jsonl = data.get("from_jsonl", False)
+    meta_label = "30 days · JSONL" if from_jsonl else "30 days"
 
     if output_tok == 0 and input_tok == 0:
         return (
             '<div class="card" tabindex="0" role="region" aria-label="Token budget">'
             '<div class="card-header"><span class="card-title">Token Budget</span>'
-            '<span class="card-meta">30 days</span></div>'
+            f'<span class="card-meta">{meta_label}</span></div>'
             '<div class="card-body"><div class="empty">No session data yet.</div></div>'
             "</div>"
         )
@@ -6030,14 +6050,167 @@ def _render_stats_tokens_panel(data: dict) -> str:
             f'<div style="display:flex;gap:4px;align-items:flex-end;margin-bottom:6px">{bars}</div>'
         )
 
-    note = '<div style="color:var(--c-muted);font-size:0.8em">session-meta tokens · completed sessions only</div>'
+    if from_jsonl:
+        note = '<div style="color:var(--c-muted);font-size:0.8em">JSONL transcript tokens · all turns</div>'
+    else:
+        note = '<div style="color:var(--c-muted);font-size:0.8em">session-meta tokens · completed sessions only</div>'
     body = summary + bars + note
 
     return (
         '<div class="card" tabindex="0" role="region" aria-label="Token budget">'
         '<div class="card-header"><span class="card-title">Token Budget</span>'
-        '<span class="card-meta">7 days · session-meta</span></div>'
+        f'<span class="card-meta">{meta_label}</span></div>'
         f'<div class="card-body">{body}</div>'
+        "</div>"
+    )
+
+
+def _hook_display_key(command: str) -> str:
+    """Return a stable display name for a hook command regardless of binary name.
+
+    For keephive-style commands (``/any/path/binary hook-stop``), the hook
+    argument (``hook-stop``) is returned — immune to binary rename accidents.
+    For plugin scripts, the filename is returned (``stop-hook.sh``).
+    """
+    import re
+
+    m = re.search(r"\bhook-\S+", command)
+    if m:
+        return m.group(0)
+    parts = command.replace("${CLAUDE_PLUGIN_ROOT}", "plugin").split("/")
+    return parts[-1].split()[0]
+
+
+# ---- Transcript signals panel ----
+
+
+def _get_transcript_signals_data() -> dict:
+    """Parse JSONL transcripts for cache efficiency, model mix, and stop hook timing."""
+    try:
+        from keephive.storage import read_session_transcripts
+
+        sessions = read_session_transcripts(days_back=7)
+        if not sessions:
+            return {}
+
+        total_hits = sum(s["cache_hits"] for s in sessions)
+        total_input = sum(s["cache_hits"] + s["cache_created"] + s["cache_fresh"] for s in sessions)
+        cache_pct = int(100 * total_hits / total_input) if total_input > 0 else 0
+
+        all_models: dict[str, int] = {}
+        for s in sessions:
+            for m, c in s["model_counts"].items():
+                if not m.startswith("<"):
+                    all_models[m] = all_models.get(m, 0) + c
+
+        stop_timings = [t for s in sessions for t in s["stop_hook_timings"]]
+        by_hook: dict[str, list[int]] = {}
+        for t in stop_timings:
+            key = _hook_display_key(t["command"])
+            by_hook.setdefault(key, []).append(t["duration_ms"])
+        hook_rows = []
+        for hk, durations in sorted(by_hook.items()):
+            hook_rows.append(
+                {
+                    "name": hk,
+                    "avg_ms": sum(durations) // len(durations),
+                    "max_ms": max(durations),
+                    "n": len(durations),
+                    "alert": sum(durations) // len(durations) > 500,
+                }
+            )
+
+        return {
+            "session_count": len(sessions),
+            "cache_pct": cache_pct,
+            "cache_hits_b": total_hits / 1_000_000_000,
+            "cache_total_b": total_input / 1_000_000_000,
+            "model_counts": all_models,
+            "hook_rows": hook_rows,
+        }
+    except Exception:
+        return {}
+
+
+def _render_transcript_signals_panel(data: dict) -> str:
+    """Render cache efficiency + model mix + stop hook timing from JSONL transcripts."""
+    if not data:
+        return (
+            '<div class="card" tabindex="0" role="region" aria-label="Transcript Signals">'
+            '<div class="card-header"><span class="card-title">Transcript Signals</span>'
+            '<span class="card-meta">7 days · JSONL</span></div>'
+            '<div class="card-body"><div class="empty">No JSONL data yet.</div></div>'
+            "</div>"
+        )
+
+    rows_html = ""
+
+    # Cache efficiency bar
+    cache_pct = data.get("cache_pct", 0)
+    hits_b = data.get("cache_hits_b", 0.0)
+    total_b = data.get("cache_total_b", 0.0)
+    bar_w = max(2, cache_pct)
+    color = (
+        "var(--c-ok)"
+        if cache_pct >= 80
+        else "var(--c-warn)"
+        if cache_pct >= 50
+        else "var(--c-danger,#e55)"
+    )
+    rows_html += (
+        f'<div style="margin-bottom:10px">'
+        f'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
+        f'<span style="color:var(--c-muted)">Cache efficiency</span>'
+        f"<strong>{cache_pct}%</strong>"
+        f"</div>"
+        f'<div style="background:var(--c-border);border-radius:3px;height:8px">'
+        f'<div style="width:{bar_w}%;background:{color};border-radius:3px;height:8px"></div>'
+        f"</div>"
+        f'<div style="color:var(--c-muted);font-size:0.75em;margin-top:2px">'
+        f"{hits_b:.1f}B / {total_b:.1f}B tokens · {data.get('session_count', 0)} sessions"
+        f"</div>"
+        f"</div>"
+    )
+
+    # Model mix
+    models = data.get("model_counts", {})
+    total_calls = sum(models.values())
+    if total_calls > 0:
+        rows_html += '<div style="margin-bottom:10px"><div style="color:var(--c-muted);margin-bottom:4px">Model mix</div>'
+        rows_html += '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+        for model, count in sorted(models.items(), key=lambda x: -x[1]):
+            short = model.replace("claude-", "").split("-")[0]
+            pct = int(100 * count / total_calls)
+            rows_html += (
+                f'<span style="background:var(--c-border);border-radius:4px;padding:2px 7px;font-size:0.85em">'
+                f"{_e(short)} {pct}%"
+                f"</span>"
+            )
+        rows_html += "</div></div>"
+
+    # Stop hook timing table
+    hook_rows = data.get("hook_rows", [])
+    if hook_rows:
+        rows_html += '<div style="margin-top:8px"><div style="color:var(--c-muted);margin-bottom:4px">Stop hook timing</div>'
+        rows_html += '<table style="width:100%;font-size:0.82em;border-collapse:collapse">'
+        rows_html += '<tr style="color:var(--c-muted)"><th style="text-align:left;font-weight:normal">hook</th><th style="text-align:right">avg</th><th style="text-align:right">max</th></tr>'
+        for hr in hook_rows:
+            alert_icon = " ⚠" if hr["alert"] else ""
+            avg_color = "color:var(--c-warn)" if hr["alert"] else ""
+            rows_html += (
+                f"<tr>"
+                f'<td style="padding:2px 0">{_e(hr["name"])}{_e(alert_icon)}</td>'
+                f'<td style="text-align:right;{avg_color}">{hr["avg_ms"]}ms</td>'
+                f'<td style="text-align:right;color:var(--c-muted)">{hr["max_ms"]}ms</td>'
+                f"</tr>"
+            )
+        rows_html += "</table></div>"
+
+    return (
+        '<div class="card" tabindex="0" role="region" aria-label="Transcript Signals">'
+        '<div class="card-header"><span class="card-title">Transcript Signals</span>'
+        '<span class="card-meta">7 days · JSONL</span></div>'
+        f'<div class="card-body">{rows_html}</div>'
         "</div>"
     )
 
@@ -6485,6 +6658,7 @@ PANELS: dict[str, tuple] = {
     "stats-capture": (_get_capture_data, _render_capture_panel),
     "stats-recalled": (_get_recalled_data, _render_recalled_panel),
     "stats-tokens": (_get_stats_tokens_data, _render_stats_tokens_panel),
+    "stats-transcripts": (_get_transcript_signals_data, _render_transcript_signals_panel),
     "profiles": (_get_profiles_data, _render_profiles_panel),
     "transfer": (_get_transfer_data, _render_transfer_panel),
     "wander-list": (_get_wander_data, _render_wander_list_panel),
@@ -6538,8 +6712,8 @@ VIEWS: dict[str, dict] = {
         "path": "/stats",
         "title": "Stats",
         "cols": [
-            ["stats", "stats-pipeline", "stats-capture", "stats-platforms"],
-            ["sessions", "stats-commands", "stats-tokens"],
+            ["stats", "stats-transcripts", "stats-pipeline", "stats-capture"],
+            ["sessions", "stats-commands", "stats-tokens", "stats-platforms"],
         ],
         "rows": [["stats-trends"]],
     },
