@@ -205,23 +205,22 @@ def render_md(text: str) -> str:
 
 # ---- CSS + JS ----
 
-_CSS = """
-:root{
---hive-primary:#D4A04A;--hive-primary-dim:#9A7235;--hive-primary-bright:#E8C882;--hive-primary-bg:#2D2518;
---hive-bg:#1A1714;--hive-surface:#23201B;--hive-surface-2:#2C2823;--hive-surface-3:#36312A;
---hive-hover:#282420;--hive-border:#403930;--hive-border-subtle:#332E27;
---hive-text:#D9CFC0;--hive-text-bright:#E8E0D4;--hive-text-secondary:#9E9486;--hive-text-tertiary:#766E63;--hive-text-dim:#5E5549;
---hive-ok:#4CB060;--hive-ok-dim:#3A8548;--hive-ok-bg:#152B1A;--hive-ok-bright:#60B870;
---hive-warn:#C9A030;--hive-warn-dim:#A88020;--hive-warn-bg:#2D2710;
---hive-err:#D05040;--hive-err-dim:#8A3028;--hive-err-bg:#2E1510;--hive-err-bright:#E06858;
---hive-info:#5E9EC4;--hive-info-bg:#152028;
---hive-correction:#D08050;--hive-correction-bg:#2E1D10;
---hive-decision:#C490D0;--hive-decision-bg:#2A1E30;
---hive-fact:#D4A04A;--hive-fact-bg:#2D2518;
---c-bg:var(--hive-bg);--c-surface:var(--hive-surface);--c-border:var(--hive-border);--c-fg:var(--hive-text-bright);
---c-muted:var(--hive-text-secondary);--c-ok:var(--hive-ok);--c-warn:var(--hive-warn);--c-danger:var(--hive-err);
---c-green:var(--hive-ok);--c-yellow:var(--hive-warn-dim);--c-red:var(--hive-err);--c-accent:var(--hive-primary)
-}
+def _build_root_css() -> str:
+    """Generate :root CSS block from DESIGN_TOKENS (single source of truth)."""
+    from keephive.output import DESIGN_TOKENS as T
+
+    props = ";".join(f"--hive-{k}:{v}" for k, v in T.items())
+    aliases = (
+        "--c-bg:var(--hive-bg);--c-surface:var(--hive-surface);--c-border:var(--hive-border);"
+        "--c-fg:var(--hive-text-bright);--c-muted:var(--hive-text-secondary);"
+        "--c-ok:var(--hive-ok);--c-warn:var(--hive-warn);--c-danger:var(--hive-err);"
+        "--c-green:var(--hive-ok);--c-yellow:var(--hive-warn-dim);--c-red:var(--hive-err);"
+        "--c-accent:var(--hive-primary)"
+    )
+    return f":root{{{props};{aliases}}}"
+
+
+_CSS = _build_root_css() + """
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--hive-bg);color:var(--hive-text);font-size:13px;line-height:1.6;letter-spacing:-0.006em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 nav{background:var(--hive-surface);border-bottom:1px solid var(--hive-border);padding:0 16px;display:flex;align-items:center;gap:2px;position:sticky;top:0;z-index:100}

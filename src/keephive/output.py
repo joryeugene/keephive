@@ -11,19 +11,64 @@ import os
 from rich.console import Console
 from rich.theme import Theme
 
-# Amber Terminal theme: warm tinted colors derived from keephive's honey/hive identity
+# Amber Terminal: single source of truth for keephive's visual identity.
+# Both the Rich CLI theme and the serve.py CSS :root block derive from this dict.
+# To change a color across the entire product, edit it here.
+DESIGN_TOKENS: dict[str, str] = {
+    # Primary (amber/honey)
+    "primary": "#D4A04A",
+    "primary-dim": "#9A7235",
+    "primary-bright": "#E8C882",
+    "primary-bg": "#2D2518",
+    # Neutrals (warm-tinted)
+    "bg": "#1A1714",
+    "surface": "#23201B",
+    "surface-2": "#2C2823",
+    "surface-3": "#36312A",
+    "hover": "#282420",
+    "border": "#403930",
+    "border-subtle": "#332E27",
+    # Text
+    "text": "#D9CFC0",
+    "text-bright": "#E8E0D4",
+    "text-secondary": "#9E9486",
+    "text-tertiary": "#766E63",
+    "text-dim": "#5E5549",
+    # Semantic
+    "ok": "#4CB060",
+    "ok-dim": "#3A8548",
+    "ok-bg": "#152B1A",
+    "ok-bright": "#60B870",
+    "warn": "#C9A030",
+    "warn-dim": "#A88020",
+    "warn-bg": "#2D2710",
+    "err": "#D05040",
+    "err-dim": "#8A3028",
+    "err-bg": "#2E1510",
+    "err-bright": "#E06858",
+    "info": "#5E9EC4",
+    "info-bg": "#152028",
+    # Categories
+    "correction": "#D08050",
+    "correction-bg": "#2E1D10",
+    "decision": "#C490D0",
+    "decision-bg": "#2A1E30",
+    "fact": "#D4A04A",
+    "fact-bg": "#2D2518",
+}
+
 _theme = Theme(
     {
-        "ok": "#4CB060",
-        "warn": "#C9A030",
-        "err": "#D05040",
-        "info": "#5E9EC4",
-        "dim": "#766E63",
-        "accent": "#D4A04A",
-        "tier.working": "#4CB060",
-        "tier.knowledge": "#5E9EC4",
-        "tier.daily": "#D4A04A",
-        "tier.archive": "#766E63",
+        "ok": DESIGN_TOKENS["ok"],
+        "warn": DESIGN_TOKENS["warn"],
+        "err": DESIGN_TOKENS["err"],
+        "info": DESIGN_TOKENS["info"],
+        "dim": DESIGN_TOKENS["text-tertiary"],
+        "accent": DESIGN_TOKENS["primary"],
+        "tier.working": DESIGN_TOKENS["ok"],
+        "tier.knowledge": DESIGN_TOKENS["info"],
+        "tier.daily": DESIGN_TOKENS["primary"],
+        "tier.archive": DESIGN_TOKENS["text-tertiary"],
     }
 )
 
