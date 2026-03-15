@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.6.0
+
+Amber Terminal visual identity, dashboard performance, SPA navigation.
+
+### Features
+
+- **Amber Terminal visual identity**: Replaced GitHub Dark clone with a distinctive warm
+  palette derived from the keephive name (keep + hive = honey/amber). All 80+ hardcoded
+  hex values replaced with CSS custom properties in a `:root` block. DM Sans + JetBrains
+  Mono typography via Google Fonts CDN.
+- **Centralized design tokens**: `DESIGN_TOKENS` dict in output.py serves as single source
+  of truth for both CSS custom properties and Rich CLI theme colors. All 12 command files
+  migrated from raw color names (`[green]`, `[red]`) to semantic Rich styles (`[ok]`, `[err]`).
+- **SPA navigation**: Dashboard uses fragment fetching with pushState for instant view
+  switching without full page reloads.
+- **Transcript signals panel**: New stats panel showing cache efficiency, model mix, and
+  stop hook timing parsed from JSONL session transcripts.
+
+### Performance
+
+- **Persistent transcript cache**: Replaced 60s in-memory TTL cache with a two-layer
+  mtime-indexed disk cache. Cold parse: 14s (first ever, unavoidable). Warm: 0.3s (42x
+  faster). Server pre-warms cache on startup in a background thread.
+- **Lazy panel loading**: Expensive stats panels render a placeholder on initial page load
+  and fetch asynchronously after the page shell paints.
+
 ## v1.5.0
 
 Compounding loop: visible growth, experimental rules, interactive dashboard, closed-loop automation.

@@ -64,7 +64,7 @@ Keep your agent orientated across platforms. The new <code>hive serve /brain</co
 
 ```console
 $ hive
-keephive v1.3.0
+keephive v1.6.0
   ● hooks  ● mcp  ● data  ● daemon
 
   4 facts (4 ok) | 12 today | 8 yesterday | 2 guides | 48K
