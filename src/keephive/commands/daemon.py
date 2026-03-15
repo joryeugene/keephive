@@ -565,6 +565,18 @@ Write the briefing. Each point on its own line. Include pending queue summary at
             ts = get_now().strftime("%H:%M")
             entry = f"\n[🐝 KingBee {ts}] morning briefing\n{result.content}\n"
             append_to_daily(entry)
+            # Dual-write: structured insight for dashboard
+            from keephive.storage import append_kingbee_insight
+
+            lines = [ln.strip() for ln in result.content.strip().splitlines() if ln.strip()]
+            append_kingbee_insight(
+                {
+                    "task": "morning-briefing",
+                    "timestamp": get_now().isoformat(),
+                    "summary": lines[0][:120] if lines else "Morning briefing delivered",
+                    "details": lines[1:4] if len(lines) > 1 else [],
+                }
+            )
     except ClaudePipeError as e:
         _log_daemon(f"morning-briefing failed: {e}")
         return True if _is_no_backend_error(e) else False
@@ -598,6 +610,18 @@ Memory:
             ts = get_now().strftime("%H:%M")
             entry = f"\n[🐝 KingBee {ts}] stale-check\n{result.content}\n"
             append_to_daily(entry)
+            # Dual-write: structured insight for dashboard
+            from keephive.storage import append_kingbee_insight
+
+            lines = [ln.strip() for ln in result.content.strip().splitlines() if ln.strip()]
+            append_kingbee_insight(
+                {
+                    "task": "stale-check",
+                    "timestamp": get_now().isoformat(),
+                    "summary": lines[0][:120] if lines else "Memory reviewed",
+                    "details": lines[1:4] if len(lines) > 1 else [],
+                }
+            )
     except ClaudePipeError as e:
         _log_daemon(f"stale-check failed: {e}")
         return True if _is_no_backend_error(e) else False
@@ -882,8 +906,24 @@ def _task_self_improve() -> bool:
         f"{item.get('type', '?')}: {item.get('name', '')[:60]}" for item in dismissed[-20:]
     ]
 
-    prompt = f"""You are KingBee analyzing your own effectiveness over the last 7 days.
+    # ── Acceptance rate feedback (closed-loop: learn from what worked) ──
+    from keephive.storage import improvement_history_stats
 
+    hist_stats = improvement_history_stats()
+    effectiveness_context = ""
+    if hist_stats["total_applied"] + hist_stats["total_dismissed"] > 0:
+        by_type = hist_stats["by_type"]
+        type_rates = ", ".join(f"{t}: {c} accepted" for t, c in sorted(by_type.items(), key=lambda x: -x[1]))
+        effectiveness_context = (
+            f"\n\nYour track record: {hist_stats['total_applied']} applied, "
+            f"{hist_stats['total_dismissed']} dismissed "
+            f"({int(hist_stats['acceptance_rate'] * 100)}% acceptance rate). "
+            f"Breakdown: {type_rates}. "
+            f"Propose more of what gets accepted. Avoid types that get dismissed."
+        )
+
+    prompt = f"""You are KingBee analyzing your own effectiveness over the last 7 days.
+{effectiveness_context}
 You can propose NEW improvements OR refine existing ones. Propose at most 4 items total. Quality over quantity. Silence is acceptable.
 
 **For NEW items** (proposed_skills / proposed_tasks / proposed_rules):
@@ -972,6 +1012,26 @@ If nothing warrants a proposal, return all empty lists with summary "No patterns
                 )
             else:
                 _log_daemon("self-improve: no new proposals this cycle")
+            # Dual-write: structured insight for dashboard
+            from keephive.clock import get_now
+            from keephive.storage import append_kingbee_insight
+
+            proposal_types = [it.get("type", "?") for it in new_items]
+            append_kingbee_insight(
+                {
+                    "task": "self-improve",
+                    "timestamp": get_now().isoformat(),
+                    "summary": (
+                        f"{len(new_items)} proposals: {', '.join(proposal_types)}"
+                        if new_items
+                        else "No patterns this cycle"
+                    ),
+                    "details": [
+                        f"{it.get('type')}: {it.get('name', it.get('rule', ''))[:60]}"
+                        for it in new_items[:4]
+                    ],
+                }
+            )
             return True  # caller handles _mark_last_run
         return False  # run_claude_pipe returned None
     except ClaudePipeError as e:
@@ -1101,6 +1161,23 @@ used_web_search: true if you used WebSearch, false otherwise"""
             )
             _log_daemon(f"wander: wrote {path.name}{web_note}")
 
+            from keephive.storage import append_kingbee_insight
+
+            append_kingbee_insight({
+                "task": "wander",
+                "timestamp": get_now().isoformat(),
+                "summary": f"Explored '{seed}' ({seed_source}){web_note}",
+                "details": [
+                    f"Hypothesis: {result.hypothesis}",
+                    f"Question: {result.question}",
+                    *(
+                        [f"Action ({result.action_type}): {result.action}"]
+                        if result.action and result.action_type != "none"
+                        else []
+                    ),
+                ],
+            })
+
             # If wander produced an actionable hypothesis, queue it for hive improve review
             if result.action and result.action_type != "none":
                 try:
@@ -1226,6 +1303,16 @@ Do not invent or extrapolate beyond what the entries say.
     }
     append_pending_improvements([proposal])
     _log_daemon(f"[reflect-draft: proposed guide '{topic}']")
+
+    from keephive.clock import get_now
+    from keephive.storage import append_kingbee_insight
+
+    append_kingbee_insight({
+        "task": "reflect-draft",
+        "timestamp": get_now().isoformat(),
+        "summary": f"Proposed guide for '{topic}' from {len(entries)} log entries",
+        "details": [f"Guide '{topic}' queued for review (trusted=False)"],
+    })
 
     # Write daemon hints: active theme generation implies knowledge drift
     _write_reflect_hints(topic, len(entries))

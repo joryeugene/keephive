@@ -13,7 +13,11 @@ import sys
 
 from rich.console import Console
 
-from keephive.storage import growth_snapshot
+from keephive.storage import (
+    experiment_results,
+    growth_snapshot,
+    improvement_history_stats,
+)
 
 _SPARK_CHARS = " ▁▂▃▄▅▆▇█"
 
@@ -84,6 +88,12 @@ def cmd_growth(args: list[str]) -> None:
 
     # Comprehension coverage
     _print_comprehension_section(console, snap.get("comprehension", {}))
+
+    # Improvement velocity
+    _print_improvement_section(console)
+
+    # Experiment results
+    _print_experiment_section(console)
 
     # 30-day sparklines
     console.print("[bold]30-Day Trends[/bold]")
@@ -162,6 +172,42 @@ def _print_comprehension_section(console: Console, cov: dict) -> None:
     console.print()
 
 
+def _print_improvement_section(console: Console) -> None:
+    """Print KingBee improvement velocity section."""
+    stats = improvement_history_stats()
+    total = stats["total_applied"] + stats["total_dismissed"]
+    if total == 0:
+        return
+
+    console.print("[bold]KingBee Effectiveness[/bold]")
+    console.print(f"  Applied             {stats['total_applied']}")
+    console.print(f"  Dismissed           {stats['total_dismissed']}")
+    console.print(f"  Acceptance rate     {_pct_str(stats['acceptance_rate'] * 100)}")
+    if stats["by_type"]:
+        type_parts = [f"{t}={c}" for t, c in sorted(stats["by_type"].items(), key=lambda x: -x[1])]
+        console.print(f"  By type             {', '.join(type_parts)}")
+    console.print()
+
+
+def _print_experiment_section(console: Console) -> None:
+    """Print rule experiment results section."""
+    results = experiment_results()
+    if not results:
+        return
+
+    console.print("[bold]Rule Experiments[/bold]")
+    for exp in results[:5]:
+        rule_text = exp.get("rule_text", "")[:50]
+        delta = exp.get("friction_delta")
+        if delta is not None:
+            sign = "+" if delta > 0 else ""
+            color = "err" if delta > 0 else "ok"
+            console.print(f"  {rule_text}  [{color}]{sign}{delta:.0f}%[/{color}]")
+        else:
+            console.print(f"  {rule_text}  [dim]no baseline[/dim]")
+    console.print()
+
+
 def _print_growth_story(console: Console, snap: dict) -> None:
     """Print a deterministic growth narrative from template patterns."""
     observations: list[str] = []
@@ -210,6 +256,17 @@ def _print_growth_story(console: Console, snap: dict) -> None:
             f"Auto-captured facts are mostly reviewed ({auto_only} unverified)."
             " Low comprehension debt."
         )
+
+    # Improvement velocity
+    hist = improvement_history_stats()
+    if hist["total_applied"] > 0:
+        recent = hist.get("recent", [])
+        week_cutoff = snap["trend_30d"][-7]["date"] if len(snap["trend_30d"]) >= 7 else ""
+        this_week = sum(1 for r in recent if week_cutoff and r.get("applied_at", "") >= week_cutoff)
+        if this_week > 0:
+            observations.append(f"{this_week} improvements applied this week.")
+        elif hist["total_applied"] > 3:
+            observations.append(f"{hist['total_applied']} improvements applied total. KingBee is learning what works.")
 
     if observations:
         console.print("[bold]Growth Story[/bold]")
