@@ -216,7 +216,8 @@ def _build_root_css() -> str:
         "--c-fg:var(--hive-text-bright);--c-muted:var(--hive-text-secondary);"
         "--c-ok:var(--hive-ok);--c-warn:var(--hive-warn);--c-danger:var(--hive-err);"
         "--c-green:var(--hive-ok);--c-yellow:var(--hive-warn-dim);--c-red:var(--hive-err);"
-        "--c-accent:var(--hive-primary)"
+        "--c-accent:var(--hive-primary);"
+        "--c-info:#6ba3d6;--c-amber:#d4a574;--c-purple:#a875d4;--c-teal:#6bc4b8"
     )
     return f":root{{{props};{aliases}}}"
 
@@ -6689,6 +6690,208 @@ def _render_rules_pending_panel(data: dict) -> str:
     )
 
 
+# ---- KingBee insights panel ----
+
+
+def _get_kingbee_insights_data() -> dict:
+    from keephive.storage import read_kingbee_insights
+
+    insights = read_kingbee_insights(limit=20)
+    return {"insights": insights}
+
+
+def _render_kingbee_insights_panel(data: dict) -> str:
+    insights = data.get("insights", [])
+    if not insights:
+        return (
+            '<div class="card" tabindex="0" role="region" aria-label="KingBee Insights">'
+            '<div class="card-header"><span class="card-title">KingBee Insights</span></div>'
+            '<div class="card-body">'
+            '<div style="color:var(--c-muted);font-size:12px">No insights yet. '
+            "KingBee will write structured entries as daemon tasks run.</div>"
+            "</div></div>"
+        )
+
+    rows = ""
+    for entry in insights:
+        task = _e(entry.get("task", "?"))
+        summary = _e(entry.get("summary", ""))
+        ts = entry.get("timestamp", "")
+        time_str = ts[11:16] if len(ts) > 16 else ""
+        project = entry.get("project", "")
+        proj_badge = (
+            f'<span style="font-size:10px;padding:1px 5px;border-radius:3px;'
+            f'background:var(--c-surface);color:var(--c-ok);margin-left:4px">'
+            f"{_e(project)}</span>"
+            if project
+            else ""
+        )
+        details = entry.get("details", [])
+        detail_html = ""
+        if details:
+            detail_items = "".join(
+                f'<div style="font-size:11px;color:var(--c-muted);padding:1px 0">'
+                f"{_e(str(d)[:120])}</div>"
+                for d in details[:3]
+            )
+            detail_html = f'<div style="margin-top:4px">{detail_items}</div>'
+
+        rows += (
+            f'<div style="padding:6px 0;border-bottom:1px solid var(--c-border)">'
+            f'<div style="display:flex;align-items:center;gap:6px">'
+            f'<span style="font-size:10px;padding:2px 6px;border-radius:3px;'
+            f'background:var(--c-surface);color:var(--c-muted);text-transform:uppercase">'
+            f"{task}</span>"
+            f'<span style="font-size:11px;color:var(--c-muted)">{time_str}</span>'
+            f"{proj_badge}</div>"
+            f'<div style="font-size:12px;margin-top:2px">{summary}</div>'
+            f"{detail_html}"
+            f"</div>"
+        )
+
+    return (
+        '<div class="card" tabindex="0" role="region" aria-label="KingBee Insights">'
+        '<div class="card-header"><span class="card-title">KingBee Insights</span>'
+        f'<span style="font-size:11px;color:var(--c-muted)"> ({len(insights)})</span></div>'
+        f'<div class="card-body">{rows}</div></div>'
+    )
+
+
+# ---- Experiment results panel ----
+
+
+def _get_experiment_results_data() -> dict:
+    from keephive.storage import experiment_results
+
+    return {"results": experiment_results()}
+
+
+def _render_experiment_results_panel(data: dict) -> str:
+    results = data.get("results", [])
+    if not results:
+        return (
+            '<div class="card" tabindex="0" role="region" aria-label="Experiments">'
+            '<div class="card-header"><span class="card-title">Rule Experiments</span></div>'
+            '<div class="card-body">'
+            '<div style="color:var(--c-muted);font-size:12px">No experiments yet. '
+            "Try: <code>hive rule try &quot;your rule&quot;</code></div>"
+            "</div></div>"
+        )
+
+    rows = ""
+    for r in results:
+        rule_text = _e(r.get("rule_text", "?"))
+        delta = r.get("friction_delta")
+        status = r.get("status", "active")
+        days = r.get("duration_days", 0)
+        expiry = r.get("expiry", "")
+
+        if delta is not None:
+            if delta < 0:
+                delta_html = f'<span style="color:var(--c-ok)">{delta}%</span>'
+            elif delta > 0:
+                delta_html = f'<span style="color:var(--c-err)">+{delta}%</span>'
+            else:
+                delta_html = '<span style="color:var(--c-muted)">0%</span>'
+        else:
+            delta_html = '<span style="color:var(--c-muted)">pending</span>'
+
+        status_color = "var(--c-ok)" if status == "active" else "var(--c-muted)"
+        rows += (
+            f'<div style="padding:6px 0;border-bottom:1px solid var(--c-border)">'
+            f'<div style="font-size:12px">{rule_text}</div>'
+            f'<div style="display:flex;gap:12px;margin-top:3px;font-size:11px">'
+            f'<span style="color:{status_color}">{_e(status)}</span>'
+            f"<span>friction: {delta_html}</span>"
+            f'<span style="color:var(--c-muted)">{days}d</span>'
+            + (f'<span style="color:var(--c-muted)">exp: {_e(expiry)}</span>' if expiry else "")
+            + "</div></div>"
+        )
+
+    return (
+        '<div class="card" tabindex="0" role="region" aria-label="Experiments">'
+        '<div class="card-header"><span class="card-title">Rule Experiments</span>'
+        f'<span style="font-size:11px;color:var(--c-muted)"> ({len(results)})</span></div>'
+        f'<div class="card-body">{rows}</div></div>'
+    )
+
+
+# ---- Improvement effectiveness panel ----
+
+
+def _get_improvement_effectiveness_data() -> dict:
+    from keephive.storage import improvement_history_stats
+
+    return improvement_history_stats()
+
+
+def _render_improvement_effectiveness_panel(data: dict) -> str:
+    total = data.get("total_applied", 0)
+    dismissed = data.get("total_dismissed", 0)
+    rate = data.get("acceptance_rate", 0)
+    by_type = data.get("by_type", {})
+    recent = data.get("recent", [])
+
+    if total == 0 and dismissed == 0:
+        return (
+            '<div class="card" tabindex="0" role="region" aria-label="KingBee Effectiveness">'
+            '<div class="card-header"><span class="card-title">KingBee Effectiveness</span></div>'
+            '<div class="card-body">'
+            '<div style="color:var(--c-muted);font-size:12px">No improvement history yet. '
+            "KingBee proposals appear after running the daemon.</div>"
+            "</div></div>"
+        )
+
+    rate_color = "var(--c-ok)" if rate > 0.5 else "var(--c-warn)" if rate > 0.2 else "var(--c-err)"
+    metrics = (
+        f'<div style="display:flex;gap:16px;margin-bottom:8px">'
+        f'<div><span style="font-size:20px;font-weight:600;color:var(--c-fg)">{total}</span>'
+        f'<div style="font-size:10px;color:var(--c-muted)">applied</div></div>'
+        f'<div><span style="font-size:20px;font-weight:600;color:var(--c-muted)">{dismissed}</span>'
+        f'<div style="font-size:10px;color:var(--c-muted)">dismissed</div></div>'
+        f'<div><span style="font-size:20px;font-weight:600;color:{rate_color}">'
+        f"{int(rate * 100)}%</span>"
+        f'<div style="font-size:10px;color:var(--c-muted)">acceptance</div></div>'
+        f"</div>"
+    )
+
+    type_pills = ""
+    for t, count in sorted(by_type.items(), key=lambda x: -x[1]):
+        type_pills += (
+            f'<span style="display:inline-block;padding:2px 6px;border-radius:3px;'
+            f'font-size:10px;margin:2px;background:var(--c-surface);color:var(--c-fg)">'
+            f"{count} {_e(t)}</span>"
+        )
+
+    recent_html = ""
+    if recent:
+        items = "".join(
+            f'<div style="font-size:11px;color:var(--c-muted);padding:2px 0">'
+            f"{_e(r.get('type', '?'))}: {_e(r.get('name', '')[:60])}</div>"
+            for r in recent[-3:]
+        )
+        recent_html = (
+            f'<div style="margin-top:8px;border-top:1px solid var(--c-border);padding-top:6px">'
+            f'<div style="font-size:10px;color:var(--c-muted);margin-bottom:4px">Recent:</div>'
+            f"{items}</div>"
+        )
+
+    return (
+        '<div class="card" tabindex="0" role="region" aria-label="KingBee Effectiveness">'
+        '<div class="card-header"><span class="card-title">KingBee Effectiveness</span></div>'
+        f'<div class="card-body">{metrics}{type_pills}{recent_html}</div></div>'
+    )
+
+
+# ---- Graph data (API-only, rendered client-side) ----
+
+
+def _get_graph_data() -> dict:
+    from keephive.storage import build_knowledge_graph
+
+    return build_knowledge_graph()
+
+
 # ---- Facts pending panel ----
 
 
@@ -6793,6 +6996,12 @@ PANELS: dict[str, tuple] = {
     "improve-queue": (_get_improve_queue_data, _render_improve_queue_panel),
     "rules-pending": (_get_rules_pending_data, _render_rules_pending_panel),
     "facts-pending": (_get_facts_pending_data, _render_facts_pending_panel),
+    "kingbee-insights": (_get_kingbee_insights_data, _render_kingbee_insights_panel),
+    "experiment-results": (_get_experiment_results_data, _render_experiment_results_panel),
+    "improvement-effectiveness": (
+        _get_improvement_effectiveness_data,
+        _render_improvement_effectiveness_panel,
+    ),
 }
 
 # ---- View definitions ----
@@ -6811,7 +7020,10 @@ VIEWS: dict[str, dict] = {
     "agent": {
         "path": "/agent",
         "title": "Agent",
-        "cols": [["active-loops"], ["daemon-status"]],
+        "cols": [
+            ["active-loops", "kingbee-insights"],
+            ["daemon-status", "improvement-effectiveness"],
+        ],
         "rows": [["daemon-log"]],
     },
     "play": {
@@ -6834,7 +7046,7 @@ VIEWS: dict[str, dict] = {
             ["stats", "stats-pipeline", "stats-capture"],
             ["sessions", "stats-commands", "stats-transcripts"],
         ],
-        "rows": [["stats-tokens", "stats-platforms"], ["stats-trends"]],
+        "rows": [["stats-tokens", "stats-platforms"], ["stats-trends", "experiment-results"]],
     },
     "brain": {
         "path": "/brain",
@@ -6865,6 +7077,13 @@ VIEWS: dict[str, dict] = {
             ["improve-queue"],
             ["rules-pending", "facts-pending"],
         ],
+    },
+    "graph": {
+        "path": "/graph",
+        "title": "Graph",
+        "custom_render": True,
+        "cols": [],
+        "rows": [],
     },
     "settings": {
         "path": "/settings",
@@ -6927,10 +7146,230 @@ _LAZY_PLACEHOLDER = (
 )
 
 
+def _render_graph_fragment() -> str:
+    """Render the knowledge graph view with client-side force-directed layout."""
+    return """
+<div class="card" style="height:calc(100vh - 120px);min-height:400px" tabindex="0"
+     role="region" aria-label="Knowledge Graph">
+  <div class="card-header" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span class="card-title">Knowledge Graph</span>
+    <div style="display:flex;gap:4px;font-size:10px;flex-wrap:wrap" id="graph-filters">
+      <button class="graph-type-btn active" data-type="all" onclick="graphFilter('all',this)"
+        style="padding:2px 8px;border:1px solid var(--c-border);border-radius:3px;
+        background:var(--c-surface);color:var(--c-fg);cursor:pointer;font-size:10px">All</button>
+      <button class="graph-type-btn" data-type="fact" onclick="graphFilter('fact',this)"
+        style="padding:2px 8px;border:1px solid var(--c-border);border-radius:3px;
+        background:transparent;color:var(--c-amber);cursor:pointer;font-size:10px">Facts</button>
+      <button class="graph-type-btn" data-type="guide" onclick="graphFilter('guide',this)"
+        style="padding:2px 8px;border:1px solid var(--c-border);border-radius:3px;
+        background:transparent;color:var(--c-info);cursor:pointer;font-size:10px">Guides</button>
+      <button class="graph-type-btn" data-type="project" onclick="graphFilter('project',this)"
+        style="padding:2px 8px;border:1px solid var(--c-border);border-radius:3px;
+        background:transparent;color:var(--c-ok);cursor:pointer;font-size:10px">Projects</button>
+      <button class="graph-type-btn" data-type="rule" onclick="graphFilter('rule',this)"
+        style="padding:2px 8px;border:1px solid var(--c-border);border-radius:3px;
+        background:transparent;color:var(--c-purple);cursor:pointer;font-size:10px">Rules</button>
+      <button class="graph-type-btn" data-type="todo" onclick="graphFilter('todo',this)"
+        style="padding:2px 8px;border:1px solid var(--c-border);border-radius:3px;
+        background:transparent;color:var(--c-err);cursor:pointer;font-size:10px">TODOs</button>
+      <button class="graph-type-btn" data-type="wander" onclick="graphFilter('wander',this)"
+        style="padding:2px 8px;border:1px solid var(--c-border);border-radius:3px;
+        background:transparent;color:var(--c-teal);cursor:pointer;font-size:10px">Wander</button>
+    </div>
+    <span id="graph-stats" style="font-size:10px;color:var(--c-muted);margin-left:auto"></span>
+  </div>
+  <div class="card-body" style="padding:0;position:relative;overflow:hidden;height:100%">
+    <svg id="graph-svg" style="width:100%;height:100%"></svg>
+    <div id="graph-tooltip"
+      style="display:none;position:absolute;padding:6px 10px;border-radius:4px;
+      background:var(--c-surface);border:1px solid var(--c-border);font-size:11px;
+      color:var(--c-fg);max-width:300px;pointer-events:none;z-index:10;
+      box-shadow:0 2px 8px rgba(0,0,0,0.3)"></div>
+  </div>
+</div>
+<script>
+(function(){
+  var svg=document.getElementById('graph-svg');
+  var tooltip=document.getElementById('graph-tooltip');
+  var statsEl=document.getElementById('graph-stats');
+  var nodes=[],edges=[],activeFilter='all';
+  var W,H,dragging=null,dragOff={x:0,y:0},simRunning=false;
+
+  var TYPE_COLORS={
+    fact:'#d4a574',guide:'#6ba3d6',project:'#6abf69',
+    todo:'#d46b6b',rule:'#a875d4',wander:'#6bc4b8'
+  };
+
+  function load(){
+    fetch('/api/graph-data').then(function(r){return r.json();}).then(function(g){
+      nodes=g.nodes||[];edges=g.edges||[];
+      var rect=svg.getBoundingClientRect();W=rect.width;H=rect.height;
+      initPositions();simulate();render();
+      var orphans=nodes.filter(function(n){return n.orphan;}).length;
+      var stale=nodes.filter(function(n){return n.stale;}).length;
+      statsEl.textContent=nodes.length+' nodes, '+edges.length+' edges'
+        +(orphans?' | '+orphans+' orphan':'')+(stale?' | '+stale+' stale':'');
+    });
+  }
+
+  function initPositions(){
+    for(var i=0;i<nodes.length;i++){
+      var n=nodes[i];
+      n.x=W/2+(Math.random()-0.5)*W*0.6;
+      n.y=H/2+(Math.random()-0.5)*H*0.6;
+      n.vx=0;n.vy=0;
+    }
+  }
+
+  var nodeMap={};
+  function buildMap(){
+    nodeMap={};
+    for(var i=0;i<nodes.length;i++) nodeMap[nodes[i].id]=nodes[i];
+  }
+
+  function simulate(){
+    buildMap();simRunning=true;
+    var alpha=1,decay=0.97,minAlpha=0.01;
+    function tick(){
+      if(alpha<minAlpha){simRunning=false;return;}
+      // Repulsion
+      for(var i=0;i<nodes.length;i++){
+        for(var j=i+1;j<nodes.length;j++){
+          var a=nodes[i],b=nodes[j];
+          var dx=b.x-a.x,dy=b.y-a.y;
+          var d2=dx*dx+dy*dy;if(d2<1)d2=1;
+          var f=300/d2*alpha;
+          a.vx-=dx*f;a.vy-=dy*f;
+          b.vx+=dx*f;b.vy+=dy*f;
+        }
+      }
+      // Attraction along edges
+      for(var i=0;i<edges.length;i++){
+        var s=nodeMap[edges[i].source],t=nodeMap[edges[i].target];
+        if(!s||!t)continue;
+        var dx=t.x-s.x,dy=t.y-s.y;
+        var d=Math.sqrt(dx*dx+dy*dy);if(d<1)d=1;
+        var f=(d-80)*0.005*alpha;
+        s.vx+=dx/d*f;s.vy+=dy/d*f;
+        t.vx-=dx/d*f;t.vy-=dy/d*f;
+      }
+      // Center gravity
+      for(var i=0;i<nodes.length;i++){
+        var n=nodes[i];
+        n.vx+=(W/2-n.x)*0.001*alpha;
+        n.vy+=(H/2-n.y)*0.001*alpha;
+        // Damping
+        n.vx*=0.6;n.vy*=0.6;
+        if(n!==dragging){n.x+=n.vx;n.y+=n.vy;}
+        // Bounds
+        n.x=Math.max(20,Math.min(W-20,n.x));
+        n.y=Math.max(20,Math.min(H-20,n.y));
+      }
+      alpha*=decay;
+      render();
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function nodeSize(n){
+    if(n.type==='project') return n.hub?14:10;
+    if(n.hub) return 8;
+    return 5;
+  }
+
+  function isVisible(n){
+    return activeFilter==='all'||n.type===activeFilter;
+  }
+
+  function render(){
+    var html='';
+    // Edges
+    for(var i=0;i<edges.length;i++){
+      var s=nodeMap[edges[i].source],t=nodeMap[edges[i].target];
+      if(!s||!t||!isVisible(s)||!isVisible(t))continue;
+      html+='<line x1="'+s.x+'" y1="'+s.y+'" x2="'+t.x+'" y2="'+t.y+'"'
+        +' stroke="'+(TYPE_COLORS[s.type]||'#666')+'" stroke-opacity="0.2" stroke-width="1"/>';
+    }
+    // Nodes
+    for(var i=0;i<nodes.length;i++){
+      var n=nodes[i];
+      if(!isVisible(n))continue;
+      var r=nodeSize(n),color=TYPE_COLORS[n.type]||'#888';
+      var opacity=n.orphan?'0.5':'1';
+      var dash=n.stale?'stroke-dasharray="3,2"':'';
+      html+='<circle cx="'+n.x+'" cy="'+n.y+'" r="'+r+'" fill="'+color+'"'
+        +' fill-opacity="'+opacity+'" stroke="'+color+'" stroke-width="1.5" '+dash
+        +' data-idx="'+i+'" style="cursor:pointer"/>';
+      if(n.type==='project'){
+        html+='<text x="'+n.x+'" y="'+(n.y+r+12)+'" text-anchor="middle"'
+          +' fill="'+color+'" font-size="10" font-weight="500">'+n.label+'</text>';
+      }
+    }
+    svg.innerHTML=html;
+  }
+
+  // Interaction
+  svg.addEventListener('mousemove',function(e){
+    var el=e.target;
+    if(el.tagName==='circle'&&el.dataset.idx){
+      var n=nodes[parseInt(el.dataset.idx)];
+      tooltip.style.display='block';
+      tooltip.style.left=(e.offsetX+12)+'px';
+      tooltip.style.top=(e.offsetY-20)+'px';
+      var props=n.type.toUpperCase();
+      if(n.project) props+=' | '+n.project;
+      if(n.stale) props+=' | STALE';
+      if(n.orphan) props+=' | ORPHAN';
+      if(n.type_tag) props+=' | '+n.type_tag;
+      tooltip.innerHTML='<div style="font-weight:600;margin-bottom:2px">'+props+'</div>'
+        +'<div>'+n.label+'</div>';
+    }else{
+      tooltip.style.display='none';
+    }
+    if(dragging){
+      var rect=svg.getBoundingClientRect();
+      dragging.x=e.clientX-rect.left-dragOff.x;
+      dragging.y=e.clientY-rect.top-dragOff.y;
+      if(!simRunning)render();
+    }
+  });
+  svg.addEventListener('mousedown',function(e){
+    if(e.target.tagName==='circle'&&e.target.dataset.idx){
+      var n=nodes[parseInt(e.target.dataset.idx)];
+      dragging=n;
+      var rect=svg.getBoundingClientRect();
+      dragOff.x=e.clientX-rect.left-n.x;
+      dragOff.y=e.clientY-rect.top-n.y;
+    }
+  });
+  document.addEventListener('mouseup',function(){dragging=null;});
+
+  window.graphFilter=function(type,btn){
+    activeFilter=type;
+    var btns=document.querySelectorAll('.graph-type-btn');
+    btns.forEach(function(b){b.classList.remove('active');b.style.background='transparent';});
+    btn.classList.add('active');btn.style.background='var(--c-surface)';
+    render();
+  };
+
+  load();
+  // Resize handler
+  window.addEventListener('resize',function(){
+    var rect=svg.getBoundingClientRect();W=rect.width;H=rect.height;render();
+  });
+})();
+</script>
+"""
+
+
 def render_fragment(view_name: str, extra_params: dict | None = None) -> str:
     view_def = VIEWS.get(view_name)
     if not view_def:
         return '<div class="empty">Unknown view</div>'
+
+    if view_def.get("custom_render") and view_name == "graph":
+        return _render_graph_fragment()
 
     parts: list[str] = []
 
@@ -7252,6 +7691,26 @@ class _HiveHandler(BaseHTTPRequestHandler):
                 resp_data = json.dumps({"items": items}).encode()
             except Exception as exc:
                 resp_data = json.dumps({"items": [], "error": str(exc)}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._cors()
+            self.send_header("Content-Length", str(len(resp_data)))
+            self.end_headers()
+            self.wfile.write(resp_data)
+            return
+
+        if path == "/api/graph-data":
+            try:
+                qs = parse_qs(parsed.query)
+                project = (qs.get("project", [""])[0] or "").strip() or None
+                graph = _get_graph_data() if not project else None
+                if project:
+                    from keephive.storage import build_knowledge_graph
+
+                    graph = build_knowledge_graph(project_filter=project)
+                resp_data = json.dumps(graph).encode()
+            except Exception as exc:
+                resp_data = json.dumps({"nodes": [], "edges": [], "error": str(exc)}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._cors()
@@ -8278,6 +8737,84 @@ class _HiveHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(resp)
                 return
+
+        elif self.path == "/api/mem/entry":
+            idx = data.get("index")
+            action = (data.get("action") or "").strip()
+            new_text = (data.get("text") or "").strip()
+
+            if idx is None or not action:
+                ok = False
+                error = "index and action are required"
+            else:
+                try:
+                    from keephive.storage import delete_memory_entry, update_memory_entry
+
+                    if action == "delete":
+                        ok = delete_memory_entry(int(idx))
+                        if not ok:
+                            error = f"invalid index: {idx}"
+                    elif action == "update":
+                        if not new_text:
+                            ok = False
+                            error = "text is required for update"
+                        else:
+                            ok = update_memory_entry(int(idx), new_text)
+                            if not ok:
+                                error = f"invalid index: {idx}"
+                    else:
+                        ok = False
+                        error = f"unknown action: {action}"
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/rules/entry":
+            idx = data.get("index")
+            action = (data.get("action") or "").strip()
+            new_text = (data.get("text") or "").strip()
+
+            if idx is None or not action:
+                ok = False
+                error = "index and action are required"
+            else:
+                try:
+                    from keephive.storage import delete_rule_entry, update_rule_entry
+
+                    if action == "delete":
+                        ok = delete_rule_entry(int(idx))
+                        if not ok:
+                            error = f"invalid index: {idx}"
+                    elif action == "update":
+                        if not new_text:
+                            ok = False
+                            error = "text is required for update"
+                        else:
+                            ok = update_rule_entry(int(idx), new_text)
+                            if not ok:
+                                error = f"invalid index: {idx}"
+                    else:
+                        ok = False
+                        error = f"unknown action: {action}"
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
+
+        elif self.path == "/api/facts/promote":
+            idx = data.get("index")
+            if idx is None:
+                ok = False
+                error = "index is required"
+            else:
+                try:
+                    from keephive.storage import promote_pending_fact
+
+                    ok = promote_pending_fact(int(idx))
+                    if not ok:
+                        error = f"invalid index: {idx}"
+                except Exception as exc:
+                    ok = False
+                    error = str(exc)
 
         else:
             self.send_response(404)

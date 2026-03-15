@@ -3205,6 +3205,7 @@ def test_consolidated_views_exist():
         "settings",
         "play",
         "agent",
+        "graph",
     }
 
 
