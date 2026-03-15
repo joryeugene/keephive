@@ -986,6 +986,22 @@ _JS = """
   }
   _connectSSE();
 
+  // --- Lazy panel loading: fetch expensive panels after page shell is painted ---
+  function _loadLazyPanels(){
+    document.querySelectorAll('[data-panel-id]').forEach(function(el){
+      var name=el.dataset.panelId;
+      // Only fetch if panel contains the loading placeholder
+      if(!el.querySelector('.empty')||el.textContent.trim()!=='loading\u2026')return;
+      fetch('/api/panel/'+encodeURIComponent(name))
+        .then(function(r){return r.text();})
+        .then(function(html){
+          el.innerHTML=html;
+        })
+        .catch(function(){});
+    });
+  }
+  _loadLazyPanels();
+
   // --- Reconnect on tab focus so time-sensitive panels show fresh data ---
   document.addEventListener('visibilitychange',function(){
     if(document.visibilityState==='visible'){_connectSSE();}
@@ -1724,10 +1740,11 @@ _JS = """
     if(p)_VIEW_PATHS[p]=a.textContent.trim();
   });
 
+  var _navInFlight=false;
   function _navigateTo(path,push){
+    if(_navInFlight)return;
     var mc=document.getElementById('main-content');
     if(!mc)return;
-    // Derive view name from path
     // Map path to view name (/ -> home, /stats -> stats, etc.)
     var vn='home';
     if(path!=='/'){
@@ -1735,33 +1752,34 @@ _JS = """
       var aliases={'daily':'home','simple':'home','mem':'brain','notes':'brain','wander':'play'};
       vn=aliases[seg]||seg;
     }
+    // Same view, no-op
+    if(vn===view)return;
 
-    mc.style.opacity='0.5';
+    _navInFlight=true;
+    // Update active tab immediately for responsive feel
+    document.querySelectorAll('nav .nav-tab').forEach(function(a){
+      a.classList.toggle('active',a.getAttribute('href')===path);
+    });
+    // Show loading state
+    mc.innerHTML='<div style="display:flex;align-items:center;justify-content:center;min-height:200px;color:var(--hive-text-tertiary)">loading\u2026</div>';
+    if(push)history.pushState({view:vn},'',path);
+    document.title='hive \u2014 '+(_VIEW_PATHS[path]||vn);
+
     fetch('/api/fragment?view='+encodeURIComponent(vn))
       .then(function(r){return r.text();})
       .then(function(html){
         mc.innerHTML=html;
-        mc.style.opacity='1';
         view=vn;
         document.body.dataset.view=vn;
-        // Update active tab
-        document.querySelectorAll('nav .nav-tab').forEach(function(a){
-          a.classList.toggle('active',a.getAttribute('href')===path);
-        });
-        // Update title
-        var title=_VIEW_PATHS[path]||vn;
-        document.title='hive \u2014 '+title;
-        // Reconnect SSE for new view panels
         _connectSSE();
-        // Re-run restoreState for filter persistence
+        _loadLazyPanels();
         restoreState();
-        // Reset focus
         _focusIdx=-1;_innerMode=false;_innerIdx=-1;
         window.scrollTo(0,0);
-        if(push)history.pushState({view:vn},'',path);
+        _navInFlight=false;
       })
       .catch(function(){
-        mc.style.opacity='1';
+        _navInFlight=false;
         window.location.href=path;
       });
   }
@@ -6884,12 +6902,30 @@ def _render_panel_safe(name: str, extra_params: dict | None = None) -> str:
         )
 
 
+# Panels that are expensive to render get a loading placeholder on initial page
+# load.  The client fetches them lazily via /api/panel/<name> after the shell
+# is painted, so the page appears instantly even when a panel takes 12+ seconds.
+_LAZY_PANELS: set[str] = {"stats-tokens", "stats-transcripts", "stats-platforms"}
+
+_LAZY_PLACEHOLDER = (
+    '<div class="card"><div class="card-body">'
+    '<div class="empty" style="min-height:80px;display:flex;align-items:center;'
+    'justify-content:center;color:var(--hive-text-tertiary)">'
+    'loading\u2026</div></div></div>'
+)
+
+
 def render_fragment(view_name: str, extra_params: dict | None = None) -> str:
     view_def = VIEWS.get(view_name)
     if not view_def:
         return '<div class="empty">Unknown view</div>'
 
     parts: list[str] = []
+
+    def _panel_html(name: str) -> str:
+        if name in _LAZY_PANELS:
+            return _LAZY_PLACEHOLDER
+        return _render_panel_safe(name, extra_params)
 
     def add_columns() -> None:
         columns = view_def.get("cols") or []
@@ -6899,7 +6935,7 @@ def render_fragment(view_name: str, extra_params: dict | None = None) -> str:
         column_html = []
         for col in columns:
             panels_html = "".join(
-                f'<div class="grid-panel" data-panel-id="{_e(name)}">{_render_panel_safe(name, extra_params)}</div>'
+                f'<div class="grid-panel" data-panel-id="{_e(name)}">{_panel_html(name)}</div>'
                 for name in col
             )
             column_html.append(f'<div class="grid-col-stack">{panels_html}</div>')
@@ -6909,7 +6945,7 @@ def render_fragment(view_name: str, extra_params: dict | None = None) -> str:
         for row in view_def.get("rows", []) or []:
             row_panels = []
             for name in row:
-                panel_html = _render_panel_safe(name, extra_params)
+                panel_html = _panel_html(name)
                 row_panels.append(
                     f'<div class="grid-panel" data-panel-id="{_e(name)}">{panel_html}</div>'
                 )
@@ -8415,6 +8451,18 @@ def cmd_serve(args: list[str]) -> None:
 
     watcher = threading.Thread(target=_file_watcher_thread, daemon=True)
     watcher.start()
+
+    # Pre-warm the transcript disk cache in the background so the first
+    # /stats page load hits a warm cache instead of parsing 3.5 GB of JSONL.
+    def _prewarm_transcripts() -> None:
+        try:
+            from keephive.storage import read_session_transcripts
+
+            read_session_transcripts(days_back=30)
+        except Exception:
+            pass
+
+    threading.Thread(target=_prewarm_transcripts, daemon=True).start()
 
     url = f"http://localhost:{port}"
     if os.environ.get("HIVE_SERVE_WORKER"):
