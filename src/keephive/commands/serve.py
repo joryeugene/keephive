@@ -7178,7 +7178,14 @@ def _render_graph_fragment() -> str:
     </div>
     <span id="graph-stats" style="font-size:10px;color:var(--c-muted);margin-left:auto"></span>
   </div>
-  <div class="card-body" style="padding:0;position:relative;overflow:hidden;height:100%">
+  <div class="card-body" style="padding:0;position:relative;overflow:hidden;min-height:600px;height:calc(100vh - 160px)">
+    <div id="graph-loading" style="position:absolute;inset:0;display:flex;align-items:center;
+      justify-content:center;flex-direction:column;gap:8px;z-index:5">
+      <div style="width:32px;height:32px;border:3px solid var(--c-border);border-top-color:var(--c-accent);
+        border-radius:50%;animation:graph-spin 0.8s linear infinite"></div>
+      <span style="font-size:11px;color:var(--c-muted)">Assembling knowledge graph...</span>
+    </div>
+    <style>@keyframes graph-spin{to{transform:rotate(360deg)}}</style>
     <svg id="graph-svg" style="width:100%;height:100%"></svg>
     <div id="graph-tooltip"
       style="display:none;position:absolute;padding:6px 10px;border-radius:4px;
@@ -7209,6 +7216,11 @@ def _render_graph_fragment() -> str:
       var stale=nodes.filter(function(n){return n.stale;}).length;
       statsEl.textContent=nodes.length+' nodes, '+edges.length+' edges'
         +(orphans?' | '+orphans+' orphan':'')+(stale?' | '+stale+' stale':'');
+      var loader=document.getElementById('graph-loading');
+      if(loader) loader.style.display='none';
+    }).catch(function(){
+      var loader=document.getElementById('graph-loading');
+      if(loader) loader.querySelector('span').textContent='Failed to load graph data.';
     });
   }
 
@@ -7282,31 +7294,47 @@ def _render_graph_fragment() -> str:
     return activeFilter==='all'||n.type===activeFilter;
   }
 
+  var NS='http://www.w3.org/2000/svg';
+  function mkEl(tag,attrs){
+    var el=document.createElementNS(NS,tag);
+    for(var k in attrs) el.setAttribute(k,attrs[k]);
+    return el;
+  }
+
   function render(){
-    var html='';
+    while(svg.firstChild) svg.removeChild(svg.firstChild);
     // Edges
     for(var i=0;i<edges.length;i++){
       var s=nodeMap[edges[i].source],t=nodeMap[edges[i].target];
       if(!s||!t||!isVisible(s)||!isVisible(t))continue;
-      html+='<line x1="'+s.x+'" y1="'+s.y+'" x2="'+t.x+'" y2="'+t.y+'"'
-        +' stroke="'+(TYPE_COLORS[s.type]||'#666')+'" stroke-opacity="0.2" stroke-width="1"/>';
+      svg.appendChild(mkEl('line',{
+        x1:s.x,y1:s.y,x2:t.x,y2:t.y,
+        stroke:TYPE_COLORS[s.type]||'#666','stroke-opacity':'0.2','stroke-width':'1'
+      }));
     }
     // Nodes
     for(var i=0;i<nodes.length;i++){
       var n=nodes[i];
       if(!isVisible(n))continue;
       var r=nodeSize(n),color=TYPE_COLORS[n.type]||'#888';
-      var opacity=n.orphan?'0.5':'1';
-      var dash=n.stale?'stroke-dasharray="3,2"':'';
-      html+='<circle cx="'+n.x+'" cy="'+n.y+'" r="'+r+'" fill="'+color+'"'
-        +' fill-opacity="'+opacity+'" stroke="'+color+'" stroke-width="1.5" '+dash
-        +' data-idx="'+i+'" style="cursor:pointer"/>';
+      var attrs={cx:n.x,cy:n.y,r:r,fill:color,
+        'fill-opacity':n.orphan?'0.5':'1',
+        stroke:color,'stroke-width':'1.5',
+        'data-idx':i,style:'cursor:pointer'};
+      if(n.stale) attrs['stroke-dasharray']='3,2';
+      svg.appendChild(mkEl('circle',attrs));
       if(n.type==='project'){
-        html+='<text x="'+n.x+'" y="'+(n.y+r+12)+'" text-anchor="middle"'
-          +' fill="'+color+'" font-size="10" font-weight="500">'+n.label+'</text>';
+        var txt=document.createElementNS(NS,'text');
+        txt.setAttribute('x',n.x);
+        txt.setAttribute('y',n.y+r+12);
+        txt.setAttribute('text-anchor','middle');
+        txt.setAttribute('fill',color);
+        txt.setAttribute('font-size','10');
+        txt.setAttribute('font-weight','500');
+        txt.textContent=n.label;
+        svg.appendChild(txt);
       }
     }
-    svg.innerHTML=html;
   }
 
   // Interaction
