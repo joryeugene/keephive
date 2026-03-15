@@ -205,6 +205,7 @@ def render_md(text: str) -> str:
 
 # ---- CSS + JS ----
 
+
 def _build_root_css() -> str:
     """Generate :root CSS block from DESIGN_TOKENS (single source of truth)."""
     from keephive.output import DESIGN_TOKENS as T
@@ -220,7 +221,9 @@ def _build_root_css() -> str:
     return f":root{{{props};{aliases}}}"
 
 
-_CSS = _build_root_css() + """
+_CSS = (
+    _build_root_css()
+    + """
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--hive-bg);color:var(--hive-text);font-size:13px;line-height:1.6;letter-spacing:-0.006em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 nav{background:var(--hive-surface);border-bottom:1px solid var(--hive-border);padding:0 16px;display:flex;align-items:center;gap:2px;position:sticky;top:0;z-index:100}
@@ -633,6 +636,7 @@ mark{background:var(--hive-warn-bg);color:var(--hive-warn);padding:0 2px;border-
 .chip-remove:hover{color:var(--hive-err)}
 .chip-row{display:flex;flex-wrap:wrap;gap:2px}
 """
+)
 _JS = """
 (function(){
   var view=document.body.dataset.view||'home';
@@ -3203,7 +3207,9 @@ def _render_stats_commands_panel(data: dict) -> str:
                     f'<span style="font-size:11px;color:{trend_color}">{_e(trend_str)}</span>'
                 )
             else:
-                trend_inner = '<span style="font-size:11px;color:var(--hive-text-dim)">\u25ac</span>'
+                trend_inner = (
+                    '<span style="font-size:11px;color:var(--hive-text-dim)">\u25ac</span>'
+                )
             trend_html = f'<span style="min-width:42px;display:inline-block;text-align:right">{trend_inner}</span>'
             tool_title = f"{_e(tool)}: {count} uses ({pct}% of total)"
             if trend_str:
@@ -4125,12 +4131,18 @@ def _render_trends_panel(data: dict) -> str:
         # Gauge color: % KPIs use health-based color; others use trend direction
         if suffix == "%":
             gauge_color = (
-                "var(--hive-ok)" if kpi["this"] >= 80 else "var(--hive-warn)" if kpi["this"] >= 50 else "var(--hive-err)"
+                "var(--hive-ok)"
+                if kpi["this"] >= 80
+                else "var(--hive-warn)"
+                if kpi["this"] >= 50
+                else "var(--hive-err)"
             )
         else:
-            gauge_color = {"up": "var(--hive-ok)", "down": "var(--hive-err)", "flat": "var(--hive-text-dim)"}.get(
-                kpi["trend"], "var(--hive-text-dim)"
-            )
+            gauge_color = {
+                "up": "var(--hive-ok)",
+                "down": "var(--hive-err)",
+                "flat": "var(--hive-text-dim)",
+            }.get(kpi["trend"], "var(--hive-text-dim)")
         gauge_html = (
             f'<div class="gauge-track" style="flex:1;margin:0 6px">'
             f'<div class="gauge-fill" style="width:{gauge_pct}%;background:{gauge_color}"></div>'
@@ -6911,7 +6923,7 @@ _LAZY_PLACEHOLDER = (
     '<div class="card"><div class="card-body">'
     '<div class="empty" style="min-height:80px;display:flex;align-items:center;'
     'justify-content:center;color:var(--hive-text-tertiary)">'
-    'loading\u2026</div></div></div>'
+    "loading\u2026</div></div></div>"
 )
 
 

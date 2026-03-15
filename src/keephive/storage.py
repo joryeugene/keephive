@@ -3731,16 +3731,12 @@ def _parse_single_jsonl(jsonl_path: Path) -> dict:
                 msg = entry.get("message", {})
                 usage = msg.get("usage", {})
                 session["cache_hits"] += usage.get("cache_read_input_tokens", 0)
-                session["cache_created"] += usage.get(
-                    "cache_creation_input_tokens", 0
-                )
+                session["cache_created"] += usage.get("cache_creation_input_tokens", 0)
                 session["cache_fresh"] += usage.get("input_tokens", 0)
                 session["output_tokens"] += usage.get("output_tokens", 0)
                 model = msg.get("model", "")
                 if model:
-                    session["model_counts"][model] = (
-                        session["model_counts"].get(model, 0) + 1
-                    )
+                    session["model_counts"][model] = session["model_counts"].get(model, 0) + 1
 
             elif etype == "system":
                 subtype = entry.get("subtype", "")
@@ -3852,13 +3848,7 @@ def read_session_transcripts(days_back: int = 7) -> list[dict]:
     for fkey in live_keys:
         entry = disk_cache.get(fkey)
         if entry:
-            results.append(
-                {
-                    k: v
-                    for k, v in entry.items()
-                    if k != "mtime"
-                }
-            )
+            results.append({k: v for k, v in entry.items() if k != "mtime"})
 
     # Update in-memory cache
     with _transcript_cache_lock:

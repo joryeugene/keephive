@@ -364,9 +364,7 @@ def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
                 pending_rules = hive_dir() / ".pending-rules.md"
                 with pending_rules.open("a") as f:
                     f.write(f"- REMOVE: {target} [auto:kingbee-prune]\n")
-                console.print(
-                    "  [ok]✓[/ok] Rule removal queued → run [dim]hive rule review[/dim]"
-                )
+                console.print("  [ok]✓[/ok] Rule removal queued → run [dim]hive rule review[/dim]")
 
         elif action in ("edit", "merge"):
             if target_type == "skill":
@@ -398,9 +396,7 @@ def _apply_improvement(item: dict, edited_text: str | None = None) -> None:
                     merged_path = gd / f"{item['merge_with']}.md"
                     if merged_path.exists():
                         merged_path.unlink()
-                        console.print(
-                            f"  [ok]✓[/ok] Removed merged-in skill: {item['merge_with']}"
-                        )
+                        console.print(f"  [ok]✓[/ok] Removed merged-in skill: {item['merge_with']}")
                 from keephive.commands.skill import _skill_sync
 
                 _skill_sync()

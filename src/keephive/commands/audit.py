@@ -542,9 +542,7 @@ def _run_perspectives(
         for key, label in names.items():
             elapsed = finished_at.get(key, time.monotonic()) - start
             if states[key] == "done":
-                lines.append(
-                    f"  [ok]{label:<14}[/ok] [ok]\u2713[/ok] complete ({elapsed:.0f}s)"
-                )
+                lines.append(f"  [ok]{label:<14}[/ok] [ok]\u2713[/ok] complete ({elapsed:.0f}s)")
             else:
                 lines.append(
                     f"  [info]{label:<14}[/info] [info]\u25cf[/info] analyzing... ({elapsed:.0f}s)"

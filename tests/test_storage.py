@@ -1247,8 +1247,20 @@ class TestReadSessionTranscripts:
         proj_dir = projects_dir / "-test-project"
         proj_dir.mkdir(parents=True)
         (proj_dir / "agent-abc123.jsonl").write_text(
-            json.dumps({"type": "assistant", "message": {"model": "claude-sonnet-4-6", "usage": {"input_tokens": 10, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}}}
-            ) + "\n"
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "model": "claude-sonnet-4-6",
+                        "usage": {
+                            "input_tokens": 10,
+                            "cache_read_input_tokens": 0,
+                            "cache_creation_input_tokens": 0,
+                        },
+                    },
+                }
+            )
+            + "\n"
         )
         result = read_session_transcripts(days_back=365)
         assert result == []
@@ -1290,10 +1302,10 @@ class TestReadSessionTranscripts:
         result = read_session_transcripts(days_back=365)
         assert len(result) == 1
         s = result[0]
-        assert s["cache_hits"] == 13000    # 5000 + 8000
-        assert s["cache_fresh"] == 150     # 100 + 50
+        assert s["cache_hits"] == 13000  # 5000 + 8000
+        assert s["cache_fresh"] == 150  # 100 + 50
         assert s["cache_created"] == 2000  # 2000 + 0
-        assert s["output_tokens"] == 450   # 300 + 150
+        assert s["output_tokens"] == 450  # 300 + 150
 
     def test_extracts_model_counts(self, hive_env, tmp_path, monkeypatch):
         """model_counts counts each model ID across all assistant turns."""
@@ -1303,9 +1315,39 @@ class TestReadSessionTranscripts:
         monkeypatch.setenv("HIVE_CC_PROJECTS_DIR", str(projects_dir))
 
         records = [
-            {"type": "assistant", "message": {"model": "claude-haiku-4-5", "usage": {"input_tokens": 1, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}}},
-            {"type": "assistant", "message": {"model": "claude-haiku-4-5", "usage": {"input_tokens": 1, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}}},
-            {"type": "assistant", "message": {"model": "claude-sonnet-4-6", "usage": {"input_tokens": 1, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}}},
+            {
+                "type": "assistant",
+                "message": {
+                    "model": "claude-haiku-4-5",
+                    "usage": {
+                        "input_tokens": 1,
+                        "cache_read_input_tokens": 0,
+                        "cache_creation_input_tokens": 0,
+                    },
+                },
+            },
+            {
+                "type": "assistant",
+                "message": {
+                    "model": "claude-haiku-4-5",
+                    "usage": {
+                        "input_tokens": 1,
+                        "cache_read_input_tokens": 0,
+                        "cache_creation_input_tokens": 0,
+                    },
+                },
+            },
+            {
+                "type": "assistant",
+                "message": {
+                    "model": "claude-sonnet-4-6",
+                    "usage": {
+                        "input_tokens": 1,
+                        "cache_read_input_tokens": 0,
+                        "cache_creation_input_tokens": 0,
+                    },
+                },
+            },
         ]
         self._write_jsonl(projects_dir, "sess-models", records)
         result = read_session_transcripts(days_back=365)
@@ -1335,7 +1377,10 @@ class TestReadSessionTranscripts:
         result = read_session_transcripts(days_back=365)
         s = result[0]
         assert len(s["stop_hook_timings"]) == 2
-        assert s["stop_hook_timings"][0] == {"command": "/usr/local/bin/keephive hook-stop", "duration_ms": 120}
+        assert s["stop_hook_timings"][0] == {
+            "command": "/usr/local/bin/keephive hook-stop",
+            "duration_ms": 120,
+        }
         assert s["stop_hook_timings"][1]["duration_ms"] == 45
 
     def test_extracts_turn_durations(self, hive_env, tmp_path, monkeypatch):
