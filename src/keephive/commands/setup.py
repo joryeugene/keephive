@@ -173,13 +173,26 @@ def _scan_git_decisions() -> list[str]:
     """Extract decision-like commits from the last 90 days of git history."""
     import subprocess
 
-    decision_words = {"chose", "switch", "replace", "migrate", "upgrade", "deprecate",
-                      "remove", "rewrite", "redesign", "refactor"}
+    decision_words = {
+        "chose",
+        "switch",
+        "replace",
+        "migrate",
+        "upgrade",
+        "deprecate",
+        "remove",
+        "rewrite",
+        "redesign",
+        "refactor",
+    }
     facts = []
     try:
         result = subprocess.run(
             ["git", "log", "--oneline", "--since=90 days ago", "--format=%h %s"],
-            capture_output=True, text=True, timeout=10, cwd=str(Path.cwd()),
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=str(Path.cwd()),
         )
         if result.returncode != 0:
             return []
@@ -222,8 +235,10 @@ def _scan_auto_memory() -> list[str]:
             if len(text) < 15:
                 continue
             # Skip if already in working memory (trigram overlap > 0.8)
-            if existing_memory and SequenceMatcher(None, text.lower(),
-                                                    existing_memory.lower()).ratio() > 0.8:
+            if (
+                existing_memory
+                and SequenceMatcher(None, text.lower(), existing_memory.lower()).ratio() > 0.8
+            ):
                 continue
             # Skip if text is already a substring of existing memory
             if text in existing_memory:

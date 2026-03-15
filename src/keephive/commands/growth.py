@@ -266,7 +266,9 @@ def _print_growth_story(console: Console, snap: dict) -> None:
         if this_week > 0:
             observations.append(f"{this_week} improvements applied this week.")
         elif hist["total_applied"] > 3:
-            observations.append(f"{hist['total_applied']} improvements applied total. KingBee is learning what works.")
+            observations.append(
+                f"{hist['total_applied']} improvements applied total. KingBee is learning what works."
+            )
 
     if observations:
         console.print("[bold]Growth Story[/bold]")

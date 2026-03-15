@@ -603,8 +603,7 @@ def _task_stale_check() -> bool:
 
         graph = build_knowledge_graph()
         stale_hubs = [
-            n for n in graph["nodes"]
-            if n.get("stale") and n.get("hub") and n["type"] == "fact"
+            n for n in graph["nodes"] if n.get("stale") and n.get("hub") and n["type"] == "fact"
         ]
         if stale_hubs:
             hub_texts = [n["text"][:100] for n in stale_hubs[:5]]
@@ -934,7 +933,9 @@ def _task_self_improve() -> bool:
     effectiveness_context = ""
     if hist_stats["total_applied"] + hist_stats["total_dismissed"] > 0:
         by_type = hist_stats["by_type"]
-        type_rates = ", ".join(f"{t}: {c} accepted" for t, c in sorted(by_type.items(), key=lambda x: -x[1]))
+        type_rates = ", ".join(
+            f"{t}: {c} accepted" for t, c in sorted(by_type.items(), key=lambda x: -x[1])
+        )
         effectiveness_context = (
             f"\n\nYour track record: {hist_stats['total_applied']} applied, "
             f"{hist_stats['total_dismissed']} dismissed "
@@ -1212,20 +1213,22 @@ used_web_search: true if you used WebSearch, false otherwise"""
 
             from keephive.storage import append_kingbee_insight
 
-            append_kingbee_insight({
-                "task": "wander",
-                "timestamp": get_now().isoformat(),
-                "summary": f"Explored '{seed}' ({seed_source}){web_note}",
-                "details": [
-                    f"Hypothesis: {result.hypothesis}",
-                    f"Question: {result.question}",
-                    *(
-                        [f"Action ({result.action_type}): {result.action}"]
-                        if result.action and result.action_type != "none"
-                        else []
-                    ),
-                ],
-            })
+            append_kingbee_insight(
+                {
+                    "task": "wander",
+                    "timestamp": get_now().isoformat(),
+                    "summary": f"Explored '{seed}' ({seed_source}){web_note}",
+                    "details": [
+                        f"Hypothesis: {result.hypothesis}",
+                        f"Question: {result.question}",
+                        *(
+                            [f"Action ({result.action_type}): {result.action}"]
+                            if result.action and result.action_type != "none"
+                            else []
+                        ),
+                    ],
+                }
+            )
 
             # If wander produced an actionable hypothesis, queue it for hive improve review
             if result.action and result.action_type != "none":
@@ -1356,12 +1359,14 @@ Do not invent or extrapolate beyond what the entries say.
     from keephive.clock import get_now
     from keephive.storage import append_kingbee_insight
 
-    append_kingbee_insight({
-        "task": "reflect-draft",
-        "timestamp": get_now().isoformat(),
-        "summary": f"Proposed guide for '{topic}' from {len(entries)} log entries",
-        "details": [f"Guide '{topic}' queued for review (trusted=False)"],
-    })
+    append_kingbee_insight(
+        {
+            "task": "reflect-draft",
+            "timestamp": get_now().isoformat(),
+            "summary": f"Proposed guide for '{topic}' from {len(entries)} log entries",
+            "details": [f"Guide '{topic}' queued for review (trusted=False)"],
+        }
+    )
 
     # Write daemon hints: active theme generation implies knowledge drift
     _write_reflect_hints(topic, len(entries))
