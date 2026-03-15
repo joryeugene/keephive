@@ -3855,3 +3855,529 @@ def read_session_transcripts(days_back: int = 7) -> list[dict]:
         _transcript_mem_cache[mem_key] = (time.monotonic(), results)
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# KingBee structured insights
+# ---------------------------------------------------------------------------
+
+
+def kingbee_insights_file() -> Path:
+    """Path to .kingbee-insights.json — structured daemon task output."""
+    return hive_dir() / ".kingbee-insights.json"
+
+
+def read_kingbee_insights(limit: int = 50) -> list[dict]:
+    """Read KingBee structured insights, newest first."""
+    f = kingbee_insights_file()
+    if not f.exists():
+        return []
+    try:
+        data = json.loads(f.read_text())
+        if not isinstance(data, list):
+            return []
+        return list(reversed(data[-limit:]))
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def append_kingbee_insight(entry: dict) -> None:
+    """Append a structured insight entry. Rolling 200-item cap."""
+    f = kingbee_insights_file()
+    existing: list[dict] = []
+    if f.exists():
+        try:
+            data = json.loads(f.read_text())
+            if isinstance(data, list):
+                existing = data
+        except (json.JSONDecodeError, OSError):
+            pass
+    existing.append(entry)
+    if len(existing) > 200:
+        existing = existing[-200:]
+    f.write_text(json.dumps(existing, indent=2) + "\n")
+
+
+# ---------------------------------------------------------------------------
+# Entry-level CRUD for memory.md and rules.md
+# ---------------------------------------------------------------------------
+
+
+def _parse_bullet_lines(content: str) -> list[str]:
+    """Extract bullet-point lines from markdown content."""
+    return [ln for ln in content.splitlines() if ln.strip().startswith("- ")]
+
+
+def _rebuild_file_after_splice(path: Path, bullet_lines: list[str], original_content: str) -> None:
+    """Rebuild a file replacing its bullet lines while preserving non-bullet content.
+
+    Handles files that have headers/sections between bullet groups by
+    replacing bullet lines in-order while keeping everything else intact.
+    """
+    result_lines: list[str] = []
+    bullet_idx = 0
+    for line in original_content.splitlines():
+        if line.strip().startswith("- "):
+            if bullet_idx < len(bullet_lines):
+                result_lines.append(bullet_lines[bullet_idx])
+            # else: this line was deleted (index beyond new list)
+            bullet_idx += 1
+        else:
+            result_lines.append(line)
+    # Append any new bullets added beyond original count
+    while bullet_idx < len(bullet_lines):
+        result_lines.append(bullet_lines[bullet_idx])
+        bullet_idx += 1
+    backup_and_write(path, "\n".join(result_lines) + "\n")
+
+
+def delete_memory_entry(idx: int) -> bool:
+    """Delete a single bullet-point entry from memory.md by index. Returns True on success."""
+    path = memory_file()
+    if not path.exists():
+        return False
+    content = path.read_text()
+    bullets = _parse_bullet_lines(content)
+    if idx < 0 or idx >= len(bullets):
+        return False
+    bullets.pop(idx)
+    _rebuild_file_after_splice(path, bullets, content)
+    return True
+
+
+def update_memory_entry(idx: int, new_text: str) -> bool:
+    """Update a single bullet-point entry in memory.md by index. Returns True on success."""
+    path = memory_file()
+    if not path.exists():
+        return False
+    content = path.read_text()
+    bullets = _parse_bullet_lines(content)
+    if idx < 0 or idx >= len(bullets):
+        return False
+    new_text = new_text.strip()
+    if not new_text.startswith("- "):
+        new_text = f"- {new_text}"
+    bullets[idx] = new_text
+    _rebuild_file_after_splice(path, bullets, content)
+    return True
+
+
+def delete_rule_entry(idx: int) -> bool:
+    """Delete a single bullet-point entry from rules.md by index. Returns True on success."""
+    path = rules_file()
+    if not path.exists():
+        return False
+    content = path.read_text()
+    bullets = _parse_bullet_lines(content)
+    if idx < 0 or idx >= len(bullets):
+        return False
+    bullets.pop(idx)
+    _rebuild_file_after_splice(path, bullets, content)
+    return True
+
+
+def update_rule_entry(idx: int, new_text: str) -> bool:
+    """Update a single bullet-point entry in rules.md by index. Returns True on success."""
+    path = rules_file()
+    if not path.exists():
+        return False
+    content = path.read_text()
+    bullets = _parse_bullet_lines(content)
+    if idx < 0 or idx >= len(bullets):
+        return False
+    new_text = new_text.strip()
+    if not new_text.startswith("- "):
+        new_text = f"- {new_text}"
+    bullets[idx] = new_text
+    _rebuild_file_after_splice(path, bullets, content)
+    return True
+
+
+def promote_pending_fact(idx: int) -> bool:
+    """Move a pending fact to memory.md. Returns True on success."""
+    items = read_pending_facts()
+    if idx < 0 or idx >= len(items):
+        return False
+    fact_text = items[idx]["fact"]
+    path = memory_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a") as f:
+        f.write(f"- [auto] {fact_text} [auto:{today()}]\n")
+    items.pop(idx)
+    write_pending_facts(items)
+    return True
+
+
+def dismiss_pending_fact(idx: int) -> bool:
+    """Remove a pending fact without promoting it. Returns True on success."""
+    items = read_pending_facts()
+    if idx < 0 or idx >= len(items):
+        return False
+    items.pop(idx)
+    write_pending_facts(items)
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Dead pool readers — surfaces data from previously write-only stores
+# ---------------------------------------------------------------------------
+
+
+def improvement_history_stats() -> dict:
+    """Compute acceptance statistics from improvement history.
+
+    Returns {total_applied, total_dismissed, acceptance_rate, by_type, recent}.
+    Previously the improvement history file was never read by anything.
+    """
+    history = read_improvement_history()
+    dismissed = read_dismissed_improvements()
+    by_type: dict[str, int] = {}
+    for entry in history:
+        t = entry.get("type", "?")
+        by_type[t] = by_type.get(t, 0) + 1
+    dismissed_count = len(dismissed)
+    total = len(history)
+    acceptance_rate = total / (total + dismissed_count) if (total + dismissed_count) > 0 else 0.0
+    return {
+        "total_applied": total,
+        "total_dismissed": dismissed_count,
+        "acceptance_rate": round(acceptance_rate, 2),
+        "by_type": by_type,
+        "recent": history[-5:] if history else [],
+    }
+
+
+def experiment_results() -> list[dict]:
+    """Surface experiment baseline results for display.
+
+    Returns list of {rule_hash, rule_text, friction_delta, duration_days, status, ...}.
+    Previously this data was opaque and never surfaced to the user.
+    """
+    baselines = read_experiment_baselines()
+    results = []
+    for rule_hash, data in baselines.items():
+        results.append(
+            {
+                "rule_hash": rule_hash,
+                "rule_text": data.get("rule_text", "")[:80],
+                "baseline_friction": data.get("baseline_friction", 0),
+                "current_friction": data.get("current_friction"),
+                "friction_delta": data.get("friction_delta"),
+                "duration_days": data.get("duration_days", 0),
+                "status": data.get("status", "active"),
+                "expiry": data.get("expiry_date", ""),
+            }
+        )
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Knowledge graph — computed view over flat files
+# ---------------------------------------------------------------------------
+
+# Stopwords for keyword extraction (local to avoid circular import with wander.py)
+_GRAPH_STOPWORDS = frozenset(
+    {
+        "hive",
+        "just",
+        "that",
+        "this",
+        "with",
+        "have",
+        "from",
+        "will",
+        "make",
+        "need",
+        "more",
+        "some",
+        "been",
+        "your",
+        "they",
+        "when",
+        "what",
+        "here",
+        "there",
+        "which",
+        "about",
+        "would",
+        "could",
+        "should",
+        "does",
+        "into",
+        "also",
+        "then",
+        "than",
+        "other",
+        "each",
+        "only",
+        "were",
+        "after",
+        "before",
+        "between",
+        "through",
+        "using",
+        "used",
+        "uses",
+        "auto",
+        "project",
+        "fact",
+        "true",
+        "false",
+        "none",
+        "data",
+        "file",
+        "line",
+        "code",
+        "test",
+    }
+)
+
+_PROJECT_TAG_RE = re.compile(r"\[project:([^\]]+)\]")
+_DATE_TAG_RE = re.compile(r"\[(auto|verified):(\d{4}-\d{2}-\d{2})\]")
+_TYPE_PREFIX_RE = re.compile(r"^(?:- )?(?:\[auto\]\s*)?(\w+):\s*")
+
+
+def _extract_keywords(text: str) -> set[str]:
+    """Extract significant words from text for graph edge computation."""
+    words = set(re.findall(r"[a-z][a-z0-9_]{3,}", text.lower()))
+    return words - _GRAPH_STOPWORDS
+
+
+def _parse_guide_frontmatter_for_graph(text: str) -> dict:
+    """Extract tags, projects, and always flag from guide YAML frontmatter."""
+    result: dict = {"tags": [], "projects": [], "always": False}
+    if not text.startswith("---"):
+        return result
+    lines = text.splitlines()
+    fm_lines = []
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        fm_lines.append(line)
+    fm_text = "\n".join(fm_lines)
+    if re.search(r"always:\s*(true|yes)", fm_text, re.IGNORECASE):
+        result["always"] = True
+    tags_match = re.search(r"tags:\s*\[([^\]]+)\]", fm_text)
+    if tags_match:
+        result["tags"] = [
+            t.strip().strip("'\"").lower() for t in tags_match.group(1).split(",") if t.strip()
+        ]
+    proj_match = re.search(r"projects:\s*\[([^\]]+)\]", fm_text)
+    if proj_match:
+        result["projects"] = [
+            p.strip().strip("'\"").lower() for p in proj_match.group(1).split(",") if p.strip()
+        ]
+    return result
+
+
+def build_knowledge_graph(project_filter: str | None = None) -> dict:
+    """Assemble knowledge graph from flat files. No storage. Pure function.
+
+    Returns {"nodes": [...], "edges": [...]}.
+    Each node: {id, type, label, project?, stale?, orphan?, hub?, age_days?, type_tag?}
+    Each edge: {source, target, type}
+
+    Performance target: < 500ms for 100 facts, 20 guides, 10 projects.
+    """
+    nodes: list[dict] = []
+    edges: list[dict] = []
+    project_set: set[str] = set()
+    node_keywords: dict[str, set[str]] = {}
+    node_edge_count: dict[str, int] = {}
+    today_str = today()
+
+    # --- 1. Parse memory.md -> fact nodes ---
+    mem_content = read_memory()
+    fact_lines = _parse_bullet_lines(mem_content)
+    for i, line in enumerate(fact_lines):
+        node_id = f"fact:{i}"
+        text = line.lstrip("- ").strip()
+
+        projects = _PROJECT_TAG_RE.findall(text)
+        project_set.update(p.lower() for p in projects)
+
+        dates = _DATE_TAG_RE.findall(text)
+        most_recent_date = ""
+        stale = False
+        age_days = 0
+        for _, tag_date in dates:
+            if tag_date > most_recent_date:
+                most_recent_date = tag_date
+        if most_recent_date:
+            try:
+                from datetime import date as _date
+
+                d = _date.fromisoformat(most_recent_date)
+                t = _date.fromisoformat(today_str)
+                age_days = (t - d).days
+                stale = age_days > 30
+            except ValueError:
+                pass
+
+        type_tag = ""
+        m = _TYPE_PREFIX_RE.match(text)
+        if m:
+            type_tag = m.group(1).upper()
+
+        if project_filter:
+            pf = project_filter.lower()
+            if projects and not any(p.lower() == pf for p in projects):
+                continue
+
+        node = {
+            "id": node_id,
+            "type": "fact",
+            "label": text[:120],
+            "stale": stale,
+            "age_days": age_days,
+        }
+        if type_tag:
+            node["type_tag"] = type_tag
+        if projects:
+            node["project"] = projects[0].lower()
+        nodes.append(node)
+        node_keywords[node_id] = _extract_keywords(text)
+        node_edge_count[node_id] = 0
+
+        for p in projects:
+            p_lower = p.lower()
+            edges.append({"source": node_id, "target": f"project:{p_lower}", "type": "belongs_to"})
+            node_edge_count[node_id] = node_edge_count.get(node_id, 0) + 1
+
+    # --- 2. Parse knowledge guides -> guide nodes ---
+    gd = guides_dir()
+    guide_data: list[tuple[str, dict, set[str]]] = []
+    if gd.exists():
+        for gf in sorted(gd.glob("*.md")):
+            name = gf.stem
+            text = safe_read_text(gf)
+            if not text:
+                continue
+            fm = _parse_guide_frontmatter_for_graph(text)
+            node_id = f"guide:{name}"
+            keywords = _extract_keywords(text)
+
+            node: dict = {
+                "id": node_id,
+                "type": "guide",
+                "label": name.replace("-", " ").title(),
+            }
+            if fm["projects"]:
+                node["project"] = fm["projects"][0]
+                project_set.update(fm["projects"])
+            if fm["always"]:
+                node["always"] = True
+            nodes.append(node)
+            node_keywords[node_id] = keywords
+            node_edge_count[node_id] = 0
+            guide_data.append((name, fm, keywords))
+
+            for p in fm["projects"]:
+                edges.append({"source": node_id, "target": f"project:{p}", "type": "tagged"})
+                node_edge_count[node_id] = node_edge_count.get(node_id, 0) + 1
+                project_set.add(p)
+
+    # --- 3. Guide <-> Guide edges (shared tags) ---
+    for i, (name_a, fm_a, _) in enumerate(guide_data):
+        tags_a = set(fm_a["tags"])
+        if not tags_a:
+            continue
+        for name_b, fm_b, _ in guide_data[i + 1 :]:
+            tags_b = set(fm_b["tags"])
+            if tags_a & tags_b:
+                id_a = f"guide:{name_a}"
+                id_b = f"guide:{name_b}"
+                edges.append({"source": id_a, "target": id_b, "type": "shared_tag"})
+                node_edge_count[id_a] = node_edge_count.get(id_a, 0) + 1
+                node_edge_count[id_b] = node_edge_count.get(id_b, 0) + 1
+
+    # --- 4. Fact -> Guide edges (keyword overlap >= 3) ---
+    for node in nodes:
+        if node["type"] != "fact":
+            continue
+        fact_kw = node_keywords.get(node["id"], set())
+        if len(fact_kw) < 3:
+            continue
+        for name, _, guide_kw in guide_data:
+            if len(fact_kw & guide_kw) >= 3:
+                guide_id = f"guide:{name}"
+                edges.append({"source": node["id"], "target": guide_id, "type": "keyword_overlap"})
+                node_edge_count[node["id"]] = node_edge_count.get(node["id"], 0) + 1
+                node_edge_count[guide_id] = node_edge_count.get(guide_id, 0) + 1
+
+    # --- 5. Open TODOs -> todo nodes ---
+    try:
+        todos = open_todos()
+        for i, (d, t, text) in enumerate(todos):
+            node_id = f"todo:{i}"
+            projects = _PROJECT_TAG_RE.findall(text)
+            project_set.update(p.lower() for p in projects)
+
+            if project_filter:
+                pf = project_filter.lower()
+                if projects and not any(p.lower() == pf for p in projects):
+                    continue
+
+            node = {"id": node_id, "type": "todo", "label": text[:120]}
+            if projects:
+                node["project"] = projects[0].lower()
+            nodes.append(node)
+            node_edge_count[node_id] = 0
+
+            for p in projects:
+                p_lower = p.lower()
+                edges.append(
+                    {"source": node_id, "target": f"project:{p_lower}", "type": "belongs_to"}
+                )
+                node_edge_count[node_id] = node_edge_count.get(node_id, 0) + 1
+    except Exception:
+        pass
+
+    # --- 6. Rules -> rule nodes ---
+    rules_content = read_rules()
+    rule_lines = _parse_bullet_lines(rules_content)
+    for i, line in enumerate(rule_lines):
+        node_id = f"rule:{i}"
+        text = line.lstrip("- ").strip()
+        nodes.append({"id": node_id, "type": "rule", "label": text[:120]})
+        node_keywords[node_id] = _extract_keywords(text)
+        node_edge_count[node_id] = 0
+
+    # --- 7. Wander docs -> wander nodes ---
+    try:
+        wander_docs = list_wander_docs(limit=30)
+        for doc in wander_docs:
+            filename = doc.get("filename", "")
+            node_id = f"wander:{filename}"
+            hypothesis = doc.get("hypothesis", "")
+            seed = doc.get("seed", "")
+            label = hypothesis[:120] if hypothesis else seed[:120]
+            if not label:
+                continue
+            node = {"id": node_id, "type": "wander", "label": label}
+            connections = doc.get("connections", [])
+            if connections:
+                node["connections"] = len(connections)
+            nodes.append(node)
+            node_edge_count[node_id] = 0
+    except Exception:
+        pass
+
+    # --- 8. Project hub nodes ---
+    for p in sorted(project_set):
+        if project_filter and p != project_filter.lower():
+            continue
+        node_id = f"project:{p}"
+        edge_count = sum(1 for e in edges if e["target"] == node_id or e["source"] == node_id)
+        node_edge_count[node_id] = edge_count
+        nodes.append({"id": node_id, "type": "project", "label": p, "hub": edge_count > 3})
+
+    # --- 9. Compute orphan and hub properties ---
+    for node in nodes:
+        if node["type"] == "project":
+            continue  # hub already set above
+        ec = node_edge_count.get(node["id"], 0)
+        node["orphan"] = ec == 0
+        node["hub"] = ec > 3
+
+    return {"nodes": nodes, "edges": edges}

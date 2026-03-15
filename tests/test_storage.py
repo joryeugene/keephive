@@ -3012,3 +3012,618 @@ class TestPromoteFactsToMemory:
 
         count = _promote_facts_to_memory([{"fact": "Some fact", "loop_id": ""}])
         assert count == 0
+
+
+# ---------------------------------------------------------------------------
+# KingBee structured insights
+# ---------------------------------------------------------------------------
+
+
+class TestKingBeeInsights:
+    def test_read_empty(self, hive_env):
+        """Returns empty list when no insights file exists."""
+        from keephive.storage import read_kingbee_insights
+
+        assert read_kingbee_insights() == []
+
+    def test_append_and_read_roundtrip(self, hive_env):
+        """Appended insight is readable and returned newest-first."""
+        from keephive.storage import append_kingbee_insight, read_kingbee_insights
+
+        append_kingbee_insight({"task": "stale-check", "summary": "first"})
+        append_kingbee_insight({"task": "wander", "summary": "second"})
+
+        result = read_kingbee_insights()
+        assert len(result) == 2
+        assert result[0]["summary"] == "second"
+        assert result[1]["summary"] == "first"
+
+    def test_rolling_cap_at_200(self, hive_env):
+        """File never exceeds 200 entries; oldest are evicted."""
+        from keephive.storage import (
+            append_kingbee_insight,
+            kingbee_insights_file,
+            read_kingbee_insights,
+        )
+
+        for i in range(210):
+            append_kingbee_insight({"idx": i})
+
+        data = json.loads(kingbee_insights_file().read_text())
+        assert len(data) == 200
+        assert data[0]["idx"] == 10  # first 10 evicted
+
+        result = read_kingbee_insights(limit=5)
+        assert len(result) == 5
+        assert result[0]["idx"] == 209
+
+    def test_corrupt_file_returns_empty(self, hive_env):
+        """Corrupt JSON returns empty list instead of crashing."""
+        from keephive.storage import kingbee_insights_file, read_kingbee_insights
+
+        kingbee_insights_file().write_text("not json at all")
+        assert read_kingbee_insights() == []
+
+    def test_non_list_returns_empty(self, hive_env):
+        """A JSON object (not array) returns empty list."""
+        from keephive.storage import kingbee_insights_file, read_kingbee_insights
+
+        kingbee_insights_file().write_text('{"not": "a list"}')
+        assert read_kingbee_insights() == []
+
+
+# ---------------------------------------------------------------------------
+# Entry-level CRUD for memory.md and rules.md
+# ---------------------------------------------------------------------------
+
+
+class TestParseBulletLines:
+    def test_extracts_only_bullets(self, hive_env):
+        """Extracts bullet lines, ignores headers and blank lines."""
+        from keephive.storage import _parse_bullet_lines
+
+        content = "# Header\n\n- First fact\n- Second fact\nNot a bullet\n- Third\n"
+        bullets = _parse_bullet_lines(content)
+        assert bullets == ["- First fact", "- Second fact", "- Third"]
+
+    def test_empty_content(self, hive_env):
+        from keephive.storage import _parse_bullet_lines
+
+        assert _parse_bullet_lines("") == []
+
+
+class TestRebuildFileAfterSplice:
+    def test_preserves_headers_between_bullets(self, hive_env):
+        """Headers and non-bullet content survive a splice operation."""
+        from keephive.storage import _rebuild_file_after_splice
+
+        original = "# Title\n\n- Alpha\n- Beta\n\n## Section\n\n- Gamma\n"
+        path = hive_env / "splice-test.md"
+        path.write_text(original)
+
+        _rebuild_file_after_splice(path, ["- Alpha-v2", "- Beta-v2", "- Gamma-v2"], original)
+
+        result = path.read_text()
+        assert "# Title" in result
+        assert "## Section" in result
+        assert "- Alpha-v2" in result
+        assert "- Gamma-v2" in result
+        assert "- Alpha\n" not in result
+
+    def test_deletion_reduces_bullet_count(self, hive_env):
+        """Passing fewer bullets than original removes lines."""
+        from keephive.storage import _rebuild_file_after_splice
+
+        original = "# Mem\n- A\n- B\n- C\n"
+        path = hive_env / "splice-del.md"
+        path.write_text(original)
+
+        _rebuild_file_after_splice(path, ["- A", "- C"], original)
+        result = path.read_text()
+        assert "- A" in result
+        assert "- C" in result
+        assert "- B" not in result
+
+
+class TestDeleteMemoryEntry:
+    def test_delete_middle_entry(self, hive_env):
+        """Deleting index 1 removes the second bullet, keeps others."""
+        from keephive.storage import _parse_bullet_lines, delete_memory_entry, memory_file
+
+        assert delete_memory_entry(1) is True
+        content = memory_file().read_text()
+        bullets = _parse_bullet_lines(content)
+        assert len(bullets) == 2
+        assert "Pydantic" not in content
+        assert "Python" in content
+
+    def test_out_of_range_returns_false(self, hive_env):
+        """Index beyond bullet count returns False without modifying file."""
+        from keephive.storage import delete_memory_entry, memory_file
+
+        original = memory_file().read_text()
+        assert delete_memory_entry(99) is False
+        assert memory_file().read_text() == original
+
+    def test_negative_index_returns_false(self, hive_env):
+        from keephive.storage import delete_memory_entry
+
+        assert delete_memory_entry(-1) is False
+
+    def test_missing_file_returns_false(self, hive_env):
+        from keephive.storage import delete_memory_entry, memory_file
+
+        memory_file().unlink()
+        assert delete_memory_entry(0) is False
+
+
+class TestUpdateMemoryEntry:
+    def test_update_first_entry(self, hive_env):
+        """Updating index 0 replaces the first bullet text."""
+        from keephive.storage import _parse_bullet_lines, memory_file, update_memory_entry
+
+        assert update_memory_entry(0, "Rust is also great") is True
+        bullets = _parse_bullet_lines(memory_file().read_text())
+        assert bullets[0] == "- Rust is also great"
+
+    def test_auto_prefixes_dash(self, hive_env):
+        """Text without leading '- ' gets it auto-prepended."""
+        from keephive.storage import _parse_bullet_lines, memory_file, update_memory_entry
+
+        update_memory_entry(0, "No dash provided")
+        bullets = _parse_bullet_lines(memory_file().read_text())
+        assert bullets[0] == "- No dash provided"
+
+    def test_preserves_dash_prefix(self, hive_env):
+        """Text with leading '- ' is kept as-is."""
+        from keephive.storage import _parse_bullet_lines, memory_file, update_memory_entry
+
+        update_memory_entry(0, "- Already has dash")
+        bullets = _parse_bullet_lines(memory_file().read_text())
+        assert bullets[0] == "- Already has dash"
+
+    def test_out_of_range(self, hive_env):
+        from keephive.storage import update_memory_entry
+
+        assert update_memory_entry(100, "new text") is False
+
+
+class TestDeleteRuleEntry:
+    def test_delete_from_rules(self, hive_env):
+        """Deleting a rule removes it from rules.md."""
+        from keephive.storage import _parse_bullet_lines, delete_rule_entry, rules_file
+
+        rf = rules_file()
+        rf.write_text("# Rules\n\n- Rule A\n- Rule B\n- Rule C\n")
+
+        assert delete_rule_entry(1) is True
+        bullets = _parse_bullet_lines(rf.read_text())
+        assert len(bullets) == 2
+        assert all("Rule B" not in b for b in bullets)
+
+    def test_missing_file(self, hive_env):
+        from keephive.storage import delete_rule_entry, rules_file
+
+        rules_file().unlink(missing_ok=True)
+        assert delete_rule_entry(0) is False
+
+
+class TestUpdateRuleEntry:
+    def test_update_rule(self, hive_env):
+        from keephive.storage import _parse_bullet_lines, rules_file, update_rule_entry
+
+        rf = rules_file()
+        rf.write_text("# Rules\n\n- Old rule\n")
+
+        assert update_rule_entry(0, "New rule text") is True
+        bullets = _parse_bullet_lines(rf.read_text())
+        assert bullets[0] == "- New rule text"
+
+
+class TestPromotePendingFact:
+    def test_promote_moves_to_memory(self, hive_env):
+        """Promoting a pending fact appends it to memory.md and removes from pending."""
+        from keephive.storage import (
+            memory_file,
+            promote_pending_fact,
+            read_pending_facts,
+            write_pending_facts,
+        )
+
+        write_pending_facts(
+            [
+                {"fact": "Django uses MTV pattern", "source": "precompact"},
+                {"fact": "Redis is in-memory", "source": "precompact"},
+            ]
+        )
+
+        assert promote_pending_fact(0) is True
+        mem = memory_file().read_text()
+        assert "Django uses MTV pattern" in mem
+
+        remaining = read_pending_facts()
+        assert len(remaining) == 1
+        assert remaining[0]["fact"] == "Redis is in-memory"
+
+    def test_out_of_range(self, hive_env):
+        from keephive.storage import promote_pending_fact, write_pending_facts
+
+        write_pending_facts([{"fact": "only one"}])
+        assert promote_pending_fact(5) is False
+
+
+class TestDismissPendingFact:
+    def test_dismiss_removes_fact(self, hive_env):
+        """Dismissing a pending fact removes it without adding to memory."""
+        from keephive.storage import (
+            dismiss_pending_fact,
+            memory_file,
+            read_pending_facts,
+            write_pending_facts,
+        )
+
+        original_mem = memory_file().read_text()
+        write_pending_facts([{"fact": "Unwanted fact"}])
+
+        assert dismiss_pending_fact(0) is True
+        assert read_pending_facts() == []
+        assert memory_file().read_text() == original_mem
+
+
+# ---------------------------------------------------------------------------
+# Dead pool readers
+# ---------------------------------------------------------------------------
+
+
+class TestImprovementHistoryStats:
+    def test_empty_state(self, hive_env):
+        """Returns zero counts when no history exists."""
+        from keephive.storage import improvement_history_stats
+
+        stats = improvement_history_stats()
+        assert stats["total_applied"] == 0
+        assert stats["total_dismissed"] == 0
+        assert stats["acceptance_rate"] == 0.0
+        assert stats["by_type"] == {}
+        assert stats["recent"] == []
+
+    def test_computes_rate_and_breakdown(self, hive_env):
+        """Calculates acceptance rate from applied + dismissed counts."""
+        from keephive.storage import (
+            append_improvement_history,
+            improvement_history_stats,
+        )
+
+        # Seed dismissed improvements
+        dismissed_path = hive_env / ".dismissed-improvements.json"
+        dismissed_path.write_text(
+            json.dumps(
+                [
+                    {"type": "skill", "name": "bad-skill"},
+                    {"type": "task", "name": "bad-task"},
+                ]
+            )
+        )
+
+        # Seed applied improvements
+        append_improvement_history({"type": "rule", "name": "good-rule"})
+        append_improvement_history({"type": "rule", "name": "another-rule"})
+        append_improvement_history({"type": "skill", "name": "good-skill"})
+
+        stats = improvement_history_stats()
+        assert stats["total_applied"] == 3
+        assert stats["total_dismissed"] == 2
+        assert stats["acceptance_rate"] == 0.6  # 3 / (3+2)
+        assert stats["by_type"] == {"rule": 2, "skill": 1}
+        assert len(stats["recent"]) == 3
+
+
+class TestExperimentResults:
+    def test_empty_state(self, hive_env):
+        """Returns empty list when no baselines exist."""
+        from keephive.storage import experiment_results
+
+        assert experiment_results() == []
+
+    def test_surfaces_baseline_data(self, hive_env):
+        """Reads opaque baseline file and returns structured results."""
+        from keephive.storage import experiment_baselines_file, experiment_results
+
+        baselines = {
+            "abc123": {
+                "rule_text": "Test before fixing bugs to understand root cause",
+                "baseline_friction": 42,
+                "current_friction": 25,
+                "friction_delta": -17,
+                "duration_days": 14,
+                "status": "expired",
+                "expiry_date": "2026-03-01",
+            },
+        }
+        experiment_baselines_file().write_text(json.dumps(baselines))
+
+        results = experiment_results()
+        assert len(results) == 1
+        r = results[0]
+        assert r["rule_hash"] == "abc123"
+        assert r["friction_delta"] == -17
+        assert r["status"] == "expired"
+        assert r["duration_days"] == 14
+
+
+# ---------------------------------------------------------------------------
+# Knowledge graph
+# ---------------------------------------------------------------------------
+
+
+class TestExtractKeywords:
+    def test_filters_stopwords_and_short_words(self, hive_env):
+        from keephive.storage import _extract_keywords
+
+        words = _extract_keywords("This code uses pydantic models with validation")
+        assert "pydantic" in words
+        assert "models" in words
+        assert "validation" in words
+        assert "this" not in words
+        assert "with" not in words
+        assert "code" not in words  # in _GRAPH_STOPWORDS
+
+    def test_empty_input(self, hive_env):
+        from keephive.storage import _extract_keywords
+
+        assert _extract_keywords("") == set()
+
+
+class TestParseGuideFrontmatter:
+    def test_extracts_tags_and_projects(self, hive_env):
+        from keephive.storage import _parse_guide_frontmatter_for_graph
+
+        text = "---\ntags: [testing, python]\nprojects: [keephive, clearbuzz]\nalways: true\n---\n# Guide\nContent here."
+        fm = _parse_guide_frontmatter_for_graph(text)
+        assert fm["tags"] == ["testing", "python"]
+        assert fm["projects"] == ["keephive", "clearbuzz"]
+        assert fm["always"] is True
+
+    def test_no_frontmatter(self, hive_env):
+        from keephive.storage import _parse_guide_frontmatter_for_graph
+
+        fm = _parse_guide_frontmatter_for_graph("# Just a title\nNo frontmatter.")
+        assert fm["tags"] == []
+        assert fm["projects"] == []
+        assert fm["always"] is False
+
+    def test_partial_frontmatter(self, hive_env):
+        """Frontmatter with only tags, no projects or always flag."""
+        from keephive.storage import _parse_guide_frontmatter_for_graph
+
+        text = "---\ntags: [debugging]\n---\n# Guide"
+        fm = _parse_guide_frontmatter_for_graph(text)
+        assert fm["tags"] == ["debugging"]
+        assert fm["projects"] == []
+        assert fm["always"] is False
+
+
+class TestBuildKnowledgeGraph:
+    def test_basic_structure(self, hive_env):
+        """Graph returns nodes and edges from seeded memory.md."""
+        from keephive.storage import build_knowledge_graph
+
+        graph = build_knowledge_graph()
+        assert "nodes" in graph
+        assert "edges" in graph
+        assert len(graph["nodes"]) >= 3  # hive_env seeds 3 facts
+
+    def test_fact_nodes_from_memory(self, hive_env):
+        """Each bullet in memory.md becomes a fact node."""
+        from keephive.storage import build_knowledge_graph
+
+        graph = build_knowledge_graph()
+        fact_nodes = [n for n in graph["nodes"] if n["type"] == "fact"]
+        assert len(fact_nodes) == 3
+        assert fact_nodes[0]["id"] == "fact:0"
+
+    def test_stale_fact_detection(self, hive_env, monkeypatch):
+        """Facts with verified date > 30 days ago are marked stale."""
+        monkeypatch.setenv("HIVE_DATE", "2026-03-15")
+        from keephive.storage import build_knowledge_graph
+
+        graph = build_knowledge_graph()
+        fact_nodes = [n for n in graph["nodes"] if n["type"] == "fact"]
+        # First fact: [verified:2020-01-01] is stale
+        stale_node = [n for n in fact_nodes if "Python" in n["label"]][0]
+        assert stale_node["stale"] is True
+        assert stale_node["age_days"] > 30
+
+    def test_fresh_fact_not_stale(self, hive_env, monkeypatch):
+        """Facts with recent verified date are not stale."""
+        monkeypatch.setenv("HIVE_DATE", "2026-03-15")
+        from keephive.storage import build_knowledge_graph
+
+        graph = build_knowledge_graph()
+        fact_nodes = [n for n in graph["nodes"] if n["type"] == "fact"]
+        fresh_node = [n for n in fact_nodes if "Pydantic" in n["label"]][0]
+        assert fresh_node["stale"] is False
+
+    def test_project_tags_create_edges(self, hive_env):
+        """Facts with [project:X] tags generate project nodes and edges."""
+        from keephive.storage import build_knowledge_graph, memory_file
+
+        mem = memory_file()
+        mem.write_text(
+            "# Memory\n\n"
+            "- serve.py uses port 3847 [project:keephive] [verified:2026-03-10]\n"
+            "- React Native for mobile [project:clearbuzz] [verified:2026-03-10]\n"
+        )
+
+        graph = build_knowledge_graph()
+        project_nodes = [n for n in graph["nodes"] if n["type"] == "project"]
+        project_names = {n["label"] for n in project_nodes}
+        assert "keephive" in project_names
+        assert "clearbuzz" in project_names
+
+        belongs_to_edges = [e for e in graph["edges"] if e["type"] == "belongs_to"]
+        assert len(belongs_to_edges) == 2
+
+    def test_project_filter(self, hive_env):
+        """project_filter limits facts to those matching the given project."""
+        from keephive.storage import build_knowledge_graph, memory_file
+
+        mem = memory_file()
+        mem.write_text(
+            "# Memory\n\n"
+            "- Fact A [project:keephive] [auto:2026-03-10]\n"
+            "- Fact B [project:clearbuzz] [auto:2026-03-10]\n"
+            "- Fact C no project tag [auto:2026-03-10]\n"
+        )
+
+        graph = build_knowledge_graph(project_filter="keephive")
+        fact_nodes = [n for n in graph["nodes"] if n["type"] == "fact"]
+        # Fact A matches keephive, Fact C has no project tag (not excluded)
+        labels = [n["label"] for n in fact_nodes]
+        assert any("Fact A" in lbl for lbl in labels)
+        assert any("Fact C" in lbl for lbl in labels)
+        assert not any("Fact B" in lbl for lbl in labels)
+
+    def test_guide_nodes(self, hive_env):
+        """Knowledge guides become guide nodes in the graph."""
+        from keephive.storage import build_knowledge_graph, guides_dir
+
+        gd = guides_dir()
+        (gd / "testing.md").write_text(
+            "---\ntags: [testing, python]\nprojects: [keephive]\n---\n# Testing Guide\nContent."
+        )
+
+        graph = build_knowledge_graph()
+        guide_nodes = [n for n in graph["nodes"] if n["type"] == "guide"]
+        assert len(guide_nodes) == 1
+        assert guide_nodes[0]["id"] == "guide:testing"
+        assert guide_nodes[0]["label"] == "Testing"
+
+    def test_guide_project_edges(self, hive_env):
+        """Guides with projects: frontmatter get tagged edges."""
+        from keephive.storage import build_knowledge_graph, guides_dir
+
+        gd = guides_dir()
+        (gd / "api-ref.md").write_text("---\nprojects: [keephive]\n---\n# API Reference")
+
+        graph = build_knowledge_graph()
+        tagged_edges = [e for e in graph["edges"] if e["type"] == "tagged"]
+        assert len(tagged_edges) >= 1
+        assert tagged_edges[0]["target"] == "project:keephive"
+
+    def test_guide_shared_tag_edges(self, hive_env):
+        """Two guides with a shared tag get a shared_tag edge."""
+        from keephive.storage import build_knowledge_graph, guides_dir
+
+        gd = guides_dir()
+        (gd / "guide-a.md").write_text("---\ntags: [debugging, python]\n---\n# A")
+        (gd / "guide-b.md").write_text("---\ntags: [python, testing]\n---\n# B")
+        (gd / "guide-c.md").write_text("---\ntags: [javascript]\n---\n# C")
+
+        graph = build_knowledge_graph()
+        shared_tag_edges = [e for e in graph["edges"] if e["type"] == "shared_tag"]
+        assert len(shared_tag_edges) == 1  # A-B share "python", C shares nothing
+        sources_targets = {shared_tag_edges[0]["source"], shared_tag_edges[0]["target"]}
+        assert sources_targets == {"guide:guide-a", "guide:guide-b"}
+
+    def test_keyword_overlap_edges(self, hive_env):
+        """Facts with 3+ keyword overlap with a guide get keyword_overlap edges."""
+        from keephive.storage import build_knowledge_graph, guides_dir, memory_file
+
+        memory_file().write_text(
+            "# Memory\n\n- pydantic validation models require schema definition [auto:2026-03-10]\n"
+        )
+        gd = guides_dir()
+        (gd / "pydantic-guide.md").write_text(
+            "---\ntags: [python]\n---\n# Pydantic Guide\n"
+            "Pydantic validation models use schema definitions for structured data.\n"
+        )
+
+        graph = build_knowledge_graph()
+        kw_edges = [e for e in graph["edges"] if e["type"] == "keyword_overlap"]
+        assert len(kw_edges) >= 1
+
+    def test_rule_nodes(self, hive_env):
+        """Rules become rule nodes in the graph."""
+        from keephive.storage import build_knowledge_graph, rules_file
+
+        rules_file().write_text("# Rules\n\n- Always test before committing\n- Never skip hooks\n")
+
+        graph = build_knowledge_graph()
+        rule_nodes = [n for n in graph["nodes"] if n["type"] == "rule"]
+        assert len(rule_nodes) == 2
+        assert rule_nodes[0]["id"] == "rule:0"
+
+    def test_orphan_detection(self, hive_env):
+        """Nodes with zero edges are marked orphan=True."""
+        from keephive.storage import build_knowledge_graph, memory_file
+
+        # Fact with no project tag and no keyword overlap = orphan
+        memory_file().write_text("# Memory\n\n- Standalone unconnected thought\n")
+
+        graph = build_knowledge_graph()
+        fact_nodes = [n for n in graph["nodes"] if n["type"] == "fact"]
+        assert len(fact_nodes) == 1
+        assert fact_nodes[0]["orphan"] is True
+
+    def test_hub_detection(self, hive_env):
+        """Nodes with > 3 edges are marked hub=True."""
+        from keephive.storage import build_knowledge_graph, memory_file
+
+        # 5 facts pointing to the same project = project becomes a hub
+        facts = "\n".join(
+            f"- Fact {i} about the project [project:bigproj] [auto:2026-03-10]" for i in range(5)
+        )
+        memory_file().write_text(f"# Memory\n\n{facts}\n")
+
+        graph = build_knowledge_graph()
+        project_nodes = [n for n in graph["nodes"] if n["type"] == "project"]
+        assert len(project_nodes) == 1
+        assert project_nodes[0]["hub"] is True
+
+    def test_type_tag_extraction(self, hive_env, monkeypatch):
+        """Facts with TYPE: prefix get type_tag property."""
+        monkeypatch.setenv("HIVE_DATE", "2026-03-15")
+        from keephive.storage import build_knowledge_graph, memory_file
+
+        memory_file().write_text(
+            "# Memory\n\n"
+            "- DECISION: chose sqlite over postgres [auto:2026-03-10]\n"
+            "- FACT: python uses indentation [auto:2026-03-10]\n"
+            "- No type prefix here [auto:2026-03-10]\n"
+        )
+
+        graph = build_knowledge_graph()
+        fact_nodes = [n for n in graph["nodes"] if n["type"] == "fact"]
+        tagged = {n.get("type_tag", ""): n["label"] for n in fact_nodes}
+        assert "DECISION" in tagged
+        assert "FACT" in tagged
+        # The third fact has no type prefix
+        no_tag = [n for n in fact_nodes if "type_tag" not in n]
+        assert len(no_tag) == 1
+
+    def test_todo_nodes(self, hive_env, monkeypatch):
+        """Open TODOs from daily logs become todo nodes."""
+        monkeypatch.setenv("HIVE_DATE", "2026-03-15")
+        from keephive.storage import build_knowledge_graph, daily_file
+
+        # collect_todos expects `- TODO: text` format, not `- [ ] text`
+        df = daily_file("2026-03-15")
+        df.parent.mkdir(parents=True, exist_ok=True)
+        df.write_text("# 2026-03-15\n\n- TODO: Fix the dashboard layout [project:keephive]\n")
+
+        graph = build_knowledge_graph()
+        todo_nodes = [n for n in graph["nodes"] if n["type"] == "todo"]
+        assert len(todo_nodes) >= 1
+
+    def test_empty_hive_produces_valid_graph(self, hive_env):
+        """An empty hive (no memory, no guides) still returns valid structure."""
+        from keephive.storage import memory_file
+
+        memory_file().write_text("")
+
+        from keephive.storage import build_knowledge_graph
+
+        graph = build_knowledge_graph()
+        assert isinstance(graph["nodes"], list)
+        assert isinstance(graph["edges"], list)
