@@ -595,11 +595,32 @@ def _task_stale_check() -> bool:
         return False
 
     memory = safe_read_text(memory_path)
+
+    # Graph-aware: prioritize stale hub facts (high-connection, high-impact)
+    graph_context = ""
+    try:
+        from keephive.storage import build_knowledge_graph
+
+        graph = build_knowledge_graph()
+        stale_hubs = [
+            n for n in graph["nodes"]
+            if n.get("stale") and n.get("hub") and n["type"] == "fact"
+        ]
+        if stale_hubs:
+            hub_texts = [n["text"][:100] for n in stale_hubs[:5]]
+            graph_context = (
+                "\n\nHigh-priority stale facts (these connect to many other nodes):\n"
+                + "\n".join(f"- {t}" for t in hub_texts)
+                + "\nCheck these first."
+            )
+    except Exception:
+        pass  # Graph assembly failure should never block stale-check
+
     prompt = f"""You are KingBee. Review these memory.md facts for staleness.
 Flag any that are: older than 30 days about fast-moving code, contradictory, or likely outdated.
 One line per flagged fact. If nothing is stale, write exactly one line: "Memory is clean."
 Always write at least one line of output.
-{_VOICE_DISCIPLINE}
+{_VOICE_DISCIPLINE}{graph_context}
 
 Memory:
 {memory[:3000]}"""
@@ -922,8 +943,36 @@ def _task_self_improve() -> bool:
             f"Propose more of what gets accepted. Avoid types that get dismissed."
         )
 
+    # ── Graph-aware: surface orphan facts and sparse projects ────────
+    graph_context = ""
+    try:
+        from keephive.storage import build_knowledge_graph
+
+        graph = build_knowledge_graph()
+        orphan_facts = [n for n in graph["nodes"] if n.get("orphan") and n["type"] == "fact"]
+        projects = [n for n in graph["nodes"] if n["type"] == "project"]
+        if orphan_facts:
+            orphan_preview = [f["text"][:80] for f in orphan_facts[:5]]
+            graph_context += (
+                f"\n\nOrphan facts ({len(orphan_facts)} total, not connected to any guide or project):\n"
+                + "\n".join(f"- {t}" for t in orphan_preview)
+                + "\nConsider proposing a guide that connects these orphan facts."
+            )
+        if len(projects) > 1:
+            proj_edges = {}
+            for edge in graph["edges"]:
+                for pid in (edge.get("source"), edge.get("target")):
+                    node = next((n for n in projects if n["id"] == pid), None)
+                    if node:
+                        proj_edges[node["label"]] = proj_edges.get(node["label"], 0) + 1
+            sparse = [p for p, c in proj_edges.items() if c < 3]
+            if sparse:
+                graph_context += f"\nSparse projects (few connections): {', '.join(sparse)}"
+    except Exception:
+        pass  # Graph failure should never block self-improve
+
     prompt = f"""You are KingBee analyzing your own effectiveness over the last 7 days.
-{effectiveness_context}
+{effectiveness_context}{graph_context}
 You can propose NEW improvements OR refine existing ones. Propose at most 4 items total. Quality over quantity. Silence is acceptable.
 
 **For NEW items** (proposed_skills / proposed_tasks / proposed_rules):
