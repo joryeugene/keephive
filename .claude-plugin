@@ -1,0 +1,21 @@
+{
+  "name": "keephive-marketplace",
+  "owner": {
+    "name": "Jory",
+    "url": "https://github.com/joryeugene"
+  },
+  "plugins": [
+    {
+      "name": "keephive",
+      "source": "./",
+      "description": "Persistent memory + background intelligence for Claude Code. Captures facts and decisions across sessions, verifies staleness, runs KingBee daemon.",
+      "strict": false,
+      "keywords": ["memory", "knowledge", "daemon", "persistence", "mcp", "claude-code", "session"],
+      "skills": ["./skills/keephive-helper"]
+    }
+  ],
+  "metadata": {
+    "description": "keephive plugin for Claude Code",
+    "version": "2.0.2"
+  }
+}
