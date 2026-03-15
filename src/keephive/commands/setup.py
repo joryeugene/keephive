@@ -118,6 +118,153 @@ def _maybe_migrate(namespace: argparse.Namespace) -> None:
     set_active_profile(active_profile())
 
 
+def _scan_project_knowledge() -> dict:
+    """Scan CLAUDE.md, git history, and auto-memory for importable knowledge.
+
+    Everything goes to pending queues (.pending-facts.md, .pending-rules.md).
+    Nothing is auto-committed to memory. Returns counts of queued items.
+    """
+    facts: list[str] = []
+    rules: list[str] = []
+
+    # ── 1. Scan CLAUDE.md files in cwd ────────────────────────────────
+    for claude_md in _find_claude_md_files():
+        try:
+            content = claude_md.read_text()
+        except OSError:
+            continue
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("- "):
+                continue
+            text = stripped[2:].strip()
+            if len(text) < 15:
+                continue
+            # Classify: constraint-like words suggest a rule
+            constraint_words = {"always", "never", "must", "forbidden", "required", "banned"}
+            if any(w in text.lower() for w in constraint_words):
+                rules.append(text)
+            else:
+                facts.append(text)
+
+    # ── 2. Scan git history for decision commits ──────────────────────
+    facts.extend(_scan_git_decisions())
+
+    # ── 3. Import auto-memory entries ─────────────────────────────────
+    facts.extend(_scan_auto_memory())
+
+    # ── 4. Write to pending queues (deduplicating against existing) ───
+    queued_facts = _queue_pending_facts(facts)
+    queued_rules = _queue_pending_rules(rules)
+
+    return {"facts": queued_facts, "rules": queued_rules, "total": queued_facts + queued_rules}
+
+
+def _find_claude_md_files() -> list[Path]:
+    """Find CLAUDE.md files in the current working directory tree."""
+    candidates = [
+        Path.cwd() / "CLAUDE.md",
+        Path.cwd() / ".claude" / "CLAUDE.md",
+    ]
+    return [p for p in candidates if p.exists()]
+
+
+def _scan_git_decisions() -> list[str]:
+    """Extract decision-like commits from the last 90 days of git history."""
+    import subprocess
+
+    decision_words = {"chose", "switch", "replace", "migrate", "upgrade", "deprecate",
+                      "remove", "rewrite", "redesign", "refactor"}
+    facts = []
+    try:
+        result = subprocess.run(
+            ["git", "log", "--oneline", "--since=90 days ago", "--format=%h %s"],
+            capture_output=True, text=True, timeout=10, cwd=str(Path.cwd()),
+        )
+        if result.returncode != 0:
+            return []
+        for line in result.stdout.strip().splitlines()[:50]:
+            parts = line.split(" ", 1)
+            if len(parts) < 2:
+                continue
+            sha, msg = parts
+            if any(w in msg.lower() for w in decision_words):
+                facts.append(f"DECISION: {msg} (commit {sha}) [imported:git-history]")
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return facts
+
+
+def _scan_auto_memory() -> list[str]:
+    """Import entries from Claude Code auto-memory files."""
+    from difflib import SequenceMatcher
+
+    memory_dir = Path.home() / ".claude" / "projects"
+    if not memory_dir.exists():
+        return []
+
+    facts = []
+    existing_memory = ""
+    mem_path = hive_dir() / "working" / "memory.md"
+    if mem_path.exists():
+        existing_memory = mem_path.read_text()
+
+    for memory_file in memory_dir.rglob("MEMORY.md"):
+        try:
+            content = memory_file.read_text()
+        except OSError:
+            continue
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("- "):
+                continue
+            text = stripped[2:].strip()
+            if len(text) < 15:
+                continue
+            # Skip if already in working memory (trigram overlap > 0.8)
+            if existing_memory and SequenceMatcher(None, text.lower(),
+                                                    existing_memory.lower()).ratio() > 0.8:
+                continue
+            # Skip if text is already a substring of existing memory
+            if text in existing_memory:
+                continue
+            facts.append(f"{text} [imported:claude-auto-memory]")
+
+    return facts
+
+
+def _queue_pending_facts(facts: list[str]) -> int:
+    """Append unique facts to .pending-facts.md. Returns count queued."""
+    if not facts:
+        return 0
+    pending_path = hive_dir() / ".pending-facts.md"
+    existing = pending_path.read_text() if pending_path.exists() else ""
+    queued = 0
+    with pending_path.open("a") as f:
+        for fact in facts:
+            if fact not in existing:
+                f.write(f"- {fact}\n")
+                queued += 1
+    return queued
+
+
+def _queue_pending_rules(rules: list[str]) -> int:
+    """Append unique rules to .pending-rules.md. Returns count queued."""
+    if not rules:
+        return 0
+    from keephive.storage import pending_rules_file
+
+    pending_path = pending_rules_file()
+    existing = pending_path.read_text() if pending_path.exists() else ""
+    queued = 0
+    with pending_path.open("a") as f:
+        for rule in rules:
+            if rule not in existing:
+                f.write(f"- {rule} [imported:claude-md]\n")
+                queued += 1
+    return queued
+
+
 def cmd_setup(args: list[str]) -> None:
     ns = _parse_setup_args(args)
     command = ns.command
@@ -179,7 +326,20 @@ def cmd_setup(args: list[str]) -> None:
     console.print("  Checking global install...")
     _sync_global_install()
 
-    # 10. Initialize KingBee: SOUL.md + daemon.json
+    # 10. Scan project knowledge (onboarding)
+    console.print()
+    console.print("  Scanning project knowledge...")
+    scan_results = _scan_project_knowledge()
+    if scan_results["total"] > 0:
+        console.print(
+            f"  [ok]OK[/ok] queued {scan_results['total']} entries for review"
+            f" ({scan_results['facts']} facts, {scan_results['rules']} rules)"
+        )
+        console.print("  [dim]Review with: hive mem review / hive rule review[/dim]")
+    else:
+        console.print("  [dim]No project knowledge to import[/dim]")
+
+    # 11. Initialize KingBee: SOUL.md + daemon.json
     console.print()
     console.print("  🐝 Initializing KingBee...")
     sf = soul_file()
