@@ -1,21 +1,22 @@
 [project]
 name = "keephive"
-version = "2.0.0"
-description = "A knowledge sidecar for Claude Code"
+version = "2.0.1"
+description = "Persistent memory and background intelligence for Claude Code — captures facts, verifies staleness, KingBee daemon"
 readme = "README.md"
 license = "MIT"
 authors = [
     { name = "Jory", email = "jory@pestorious.com" }
 ]
 requires-python = ">=3.13"
-keywords = ["claude", "memory", "verification", "claude-code", "mcp", "agent", "knowledge-graph", "daemon", "dashboard"]
+keywords = ["claude", "memory", "verification", "claude-code", "mcp", "agent", "knowledge-graph", "daemon", "dashboard", "ai-memory", "claude-memory", "session-memory", "persistent-memory", "llm-memory"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Environment :: Console",
 ]
 dependencies = [

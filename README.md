@@ -8,19 +8,25 @@
   <a href="https://github.com/joryeugene/keephive/blob/main/LICENSE"><img src="https://img.shields.io/github/license/joryeugene/keephive.svg" alt="License"></a>
 </p>
 
-<table><tr>
-<td>
-  <h3>A knowledge sidecar for AI agents, powered by KingBee</h3>
-  <p>Claude Code gets the full hook stack; every MCP-aware agent can tap the same memory, log, and audit tools. <strong>KingBee</strong> is the background daemon that maintains persistent agent identity, self-improves from session logs, and surfaces insights automatically.</p>
-</td>
-<td align="center">
-  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/mascot.png" width="240" alt="keephive mascot" />
-</td>
-</tr></table>
+**Claude Code remembers nothing between sessions. keephive fixes that.**
+
+Persistent memory and background intelligence for Claude Code. Captures facts and decisions, verifies they're still true, and runs a background agent (KingBee) that surfaces insights and briefs you each morning.
+
+| Without keephive | With keephive |
+|---|---|
+| "Implement auth" → Claude builds it. Session ends. | `hive r "DECISION: JWT, 7-day refresh"` |
+| Next session: "I don't have context about the auth system..." | Session start: Claude already knows the JWT decision |
+| You re-explain the stack on every new session | Knowledge compounds; context injects automatically |
+| Stale facts silently mislead Claude | `hive verify` checks facts against the codebase |
+| No visibility into what Claude has learned | `hive stats`, `hive serve`, knowledge graph |
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/joryeugene/keephive/main/assets/mascot.png" width="160" alt="keephive mascot" />
+</p>
 
 ## TLDR
 
-1. **Install**: `curl -fsSL https://raw.githubusercontent.com/joryeugene/keephive/main/install.sh | bash`
+1. **Install**: `pipx install keephive && keephive setup` (or `curl -fsSL https://raw.githubusercontent.com/joryeugene/keephive/main/install.sh | bash` for automated setup)
 2. **Connect your agent.** Claude Code discovers eight hooks automatically. Any MCP client can run `keephive mcp-serve` and call the same tools.
 3. **Look around**: `hive status` (`h s`), `hive log` (`h l`), `hive todo`
 4. **Visual overview**: `hive serve` (`h ws`) opens a browser dashboard at localhost:3847
@@ -91,23 +97,23 @@ keephive v1.6.0
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/joryeugene/keephive/main/install.sh | bash
+pipx install keephive   # recommended — isolated, no venv required
+keephive setup
 ```
 
-One command. Installs keephive, registers 8 hooks and an MCP server, and verifies everything. Requires [uv](https://docs.astral.sh/uv/). Run once; re-run after upgrades.
-
-Or install manually:
+Or with [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv tool install keephive
 keephive setup
 ```
 
-Via pip:
+`keephive setup` registers 8 hooks and an MCP server and verifies everything is wired. Run once; re-run after upgrades.
+
+One-line install (installs uv if needed, then keephive, then runs setup):
 
 ```bash
-pip install keephive
-keephive setup
+curl -fsSL https://raw.githubusercontent.com/joryeugene/keephive/main/install.sh | bash
 ```
 
 From source:

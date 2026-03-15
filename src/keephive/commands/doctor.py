@@ -493,6 +493,7 @@ _EXPECTED_HIVE_ENTRIES = {
     ".stats.json",
     ".stats.lock",
     ".daemon-state.json",
+    ".daemon-state.lock",  # fcntl write lock for daemon_state_file()
     ".daemon.pid",
     ".settings.json",
     ".index.json",
@@ -517,6 +518,15 @@ _EXPECTED_HIVE_ENTRIES = {
     # Daemon + tasks
     ".custom-tasks.json",
     ".wander-seeds.json",
+    ".daemon-hints.json",
+    # Closed-loop / v2.0 storage files
+    ".experiment-baselines.json",
+    ".improvement-history.json",
+    ".kingbee-insights.json",
+    ".llm-routing.log",
+    ".transcript-cache.json",
+    # Specs directory (used by hive run loop tasks)
+    "specs",
     # Hooks
     ".hook-debug.log",
     # Snapshot (created by hive checkup --snapshot)
