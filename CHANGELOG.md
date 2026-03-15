@@ -1,5 +1,45 @@
 # Changelog
 
+## v2.0.0
+
+The Closed Loop: knowledge graph, dead pool drainage, graph-aware KingBee, onboarding scanners.
+
+### Features
+
+- **Knowledge graph** (`/graph` view, `GET /api/graph-data`): Computed view over flat files
+  assembling facts, guides, projects, TODOs, rules, and wander docs into a force-directed
+  SVG visualization. Nodes colored by type, sized by connection count. Stale facts show
+  dashed borders, orphans pulse. Filter by type, project, staleness. Zero external deps.
+
+- **Entry-level CRUD**: Individual fact and rule editing/deletion from the dashboard.
+  `POST /api/mem/entry`, `POST /api/rules/entry`, `POST /api/facts/promote` endpoints.
+  Index-based operations that preserve non-bullet content (headers, sections).
+
+- **KingBee structured output**: All six daemon tasks dual-write to `.kingbee-insights.json`
+  alongside daily logs. Dashboard surfaces overnight summaries from structured JSON instead
+  of parsing regex from text logs.
+
+- **Effectiveness feedback loop**: Self-improve reads `.improvement-history.json` acceptance
+  rates by type and injects track record into the LLM prompt, biasing proposals toward types
+  that get accepted.
+
+- **Graph-aware daemon targeting**: Stale-check prioritizes hub facts (high connection count
+  + stale = high impact). Self-improve identifies orphan clusters and sparse projects,
+  proposing guides that connect disconnected knowledge.
+
+- **Onboarding scanners** (`hive setup`): Three deterministic scanners populate the graph on
+  day one. CLAUDE.md bullet extraction, git decision-commit scanning (last 90 days),
+  auto-memory import from `~/.claude/projects/*/memory/MEMORY.md`. Everything queued for
+  review, nothing auto-committed.
+
+- **Dead pool drainage**: Improvement history stats, experiment friction deltas, and wander
+  doc outcomes now have readers. Growth module surfaces improvement velocity and rule
+  experiment results. KingBee insights panel in `/agent` view.
+
+- **Growth module expansion**: KingBee Effectiveness section (applied/dismissed/acceptance
+  rate by type), Rule Experiments section (friction deltas), improvement velocity in the
+  growth story narrative.
+
 ## v1.6.0
 
 Amber Terminal visual identity, dashboard performance, SPA navigation.

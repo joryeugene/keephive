@@ -8,7 +8,7 @@ authors = [
     { name = "Jory", email = "jory@pestorious.com" }
 ]
 requires-python = ">=3.13"
-keywords = ["claude", "memory", "verification", "claude-code", "mcp", "agent"]
+keywords = ["claude", "memory", "verification", "claude-code", "mcp", "agent", "knowledge-graph", "daemon", "dashboard"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
