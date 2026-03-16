@@ -27,7 +27,7 @@ Persistent memory and background intelligence for Claude Code. Captures facts an
 ## TLDR
 
 1. **Install**: `pipx install keephive && keephive setup` (or `curl -fsSL https://raw.githubusercontent.com/joryeugene/keephive/main/install.sh | bash` for automated setup)
-2. **Connect your agent.** Claude Code discovers eight hooks automatically. Any MCP client can run `keephive mcp-serve` and call the same tools.
+2. **Connect your agent.** Claude Code discovers nine hooks automatically. Any MCP client can run `keephive mcp-serve` and call the same tools.
 3. **Look around**: `hive status` (`h s`), `hive log` (`h l`), `hive todo`
 4. **Visual overview**: `hive serve` (`h ws`) opens a browser dashboard at localhost:3847
 5. **Periodic cleanup**: `hive verify` (`h v`), `hive reflect` (`h rf`), `hive audit` (`h a`)
@@ -108,7 +108,15 @@ uv tool install keephive
 keephive setup
 ```
 
-`keephive setup` registers 8 hooks and an MCP server and verifies everything is wired. Run once; re-run after upgrades.
+`keephive setup` registers 9 hooks and an MCP server and verifies everything is wired. Run once; re-run after upgrades.
+
+Or install as a Claude Code plugin (delivers skills and hooks without manual setup):
+
+```bash
+/plugin install joryeugene/keephive
+```
+
+The plugin still requires the keephive binary. Install it first with `uv tool install keephive`.
 
 One-line install (installs uv if needed, then keephive, then runs setup):
 
@@ -515,7 +523,7 @@ hive daemon log                        # tail last 50 lines of daemon.log
 | Stage | What it checks |
 |-------|---------------|
 | 0 | Privacy gate (`.llm-paused` present?) |
-| 1 | Hook pipeline (all 8 hooks registered?) |
+| 1 | Hook pipeline (all 9 hooks registered?) |
 | 2 | Daemon task freshness (last-run timestamps) |
 | 3 | Queue depths (pending facts, rules, improvements, TODOs) |
 | 4 | SOUL.md age (last update) |
