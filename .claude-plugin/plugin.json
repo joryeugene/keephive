@@ -1,0 +1,13 @@
+{
+  "name": "keephive",
+  "version": "2.0.3",
+  "description": "Persistent memory and background intelligence for Claude Code.",
+  "author": {
+    "name": "Jory Eugene",
+    "url": "https://github.com/joryeugene"
+  },
+  "homepage": "https://github.com/joryeugene/keephive",
+  "repository": "https://github.com/joryeugene/keephive",
+  "license": "MIT",
+  "keywords": ["memory", "knowledge", "daemon", "persistence", "mcp", "claude-code"]
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "keephive",
+  "description": "Persistent memory and background intelligence for Claude Code.",
+  "owner": {
+    "name": "Jory Eugene",
+    "url": "https://github.com/joryeugene"
+  },
+  "plugins": [
+    {
+      "name": "keephive",
+      "description": "Memory, verification, and KingBee daemon for Claude Code sessions.",
+      "version": "2.0.3",
+      "author": {
+        "name": "Jory Eugene",
+        "url": "https://github.com/joryeugene"
+      },
+      "source": "./",
+      "category": "development",
+      "strict": false
+    }
+  ]
+}

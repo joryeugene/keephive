@@ -139,6 +139,15 @@ uv tool upgrade keephive   # manual alternative; run keephive setup after
 > [!TIP]
 > Run `keephive setup` again after upgrading manually to sync hooks and the MCP server registration to the new binary path.
 
+### Companion: claude-stack
+
+[claude-stack](https://github.com/joryeugene/claude-stack) provides engineering discipline for Claude Code: TDD, debugging protocols, spec-writing, verification workflows, and enforcement hooks. keephive handles memory and persistence. claude-stack handles methodology and quality. They pair directly.
+
+```bash
+uv tool install keephive && keephive setup
+/plugin install joryeugene/claude-stack
+```
+
 ---
 
 ## When to use what
