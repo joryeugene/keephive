@@ -321,6 +321,9 @@ def cmd_setup(args: list[str]) -> None:
     console.print("  Installing keephive-helper skill...")
     _deploy_skills(ns)
 
+    # 5b. Install standalone skills (sync, etc.)
+    _deploy_standalone_skills()
+
     # 6. Install platform hooks
     console.print()
     console.print("  Installing platform hooks...")
@@ -484,6 +487,31 @@ def _deploy_skills(namespace: argparse.Namespace) -> None:
 
     if not installed_any:
         console.print("  [dim]No skill updates required[/dim]")
+
+
+_STANDALONE_SKILLS = {
+    "sync": "templates/skills/sync/SKILL.md",
+}
+
+
+def _deploy_standalone_skills() -> None:
+    """Install standalone skills (sync, etc.) into ~/.claude/skills/."""
+    from importlib import resources
+
+    skills_root = Path.home() / ".claude" / "skills"
+    for name, pkg_path in _STANDALONE_SKILLS.items():
+        target = skills_root / name / "SKILL.md"
+        try:
+            bundled = resources.files("keephive.data").joinpath(pkg_path).read_text()
+        except FileNotFoundError:
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        existing = target.read_text() if target.exists() else ""
+        if existing == bundled:
+            console.print(f"  [dim]{name} skill up to date[/dim]")
+        else:
+            target.write_text(bundled, encoding="utf-8")
+            console.print(f"  [ok]OK[/ok] {name} skill installed")
 
 
 def _copy_hook_templates(platform: str, target_dir: Path) -> tuple[dict[str, str], bool]:
