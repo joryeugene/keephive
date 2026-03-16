@@ -10,7 +10,7 @@
     {
       "name": "keephive",
       "description": "Memory, verification, and KingBee daemon for Claude Code sessions.",
-      "version": "2.0.3",
+      "version": "2.0.4",
       "author": {
         "name": "Jory Eugene",
         "url": "https://github.com/joryeugene"
