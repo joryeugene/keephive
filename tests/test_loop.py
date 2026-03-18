@@ -17,9 +17,9 @@ def make_loop_file(hive_env: Path, loop_id: str, session_id: str | None = None, 
     data = {
         "loop_id": loop_id,
         "task": "test task",
-        "max_iter": 10,
+        "max_seconds": None,
         "iter": 0,
-        "mode": "in-session",
+        "mode": "background",
         "session_id": session_id,
         "cwd": "/tmp/test",
         "created_at": "2026-02-24T14:00:00",
@@ -234,7 +234,7 @@ class TestStopHookPromptFileCleanup:
         )
         prompt_file.write_text("fake tmux prompt content")
 
-        monkeypatch.delenv("HIVE_LOOP_ID", raising=False)  # Ensure in-session mode path
+        monkeypatch.setenv("HIVE_LOOP_ID", loop_id)
         monkeypatch.setattr(
             "sys.stdin", io.StringIO(json.dumps({"session_id": sess, "cwd": "/tmp"}))
         )
@@ -333,21 +333,23 @@ class TestFindLoopForSession:
         assert req is None
         assert path is None
 
-    def test_in_session_mode_finds_matching_session_id(self, hive_env, monkeypatch):
-        """Scans .loop-*.json and returns the one with matching session_id."""
-        monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
-        make_loop_file(hive_env, "audit-001", session_id="sess-target")
+    def test_background_mode_lookup_by_hive_loop_id(self, hive_env, monkeypatch):
+        """HIVE_LOOP_ID env var → direct file lookup, no scanning."""
+        loop_id = "audit-001"
+        make_loop_file(hive_env, loop_id, session_id="sess-target")
         make_loop_file(hive_env, "other-001", session_id="sess-other")
+        monkeypatch.setenv("HIVE_LOOP_ID", loop_id)
 
         from keephive.commands.loop import _find_loop_for_session
 
         req, path = _find_loop_for_session("sess-target")
         assert req is not None
         assert req["loop_id"] == "audit-001"
+        assert path is not None
         assert path.name == ".loop-audit-001.json"
 
-    def test_in_session_mode_no_match_returns_none(self, hive_env, monkeypatch):
-        """Non-matching session_id → (None, None)."""
+    def test_no_hive_loop_id_returns_none(self, hive_env, monkeypatch):
+        """Without HIVE_LOOP_ID, returns (None, None) — no file scanning."""
         monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
         make_loop_file(hive_env, "audit-001", session_id="sess-other")
 
@@ -393,18 +395,17 @@ class TestFindLoopForSession:
         assert req is None
         assert path is None
 
-    def test_corrupt_loop_file_skipped(self, hive_env, monkeypatch):
-        """Corrupt JSON in a loop file is skipped, not raised."""
-        monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
-        (hive_env / ".loop-corrupt-001.json").write_text("{{{not valid json")
-        make_loop_file(hive_env, "good-001", session_id="sess-x")
+    def test_corrupt_loop_file_returns_none(self, hive_env, monkeypatch):
+        """HIVE_LOOP_ID pointing to corrupt JSON → (None, None), no raise."""
+        loop_id = "corrupt-001"
+        (hive_env / f".loop-{loop_id}.json").write_text("{{{not valid json")
+        monkeypatch.setenv("HIVE_LOOP_ID", loop_id)
 
         from keephive.commands.loop import _find_loop_for_session
 
-        # Should not raise; finds the good file
         req, path = _find_loop_for_session("sess-x")
-        assert req is not None
-        assert req["loop_id"] == "good-001"
+        assert req is None
+        assert path is None
 
 
 # ── _write_iter_log ───────────────────────────────────────────────────────────
@@ -574,12 +575,12 @@ class TestCmdRunCancel:
         assert not done_file.exists(), ".loop-done-* should be removed on cancel"
 
 
-# ── _cmd_run_task (in-session mode) ──────────────────────────────────────────
+# ── _cmd_run_task ─────────────────────────────────────────────────────────────
 
 
-class TestCmdRunTaskInSession:
+class TestCmdRunTask:
     def test_creates_loop_file(self, hive_env, monkeypatch, capsys):
-        """In-session mode creates a .loop-*.json file."""
+        """cmd_loop creates a .loop-*.json file."""
         monkeypatch.setenv("CLAUDECODE", "1")
         monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
         monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
@@ -606,7 +607,7 @@ class TestCmdRunTaskInSession:
         loop_files = list(hive_env.glob(".loop-*.json"))
         data = json.loads(loop_files[0].read_text())
         assert data["task"] == "security audit codebase"
-        assert data["mode"] == "in-session"
+        assert data["mode"] == "background"
         assert data["max_seconds"] is None
 
     def test_loop_file_respects_max_time_flag(self, hive_env, monkeypatch, capsys):
@@ -625,7 +626,7 @@ class TestCmdRunTaskInSession:
         assert data["max_seconds"] == 1800
 
     def test_first_iter_output_printed_to_stdout(self, hive_env, monkeypatch, capsys):
-        """In-session mode prints first iteration prompt to stdout (Claude reads it)."""
+        """cmd_loop prints loop confirmation to stdout (task name visible)."""
         monkeypatch.setenv("CLAUDECODE", "1")
         monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
         monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
@@ -635,28 +636,7 @@ class TestCmdRunTaskInSession:
         cmd_loop(["refactor auth module"])
         out = capsys.readouterr().out
 
-        assert "TASK: refactor auth module" in out
-        # Done-signal path must NOT be shown — agent would touch it prematurely (regression guard)
-        assert ".loop-done-" not in out
-
-    def test_guard_against_second_loop_in_same_session(self, hive_env, monkeypatch, capsys):
-        """Second in-session loop for same session_id is blocked (H6)."""
-        session_id = "sess-in-session"
-        monkeypatch.setenv("CLAUDECODE", "1")
-        monkeypatch.setenv("CLAUDE_SESSION_ID", session_id)
-        monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
-
-        # Pre-existing loop for this session
-        make_loop_file(hive_env, "existing-loop", session_id=session_id, mode="in-session")
-
-        from keephive.commands.loop import cmd_loop
-
-        cmd_loop(["another task"])
-        out = capsys.readouterr().out
-
-        assert "Loop already active" in out or "already active" in out.lower()
-        # Only the original loop file should exist
-        assert len(list(hive_env.glob(".loop-*.json"))) == 1
+        assert "refactor auth module" in out
 
 
 # ── Storage integration (pending-facts roundtrip) ─────────────────────────────
@@ -753,10 +733,11 @@ class TestStopHookLoopIntercept:
         return "".join(captured_stdout), exit_code_holder[0]
 
     def test_loop_continues_emits_exit_2(self, hive_env, monkeypatch, capsys):
-        """With active loop not at max_iter, stop hook emits exit code 2."""
+        """With active loop, stop hook emits exit code 2."""
         session_id = "sess-loop-continue"
-        make_loop_file(hive_env, "test-loop-001", session_id=session_id, iter=0, max_iter=5)
-        monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
+        loop_id = "test-loop-001"
+        make_loop_file(hive_env, loop_id, session_id=session_id, iter=0)
+        monkeypatch.setenv("HIVE_LOOP_ID", loop_id)
         monkeypatch.setenv("HIVE_STOP_NUDGE_INTERVAL", "999")
 
         payload = json.dumps({"session_id": session_id, "cwd": ""})
@@ -774,10 +755,9 @@ class TestStopHookLoopIntercept:
     def test_loop_continues_increments_iter(self, hive_env, monkeypatch, capsys):
         """Continuation increments iter in the loop file."""
         session_id = "sess-loop-iter"
-        loop_file = make_loop_file(
-            hive_env, "iter-loop-001", session_id=session_id, iter=2, max_iter=5
-        )
-        monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
+        loop_id = "iter-loop-001"
+        loop_file = make_loop_file(hive_env, loop_id, session_id=session_id, iter=2)
+        monkeypatch.setenv("HIVE_LOOP_ID", loop_id)
         monkeypatch.setenv("HIVE_STOP_NUDGE_INTERVAL", "999")
 
         payload = json.dumps({"session_id": session_id, "cwd": ""})
@@ -797,12 +777,13 @@ class TestStopHookLoopIntercept:
     def test_loop_completes_at_time_limit(self, hive_env, monkeypatch, capsys):
         """At time limit, stop hook exits 0 and removes loop file."""
         session_id = "sess-loop-done"
+        loop_id = "done-loop-001"
         # max_seconds=60, created_at far in past → elapsed >> limit → time_done
         loop_file = make_loop_file(
-            hive_env, "done-loop-001", session_id=session_id, iter=4,
+            hive_env, loop_id, session_id=session_id, iter=4,
             max_seconds=60, created_at="2026-02-24T14:00:00",
         )
-        monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
+        monkeypatch.setenv("HIVE_LOOP_ID", loop_id)
         monkeypatch.setenv("HIVE_STOP_NUDGE_INTERVAL", "999")
 
         payload = json.dumps({"session_id": session_id, "cwd": ""})
@@ -820,13 +801,13 @@ class TestStopHookLoopIntercept:
         assert not loop_file.exists(), "Loop file should be deleted at completion"
 
     def test_loop_completes_on_done_signal_file(self, hive_env, monkeypatch, capsys):
-        """Done signal file triggers loop completion even before max_iter."""
+        """Done signal file triggers loop completion."""
         session_id = "sess-loop-signal"
         loop_id = "signal-loop-001"
-        loop_file = make_loop_file(hive_env, loop_id, session_id=session_id, iter=1, max_iter=10)
+        loop_file = make_loop_file(hive_env, loop_id, session_id=session_id, iter=1)
         # Write the done signal
         (hive_env / f".loop-done-{loop_id}").write_text("done")
-        monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
+        monkeypatch.setenv("HIVE_LOOP_ID", loop_id)
         monkeypatch.setenv("HIVE_STOP_NUDGE_INTERVAL", "999")
 
         payload = json.dumps({"session_id": session_id, "cwd": ""})
@@ -965,6 +946,7 @@ class TestBackgroundMode:
         """The tmux command string includes HIVE_LOOP_ID=<id>."""
         monkeypatch.delenv("CLAUDECODE", raising=False)
         monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
+        monkeypatch.delenv("HIVE_NO_TMUX_SPAWN", raising=False)  # allow subprocess mock to intercept
 
         captured_commands: list = []
 
@@ -1061,6 +1043,7 @@ class TestBackgroundMode:
     def test_background_mode_no_batch_flag(self, hive_env, monkeypatch, capsys):
         """The claude command must NOT include -p (batch mode kills Stop hook)."""
         monkeypatch.delenv("CLAUDECODE", raising=False)
+        monkeypatch.delenv("HIVE_NO_TMUX_SPAWN", raising=False)  # allow subprocess mock to intercept
         captured = []
 
         def mock_run(cmd, **kw):
@@ -1391,11 +1374,11 @@ class TestEarlyExitLabel:
 
         session_id = "sess-early-exit-label"
         loop_id = "early-exit-001"
-        make_loop_file(hive_env, loop_id, session_id=session_id, iter=2, max_iter=10)
+        make_loop_file(hive_env, loop_id, session_id=session_id, iter=2)
         # Simulate user touching the done file to abort early
         (hive_env / f".loop-done-{loop_id}").write_text("abort")
 
-        monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
+        monkeypatch.setenv("HIVE_LOOP_ID", loop_id)
         monkeypatch.setenv("HIVE_STOP_NUDGE_INTERVAL", "999")
 
         payload = json.dumps({"session_id": session_id, "cwd": ""})
@@ -1433,7 +1416,7 @@ class TestEarlyExitLabel:
         )
         # No done signal file created
 
-        monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
+        monkeypatch.setenv("HIVE_LOOP_ID", loop_id)
         monkeypatch.setenv("HIVE_STOP_NUDGE_INTERVAL", "999")
 
         payload = json.dumps({"session_id": session_id, "cwd": ""})

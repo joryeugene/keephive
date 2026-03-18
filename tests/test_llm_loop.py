@@ -35,17 +35,16 @@ def _skip_if_no_claude() -> None:
 def _make_loop_file(
     hive_dir: Path,
     loop_id: str,
-    session_id: str = "sess-test",
     **kwargs,
 ) -> Path:
     """Write a .loop-{loop_id}.json to hive_dir with sensible defaults."""
     data = {
         "loop_id": loop_id,
         "task": "test task",
-        "max_iter": 10,
+        "max_seconds": None,
         "iter": 0,
-        "mode": "in-session",
-        "session_id": session_id,
+        "mode": "background",
+        "session_id": None,
         "cwd": str(hive_dir),
         "created_at": "2026-02-24T14:00:00",
     }
@@ -57,19 +56,21 @@ def _make_loop_file(
 
 def _run_stop_hook(
     hive_dir: Path,
+    loop_id: str,
     session_id: str = "sess-test",
     cwd: str = "/tmp",
 ) -> tuple[str, int]:
     """Invoke the stop hook via subprocess, return (stdout, exit_code).
 
     The stop hook reads JSON from stdin (session_id, cwd) and:
-    - Exits 2 with JSON continuation when a loop is active for that session.
+    - Exits 2 with JSON continuation when a loop is active (HIVE_LOOP_ID matches).
     - Exits 0 normally when no loop matches.
     """
     import os
 
     env = dict(os.environ)
     env["HIVE_HOME"] = str(hive_dir)
+    env["HIVE_LOOP_ID"] = loop_id
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE_ENTRYPOINT", None)
 
@@ -95,81 +96,76 @@ class TestLoopStopHookIntegration:
     """
 
     def test_exits_2_when_loop_active(self, llm_hive_env: Path) -> None:
-        """Stop hook exits 2 when a loop file matches the session."""
-        _make_loop_file(llm_hive_env, "active-20260224-120000", session_id="sess-active")
-        _, code = _run_stop_hook(llm_hive_env, "sess-active")
+        """Stop hook exits 2 when a loop file matches HIVE_LOOP_ID."""
+        loop_id = "active-20260224-120000"
+        _make_loop_file(llm_hive_env, loop_id)
+        _, code = _run_stop_hook(llm_hive_env, loop_id)
         assert code == 2
 
     def test_advances_iter_on_each_call(self, llm_hive_env: Path) -> None:
         """Each stop hook invocation increments the iter field in the loop file."""
         loop_id = "iter-adv-20260224-120000"
-        _make_loop_file(llm_hive_env, loop_id, session_id="sess-adv", iter=0, max_iter=5)
+        _make_loop_file(llm_hive_env, loop_id, iter=0)
 
         for expected in range(1, 4):
-            _run_stop_hook(llm_hive_env, "sess-adv")
+            _run_stop_hook(llm_hive_env, loop_id)
             data = json.loads((llm_hive_env / f".loop-{loop_id}.json").read_text())
             assert data["iter"] == expected, f"Expected iter={expected}, got {data['iter']}"
 
-    def test_exits_0_at_max_iter(self, llm_hive_env: Path) -> None:
-        """Stop hook exits 0 (completion) when iter+1 reaches max_iter."""
-        _make_loop_file(
-            llm_hive_env,
-            "max-20260224-120000",
-            session_id="sess-max",
-            iter=9,
-            max_iter=10,
-        )
-        _, code = _run_stop_hook(llm_hive_env, "sess-max")
+    def test_exits_0_at_done_signal(self, llm_hive_env: Path) -> None:
+        """Stop hook exits 0 (completion) when the done-signal file exists."""
+        loop_id = "max-20260224-120000"
+        _make_loop_file(llm_hive_env, loop_id, iter=2)
+        (llm_hive_env / f".loop-done-{loop_id}").write_text("done")
+        _, code = _run_stop_hook(llm_hive_env, loop_id)
         assert code == 0
 
     def test_loop_file_deleted_at_completion(self, llm_hive_env: Path) -> None:
-        """Loop file is removed when iteration count is exhausted."""
+        """Loop file is removed when the done-signal file triggers completion."""
         loop_id = "del-20260224-120000"
-        _make_loop_file(llm_hive_env, loop_id, session_id="sess-del", iter=9, max_iter=10)
-        _run_stop_hook(llm_hive_env, "sess-del")
+        _make_loop_file(llm_hive_env, loop_id, iter=2)
+        (llm_hive_env / f".loop-done-{loop_id}").write_text("done")
+        _run_stop_hook(llm_hive_env, loop_id)
         assert not (llm_hive_env / f".loop-{loop_id}.json").exists()
 
     def test_done_signal_exits_0_early(self, llm_hive_env: Path) -> None:
-        """Writing the done-signal file causes early completion (exit 0) below max_iter."""
+        """Writing the done-signal file causes completion (exit 0)."""
         loop_id = "sig-20260224-120000"
-        _make_loop_file(llm_hive_env, loop_id, session_id="sess-sig", iter=2, max_iter=10)
+        _make_loop_file(llm_hive_env, loop_id, iter=2)
         (llm_hive_env / f".loop-done-{loop_id}").write_text("done")
-        _, code = _run_stop_hook(llm_hive_env, "sess-sig")
+        _, code = _run_stop_hook(llm_hive_env, loop_id)
         assert code == 0
 
     def test_done_signal_and_loop_files_both_deleted(self, llm_hive_env: Path) -> None:
         """Both loop file and done-signal file are cleaned up on completion."""
         loop_id = "sig2-20260224-120000"
-        _make_loop_file(llm_hive_env, loop_id, session_id="sess-sig2", iter=2, max_iter=10)
+        _make_loop_file(llm_hive_env, loop_id, iter=2)
         (llm_hive_env / f".loop-done-{loop_id}").write_text("done")
-        _run_stop_hook(llm_hive_env, "sess-sig2")
+        _run_stop_hook(llm_hive_env, loop_id)
         assert not (llm_hive_env / f".loop-{loop_id}.json").exists()
         assert not (llm_hive_env / f".loop-done-{loop_id}").exists()
 
     def test_stdout_is_valid_json_when_continuing(self, llm_hive_env: Path) -> None:
         """Stop hook stdout is valid JSON when exit code is 2."""
-        _make_loop_file(llm_hive_env, "json-20260224-120000", session_id="sess-json")
-        stdout, code = _run_stop_hook(llm_hive_env, "sess-json")
+        loop_id = "json-20260224-120000"
+        _make_loop_file(llm_hive_env, loop_id)
+        stdout, code = _run_stop_hook(llm_hive_env, loop_id)
         assert code == 2
         parsed = json.loads(stdout)
         assert "hookSpecificOutput" in parsed
 
     def test_additional_context_contains_task(self, llm_hive_env: Path) -> None:
         """The additionalContext JSON field contains the loop task text."""
-        _make_loop_file(
-            llm_hive_env,
-            "ctx-20260224-120000",
-            session_id="sess-ctx",
-            task="refactor the payment service",
-        )
-        stdout, code = _run_stop_hook(llm_hive_env, "sess-ctx")
+        loop_id = "ctx-20260224-120000"
+        _make_loop_file(llm_hive_env, loop_id, task="refactor the payment service")
+        stdout, code = _run_stop_hook(llm_hive_env, loop_id)
         assert code == 2
         ctx = json.loads(stdout)["hookSpecificOutput"]["additionalContext"]
         assert "refactor the payment service" in ctx
 
     def test_exits_0_when_no_loop_matches(self, llm_hive_env: Path) -> None:
-        """Stop hook exits 0 (normal flow) when no loop file matches the session."""
-        _, code = _run_stop_hook(llm_hive_env, "no-such-session-xyz")
+        """Stop hook exits 0 (normal flow) when HIVE_LOOP_ID has no matching file."""
+        _, code = _run_stop_hook(llm_hive_env, "nonexistent-loop-xyz")
         assert code == 0
 
 
@@ -186,11 +182,10 @@ class TestLoopContinuationPromptQuality:
 
     def _get_context(self, hive_dir: Path, **kwargs: object) -> str:
         loop_id = "qual-20260224-120000"
-        session_id = "sess-qual"
-        defaults: dict = {"task": "implement OAuth2 authentication", "iter": 0, "max_iter": 5}
+        defaults: dict = {"task": "implement OAuth2 authentication", "iter": 0}
         defaults.update(kwargs)
-        _make_loop_file(hive_dir, loop_id, session_id=session_id, **defaults)
-        stdout, code = _run_stop_hook(hive_dir, session_id)
+        _make_loop_file(hive_dir, loop_id, **defaults)
+        stdout, code = _run_stop_hook(hive_dir, loop_id)
         assert code == 2, f"Expected exit 2, got {code}. stdout: {stdout!r}"
         return json.loads(stdout)["hookSpecificOutput"]["additionalContext"]
 
@@ -200,20 +195,15 @@ class TestLoopContinuationPromptQuality:
         assert "implement OAuth2 authentication" in ctx
 
     def test_context_has_iteration_numbers(self, llm_hive_env: Path) -> None:
-        """Current iteration count (N/M) appears in the continuation prompt."""
-        # iter=2 means iteration 2 just completed; next prompt shows 3/5
-        ctx = self._get_context(llm_hive_env, iter=2, max_iter=5)
-        assert "3" in ctx and "5" in ctx
+        """Current iteration number appears in the continuation prompt."""
+        # iter=2 means iteration 2 just completed; next header shows ITERATION 3
+        ctx = self._get_context(llm_hive_env, iter=2)
+        assert "3" in ctx and "ITERATION" in ctx
 
-    def test_context_has_done_signal_path(self, llm_hive_env: Path) -> None:
-        """Done-signal path (.loop-done-*) is included so the agent can signal completion."""
+    def test_context_starts_with_maintenance_or_task(self, llm_hive_env: Path) -> None:
+        """Continuation prompt starts with SELF-MAINTENANCE or contains TASK: block."""
         ctx = self._get_context(llm_hive_env)
-        assert ".loop-done-" in ctx
-
-    def test_context_starts_with_continue(self, llm_hive_env: Path) -> None:
-        """Continuation prompt starts with 'Continue:' for clear actionability."""
-        ctx = self._get_context(llm_hive_env)
-        assert ctx.startswith("Continue:"), f"Expected 'Continue:' prefix, got: {ctx[:60]!r}"
+        assert "SELF-MAINTENANCE" in ctx or "TASK:" in ctx
 
     def test_context_is_substantive(self, llm_hive_env: Path) -> None:
         """Continuation prompt has >10 words — not a one-liner."""
@@ -221,37 +211,21 @@ class TestLoopContinuationPromptQuality:
         word_count = len(ctx.split())
         assert word_count > 10, f"Context too terse ({word_count} words): {ctx!r}"
 
-    def test_done_signal_path_is_absolute(self, llm_hive_env: Path) -> None:
-        """Done-signal path in the continuation is an absolute filesystem path."""
-        import re
-
-        ctx = self._get_context(llm_hive_env)
-        paths = re.findall(r"(/[^\s]+\.loop-done-[^\s]+)", ctx)
-        assert paths, f"No absolute done-signal path found in: {ctx!r}"
-
     def test_completion_stdout_is_valid_json(self, llm_hive_env: Path) -> None:
         """Completion (exit 0) stdout is also valid JSON — consistent contract."""
-        _make_loop_file(
-            llm_hive_env,
-            "comp-json-20260224-120000",
-            session_id="sess-comp",
-            iter=9,
-            max_iter=10,
-        )
-        stdout, code = _run_stop_hook(llm_hive_env, "sess-comp")
+        loop_id = "comp-json-20260224-120000"
+        _make_loop_file(llm_hive_env, loop_id, iter=2)
+        (llm_hive_env / f".loop-done-{loop_id}").write_text("done")
+        stdout, code = _run_stop_hook(llm_hive_env, loop_id)
         assert code == 0
         json.loads(stdout)  # Must not raise
 
     def test_completion_context_mentions_review(self, llm_hive_env: Path) -> None:
         """Completion message tells agent what to do next (review extracted facts)."""
-        _make_loop_file(
-            llm_hive_env,
-            "comp-msg-20260224-120000",
-            session_id="sess-compmsg",
-            iter=9,
-            max_iter=10,
-        )
-        stdout, _ = _run_stop_hook(llm_hive_env, "sess-compmsg")
+        loop_id = "comp-msg-20260224-120000"
+        _make_loop_file(llm_hive_env, loop_id, iter=2)
+        (llm_hive_env / f".loop-done-{loop_id}").write_text("done")
+        stdout, _ = _run_stop_hook(llm_hive_env, loop_id)
         ctx = json.loads(stdout)["hookSpecificOutput"]["additionalContext"]
         assert "complete" in ctx.lower() or "review" in ctx.lower()
 
@@ -457,25 +431,16 @@ class TestLoopKnowledgeFlywheel:
         _cmd_run_review()
         assert len(mem.read_text().splitlines()) > before
 
-    def test_facts_seed_next_loop_context(
-        self,
-        llm_hive_env: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture,
-    ) -> None:
+    def test_facts_seed_next_loop_context(self, llm_hive_env: Path) -> None:
         """Memory facts relevant to the task appear in the CONTEXT block of the loop start."""
+        from keephive.commands.loop import _build_first_iter_output, _seed_memory
         from keephive.storage import memory_file
 
         memory_file().write_text(
             "# Working Memory\n\n- JWT authentication uses HMAC-SHA256 signing\n"
         )
-        monkeypatch.setenv("CLAUDECODE", "1")
-        monkeypatch.setenv("CLAUDE_SESSION_ID", "seed-ctx-session-unique")
-
-        from keephive.commands.loop import cmd_loop
-
-        cmd_loop(["implement JWT authentication flow"])
-        out = capsys.readouterr().out
+        seed = _seed_memory("implement JWT authentication flow")
+        out = _build_first_iter_output("test-loop", "implement JWT authentication flow", None, seed)
         assert "CONTEXT:" in out, f"Expected CONTEXT block in first-iter output:\n{out}"
         assert "JWT" in out
 
@@ -498,19 +463,15 @@ class TestLoopPromptImprovement:
             session_id="sess-words",
             task="refactor the database access layer",
         )
-        stdout, code = _run_stop_hook(llm_hive_env, "sess-words")
+        stdout, code = _run_stop_hook(llm_hive_env, "words-20260224-120000")
         assert code == 2
         ctx = json.loads(stdout)["hookSpecificOutput"]["additionalContext"]
         word_count = len(ctx.split())
         assert word_count > 8, f"Only {word_count} words: {ctx!r}"
 
-    def test_memory_context_included_when_relevant(
-        self,
-        llm_hive_env: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture,
-    ) -> None:
-        """CONTEXT block present in first-iteration output when memory matches task topic."""
+    def test_memory_context_included_when_relevant(self, llm_hive_env: Path) -> None:
+        """CONTEXT block present when memory has entries matching the task topic."""
+        from keephive.commands.loop import _build_first_iter_output, _seed_memory
         from keephive.storage import memory_file
 
         memory_file().write_text(
@@ -518,61 +479,26 @@ class TestLoopPromptImprovement:
             "- Database migrations must run before deployment\n"
             "- Use Alembic for Python database schema changes\n"
         )
-        monkeypatch.setenv("CLAUDECODE", "1")
-        monkeypatch.setenv("CLAUDE_SESSION_ID", "ctx-match-session-unique")
-
-        from keephive.commands.loop import cmd_loop
-
-        cmd_loop(["run database migrations for the release"])
-        out = capsys.readouterr().out
+        seed = _seed_memory("run database migrations for the release")
+        out = _build_first_iter_output(
+            "test-loop", "run database migrations for the release", None, seed
+        )
         assert "CONTEXT:" in out
 
     def test_completion_message_has_review_hint(self, llm_hive_env: Path) -> None:
         """Completion message references 'review' so agent knows next step."""
-        _make_loop_file(
-            llm_hive_env,
-            "review-hint-20260224-120000",
-            session_id="sess-review-hint",
-            iter=9,
-            max_iter=10,
-        )
-        stdout, code = _run_stop_hook(llm_hive_env, "sess-review-hint")
+        loop_id = "review-hint-20260224-120000"
+        _make_loop_file(llm_hive_env, loop_id, session_id="sess-review-hint", iter=2)
+        (llm_hive_env / f".loop-done-{loop_id}").write_text("done")
+        stdout, code = _run_stop_hook(llm_hive_env, "review-hint-20260224-120000")
         assert code == 0
         ctx = json.loads(stdout)["hookSpecificOutput"]["additionalContext"]
         assert "review" in ctx.lower()
 
-    def test_first_iteration_has_absolute_signal_path(
-        self,
-        llm_hive_env: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture,
-    ) -> None:
-        """First-iteration output contains an absolute done-signal path."""
-        import re
-
-        monkeypatch.setenv("CLAUDECODE", "1")
-        monkeypatch.setenv("CLAUDE_SESSION_ID", "sigpath-session-unique")
-
-        from keephive.commands.loop import cmd_loop
-
-        cmd_loop(["test the signal path feature"])
-        out = capsys.readouterr().out
-        paths = re.findall(r"(/[^\s]+\.loop-done-[^\s]+)", out)
-        assert paths, f"No absolute done-signal path found in:\n{out}"
-
-    def test_task_always_appears_in_first_iter(
-        self,
-        llm_hive_env: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture,
-    ) -> None:
+    def test_task_always_appears_in_first_iter(self, llm_hive_env: Path) -> None:
         """TASK: block always present in first-iteration output regardless of memory."""
-        monkeypatch.setenv("CLAUDECODE", "1")
-        monkeypatch.setenv("CLAUDE_SESSION_ID", "task-block-session-unique")
+        from keephive.commands.loop import _build_first_iter_output
 
-        from keephive.commands.loop import cmd_loop
-
-        cmd_loop(["implement the user profile page"])
-        out = capsys.readouterr().out
+        out = _build_first_iter_output("test-loop", "implement the user profile page", None, [])
         assert "TASK:" in out
         assert "implement the user profile page" in out

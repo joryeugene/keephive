@@ -37,7 +37,6 @@ def hook_stop(_args: list[str]) -> None:
     # If a loop is active for this session, drive the iteration state machine.
     try:
         from keephive.commands.loop import _find_loop_for_session, _loop_done_path, _write_iter_log
-        from keephive.nudge import build_nudge_output
         from keephive.storage import hive_dir
 
         req, loop_file = _find_loop_for_session(session_id)
@@ -111,7 +110,9 @@ def hook_stop(_args: list[str]) -> None:
                     "║  Next: hive run review" + " " * (W - 22) + "║\n"
                     "╚" + "═" * W + "╝"
                 )
-                sys.stdout.write(build_nudge_output(completion_msg, event_name="Stop"))
+                sys.stdout.write(
+                    json.dumps({"hookSpecificOutput": {"additionalContext": completion_msg}})
+                )
                 sys.exit(0)
 
             else:
@@ -152,7 +153,11 @@ def hook_stop(_args: list[str]) -> None:
                     + time_hint
                     + "─" * 64
                 )
-                sys.stdout.write(build_nudge_output(continuation, event_name="Stop"))
+                sys.stdout.write(
+                    json.dumps(
+                        {"hookSpecificOutput": {"additionalContext": continuation}}
+                    )
+                )
                 sys.exit(2)
 
     except SystemExit:

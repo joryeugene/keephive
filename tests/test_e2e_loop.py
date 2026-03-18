@@ -8,7 +8,6 @@ Filter: just test-one "-m terminal -k TestLoop"
 
 Design notes:
   - Loop files written from Python side (outside tmux) for setup speed and determinism.
-  - In-session mode requires CLAUDECODE=1 + CLAUDE_SESSION_ID exported in the shell.
   - Review tests use piped stdin (printf "y\\n" | review) which triggers auto-accept
     because prompt_yn returns default_yes=True when stdin is not a TTY.
   - Decline behavior is covered at the unit level in test_llm_loop.py::TestLoopKnowledgeFlywheel.
@@ -38,9 +37,9 @@ def _write_loop_file(
     data: dict = {
         "loop_id": loop_id,
         "task": "test task for loop",
-        "max_iter": 10,
+        "max_seconds": None,
         "iter": 0,
-        "mode": "in-session",
+        "mode": "background",
         "session_id": session_id,
         "cwd": str(hive_home),
         "created_at": "2026-02-24T14:00:00",
@@ -65,11 +64,6 @@ def _write_loop_log_entries(hive_home: Path, day: str, entries: list[str]) -> No
     path.write_text(existing + "\n".join(f"- [10:00:00] {e}" for e in entries) + "\n")
 
 
-def _set_in_session(term: object) -> None:
-    """Export CLAUDECODE=1 + CLAUDE_SESSION_ID into the terminal shell."""
-    term.type("export CLAUDECODE=1 CLAUDE_SESSION_ID=term-test-session")  # type: ignore[union-attr]
-
-
 # ── Class 1: Help ──────────────────────────────────────────────────────────────
 
 
@@ -82,7 +76,7 @@ class TestLoopHelp:
 
     def test_help_flag(self, term: object) -> None:
         """--help flag prints usage with key flags."""
-        term.type("python -m keephive run --help").has("--max", "--background", "--at", "--tonight")  # type: ignore[union-attr]
+        term.type("python -m keephive run --help").has("--max-time", "--background", "--at", "--tonight")  # type: ignore[union-attr]
 
     def test_help_subcommand(self, term: object) -> None:
         """`run help` subcommand shows usage."""
@@ -97,109 +91,75 @@ class TestLoopHelp:
         term.type("python -m keephive --help").has("run").lacks("swarm")  # type: ignore[union-attr]
 
 
-# ── Class 2: In-session loop start ────────────────────────────────────────────
+# ── Class 2: Background loop start ────────────────────────────────────────────
 
 
 @pytest.mark.terminal
-class TestLoopStartInSession:
+class TestLoopStartBackground:
+    @pytest.fixture(autouse=True)
+    def _no_spawn(self, term: object) -> None:
+        """Block real Claude spawns by setting the test seam env var."""
+        term.type("export HIVE_NO_TMUX_SPAWN=1")  # type: ignore[union-attr]
+
     def test_prints_loop_started_header(self, term: object, save_terminal_output: object) -> None:
-        """In-session run prints the 🔁 Loop started header."""
-        _set_in_session(term)
+        """Background run prints the loop started confirmation to current window."""
         term.type("python -m keephive run 'refactor auth module'").has(  # type: ignore[union-attr]
-            "🔁 Loop started", "Loop ID:", "Max: 10 iterations"
+            "Background loop started", "Loop ID:"
         )
-        save_terminal_output("loop/start_in_session", term)  # type: ignore[union-attr]
+        save_terminal_output("loop/start_background", term)  # type: ignore[union-attr]
 
     def test_shows_cancel_hint(self, term: object) -> None:
-        """First-iteration output includes the cancel command hint."""
-        _set_in_session(term)
+        """Background output includes the cancel command hint."""
         term.type("python -m keephive run 'test cancel hint'").has("hive run cancel")  # type: ignore[union-attr]
 
-    def test_task_appears_in_task_block(self, term: object) -> None:
-        """Task text is echoed in a TASK: block for agent clarity."""
-        _set_in_session(term)
+    def test_task_appears_in_output(self, term: object) -> None:
+        """Task text appears in the background confirmation output."""
         term.type("python -m keephive run 'deploy to production'").has(  # type: ignore[union-attr]
-            "TASK:", "deploy to production"
+            "Task:", "deploy to production"
         )
-
-    def test_shows_signal_completion_path(self, term: object) -> None:
-        """Output instructs agent to write the done-signal file."""
-        _set_in_session(term)
-        term.type("python -m keephive run 'signal test task'").has(  # type: ignore[union-attr]
-            "Signal completion"
-        )
-
-    def test_done_signal_path_is_absolute(self, term: object) -> None:
-        """Done-signal path in the output contains an absolute path separator before .loop-done-."""
-        _set_in_session(term)
-        screen = term.type("python -m keephive run 'absolute path task'")  # type: ignore[union-attr]
-        # Long paths wrap across terminal lines; check for the /.../.loop-done- fragment
-        screen.has("/.loop-done-")
 
     def test_creates_loop_file(self, term: object) -> None:
         """Running `hive run` creates a .loop-*.json file in HIVE_HOME."""
-        _set_in_session(term)
         term.type("python -m keephive run 'create loop file task'")  # type: ignore[union-attr]
         loop_files = list(term.hive_home.glob(".loop-*.json"))  # type: ignore[union-attr]
         assert len(loop_files) == 1, f"Expected 1 loop file, found: {loop_files}"
 
-    def test_loop_file_mode_is_in_session(self, term: object) -> None:
-        """Loop file records mode=in-session."""
-        _set_in_session(term)
+    def test_loop_file_mode_is_background(self, term: object) -> None:
+        """Loop file records mode=background."""
         term.type("python -m keephive run 'mode check task'")  # type: ignore[union-attr]
         files = list(term.hive_home.glob(".loop-*.json"))  # type: ignore[union-attr]
         assert files
         data = json.loads(files[0].read_text())
-        assert data["mode"] == "in-session"
+        assert data["mode"] == "background"
 
     def test_loop_file_max_iter_default(self, term: object) -> None:
-        """Loop file records max_iter=10 when no --max flag is passed."""
-        _set_in_session(term)
+        """Loop file has max_seconds=None when no --max-time flag is passed."""
         term.type("python -m keephive run 'default max task'")  # type: ignore[union-attr]
         files = list(term.hive_home.glob(".loop-*.json"))  # type: ignore[union-attr]
         assert files
         data = json.loads(files[0].read_text())
-        assert data["max_iter"] == 10
+        assert data.get("max_seconds") is None
 
     def test_loop_file_iter_starts_at_zero(self, term: object) -> None:
         """Loop file starts with iter=0 (no iterations run yet)."""
-        _set_in_session(term)
         term.type("python -m keephive run 'iter zero task'")  # type: ignore[union-attr]
         files = list(term.hive_home.glob(".loop-*.json"))  # type: ignore[union-attr]
         assert files
         assert json.loads(files[0].read_text())["iter"] == 0
 
     def test_max_flag_overrides_default(self, term: object) -> None:
-        """--max 3 sets max_iter=3 in the loop file."""
-        _set_in_session(term)
-        term.type("python -m keephive run 'max flag task' --max 3")  # type: ignore[union-attr]
+        """--max-time 2h sets max_seconds=7200 in the loop file."""
+        term.type("python -m keephive run 'max flag task' --max-time 2h")  # type: ignore[union-attr]
         files = list(term.hive_home.glob(".loop-*.json"))  # type: ignore[union-attr]
         assert files
-        assert json.loads(files[0].read_text())["max_iter"] == 3
+        assert json.loads(files[0].read_text())["max_seconds"] == 7200
 
     def test_daily_log_gets_start_entry(self, term: object) -> None:
-        """Running `hive run` writes a [Loop ... start:] entry to today's daily log."""
+        """Running `hive run` writes a [Loop ... start] entry to today's daily log."""
         today = date.today().isoformat()
-        _set_in_session(term)
         term.type("python -m keephive run 'log start task'")  # type: ignore[union-attr]
         content = term.read_file(f"daily/{today}.md")  # type: ignore[union-attr]
         assert "Loop" in content and "start" in content
-
-    def test_memory_seeding_injects_context(self, term: object) -> None:
-        """When memory has a relevant fact, CONTEXT: block appears in first-iter output."""
-        (term.hive_home / "working" / "memory.md").write_text(  # type: ignore[union-attr]
-            "# Working Memory\n\n- JWT authentication requires HMAC-SHA256 signing\n"
-        )
-        _set_in_session(term)
-        term.type("python -m keephive run 'implement JWT authentication'").has("CONTEXT:")  # type: ignore[union-attr]
-
-    def test_no_memory_match_no_context(self, term: object) -> None:
-        """When memory has no relevant facts, no CONTEXT: block appears."""
-        (term.hive_home / "working" / "memory.md").write_text(  # type: ignore[union-attr]
-            "# Working Memory\n\n- Cooking tip: use fresh herbs\n"
-        )
-        _set_in_session(term)
-        term.type("python -m keephive run 'refactor payment gateway'").lacks("CONTEXT:")  # type: ignore[union-attr]
 
     def test_no_args_with_loop_active_shows_status(self, term: object) -> None:
         """When a loop is active, `run` with no args shows status instead of help."""
@@ -234,14 +194,13 @@ class TestLoopStatus:
         )
 
     def test_shows_iter_count(self, term: object) -> None:
-        """Status shows current iteration progress as 'N/M'."""
+        """Status shows current iteration count as 'iter N'."""
         _write_loop_file(
             term.hive_home,  # type: ignore[union-attr]
             "iter-status-20260224-120000",
             iter=3,
-            max_iter=10,
         )
-        term.type("python -m keephive run status").has("3/10")  # type: ignore[union-attr]
+        term.type("python -m keephive run status").has("iter 3")  # type: ignore[union-attr]
 
     def test_multiple_loops_shown(self, term: object) -> None:
         """Status with two active loops shows both loop IDs."""
@@ -384,12 +343,12 @@ class TestLoopSchedule:
         assert len(entries) == 2
 
     def test_max_in_scheduled_task(self, term: object) -> None:
-        """--max flag is preserved in the scheduled task entry."""
-        term.type("python -m keephive run 'task with max' --at 20:00 --max 5")  # type: ignore[union-attr]
+        """--max-time flag is preserved in the scheduled task entry."""
+        term.type("python -m keephive run 'task with max' --at 20:00 --max-time 2h")  # type: ignore[union-attr]
         path = term.hive_home / ".custom-tasks.json"  # type: ignore[union-attr]
         assert path.exists()
         entry = json.loads(path.read_text())[0]
-        assert entry["max_iter"] == 5
+        assert entry["max_seconds"] == 7200
 
 
 # ── Class 6: History ──────────────────────────────────────────────────────────
@@ -553,36 +512,7 @@ class TestLoopReview:
         assert "GIN indexes speed up array containment queries" in mem
 
 
-# ── Class 8: H6 double-loop guard ─────────────────────────────────────────────
-
-
-@pytest.mark.terminal
-class TestLoopH6Guard:
-    def test_second_run_same_session_blocked(self, term: object) -> None:
-        """Starting a second loop in the same session is blocked with 'Loop already active'."""
-        _write_loop_file(
-            term.hive_home,  # type: ignore[union-attr]
-            "existing-20260224-120000",
-            session_id="term-test-session",
-            mode="in-session",
-        )
-        _set_in_session(term)
-        term.type("python -m keephive run 'new task attempt'").has("Loop already active")  # type: ignore[union-attr]
-
-    def test_different_session_allowed(self, term: object) -> None:
-        """A loop from a DIFFERENT session does not block starting a new one."""
-        _write_loop_file(
-            term.hive_home,  # type: ignore[union-attr]
-            "other-session-20260224-120000",
-            session_id="some-OTHER-session-id",
-            mode="in-session",
-        )
-        _set_in_session(term)
-        # Should start normally (term-test-session != some-OTHER-session-id)
-        term.type("python -m keephive run 'allowed new task'").has("🔁 Loop started")  # type: ignore[union-attr]
-
-
-# ── Class 9: Daily log integration ────────────────────────────────────────────
+# ── Class 8: Daily log integration ────────────────────────────────────────────
 
 
 @pytest.mark.terminal
@@ -590,7 +520,6 @@ class TestLoopDailyLogIntegration:
     def test_start_writes_log_entry(self, term: object) -> None:
         """hive run creates a [Loop ... start:] entry in today's daily log."""
         today = date.today().isoformat()
-        _set_in_session(term)
         term.type("python -m keephive run 'daily log test task'")  # type: ignore[union-attr]
         daily = term.hive_home / "daily" / f"{today}.md"  # type: ignore[union-attr]
         assert daily.exists(), f"Daily log not created: {daily}"

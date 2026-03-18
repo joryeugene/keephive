@@ -1,9 +1,8 @@
 """hive run — Antifragile autonomous loop.
 
-hive run "<task>" [--max N] [--safe] [--background] [--at HH:MM] [--tonight]
+hive run "<task>" [--max-time DURATION] [--background] [--at HH:MM] [--tonight]
 
-Three modes:
-  in-session   Stop hook intercepts each turn end and continues the loop.
+Two modes:
   background   Launches a new tmux window with HIVE_LOOP_ID set.
   scheduled    Queues for daemon execution at a specified time.
 """
@@ -106,15 +105,6 @@ def _find_loop_for_session(session_id: str) -> tuple[dict, Path] | tuple[None, N
             return req, loop_file
         except (json.JSONDecodeError, OSError):
             return None, None
-
-    # In-session mode: scan for matching session_id
-    for f in sorted(hive_dir().glob(".loop-*.json")):
-        try:
-            req = json.loads(f.read_text())
-            if req.get("session_id") == session_id:
-                return req, f
-        except (json.JSONDecodeError, OSError):
-            continue
 
     return None, None
 
@@ -311,9 +301,7 @@ def _parse_run_flags(flag_args: list[str]) -> dict:
 
 
 def _cmd_run_task(task: str, flag_args: list[str]) -> None:
-    """Main entry: detect mode, seed memory, write loop file, launch."""
-    from keephive.storage import append_to_daily, hive_dir, track_event
-
+    """Main entry: seed memory, write loop file, launch."""
     opts = _parse_run_flags(flag_args)
     loop_id = _sanitize_loop_id(task)
     seed_lines = _seed_memory(task)
@@ -326,50 +314,7 @@ def _cmd_run_task(task: str, flag_args: list[str]) -> None:
         _schedule_task(loop_id, task, opts)
         return
 
-    in_session = bool(os.environ.get("CLAUDECODE"))
-
-    # Background mode (--background flag, or called outside a session with tmux)
-    if opts["background"] or (not in_session):
-        _launch_background(loop_id, task, opts, seed_lines)
-        return
-
-    # In-session mode — guard against two concurrent loops in same session (H6)
-    session_id = os.environ.get("CLAUDE_SESSION_ID", "")
-    if session_id:
-        for f in sorted(hive_dir().glob(".loop-*.json")):
-            try:
-                req = json.loads(f.read_text())
-                if req.get("session_id") == session_id and req.get("mode") == "in-session":
-                    console.print(
-                        f"[warn]Loop already active in this session:[/warn] {req.get('loop_id')}"
-                    )
-                    console.print("Cancel it first: hive run cancel")
-                    return
-            except (json.JSONDecodeError, OSError):
-                pass
-
-    # Write loop state file
-    loop_file = hive_dir() / f".loop-{loop_id}.json"
-    loop_data = {
-        "loop_id": loop_id,
-        "task": task,
-        "max_seconds": opts["max_seconds"],
-        "iter": 0,
-        "mode": "in-session",
-        "session_id": session_id or None,
-        "cwd": os.getcwd(),
-        "created_at": datetime.now().isoformat(timespec="seconds"),
-    }
-    hive_dir().mkdir(parents=True, exist_ok=True)
-    loop_file.write_text(json.dumps(loop_data))
-    track_event("loops", "started")
-
-    # Log start
-    limit_note = f"max {_format_duration(opts['max_seconds'])}" if opts["max_seconds"] else "no limit"
-    append_to_daily(f"[Loop {loop_id} start: {task} ({limit_note})]")
-
-    # Emit first-iteration prompt — Claude reads this as Bash output
-    print(_build_first_iter_output(loop_id, task, opts["max_seconds"], seed_lines))
+    _launch_background(loop_id, task, opts, seed_lines)
 
 
 def _launch_background(loop_id: str, task: str, opts: dict, seed_lines: list[str]) -> None:
@@ -429,6 +374,12 @@ def _launch_tmux_window(loop_id: str, window_name: str, prompt: str) -> str | No
     # injects it as additionalContext so Claude sees the task on session open.
     prompt_file = hive_dir() / f".loop-prompt-{loop_id}.txt"
     prompt_file.write_text(prompt)
+
+    # Test seam: set HIVE_NO_TMUX_SPAWN=1 to skip the actual tmux launch.
+    # Loop file and prompt file are already written; returning window_name lets
+    # _launch_background print confirmation and keep state without spawning Claude.
+    if os.environ.get("HIVE_NO_TMUX_SPAWN"):
+        return window_name
 
     # Interactive mode (not -p): Stop hook fires after each turn, advancing iter.
     # HIVE_LOOP_ID in env lets _find_loop_for_session claim the session on first Stop.

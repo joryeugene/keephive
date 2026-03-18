@@ -46,6 +46,7 @@ def hive_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Set environment
     monkeypatch.setenv("HIVE_HOME", str(hive_dir))
     monkeypatch.setenv("HIVE_SKIP_LLM", "1")
+    monkeypatch.setenv("HIVE_NO_TMUX_SPAWN", "1")  # Never spawn real Claude processes in unit tests
     monkeypatch.delenv("HIVE_SESSION_LAUNCHED", raising=False)
     # Isolate CC session-meta reads from host system data
     cc_meta = tmp_path / "cc-session-meta"
@@ -105,6 +106,7 @@ def llm_hive_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setenv("HIVE_HOME", str(hive_dir))
     monkeypatch.delenv("HIVE_SKIP_LLM", raising=False)
+    monkeypatch.setenv("HIVE_NO_TMUX_SPAWN", "1")  # Never spawn real Claude processes in tests
     # Strip CLAUDECODE so tool-using commands (verify, reflect) don't refuse
     monkeypatch.delenv("CLAUDECODE", raising=False)
     monkeypatch.delenv("CLAUDE_CODE_ENTRYPOINT", raising=False)
