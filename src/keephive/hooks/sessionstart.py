@@ -139,6 +139,43 @@ def _active_draft_hint() -> str:
     return f'slot {slot} · "{preview}" ({words} words)'
 
 
+def _recent_loop_completions() -> list[str]:
+    """Return human-readable lines for loops completed in the last 48h.
+
+    Reads today's and yesterday's daily logs for extract lines written by
+    _do_loop_extract() in loop.py. Returns at most 3 entries.
+    Format: "Loop completed: 'word': N items queued for review"
+    """
+    import re
+    from datetime import timedelta
+
+    extract_re = re.compile(r"\[Loop (\S+) extract: (\d+) items queued")
+    today = get_today()
+    seen: list[str] = []
+
+    for days_ago in range(2):  # today + yesterday
+        day_str = (today - timedelta(days=days_ago)).isoformat()
+        df = daily_file(day_str)
+        if not df.exists():
+            continue
+        try:
+            for line in safe_read_text(df).splitlines():
+                m = extract_re.search(line)
+                if m:
+                    loop_id, count_str = m.group(1), int(m.group(2))
+                    # loop_id format: word-YYYYMMDD-HHMMSS; extract the readable word
+                    word = loop_id.split("-")[0]
+                    label = f"'{word}'" if word != "loop" else f"loop {loop_id[:12]}"
+                    items = f"{count_str} item{'s' if count_str != 1 else ''}"
+                    seen.append(f"Loop completed: {label}: {items} queued for review")
+                    if len(seen) >= 3:
+                        return seen
+        except Exception:
+            pass
+
+    return seen
+
+
 def extract_active_themes(days: int = 7) -> list[str]:
     """Return active theme words from the last N days of daily logs.
 
@@ -447,6 +484,14 @@ def build_context(cwd: str, project_name: str) -> str:
         if kb_count > 0:
             s = "entry" if kb_count == 1 else "entries"
             parts.append(f"KingBee wrote {kb_count} {s} today. Run: hive inbox")
+    except Exception:
+        pass
+
+    # 7e. Recent loop completions (shows what background loops produced)
+    try:
+        completions = _recent_loop_completions()
+        for line in completions:
+            parts.append(line)
     except Exception:
         pass
 

@@ -86,3 +86,13 @@ def hook_sessionend(_args: list[str]) -> None:
                 pass
     except Exception:
         pass
+
+    # Update experiment efficacy measurements after each session.
+    # Guard skips the facets scan entirely when no active experiments exist.
+    try:
+        from keephive.storage import compute_experiment_results, experiment_baselines_file
+
+        if experiment_baselines_file().exists():
+            compute_experiment_results()
+    except Exception:
+        pass

@@ -270,6 +270,22 @@ def _print_growth_story(console: Console, snap: dict) -> None:
                 f"{hist['total_applied']} improvements applied total. KingBee is learning what works."
             )
 
+    # Experiment efficacy narrative
+    exp_results = experiment_results()
+    improving = [e for e in exp_results if e.get("friction_delta") is not None and e["friction_delta"] < -5]
+    degrading = [e for e in exp_results if e.get("friction_delta") is not None and e["friction_delta"] > 5]
+    if improving:
+        avg = sum(e["friction_delta"] for e in improving) / len(improving)
+        observations.append(
+            f"{len(improving)} rule experiment{'s' if len(improving) != 1 else ''} "
+            f"show avg {abs(avg):.0f}% friction reduction."
+        )
+    elif degrading:
+        observations.append(
+            f"{len(degrading)} rule experiment{'s' if len(degrading) != 1 else ''} "
+            f"increased friction. Consider reviewing with hive rule review."
+        )
+
     if observations:
         console.print("[bold]Growth Story[/bold]")
         for obs in observations:

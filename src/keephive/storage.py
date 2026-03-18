@@ -4047,12 +4047,123 @@ def improvement_history_stats() -> dict:
     }
 
 
+def compute_experiment_results() -> bool:
+    """Compute friction_delta for all active experiments from facets data.
+
+    Reads .experiment-baselines.json and ~/.claude/usage-data/facets/*.json,
+    splits facets files by mtime relative to each experiment's added_date,
+    computes before/after friction rates, and writes friction_delta back.
+
+    Returns True if any entry was updated; False if nothing changed or data
+    was insufficient. Wrapped in try/except to never crash sessionend hook.
+
+    The facets directory can be overridden via HIVE_CC_FACETS_DIR env var
+    for test isolation (matches the HIVE_CC_META_DIR pattern).
+    """
+    try:
+        baselines = read_experiment_baselines()
+        if not baselines:
+            return False
+
+        env_dir = os.environ.get("HIVE_CC_FACETS_DIR")
+        facets_dir = (
+            Path(env_dir)
+            if env_dir
+            else Path.home() / ".claude" / "usage-data" / "facets"
+        )
+        if not facets_dir.exists():
+            return False
+
+        # Collect all facet files with their mtimes once (avoid repeated stat calls)
+        facet_files: list[tuple[Path, float]] = []
+        for fpath in facets_dir.glob("*.json"):
+            try:
+                mtime = fpath.stat().st_mtime
+                facet_files.append((fpath, mtime))
+            except OSError:
+                continue
+
+        today_str = get_today().isoformat()
+        needs_write = False  # any mutation (measuring status, delta, etc.)
+        delta_computed = False  # True only when friction_delta was actually set
+
+        for rule_hash, data in baselines.items():
+            added_str = data.get("added")
+            if not added_str:
+                continue  # malformed entry, skip
+
+            try:
+                from datetime import date as _date
+                import time as _time
+
+                added_date = _date.fromisoformat(added_str)
+                # Start of added day in local time as POSIX timestamp (handles DST)
+                added_ts = _time.mktime(added_date.timetuple())
+            except (ValueError, OverflowError):
+                continue
+
+            before_total = 0
+            before_sessions = 0
+            after_total = 0
+            after_sessions = 0
+
+            for fpath, mtime in facet_files:
+                try:
+                    file_data = json.loads(fpath.read_text())
+                except (json.JSONDecodeError, OSError):
+                    continue
+                friction_total = sum(file_data.get("friction_counts", {}).values())
+                if mtime < added_ts:
+                    before_total += friction_total
+                    before_sessions += 1
+                else:
+                    after_total += friction_total
+                    after_sessions += 1
+
+            if after_sessions < 2:
+                data["status"] = "measuring"
+                needs_write = True
+                continue  # not enough data for a meaningful signal
+
+            data["current_friction_total"] = after_total
+            data["sessions_since"] = after_sessions
+
+            if before_sessions == 0:
+                # No before data: record absolute totals, cannot compute rate
+                data["friction_delta"] = None
+                data["last_computed"] = today_str
+                needs_write = True
+                continue
+
+            before_rate = before_total / before_sessions
+            after_rate = after_total / after_sessions
+
+            if before_rate > 0:
+                friction_delta = (after_rate - before_rate) / before_rate * 100
+            else:
+                friction_delta = 0.0  # before had no friction; treat as no change
+
+            data["friction_delta"] = round(friction_delta, 1)
+            data["last_computed"] = today_str
+            needs_write = True
+            delta_computed = True
+
+        if needs_write:
+            write_experiment_baselines(baselines)
+
+        return delta_computed
+
+    except Exception:
+        return False
+
+
 def experiment_results() -> list[dict]:
     """Surface experiment baseline results for display.
 
     Returns list of {rule_hash, rule_text, friction_delta, duration_days, status, ...}.
     Previously this data was opaque and never surfaced to the user.
     """
+    compute_experiment_results()  # lazy trigger: always fresh on read
     baselines = read_experiment_baselines()
     results = []
     for rule_hash, data in baselines.items():
