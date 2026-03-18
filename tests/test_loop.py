@@ -780,8 +780,12 @@ class TestStopHookLoopIntercept:
         loop_id = "done-loop-001"
         # max_seconds=60, created_at far in past → elapsed >> limit → time_done
         loop_file = make_loop_file(
-            hive_env, loop_id, session_id=session_id, iter=4,
-            max_seconds=60, created_at="2026-02-24T14:00:00",
+            hive_env,
+            loop_id,
+            session_id=session_id,
+            iter=4,
+            max_seconds=60,
+            created_at="2026-02-24T14:00:00",
         )
         monkeypatch.setenv("HIVE_LOOP_ID", loop_id)
         monkeypatch.setenv("HIVE_STOP_NUDGE_INTERVAL", "999")
@@ -946,7 +950,9 @@ class TestBackgroundMode:
         """The tmux command string includes HIVE_LOOP_ID=<id>."""
         monkeypatch.delenv("CLAUDECODE", raising=False)
         monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
-        monkeypatch.delenv("HIVE_NO_TMUX_SPAWN", raising=False)  # allow subprocess mock to intercept
+        monkeypatch.delenv(
+            "HIVE_NO_TMUX_SPAWN", raising=False
+        )  # allow subprocess mock to intercept
 
         captured_commands: list = []
 
@@ -1043,7 +1049,9 @@ class TestBackgroundMode:
     def test_background_mode_no_batch_flag(self, hive_env, monkeypatch, capsys):
         """The claude command must NOT include -p (batch mode kills Stop hook)."""
         monkeypatch.delenv("CLAUDECODE", raising=False)
-        monkeypatch.delenv("HIVE_NO_TMUX_SPAWN", raising=False)  # allow subprocess mock to intercept
+        monkeypatch.delenv(
+            "HIVE_NO_TMUX_SPAWN", raising=False
+        )  # allow subprocess mock to intercept
         captured = []
 
         def mock_run(cmd, **kw):
@@ -1411,8 +1419,12 @@ class TestEarlyExitLabel:
         loop_id = "natural-001"
         # max_seconds=60, created_at far in past → time_done, no done file
         make_loop_file(
-            hive_env, loop_id, session_id=session_id, iter=14,
-            max_seconds=60, created_at="2026-02-24T14:00:00",
+            hive_env,
+            loop_id,
+            session_id=session_id,
+            iter=14,
+            max_seconds=60,
+            created_at="2026-02-24T14:00:00",
         )
         # No done signal file created
 

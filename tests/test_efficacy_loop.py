@@ -12,9 +12,6 @@ import json
 import os
 from pathlib import Path
 
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
@@ -45,13 +42,21 @@ def _make_snap(
     auto_only: int = 0,
 ) -> dict:
     """Minimal snap dict for _print_growth_story tests."""
-    from keephive.clock import get_today
     from datetime import timedelta
+
+    from keephive.clock import get_today
 
     today = get_today()
     trend = [
-        {"date": (today - timedelta(days=30 - i)).isoformat(), "log_entries": 0,
-         "guide_hits": 0, "todos_done": 0, "corrections": 0, "daemon_runs": 0, "commands": 0}
+        {
+            "date": (today - timedelta(days=30 - i)).isoformat(),
+            "log_entries": 0,
+            "guide_hits": 0,
+            "todos_done": 0,
+            "corrections": 0,
+            "daemon_runs": 0,
+            "commands": 0,
+        }
         for i in range(30)
     ]
     return {
@@ -73,8 +78,14 @@ def _make_snap(
         },
         "fact_freshness": fact_freshness,
         "fact_count": fact_count,
-        "comprehension": {"dark_pct": dark_pct, "auto_only": auto_only, "total": 0, "verified": 0,
-                          "user_owned": 0, "coverage_pct": 0.0},
+        "comprehension": {
+            "dark_pct": dark_pct,
+            "auto_only": auto_only,
+            "total": 0,
+            "verified": 0,
+            "user_owned": 0,
+            "coverage_pct": 0.0,
+        },
         "trend_30d": trend,
         "recall_total": 0,
         "recall_hits": 0,
@@ -109,13 +120,15 @@ class TestComputeExperimentResults:
 
         from keephive.storage import compute_experiment_results, write_experiment_baselines
 
-        write_experiment_baselines({
-            "abc123": {
-                "rule_text": "Always test first",
-                "added": "2026-01-01",
-                "baseline_friction": {"wrong_approach": 5},
+        write_experiment_baselines(
+            {
+                "abc123": {
+                    "rule_text": "Always test first",
+                    "added": "2026-01-01",
+                    "baseline_friction": {"wrong_approach": 5},
+                }
             }
-        })
+        )
         result = compute_experiment_results()
         assert result is False
 
@@ -129,15 +142,21 @@ class TestComputeExperimentResults:
         f = _make_facets_file(facets_dir, "sess-old", {"wrong_approach": 3})
         _backdate(f)
 
-        from keephive.storage import compute_experiment_results, read_experiment_baselines, write_experiment_baselines
+        from keephive.storage import (
+            compute_experiment_results,
+            read_experiment_baselines,
+            write_experiment_baselines,
+        )
 
-        write_experiment_baselines({
-            "abc123": {
-                "rule_text": "Always test first",
-                "added": "2026-03-01",  # after 2020 file mtime -> file is "before" pool
-                "baseline_friction": {"wrong_approach": 5},
+        write_experiment_baselines(
+            {
+                "abc123": {
+                    "rule_text": "Always test first",
+                    "added": "2026-03-01",  # after 2020 file mtime -> file is "before" pool
+                    "baseline_friction": {"wrong_approach": 5},
+                }
             }
-        })
+        )
 
         compute_experiment_results()
 
@@ -158,15 +177,21 @@ class TestComputeExperimentResults:
         # One recent file (added_date = far past, so file is in "after" pool)
         _make_facets_file(facets_dir, "sess-new", {"wrong_approach": 2})
 
-        from keephive.storage import compute_experiment_results, read_experiment_baselines, write_experiment_baselines
+        from keephive.storage import (
+            compute_experiment_results,
+            read_experiment_baselines,
+            write_experiment_baselines,
+        )
 
-        write_experiment_baselines({
-            "abc123": {
-                "rule_text": "Check types",
-                "added": "2000-01-01",
-                "baseline_friction": {},
+        write_experiment_baselines(
+            {
+                "abc123": {
+                    "rule_text": "Check types",
+                    "added": "2000-01-01",
+                    "baseline_friction": {},
+                }
             }
-        })
+        )
 
         compute_experiment_results()
 
@@ -189,15 +214,21 @@ class TestComputeExperimentResults:
         _make_facets_file(facets_dir, "sess-after-1", {"wrong_approach": 2})
         _make_facets_file(facets_dir, "sess-after-2", {"wrong_approach": 2})
 
-        from keephive.storage import compute_experiment_results, read_experiment_baselines, write_experiment_baselines
+        from keephive.storage import (
+            compute_experiment_results,
+            read_experiment_baselines,
+            write_experiment_baselines,
+        )
 
-        write_experiment_baselines({
-            "abc123": {
-                "rule_text": "Always test first",
-                "added": "2026-01-01",
-                "baseline_friction": {"wrong_approach": 5},
+        write_experiment_baselines(
+            {
+                "abc123": {
+                    "rule_text": "Always test first",
+                    "added": "2026-01-01",
+                    "baseline_friction": {"wrong_approach": 5},
+                }
             }
-        })
+        )
 
         result = compute_experiment_results()
         assert result is True, "compute_experiment_results should return True when it updated data"
@@ -225,15 +256,21 @@ class TestComputeExperimentResults:
         _make_facets_file(facets_dir, "sess-after-1", {"wrong_approach": 10})
         _make_facets_file(facets_dir, "sess-after-2", {"wrong_approach": 10})
 
-        from keephive.storage import compute_experiment_results, read_experiment_baselines, write_experiment_baselines
+        from keephive.storage import (
+            compute_experiment_results,
+            read_experiment_baselines,
+            write_experiment_baselines,
+        )
 
-        write_experiment_baselines({
-            "abc123": {
-                "rule_text": "Try verbose logging",
-                "added": "2026-01-01",
-                "baseline_friction": {},
+        write_experiment_baselines(
+            {
+                "abc123": {
+                    "rule_text": "Try verbose logging",
+                    "added": "2026-01-01",
+                    "baseline_friction": {},
+                }
             }
-        })
+        )
 
         compute_experiment_results()
 
@@ -253,15 +290,21 @@ class TestComputeExperimentResults:
         _make_facets_file(facets_dir, "sess-1", {"wrong_approach": 3})
         _make_facets_file(facets_dir, "sess-2", {"wrong_approach": 3})
 
-        from keephive.storage import compute_experiment_results, read_experiment_baselines, write_experiment_baselines
+        from keephive.storage import (
+            compute_experiment_results,
+            read_experiment_baselines,
+            write_experiment_baselines,
+        )
 
-        write_experiment_baselines({
-            "abc123": {
-                "rule_text": "No before baseline rule",
-                "added": "2000-01-01",
-                "baseline_friction": {},
+        write_experiment_baselines(
+            {
+                "abc123": {
+                    "rule_text": "No before baseline rule",
+                    "added": "2000-01-01",
+                    "baseline_friction": {},
+                }
             }
-        })
+        )
 
         compute_experiment_results()
 
@@ -287,15 +330,21 @@ class TestComputeExperimentResults:
         _make_facets_file(facets_dir, "sess-after-1", {"wrong_approach": 0})
         _make_facets_file(facets_dir, "sess-after-2", {"wrong_approach": 0})
 
-        from keephive.storage import compute_experiment_results, read_experiment_baselines, write_experiment_baselines
+        from keephive.storage import (
+            compute_experiment_results,
+            read_experiment_baselines,
+            write_experiment_baselines,
+        )
 
-        write_experiment_baselines({
-            "abc123": {
-                "rule_text": "Zero friction rule",
-                "added": "2026-01-01",
-                "baseline_friction": {},
+        write_experiment_baselines(
+            {
+                "abc123": {
+                    "rule_text": "Zero friction rule",
+                    "added": "2026-01-01",
+                    "baseline_friction": {},
+                }
             }
-        })
+        )
 
         compute_experiment_results()
 
@@ -322,13 +371,15 @@ class TestComputeExperimentResults:
 
         from keephive.storage import compute_experiment_results, write_experiment_baselines
 
-        write_experiment_baselines({
-            "abc123": {
-                "rule_text": "Test rule",
-                "added": "2026-01-01",
-                "baseline_friction": {},
+        write_experiment_baselines(
+            {
+                "abc123": {
+                    "rule_text": "Test rule",
+                    "added": "2026-01-01",
+                    "baseline_friction": {},
+                }
             }
-        })
+        )
 
         # Must not raise
         result = compute_experiment_results()
@@ -343,15 +394,21 @@ class TestComputeExperimentResults:
         _make_facets_file(facets_dir, "sess-1", {"wrong_approach": 3})
         _make_facets_file(facets_dir, "sess-2", {"wrong_approach": 3})
 
-        from keephive.storage import compute_experiment_results, read_experiment_baselines, write_experiment_baselines
+        from keephive.storage import (
+            compute_experiment_results,
+            read_experiment_baselines,
+            write_experiment_baselines,
+        )
 
-        write_experiment_baselines({
-            "abc123": {
-                "rule_text": "No added date entry",
-                # deliberately missing 'added' field
-                "baseline_friction": {},
+        write_experiment_baselines(
+            {
+                "abc123": {
+                    "rule_text": "No added date entry",
+                    # deliberately missing 'added' field
+                    "baseline_friction": {},
+                }
             }
-        })
+        )
 
         # Must not raise
         compute_experiment_results()
@@ -371,13 +428,15 @@ class TestComputeExperimentResults:
 
         from keephive.storage import compute_experiment_results, write_experiment_baselines
 
-        write_experiment_baselines({
-            "abc123": {
-                "rule_text": "Measuring only",
-                "added": "2000-01-01",
-                "baseline_friction": {},
+        write_experiment_baselines(
+            {
+                "abc123": {
+                    "rule_text": "Measuring only",
+                    "added": "2000-01-01",
+                    "baseline_friction": {},
+                }
             }
-        })
+        )
 
         result = compute_experiment_results()
         assert result is False, "Should return False when no deltas were computed"
@@ -412,15 +471,21 @@ class TestComputeExperimentResults:
         _make_facets_file(facets_dir, "sess-after-1", {"wrong_approach": 2})
         _make_facets_file(facets_dir, "sess-after-2", {"wrong_approach": 2})
 
-        from keephive.storage import compute_experiment_results, read_experiment_baselines, write_experiment_baselines
+        from keephive.storage import (
+            compute_experiment_results,
+            read_experiment_baselines,
+            write_experiment_baselines,
+        )
 
-        write_experiment_baselines({
-            "abc123": {
-                "rule_text": "Test rule",
-                "added": "2026-01-01",
-                "baseline_friction": {},
+        write_experiment_baselines(
+            {
+                "abc123": {
+                    "rule_text": "Test rule",
+                    "added": "2026-01-01",
+                    "baseline_friction": {},
+                }
             }
-        })
+        )
 
         compute_experiment_results()
 
@@ -439,6 +504,7 @@ def _run_sessionend(monkeypatch, input_data: dict) -> None:
     """Call hook_sessionend with mocked stdin."""
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(input_data)))
     from keephive.hooks.sessionend import hook_sessionend
+
     hook_sessionend([])
 
 
@@ -456,6 +522,7 @@ class TestSessionendEfficacyTrigger:
         )
 
         from keephive.storage import experiment_baselines_file
+
         experiment_baselines_file().unlink(missing_ok=True)
 
         _run_sessionend(monkeypatch, {"session_id": "sess-guard-1", "reason": "exit"})
@@ -475,6 +542,7 @@ class TestSessionendEfficacyTrigger:
         )
 
         from keephive.storage import experiment_baselines_file
+
         experiment_baselines_file().write_text(
             '{"abc": {"rule_text": "test", "added": "2026-01-01"}}'
         )
@@ -488,6 +556,7 @@ class TestSessionendEfficacyTrigger:
 
     def test_compute_throws_no_stdout(self, hive_env, monkeypatch, capsys):
         """compute_experiment_results raising must not produce any stdout."""
+
         def bad_compute() -> bool:
             raise RuntimeError("intentional test error from bad_compute")
 
@@ -498,6 +567,7 @@ class TestSessionendEfficacyTrigger:
         )
 
         from keephive.storage import experiment_baselines_file
+
         experiment_baselines_file().write_text('{"abc": {"added": "2026-01-01"}}')
 
         _run_sessionend(monkeypatch, {"session_id": "sess-err-1", "reason": "exit"})
@@ -569,9 +639,7 @@ class TestRecentLoopCompletions:
 
         log = daily_dir() / "2026-03-18.md"
         log.parent.mkdir(parents=True, exist_ok=True)
-        log.write_text(
-            "[Loop alpha-20260318-100000 extract: 1 items queued for review]\n"
-        )
+        log.write_text("[Loop alpha-20260318-100000 extract: 1 items queued for review]\n")
 
         from keephive.hooks.sessionstart import _recent_loop_completions
 
@@ -607,9 +675,7 @@ class TestRecentLoopCompletions:
 
         log = daily_dir() / "2026-03-17.md"
         log.parent.mkdir(parents=True, exist_ok=True)
-        log.write_text(
-            "[Loop beta-20260317-090000 extract: 2 items queued for review]\n"
-        )
+        log.write_text("[Loop beta-20260317-090000 extract: 2 items queued for review]\n")
 
         from keephive.hooks.sessionstart import _recent_loop_completions
 
@@ -633,9 +699,7 @@ class TestRecentLoopCompletions:
         )
 
         yesterday_log = daily_dir() / "2026-03-17.md"
-        yesterday_log.write_text(
-            "[Loop d-20260317-090000 extract: 4 items queued for review]\n"
-        )
+        yesterday_log.write_text("[Loop d-20260317-090000 extract: 4 items queued for review]\n")
 
         from keephive.hooks.sessionstart import _recent_loop_completions
 
@@ -658,8 +722,13 @@ class TestGrowthStoryExperimentObservation:
         """Silence the improvement_history_stats call so it doesn't add noise."""
         monkeypatch.setattr(
             "keephive.commands.growth.improvement_history_stats",
-            lambda: {"total_applied": 0, "total_dismissed": 0, "acceptance_rate": 0.0,
-                     "by_type": {}, "recent": []},
+            lambda: {
+                "total_applied": 0,
+                "total_dismissed": 0,
+                "acceptance_rate": 0.0,
+                "by_type": {},
+                "recent": [],
+            },
         )
 
     def test_no_experiments_no_observation(self, hive_env, monkeypatch, capsys):
@@ -670,8 +739,9 @@ class TestGrowthStoryExperimentObservation:
         )
         self._mock_improvement_stats(monkeypatch)
 
-        from keephive.commands.growth import _print_growth_story
         from rich.console import Console
+
+        from keephive.commands.growth import _print_growth_story
 
         _print_growth_story(Console(), _make_snap())
 
@@ -690,8 +760,9 @@ class TestGrowthStoryExperimentObservation:
         )
         self._mock_improvement_stats(monkeypatch)
 
-        from keephive.commands.growth import _print_growth_story
         from rich.console import Console
+
+        from keephive.commands.growth import _print_growth_story
 
         _print_growth_story(Console(), _make_snap())
 
@@ -710,8 +781,9 @@ class TestGrowthStoryExperimentObservation:
         )
         self._mock_improvement_stats(monkeypatch)
 
-        from keephive.commands.growth import _print_growth_story
         from rich.console import Console
+
+        from keephive.commands.growth import _print_growth_story
 
         _print_growth_story(Console(), _make_snap())
 
@@ -729,8 +801,9 @@ class TestGrowthStoryExperimentObservation:
         )
         self._mock_improvement_stats(monkeypatch)
 
-        from keephive.commands.growth import _print_growth_story
         from rich.console import Console
+
+        from keephive.commands.growth import _print_growth_story
 
         _print_growth_story(Console(), _make_snap())
 
@@ -748,8 +821,9 @@ class TestGrowthStoryExperimentObservation:
         )
         self._mock_improvement_stats(monkeypatch)
 
-        from keephive.commands.growth import _print_growth_story
         from rich.console import Console
+
+        from keephive.commands.growth import _print_growth_story
 
         _print_growth_story(Console(), _make_snap())
 
@@ -767,8 +841,9 @@ class TestGrowthStoryExperimentObservation:
         )
         self._mock_improvement_stats(monkeypatch)
 
-        from keephive.commands.growth import _print_growth_story
         from rich.console import Console
+
+        from keephive.commands.growth import _print_growth_story
 
         _print_growth_story(Console(), _make_snap())
 
@@ -788,8 +863,9 @@ class TestGrowthStoryExperimentObservation:
         )
         self._mock_improvement_stats(monkeypatch)
 
-        from keephive.commands.growth import _print_growth_story
         from rich.console import Console
+
+        from keephive.commands.growth import _print_growth_story
 
         _print_growth_story(Console(), _make_snap())
 

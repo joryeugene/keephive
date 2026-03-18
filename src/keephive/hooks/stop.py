@@ -132,9 +132,7 @@ def hook_stop(_args: list[str]) -> None:
                     try:
                         from keephive.commands.loop import _format_duration
 
-                        elapsed = (
-                            datetime.now() - datetime.fromisoformat(started)
-                        ).total_seconds()
+                        elapsed = (datetime.now() - datetime.fromisoformat(started)).total_seconds()
                         remaining = int(max_seconds - elapsed)
                         if remaining > 0:
                             time_hint = f"  Time remaining: ~{_format_duration(remaining)}\n"
@@ -149,14 +147,10 @@ def hook_stop(_args: list[str]) -> None:
                 continuation = maintenance + (
                     f"─── ITERATION {next_iter} " + "─" * 49 + "\n"
                     f"PROGRESS CHECK: In one line — what did iteration {iter_n} accomplish?\n"
-                    f"TASK: {req['task']}\n"
-                    + time_hint
-                    + "─" * 64
+                    f"TASK: {req['task']}\n" + time_hint + "─" * 64
                 )
                 sys.stdout.write(
-                    json.dumps(
-                        {"hookSpecificOutput": {"additionalContext": continuation}}
-                    )
+                    json.dumps({"hookSpecificOutput": {"additionalContext": continuation}})
                 )
                 sys.exit(2)
 

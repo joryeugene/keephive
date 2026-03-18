@@ -350,7 +350,9 @@ def _launch_background(loop_id: str, task: str, opts: dict, seed_lines: list[str
     track_event("loops", "started")
 
     prompt = _build_first_iter_output(loop_id, task, opts["max_seconds"], seed_lines)
-    limit_note = f"max {_format_duration(opts['max_seconds'])}" if opts["max_seconds"] else "no limit"
+    limit_note = (
+        f"max {_format_duration(opts['max_seconds'])}" if opts["max_seconds"] else "no limit"
+    )
     append_to_daily(f"[Loop {loop_id} start (background): {task} ({limit_note})]")
 
     launched = _launch_tmux_window(loop_id, window_name, prompt)

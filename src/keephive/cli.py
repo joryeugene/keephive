@@ -65,7 +65,7 @@ HELP: dict[str, str] = {
     ),
     "inbox": "Usage: hive inbox [--days N]\n  What KingBee generated for you today.\n  Shows wander docs, morning briefings, standup drafts, and review queues.\n  --days N  Days of history to include (default 2 = today + yesterday, max 30)",
     "run": (
-        'Usage: hive run "<task>" [--max N] [--background] [--at HH:MM] [--tonight]  (alias: rn)\n'
+        'Usage: hive run "<task>" [--max-time DURATION] [--background] [--at HH:MM] [--tonight]  (alias: rn)\n'
         "  Run an autonomous iteration loop on a task.\n"
         "  Modes:\n"
         "    (no flags)     In-session stop-hook loop\n"
@@ -73,7 +73,7 @@ HELP: dict[str, str] = {
         "    --at HH:MM     Schedule via daemon\n"
         "    --tonight      Schedule for tonight at 22:00\n"
         "  Options:\n"
-        "    --max N        Maximum iterations (default 10)\n"
+        "    --max-time DURATION   Time limit: 2h, 30m, 90m, 3600 (seconds). Default: no limit.\n"
         "    --safe         Read-only mode\n"
         "  Subcommands:\n"
         "    hive run status          Active loops\n"
@@ -172,7 +172,7 @@ _CMD_FAMILIES: list[tuple[str, str, str, set[str]]] = [
     ("daemon [run|status|enable|disable]", "KingBee background daemon", "dm", {"daemon", "dm"}),
     ("wander [list|seed|run]", "Agent free-thinking log", "w", {"wander", "wr", "w"}),
     ("inbox [--days N]", "KingBee output + review queue", "ib", {"inbox", "ib"}),
-    ('run "<task>" [--max N]', "Autonomous iteration loop", "rn", {"run", "rn"}),
+    ('run "<task>" [--max-time]', "Autonomous iteration loop", "rn", {"run", "rn"}),
     ("improve [review]", "Review self-improvement proposals", "im", {"improve", "im"}),
     ("go [mode]", "Launch session", "go", {"go", "sesh", "session"}),
     ("growth [--json]", "How keephive compounds", "gr", {"gr", "growth"}),

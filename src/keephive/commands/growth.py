@@ -272,8 +272,12 @@ def _print_growth_story(console: Console, snap: dict) -> None:
 
     # Experiment efficacy narrative
     exp_results = experiment_results()
-    improving = [e for e in exp_results if e.get("friction_delta") is not None and e["friction_delta"] < -5]
-    degrading = [e for e in exp_results if e.get("friction_delta") is not None and e["friction_delta"] > 5]
+    improving = [
+        e for e in exp_results if e.get("friction_delta") is not None and e["friction_delta"] < -5
+    ]
+    degrading = [
+        e for e in exp_results if e.get("friction_delta") is not None and e["friction_delta"] > 5
+    ]
     if improving:
         avg = sum(e["friction_delta"] for e in improving) / len(improving)
         observations.append(

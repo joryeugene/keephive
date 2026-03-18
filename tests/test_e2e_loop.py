@@ -76,7 +76,9 @@ class TestLoopHelp:
 
     def test_help_flag(self, term: object) -> None:
         """--help flag prints usage with key flags."""
-        term.type("python -m keephive run --help").has("--max-time", "--background", "--at", "--tonight")  # type: ignore[union-attr]
+        term.type("python -m keephive run --help").has(
+            "--max-time", "--background", "--at", "--tonight"
+        )  # type: ignore[union-attr]
 
     def test_help_subcommand(self, term: object) -> None:
         """`run help` subcommand shows usage."""

@@ -4066,11 +4066,7 @@ def compute_experiment_results() -> bool:
             return False
 
         env_dir = os.environ.get("HIVE_CC_FACETS_DIR")
-        facets_dir = (
-            Path(env_dir)
-            if env_dir
-            else Path.home() / ".claude" / "usage-data" / "facets"
-        )
+        facets_dir = Path(env_dir) if env_dir else Path.home() / ".claude" / "usage-data" / "facets"
         if not facets_dir.exists():
             return False
 
@@ -4093,8 +4089,8 @@ def compute_experiment_results() -> bool:
                 continue  # malformed entry, skip
 
             try:
-                from datetime import date as _date
                 import time as _time
+                from datetime import date as _date
 
                 added_date = _date.fromisoformat(added_str)
                 # Start of added day in local time as POSIX timestamp (handles DST)
