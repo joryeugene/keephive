@@ -165,6 +165,34 @@ def _seed_memory(topic: str) -> list[str]:
     return relevant[:5]
 
 
+def _parse_duration(s: str) -> int | None:
+    """Parse duration string to seconds. '2h' -> 7200, '30m' -> 1800, '3600' -> 3600."""
+    s = s.strip().lower()
+    if s.endswith("h"):
+        try:
+            return int(float(s[:-1]) * 3600)
+        except ValueError:
+            return None
+    if s.endswith("m"):
+        try:
+            return int(float(s[:-1]) * 60)
+        except ValueError:
+            return None
+    try:
+        return int(s)
+    except ValueError:
+        return None
+
+
+def _format_duration(seconds: int) -> str:
+    """Format seconds as human-readable string: 3600 -> '1h', 5400 -> '1h30m', 1800 -> '30m'."""
+    if seconds >= 3600:
+        h = seconds // 3600
+        m = (seconds % 3600) // 60
+        return f"{h}h{m:02d}m" if m else f"{h}h"
+    return f"{seconds // 60}m"
+
+
 def _extract_soul_wisdom(soul_text: str) -> list[str]:
     """Extract 'What I've Learned' bullets from SOUL.md.
 
@@ -187,7 +215,9 @@ def _extract_soul_wisdom(soul_text: str) -> list[str]:
     return bullets
 
 
-def _build_first_iter_output(loop_id: str, task: str, max_iter: int, seed_lines: list[str]) -> str:
+def _build_first_iter_output(
+    loop_id: str, task: str, max_seconds: int | None, seed_lines: list[str]
+) -> str:
     """Build the stdout block for the first iteration.
 
     This is read by Claude as Bash output, kicking off iteration 1 automatically.
@@ -195,8 +225,9 @@ def _build_first_iter_output(loop_id: str, task: str, max_iter: int, seed_lines:
     """
     from keephive.storage import hive_dir, safe_read_text
 
-    done_path = str(hive_dir() / f".loop-done-{loop_id}")
     task_preview = task[:54] if len(task) > 54 else task
+    limit_str = _format_duration(max_seconds) if max_seconds else "no limit"
+    limit_display = f"Time: {limit_str}  ·  Memory seeded: {len(seed_lines)} items"
 
     # Box header (width 62 content chars, 64 total with borders)
     W = 62
@@ -206,11 +237,7 @@ def _build_first_iter_output(loop_id: str, task: str, max_iter: int, seed_lines:
         "╠" + "═" * W + "╣",
         f"║  Task: {task_preview:<{W - 8}}║",
         f"║  Loop: {loop_id:<{W - 8}}║",
-        (
-            f"║  Max: {max_iter} iter  ·  Memory seeded: {len(seed_lines)} items"
-            + " " * max(0, W - 40 - len(str(max_iter)) - len(str(len(seed_lines))))
-            + "║"
-        ),
+        "║  " + limit_display + " " * max(0, W - 2 - len(limit_display)) + "║",
         "╚" + "═" * W + "╝",
     ]
 
@@ -242,10 +269,8 @@ def _build_first_iter_output(loop_id: str, task: str, max_iter: int, seed_lines:
     lines.append("")
 
     # Task block for iteration 1
-    lines.append(f"─── ITERATION 1/{max_iter} " + "─" * 45)
+    lines.append("─── ITERATION 1 " + "─" * 48)
     lines.append(f"TASK: {task}")
-    lines.append("")
-    lines.append("  Early stop: touch " + done_path + "  (omit = auto-continue to next iter)")
     lines.append("─" * 64)
 
     return "\n".join(lines)
@@ -254,7 +279,7 @@ def _build_first_iter_output(loop_id: str, task: str, max_iter: int, seed_lines:
 def _parse_run_flags(flag_args: list[str]) -> dict:
     """Parse flag args into an options dict."""
     opts: dict = {
-        "max_iter": 10,
+        "max_seconds": None,  # None = no limit
         "background": False,
         "at": None,
         "tonight": False,
@@ -262,11 +287,15 @@ def _parse_run_flags(flag_args: list[str]) -> dict:
     i = 0
     while i < len(flag_args):
         a = flag_args[i]
+        if a == "--max-time" and i + 1 < len(flag_args):
+            parsed = _parse_duration(flag_args[i + 1])
+            if parsed is not None:
+                opts["max_seconds"] = parsed
+            i += 2
+            continue
         if a == "--max" and i + 1 < len(flag_args):
-            try:
-                opts["max_iter"] = int(flag_args[i + 1])
-            except ValueError:
-                pass
+            # Backwards compat: treat --max N as iteration hint but ignore silently
+            # (iteration-based limits are removed; just skip the value)
             i += 2
             continue
         if a == "--background":
@@ -324,7 +353,7 @@ def _cmd_run_task(task: str, flag_args: list[str]) -> None:
     loop_data = {
         "loop_id": loop_id,
         "task": task,
-        "max_iter": opts["max_iter"],
+        "max_seconds": opts["max_seconds"],
         "iter": 0,
         "mode": "in-session",
         "session_id": session_id or None,
@@ -336,10 +365,11 @@ def _cmd_run_task(task: str, flag_args: list[str]) -> None:
     track_event("loops", "started")
 
     # Log start
-    append_to_daily(f"[Loop {loop_id} start: {task} (max {opts['max_iter']} iter)]")
+    limit_note = f"max {_format_duration(opts['max_seconds'])}" if opts["max_seconds"] else "no limit"
+    append_to_daily(f"[Loop {loop_id} start: {task} ({limit_note})]")
 
     # Emit first-iteration prompt — Claude reads this as Bash output
-    print(_build_first_iter_output(loop_id, task, opts["max_iter"], seed_lines))
+    print(_build_first_iter_output(loop_id, task, opts["max_seconds"], seed_lines))
 
 
 def _launch_background(loop_id: str, task: str, opts: dict, seed_lines: list[str]) -> None:
@@ -362,7 +392,7 @@ def _launch_background(loop_id: str, task: str, opts: dict, seed_lines: list[str
     loop_data = {
         "loop_id": loop_id,
         "task": task,
-        "max_iter": opts["max_iter"],
+        "max_seconds": opts["max_seconds"],
         "iter": 0,
         "mode": "background",
         "session_id": None,
@@ -374,8 +404,9 @@ def _launch_background(loop_id: str, task: str, opts: dict, seed_lines: list[str
     loop_file.write_text(json.dumps(loop_data))
     track_event("loops", "started")
 
-    prompt = _build_first_iter_output(loop_id, task, opts["max_iter"], seed_lines)
-    append_to_daily(f"[Loop {loop_id} start (background): {task}]")
+    prompt = _build_first_iter_output(loop_id, task, opts["max_seconds"], seed_lines)
+    limit_note = f"max {_format_duration(opts['max_seconds'])}" if opts["max_seconds"] else "no limit"
+    append_to_daily(f"[Loop {loop_id} start (background): {task} ({limit_note})]")
 
     launched = _launch_tmux_window(loop_id, window_name, prompt)
     if launched is None:
@@ -434,7 +465,7 @@ def _schedule_task(loop_id: str, task: str, opts: dict) -> None:
         "due": at_time,
         "due_date": datetime.now().strftime("%Y-%m-%d"),
         "cwd": os.getcwd(),
-        "max_iter": opts["max_iter"],
+        "max_seconds": opts["max_seconds"],
         "created_at": datetime.now().isoformat(timespec="seconds"),
     }
     append_custom_task(task_entry)
@@ -471,8 +502,9 @@ def _cmd_run_status() -> None:
         task = req.get("task", "unknown")
         mode = req.get("mode", "unknown")
         iter_n = req.get("iter", 0)
-        max_iter = req.get("max_iter", 10)
+        max_seconds = req.get("max_seconds")
         created = req.get("created_at", "")
+        last_stop = req.get("last_stop_at")
 
         orphaned = ""
         if mode == "background":
@@ -480,20 +512,44 @@ def _cmd_run_status() -> None:
             if window and not _tmux_window_exists(window):
                 orphaned = "  [ORPHANED — window closed]"
 
-        age_str = ""
+        elapsed_str = ""
         if created:
             try:
-                age = datetime.now() - datetime.fromisoformat(created)
-                minutes = int(age.total_seconds() / 60)
-                age_str = f"{minutes} minutes ago" if minutes < 60 else f"{int(minutes / 60)}h ago"
+                elapsed = datetime.now() - datetime.fromisoformat(created)
+                total_min = int(elapsed.total_seconds() / 60)
+                elapsed_str = (
+                    f"{total_min}m"
+                    if total_min < 60
+                    else f"{total_min // 60}h{total_min % 60:02d}m"
+                )
             except ValueError:
                 pass
 
+        if max_seconds and elapsed_str:
+            mode_line = f"Mode: {mode}  iter {iter_n}  ({elapsed_str} / {_format_duration(max_seconds)} limit)"
+        elif elapsed_str:
+            mode_line = f"Mode: {mode}  iter {iter_n}  (running {elapsed_str})"
+        else:
+            mode_line = f"Mode: {mode}  iter {iter_n}"
+
+        if last_stop:
+            try:
+                since = datetime.now() - datetime.fromisoformat(last_stop)
+                mins = int(since.total_seconds() / 60)
+                heartbeat = f"{mins}m ago" if mins > 0 else "just now"
+            except ValueError:
+                heartbeat = last_stop
+        elif iter_n == 0:
+            heartbeat = "turn 1 in progress"
+        else:
+            heartbeat = "unknown"
+
         content_lines.append(f"  {loop_id}{orphaned}")
         content_lines.append(f"    Task: {task}")
-        content_lines.append(f"    Mode: {mode} · iter {iter_n}/{max_iter}")
-        if age_str:
-            content_lines.append(f"    Started: {age_str}")
+        content_lines.append(f"    {mode_line}")
+        content_lines.append(f"    Last active: {heartbeat}")
+        if elapsed_str:
+            content_lines.append(f"    Started: {elapsed_str} ago")
         content_lines.append(f"    Cancel: hive run cancel {loop_id}")
         content_lines.append("")
 
@@ -536,8 +592,7 @@ def _cmd_run_cancel(cancel_args: list[str]) -> None:
                 task = req.get("task", "?")
                 mode = req.get("mode", "?")
                 iter_n = req.get("iter", 0)
-                max_iter = req.get("max_iter", 10)
-                console.print(f"  {lid:<40} {task[:40]:<42} ({mode}, iter {iter_n}/{max_iter})")
+                console.print(f"  {lid:<40} {task[:40]:<42} ({mode}, iter {iter_n})")
             except (json.JSONDecodeError, OSError):
                 continue
         console.print()
@@ -757,8 +812,8 @@ def _do_loop_extract(loop_id: str, task: str = "") -> None:
 
 def _print_run_help() -> None:
     print(
-        'Usage: hive run "<task>" [--max N] [--background] [--at HH:MM] [--tonight]\n'
-        "  Run an autonomous iteration loop on a task.\n"
+        'Usage: hive run "<task>" [--max-time DURATION] [--background] [--at HH:MM] [--tonight]\n'
+        "  Run an autonomous loop on a task. Runs until cancelled or time limit reached.\n"
         "\n"
         "  Modes:\n"
         "    (no flags)        In-session stop-hook loop\n"
@@ -767,10 +822,10 @@ def _print_run_help() -> None:
         "    --tonight         Schedule for tonight at 22:00\n"
         "\n"
         "  Options:\n"
-        "    --max N           Maximum iterations (default 10)\n"
+        "    --max-time DURATION   Time limit: 2h, 30m, 90m, 3600 (seconds). Default: no limit.\n"
         "\n"
         "  Subcommands:\n"
-        "    hive run status          Show active loops\n"
+        "    hive run status          Show active loops with heartbeat\n"
         "    hive run cancel [id]     Cancel loop(s)\n"
         "    hive run cancel --all    Cancel all loops\n"
         "    hive run history         Past loops from daily log\n"

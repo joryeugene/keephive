@@ -16,6 +16,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime
 
 from keephive.clock import get_now
 
@@ -42,11 +43,23 @@ def hook_stop(_args: list[str]) -> None:
         req, loop_file = _find_loop_for_session(session_id)
         if req is not None:
             loop_id = req["loop_id"]
-            max_iter = req.get("max_iter", 10)
             # iter tracks completions so far; iter_n is what we just finished
             iter_n = req["iter"] + 1
             done_path = _loop_done_path(loop_id)
-            done = done_path.exists() or iter_n >= max_iter
+
+            # Time-based done check (max_seconds=None means no limit)
+            max_seconds = req.get("max_seconds")
+            if max_seconds:
+                started = req.get("created_at", "")
+                try:
+                    elapsed = (datetime.now() - datetime.fromisoformat(started)).total_seconds()
+                    time_done = elapsed >= max_seconds
+                except (ValueError, TypeError):
+                    time_done = False
+            else:
+                time_done = False
+
+            done = done_path.exists() or time_done
 
             if done:
                 # Capture early-exit state before unlink (unlink destroys the evidence)
@@ -85,7 +98,7 @@ def hook_stop(_args: list[str]) -> None:
                     except Exception:
                         pass
 
-                early = "early exit" if was_early else f"{iter_n}/{max_iter} iter"
+                early = "cancelled" if was_early else f"{iter_n} iterations"
                 W = 62
                 completion_msg = (
                     "╔" + "═" * W + "╗\n"
@@ -102,23 +115,42 @@ def hook_stop(_args: list[str]) -> None:
                 sys.exit(0)
 
             else:
-                # Loop continues — update state, emit continuation, exit 2
+                # Loop continues — update state, write heartbeat, emit continuation, exit 2
                 req["iter"] = iter_n
+                req["last_stop_at"] = get_now().isoformat(timespec="seconds")
                 loop_file.write_text(json.dumps(req))
-                _write_iter_log(loop_id, iter_n, f"{iter_n}/{max_iter}")
+                _write_iter_log(loop_id, iter_n, f"iter {iter_n}")
 
                 next_iter = iter_n + 1
-                done_path_str = str(_loop_done_path(loop_id))
+
+                # Time-remaining hint for agent awareness
+                time_hint = ""
+                max_seconds = req.get("max_seconds")
+                if max_seconds:
+                    started = req.get("created_at", "")
+                    try:
+                        from keephive.commands.loop import _format_duration
+
+                        elapsed = (
+                            datetime.now() - datetime.fromisoformat(started)
+                        ).total_seconds()
+                        remaining = int(max_seconds - elapsed)
+                        if remaining > 0:
+                            time_hint = f"  Time remaining: ~{_format_duration(remaining)}\n"
+                    except (ValueError, TypeError, ImportError):
+                        pass
+
                 maintenance = (
                     "SELF-MAINTENANCE: hive todo → close what's done. hive s → note warnings.\n"
                     + "─" * 64
                     + "\n"
                 )
                 continuation = maintenance + (
-                    f"─── ITERATION {next_iter}/{max_iter} " + "─" * 45 + "\n"
+                    f"─── ITERATION {next_iter} " + "─" * 49 + "\n"
                     f"PROGRESS CHECK: In one line — what did iteration {iter_n} accomplish?\n"
                     f"TASK: {req['task']}\n"
-                    f"  Early stop: touch {done_path_str}  (omit = auto-continue)\n" + "─" * 64
+                    + time_hint
+                    + "─" * 64
                 )
                 sys.stdout.write(build_nudge_output(continuation, event_name="Stop"))
                 sys.exit(2)

@@ -72,28 +72,42 @@ class TestSanitizeLoopId:
 
 class TestParseRunFlags:
     def test_defaults(self, hive_env):
-        """Empty args returns sensible defaults."""
+        """Empty args returns sensible defaults — no time limit by default."""
         from keephive.commands.loop import _parse_run_flags
 
         opts = _parse_run_flags([])
-        assert opts["max_iter"] == 10
+        assert opts["max_seconds"] is None
         assert opts["background"] is False
         assert opts["at"] is None
         assert opts["tonight"] is False
 
-    def test_max_iter_flag(self, hive_env):
-        """--max N sets max_iter correctly."""
+    def test_max_time_flag_hours(self, hive_env):
+        """--max-time 2h parses to seconds correctly."""
+        from keephive.commands.loop import _parse_run_flags
+
+        opts = _parse_run_flags(["--max-time", "2h"])
+        assert opts["max_seconds"] == 7200
+
+    def test_max_time_flag_minutes(self, hive_env):
+        """--max-time 30m parses to seconds correctly."""
+        from keephive.commands.loop import _parse_run_flags
+
+        opts = _parse_run_flags(["--max-time", "30m"])
+        assert opts["max_seconds"] == 1800
+
+    def test_max_time_invalid_ignored(self, hive_env):
+        """--max-time with invalid value leaves max_seconds as None."""
+        from keephive.commands.loop import _parse_run_flags
+
+        opts = _parse_run_flags(["--max-time", "banana"])
+        assert opts["max_seconds"] is None
+
+    def test_legacy_max_flag_silently_ignored(self, hive_env):
+        """--max N is silently ignored (backwards compat, does not set max_seconds)."""
         from keephive.commands.loop import _parse_run_flags
 
         opts = _parse_run_flags(["--max", "5"])
-        assert opts["max_iter"] == 5
-
-    def test_max_iter_non_integer_ignored(self, hive_env):
-        """--max with non-integer leaves default."""
-        from keephive.commands.loop import _parse_run_flags
-
-        opts = _parse_run_flags(["--max", "banana"])
-        assert opts["max_iter"] == 10
+        assert opts["max_seconds"] is None
 
     def test_background_flag(self, hive_env):
         """--background sets background=True."""
@@ -120,10 +134,9 @@ class TestParseRunFlags:
         """Multiple flags all parsed correctly."""
         from keephive.commands.loop import _parse_run_flags
 
-        opts = _parse_run_flags(["--max", "3", "--background"])
-        assert opts["max_iter"] == 3
+        opts = _parse_run_flags(["--max-time", "3m", "--background"])
+        assert opts["max_seconds"] == 180
         assert opts["background"] is True
-        # --safe and opts["safe"] assertions removed
 
 
 # ── TestSafeFlagRemoved ───────────────────────────────────────────────────────
@@ -204,13 +217,13 @@ class TestStopHookPromptFileCleanup:
         loop_file = hive_dir() / f".loop-{loop_id}.json"
         prompt_file = hive_dir() / f".loop-prompt-{loop_id}.txt"
 
-        # iter=9, max_iter=10 → next iter=10 = done
+        # max_seconds=60, created_at far in past → time_done=True
         loop_file.write_text(
             json.dumps(
                 {
                     "loop_id": loop_id,
                     "task": "prompt cleanup test",
-                    "max_iter": 10,
+                    "max_seconds": 60,
                     "iter": 9,
                     "mode": "background",
                     "session_id": sess,
@@ -246,15 +259,17 @@ class TestBuildFirstIterOutput:
         out = _build_first_iter_output("audit-20260224-143052", "security audit", 5, [])
         assert "security audit" in out
 
-    def test_contains_done_path(self, hive_env):
-        """Output contains the absolute done-signal path."""
+    def test_done_path_not_visible_to_agent(self, hive_env):
+        """Done-signal path must NOT appear in agent-visible output (prevents premature stop)."""
         from keephive.commands.loop import _build_first_iter_output
         from keephive.storage import hive_dir
 
         loop_id = "refactor-20260224-143052"
-        out = _build_first_iter_output(loop_id, "refactor auth", 10, [])
+        out = _build_first_iter_output(loop_id, "refactor auth", None, [])
         expected_path = str(hive_dir() / f".loop-done-{loop_id}")
-        assert expected_path in out, f"Done path {expected_path!r} not found in output"
+        assert expected_path not in out, (
+            f"Done path {expected_path!r} must not appear — agent would touch it prematurely"
+        )
 
     def test_includes_seed_lines(self, hive_env):
         """CONTEXT block included when seed_lines is non-empty."""
@@ -275,11 +290,11 @@ class TestBuildFirstIterOutput:
         assert "CONTEXT:" not in out
 
     def test_shows_iteration_header(self, hive_env):
-        """Includes iteration header showing max_iter."""
+        """Includes iteration 1 header."""
         from keephive.commands.loop import _build_first_iter_output
 
-        out = _build_first_iter_output("loop-id", "task", 7, [])
-        assert "1/7" in out
+        out = _build_first_iter_output("loop-id", "task", None, [])
+        assert "ITERATION 1" in out
 
 
 # ── _loop_done_path ───────────────────────────────────────────────────────────
@@ -592,22 +607,22 @@ class TestCmdRunTaskInSession:
         data = json.loads(loop_files[0].read_text())
         assert data["task"] == "security audit codebase"
         assert data["mode"] == "in-session"
-        assert data["max_iter"] == 10
+        assert data["max_seconds"] is None
 
-    def test_loop_file_respects_max_flag(self, hive_env, monkeypatch, capsys):
-        """--max N written to loop file."""
+    def test_loop_file_respects_max_time_flag(self, hive_env, monkeypatch, capsys):
+        """--max-time 30m written to loop file as max_seconds=1800."""
         monkeypatch.setenv("CLAUDECODE", "1")
         monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
         monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
 
         from keephive.commands.loop import cmd_loop
 
-        cmd_loop(["task description", "--max", "3"])
+        cmd_loop(["task description", "--max-time", "30m"])
         capsys.readouterr()
 
         loop_files = list(hive_env.glob(".loop-*.json"))
         data = json.loads(loop_files[0].read_text())
-        assert data["max_iter"] == 3
+        assert data["max_seconds"] == 1800
 
     def test_first_iter_output_printed_to_stdout(self, hive_env, monkeypatch, capsys):
         """In-session mode prints first iteration prompt to stdout (Claude reads it)."""
@@ -621,9 +636,8 @@ class TestCmdRunTaskInSession:
         out = capsys.readouterr().out
 
         assert "TASK: refactor auth module" in out
-        assert (
-            "Early stop:" in out
-        )  # Bug fix: was "Signal done:" which Claude misread as normal completion signal
+        # Done-signal path must NOT be shown — agent would touch it prematurely (regression guard)
+        assert ".loop-done-" not in out
 
     def test_guard_against_second_loop_in_same_session(self, hive_env, monkeypatch, capsys):
         """Second in-session loop for same session_id is blocked (H6)."""
@@ -780,11 +794,13 @@ class TestStopHookLoopIntercept:
         data = json.loads(loop_file.read_text())
         assert data["iter"] == 3
 
-    def test_loop_completes_at_max_iter(self, hive_env, monkeypatch, capsys):
-        """At max_iter, stop hook exits 0 and removes loop file."""
+    def test_loop_completes_at_time_limit(self, hive_env, monkeypatch, capsys):
+        """At time limit, stop hook exits 0 and removes loop file."""
         session_id = "sess-loop-done"
+        # max_seconds=60, created_at far in past → elapsed >> limit → time_done
         loop_file = make_loop_file(
-            hive_env, "done-loop-001", session_id=session_id, iter=4, max_iter=5
+            hive_env, "done-loop-001", session_id=session_id, iter=4,
+            max_seconds=60, created_at="2026-02-24T14:00:00",
         )
         monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
         monkeypatch.setenv("HIVE_STOP_NUDGE_INTERVAL", "999")
@@ -1322,16 +1338,17 @@ class TestTickCustomTaskIntegration:
 class TestBannerEarlyStopLabel:
     """Bug fix: 'Signal done' caused Claude to touch done file every iteration."""
 
-    def test_banner_says_early_stop_not_signal_done(self, hive_env):
-        """Banner must say 'Early stop:' — 'Signal done' caused premature termination.
+    def test_done_signal_path_hidden_from_agent(self, hive_env):
+        """Done-signal path must not appear in first-iter banner (prevents premature stop).
 
-        Bug caught: Claude interpreted 'Signal done: touch X' as 'touch X when done
-        with iteration', triggering loop completion after iteration 1 every time.
+        Bug history: 'Signal done: touch X' → Claude touched it every iteration.
+        Fix 1: renamed to 'Early stop: touch X'.
+        Fix 2 (current): removed entirely — done file is human-only infrastructure.
         """
         from keephive.commands.loop import _build_first_iter_output
 
-        out = _build_first_iter_output("fix-20260225-001", "Fix the loop bug", 5, [])
-        assert "Early stop:" in out, "'Early stop:' must appear in banner (Bug 1 fix)"
+        out = _build_first_iter_output("fix-20260225-001", "Fix the loop bug", None, [])
+        assert ".loop-done-" not in out, "Done-signal path must be hidden from agent output"
         assert "Signal done" not in out, "'Signal done' must not appear — regression guard"
 
     def test_banner_contains_self_maintenance_block(self, hive_env):
@@ -1365,10 +1382,10 @@ class TestEarlyExitLabel:
     """Bug fix: 'early exit' label was dead code because done_path was already unlinked."""
 
     def test_early_exit_label_shows_when_done_file_triggered(self, hive_env, monkeypatch):
-        """Completion box shows 'early exit' when user created the done signal file.
+        """Completion box shows 'cancelled' when user created the done signal file.
 
-        Bug caught: done_path.unlink() ran before the exists() check, so 'early exit'
-        was unreachable — completion always showed 'N/M iter' regardless of how loop ended.
+        Bug caught: done_path.unlink() ran before the exists() check, so the label
+        was unreachable — completion always showed the iter count regardless of how loop ended.
         """
         import pytest
 
@@ -1399,18 +1416,21 @@ class TestEarlyExitLabel:
 
         assert exc.value.code == 0
         combined = "".join(captured_out)
-        assert "early exit" in combined, (
-            f"Completion box must show 'early exit' when done file was present. Got: {combined!r}"
+        assert "cancelled" in combined, (
+            f"Completion box must show 'cancelled' when done file was present. Got: {combined!r}"
         )
 
     def test_natural_completion_label_shows_iter_count(self, hive_env, monkeypatch):
-        """Completion box shows 'N/M iter' for natural (non-early) completion."""
+        """Completion box shows 'N iterations' for natural (time-limit) completion."""
         import pytest
 
         session_id = "sess-natural-completion"
         loop_id = "natural-001"
-        # iter=14, max_iter=15 → iter_n=15 = done naturally
-        make_loop_file(hive_env, loop_id, session_id=session_id, iter=14, max_iter=15)
+        # max_seconds=60, created_at far in past → time_done, no done file
+        make_loop_file(
+            hive_env, loop_id, session_id=session_id, iter=14,
+            max_seconds=60, created_at="2026-02-24T14:00:00",
+        )
         # No done signal file created
 
         monkeypatch.delenv("HIVE_LOOP_ID", raising=False)
@@ -1434,7 +1454,7 @@ class TestEarlyExitLabel:
 
         assert exc.value.code == 0
         combined = "".join(captured_out)
-        assert "15/15 iter" in combined, (
-            f"Completion box must show '15/15 iter' for natural completion. Got: {combined!r}"
+        assert "15 iterations" in combined, (
+            f"Completion box must show '15 iterations' for natural completion. Got: {combined!r}"
         )
-        assert "early exit" not in combined
+        assert "cancelled" not in combined
