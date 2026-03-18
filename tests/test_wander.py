@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import timedelta
 from pathlib import Path
+
+from keephive.clock import get_today
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -13,7 +15,7 @@ from pathlib import Path
 
 def _write_daily(hive_env: Path, days_ago: int, content: str) -> None:
     """Write a daily log file for testing recurring-topic detection."""
-    d = date(2026, 2, 23) - timedelta(days=days_ago)
+    d = get_today() - timedelta(days=days_ago)
     daily_dir = hive_env / "daily"
     daily_dir.mkdir(exist_ok=True)
     (daily_dir / f"{d.isoformat()}.md").write_text(content, encoding="utf-8")
@@ -29,7 +31,7 @@ def _write_todo(hive_env: Path, content: str) -> None:
 
 def _write_daily_with_todo(hive_env: Path, days_ago: int, todo_text: str) -> None:
     """Write a daily log containing a hive-tracked TODO entry (real format)."""
-    d = date(2026, 2, 23) - timedelta(days=days_ago)
+    d = get_today() - timedelta(days=days_ago)
     daily_dir = hive_env / "daily"
     daily_dir.mkdir(exist_ok=True)
     (daily_dir / f"{d.isoformat()}.md").write_text(
@@ -56,7 +58,7 @@ class TestSeedSelection:
 
         from keephive.commands.wander import select_wander_seed
 
-        seed, source = select_wander_seed(date(2026, 2, 23))
+        seed, source = select_wander_seed(get_today())
         assert seed == "topic-alpha"
         assert source == "user-queued"
 
@@ -76,7 +78,7 @@ class TestSeedSelection:
 
         from keephive.commands.wander import select_wander_seed
 
-        seed, source = select_wander_seed(date(2026, 2, 23))
+        seed, source = select_wander_seed(get_today())
         assert source == "cross-pollination"
         assert "/" in seed  # combined as "line_a / line_b"
 
@@ -92,7 +94,7 @@ class TestSeedSelection:
 
         from keephive.commands.wander import select_wander_seed
 
-        seed, source = select_wander_seed(date(2026, 2, 23))
+        seed, source = select_wander_seed(get_today())
         assert source == "recurring-topic"
         # Seed comes from the log content — any non-stopword appearing 3+ times
         assert seed is not None
@@ -106,7 +108,7 @@ class TestSeedSelection:
 
         from keephive.commands.wander import select_wander_seed
 
-        seed, source = select_wander_seed(date(2026, 2, 23))
+        seed, source = select_wander_seed(get_today())
         assert source == "stale-todo"
         assert "Refactor" in seed
 
@@ -117,7 +119,7 @@ class TestSeedSelection:
 
         from keephive.commands.wander import select_wander_seed
 
-        seed, source = select_wander_seed(date(2026, 2, 23))
+        seed, source = select_wander_seed(get_today())
         assert seed is None
         assert source is None
 
@@ -132,7 +134,7 @@ class TestSeedSelection:
 
         from keephive.commands.wander import select_wander_seed
 
-        seed, source = select_wander_seed(date(2026, 2, 23))
+        seed, source = select_wander_seed(get_today())
         # Should NOT return recurring-topic (falls through to stale-todo or None)
         assert source != "recurring-topic"
 
@@ -148,7 +150,7 @@ class TestSeedSelection:
 
         from keephive.commands.wander import select_wander_seed
 
-        _, source = select_wander_seed(date(2026, 2, 23))
+        _, source = select_wander_seed(get_today())
         assert source == "user-queued"
 
     def test_todo_md_file_not_used_as_seed_source(self, hive_env):
@@ -159,7 +161,7 @@ class TestSeedSelection:
 
         from keephive.commands.wander import select_wander_seed
 
-        seed, source = select_wander_seed(date(2026, 2, 23))
+        seed, source = select_wander_seed(get_today())
         assert source != "stale-todo"
 
     def test_todo_not_returned_when_younger_than_7_days(self, hive_env):
@@ -169,7 +171,7 @@ class TestSeedSelection:
 
         from keephive.commands.wander import select_wander_seed
 
-        seed, source = select_wander_seed(date(2026, 2, 23))
+        seed, source = select_wander_seed(get_today())
         assert source != "stale-todo"
 
 

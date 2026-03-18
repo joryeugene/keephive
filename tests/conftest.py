@@ -6,7 +6,7 @@ import difflib
 import json
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -66,11 +66,13 @@ def hive_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     (hive_dir / "archive").mkdir()
 
     # Create test data
+    _fresh1 = (date.today() - timedelta(days=7)).isoformat()
+    _fresh2 = (date.today() - timedelta(days=10)).isoformat()
     (hive_dir / "working" / "memory.md").write_text(
         "# Working Memory\n\n"
         "- Python is great [verified:2020-01-01]\n"
-        "- keephive uses Pydantic [verified:2026-02-15]\n"
-        "- Tests are important [verified:2026-02-14]\n"
+        f"- keephive uses Pydantic [verified:{_fresh1}]\n"
+        f"- Tests are important [verified:{_fresh2}]\n"
     )
 
     (hive_dir / "working" / "rules.md").write_text(

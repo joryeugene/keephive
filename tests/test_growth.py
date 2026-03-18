@@ -94,12 +94,13 @@ class TestGrowthSnapshot:
         assert len(snap["trend_30d"]) == 30
 
     def test_fact_count_from_memory(self, hive_env):
+        _fresh = (date.today() - timedelta(days=5)).isoformat()
         mem = hive_env / "working" / "memory.md"
         mem.write_text(
             "# Memory\n"
-            "- FACT: first thing [verified:2026-03-04]\n"
-            "- FACT: second thing [verified:2026-03-04]\n"
-            "- FACT: third old [verified:2026-01-01]\n"
+            f"- FACT: first thing [verified:{_fresh}]\n"
+            f"- FACT: second thing [verified:{_fresh}]\n"
+            "- FACT: third old [verified:2020-01-01]\n"
         )
         snap = growth_snapshot()
         assert snap["fact_count"] == 3
