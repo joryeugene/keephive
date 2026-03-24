@@ -1,6 +1,6 @@
 [project]
 name = "keephive"
-version = "2.1.0"
+version = "2.2.0"
 description = "Persistent memory and background intelligence for Claude Code — captures facts, verifies staleness, KingBee daemon"
 readme = "README.md"
 license = "MIT"
