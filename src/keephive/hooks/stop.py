@@ -110,9 +110,7 @@ def hook_stop(_args: list[str]) -> None:
                     "║  Next: hive run review" + " " * (W - 22) + "║\n"
                     "╚" + "═" * W + "╝"
                 )
-                sys.stdout.write(
-                    json.dumps({"hookSpecificOutput": {"additionalContext": completion_msg}})
-                )
+                sys.stdout.write(json.dumps({"systemMessage": completion_msg}))
                 sys.exit(0)
 
             else:
@@ -149,9 +147,7 @@ def hook_stop(_args: list[str]) -> None:
                     f"PROGRESS CHECK: In one line — what did iteration {iter_n} accomplish?\n"
                     f"TASK: {req['task']}\n" + time_hint + "─" * 64
                 )
-                sys.stdout.write(
-                    json.dumps({"hookSpecificOutput": {"additionalContext": continuation}})
-                )
+                sys.stdout.write(json.dumps({"systemMessage": continuation}))
                 sys.exit(2)
 
     except SystemExit:

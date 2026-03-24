@@ -159,6 +159,55 @@ class TestSafeFlagRemoved:
         assert "safe" not in opts
 
 
+# ── _split_task_and_flags ─────────────────────────────────────────────────────
+
+
+class TestSplitTaskAndFlags:
+    def test_task_first(self, hive_env):
+        """Task before flags: hive run 'my task' --background --max-time 2h."""
+        from keephive.commands.loop import _split_task_and_flags
+
+        task, flags = _split_task_and_flags(["my task", "--background", "--max-time", "2h"])
+        assert task == "my task"
+        assert "--background" in flags
+        assert "--max-time" in flags
+        assert "2h" in flags
+
+    def test_flags_first(self, hive_env):
+        """Flags before task: hive run --background --max-time 12h 'my task'."""
+        from keephive.commands.loop import _split_task_and_flags
+
+        task, flags = _split_task_and_flags(["--background", "--max-time", "12h", "my task"])
+        assert task == "my task"
+        assert "--background" in flags
+        assert "--max-time" in flags
+        assert "12h" in flags
+
+    def test_flags_mixed(self, hive_env):
+        """Task sandwiched: hive run --background 'my task' --max-time 2h."""
+        from keephive.commands.loop import _split_task_and_flags
+
+        task, flags = _split_task_and_flags(["--background", "my task", "--max-time", "2h"])
+        assert task == "my task"
+        assert "--background" in flags
+
+    def test_no_task(self, hive_env):
+        """Only flags, no positional task string."""
+        from keephive.commands.loop import _split_task_and_flags
+
+        task, flags = _split_task_and_flags(["--background", "--max-time", "2h"])
+        assert task is None
+        assert len(flags) == 3
+
+    def test_task_only(self, hive_env):
+        """Just a task, no flags."""
+        from keephive.commands.loop import _split_task_and_flags
+
+        task, flags = _split_task_and_flags(["my task"])
+        assert task == "my task"
+        assert flags == []
+
+
 # ── TestLoopExtractIncludesTodos ──────────────────────────────────────────────
 
 

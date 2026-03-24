@@ -47,8 +47,13 @@ def cmd_loop(args: list[str]) -> None:
     if sub == "review":
         return _cmd_run_review()
 
-    # Otherwise: sub is the task string
-    _cmd_run_task(sub, args[1:])
+    # Otherwise: extract task (positional arg) and flags from all args.
+    # Flags can appear before or after the task string.
+    task, flag_args = _split_task_and_flags(args)
+    if not task:
+        _print_run_help()
+        return
+    _cmd_run_task(task, flag_args)
 
 
 def cmd_loop_extract(args: list[str]) -> None:
@@ -110,6 +115,33 @@ def _find_loop_for_session(session_id: str) -> tuple[dict, Path] | tuple[None, N
 
 
 # ── Private implementation ───────────────────────────────────────────────────
+
+
+def _split_task_and_flags(args: list[str]) -> tuple[str | None, list[str]]:
+    """Separate the positional task string from flags, regardless of ordering.
+
+    Handles: hive run "task" --background --max-time 2h
+             hive run --background --max-time 2h "task"
+             hive run --background "task" --max-time 2h
+    """
+    _FLAGS_WITH_VALUE = {"--max-time", "--max", "--at"}
+    task = None
+    flag_args: list[str] = []
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in _FLAGS_WITH_VALUE:
+            flag_args.append(a)
+            if i + 1 < len(args):
+                i += 1
+                flag_args.append(args[i])
+        elif a.startswith("--"):
+            flag_args.append(a)
+        elif task is None:
+            task = a
+        # else: extra positional, ignore
+        i += 1
+    return task, flag_args
 
 
 def _sanitize_loop_id(task: str) -> str:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 
 
@@ -173,11 +174,12 @@ class TestLifecycleNudge:
 
         # Fresh memory (no stale)
         mem = memory_file()
-        mem.write_text("# Memory\n- Fresh fact [verified:2026-02-20]\n")
+        today = date.today().isoformat()
+        mem.write_text(f"# Memory\n- Fresh fact [verified:{today}]\n")
 
         # Pending facts exist
         pending = hive_dir() / ".pending-facts.md"
-        pending.write_text("- Some pending fact [auto:2026-02-20]\n- Another [auto:2026-02-20]\n")
+        pending.write_text(f"- Some pending fact [auto:{today}]\n- Another [auto:{today}]\n")
 
         from keephive.nudge import _lifecycle_nudge
 
@@ -191,7 +193,7 @@ class TestLifecycleNudge:
 
         # Fresh memory, no pending, no TODOs
         mem = memory_file()
-        mem.write_text("# Memory\n- Fresh fact [verified:2026-02-20]\n")
+        mem.write_text(f"# Memory\n- Fresh fact [verified:{date.today().isoformat()}]\n")
 
         # Create 8 daily log files
         dd = daily_dir()
@@ -215,7 +217,7 @@ class TestLifecycleNudge:
         (hd / "working" / "notes").mkdir()
         (hd / "archive").mkdir()
         (hd / "working" / "memory.md").write_text(
-            "# Working Memory\n\n- All facts current [verified:2026-02-17]\n"
+            f"# Working Memory\n\n- All facts current [verified:{date.today().isoformat()}]\n"
         )
         monkeypatch.setenv("HIVE_HOME", str(hd))
 
@@ -235,7 +237,7 @@ class TestLifecycleNudge:
         (hd / "working" / "notes").mkdir()
         (hd / "archive").mkdir()
         (hd / "working" / "memory.md").write_text(
-            "# Working Memory\n\n- All facts current [verified:2026-02-17]\n"
+            f"# Working Memory\n\n- All facts current [verified:{date.today().isoformat()}]\n"
         )
         monkeypatch.setenv("HIVE_HOME", str(hd))
 
@@ -255,7 +257,7 @@ class TestLifecycleNudge:
         (hd / "working" / "notes").mkdir()
         (hd / "archive").mkdir()
         (hd / "working" / "memory.md").write_text(
-            "# Working Memory\n\n- All facts current [verified:2026-02-17]\n"
+            f"# Working Memory\n\n- All facts current [verified:{date.today().isoformat()}]\n"
         )
         monkeypatch.setenv("HIVE_HOME", str(hd))
 
