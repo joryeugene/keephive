@@ -241,6 +241,7 @@ nav{background:var(--hive-surface);border-bottom:1px solid var(--hive-border);pa
 .privacy-banner{display:block;width:100%}
 .privacy-banner.active{background:var(--hive-primary);color:var(--hive-bg);font-size:12px;font-weight:600;padding:6px 16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:12px}
 .privacy-banner.cli-only{background:var(--hive-info);color:var(--hive-bg);font-size:12px;font-weight:600;padding:6px 16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:12px}
+.privacy-banner.disabled{background:var(--hive-danger);color:var(--hive-bg);font-size:12px;font-weight:600;padding:6px 16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:12px}
 .privacy-banner a{color:var(--hive-bg);font-weight:700;text-decoration:underline}
 .privacy-banner.cli-only a{color:var(--hive-text-bright);font-weight:700;text-decoration:underline}
 main{max-width:1400px;margin:0 auto;padding:16px}
@@ -4198,7 +4199,7 @@ def _render_trends_panel(data: dict) -> str:
 def _get_settings_data() -> dict:
     """Read all settings for dashboard display."""
     from keephive.settings import BUILTIN_SOUNDS, DEFAULTS, DESCRIPTIONS, read_settings
-    from keephive.storage import is_force_cli, is_llm_paused
+    from keephive.storage import is_disabled, is_force_cli, is_llm_paused
 
     return {
         "settings": read_settings(),
@@ -4207,7 +4208,11 @@ def _get_settings_data() -> dict:
         "builtin_sounds": BUILTIN_SOUNDS,
         "backend": _get_backend_overview(),
         "platforms": _get_platform_overview(),
-        "privacy": {"paused": is_llm_paused(), "force_cli": is_force_cli()},
+        "privacy": {
+            "disabled": is_disabled(),
+            "paused": is_llm_paused(),
+            "force_cli": is_force_cli(),
+        },
     }
 
 
@@ -4498,20 +4503,31 @@ def _render_settings_panel(data: dict) -> str:
 
     # ── Privacy Controls card ──────────────────────────────────────────
     privacy = data.get("privacy", {})
+    disabled = privacy.get("disabled", False)
     paused = privacy.get("paused", False)
     force_cli_on = privacy.get("force_cli", False)
 
-    if paused:
-        state_badge = '<span class="brain-chip brain-chip-warn">🔒 Kill Switch ON</span>'
+    if disabled:
+        state_badge = '<span class="brain-chip" style="background:var(--hive-danger-bg);color:var(--hive-danger);border-color:var(--hive-danger)">OFF</span>'
+    elif paused:
+        state_badge = '<span class="brain-chip brain-chip-warn">Kill Switch ON</span>'
     elif force_cli_on:
-        state_badge = '<span class="brain-chip" style="background:var(--hive-info-bg);color:var(--hive-info);border-color:var(--hive-info)">🔐 CLI-Only ON</span>'
+        state_badge = '<span class="brain-chip" style="background:var(--hive-info-bg);color:var(--hive-info);border-color:var(--hive-info)">CLI-Only ON</span>'
     else:
-        state_badge = '<span class="brain-chip brain-chip-ok">🔓 Off</span>'
+        state_badge = '<span class="brain-chip brain-chip-ok">Active</span>'
+
+    power_link = (
+        '<a href="/hive-on" class="action-link">Turn On</a>'
+        if disabled
+        else '<a href="/hive-off" class="action-link">Turn Off</a>'
+    )
 
     privacy_rows = (
         f'<div class="brain-line">{state_badge}'
-        f'<span class="brain-detail">LLM backend policy</span></div>'
+        f'<span class="brain-detail">{"All activity disabled" if disabled else "LLM backend policy"}</span></div>'
         f'<div class="brain-meta" style="margin-top:.5rem">'
+        f"{power_link}"
+        f" &nbsp;·&nbsp; "
         f'<a href="/privacy-on" class="action-link">Kill Switch</a>'
         f" &nbsp;·&nbsp; "
         f'<a href="/privacy-cli" class="action-link">CLI-Only</a>'
@@ -4519,7 +4535,7 @@ def _render_settings_panel(data: dict) -> str:
         f'<a href="/privacy-off" class="action-link">Disable</a>'
         f"</div>"
         f'<div class="brain-meta" style="color:var(--hive-text-tertiary);font-size:11px;margin-top:.25rem">'
-        f"Kill switch blocks all LLM calls. CLI-only forces claude&nbsp;-p, ignores API keys."
+        f"Turn Off disables all hooks, MCP, and daemon. Kill switch blocks LLM calls. CLI-only forces claude&nbsp;-p."
         f"</div>"
     )
     privacy_card = (
@@ -5761,24 +5777,31 @@ def _render_wander_stats_panel(data: dict) -> str:
 
 
 def _get_privacy_banner_data() -> dict:
-    from keephive.storage import is_force_cli, is_llm_paused
+    from keephive.storage import is_disabled, is_force_cli, is_llm_paused
 
-    return {"paused": is_llm_paused(), "force_cli": is_force_cli()}
+    return {"disabled": is_disabled(), "paused": is_llm_paused(), "force_cli": is_force_cli()}
 
 
 def _render_privacy_banner_panel(data: dict) -> str:
+    if data.get("disabled"):
+        return (
+            '<div class="privacy-banner disabled">'
+            "keephive is OFF. All hooks, MCP tools, and daemon tasks are disabled. "
+            '<a href="/hive-on">Turn On</a>'
+            "</div>"
+        )
     if data.get("paused"):
         extra = " CLI-only also active." if data.get("force_cli") else ""
         return (
             '<div class="privacy-banner active">'
-            f"🔒 LLM Privacy Mode ON — all API calls blocked.{extra} "
+            f"LLM Privacy Mode ON. All API calls blocked.{extra} "
             '<a href="/privacy-off">Resume</a>'
             "</div>"
         )
     if data.get("force_cli"):
         return (
             '<div class="privacy-banner cli-only">'
-            "🔐 CLI-Only Mode — API backends blocked. LLM calls use claude -p only. "
+            "CLI-Only Mode. API backends blocked. LLM calls use claude -p only. "
             '<a href="/privacy-off">Allow API</a>'
             "</div>"
         )
@@ -7997,6 +8020,26 @@ class _HiveHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", str(len(resp_body)))
                 self.end_headers()
                 self.wfile.write(resp_body)
+            return
+
+        if path == "/hive-off":
+            from keephive.storage import set_disabled
+
+            set_disabled(True)
+            self.send_response(302)
+            self.send_header("Location", "/settings")
+            self._cors()
+            self.end_headers()
+            return
+
+        if path == "/hive-on":
+            from keephive.storage import set_disabled
+
+            set_disabled(False)
+            self.send_response(302)
+            self.send_header("Location", "/settings")
+            self._cors()
+            self.end_headers()
             return
 
         if path == "/privacy-off":
