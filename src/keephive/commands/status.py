@@ -29,6 +29,7 @@ from keephive.storage import (
     get_meaningful_entries,
     guides_dir,
     hive_dir,
+    is_disabled,
     is_force_cli,
     is_llm_paused,
     memory_file,
@@ -409,7 +410,11 @@ def _render_status() -> None:
     health_parts = [_dot(hooks_ok, "hooks"), _dot(mcp_ok, "mcp"), _dot(data_ok, "data")]
     console.print(f"{'  '.join(health_parts)}")
 
-    if is_llm_paused():
+    if is_disabled():
+        console.print()
+        console.print("  [bold red]⚠ DISABLED[/bold red]  [dim](hive off)[/dim]")
+        console.print("  [dim]All hooks, MCP tools, and daemon tasks are off. Run [bold]hive on[/bold] to re-enable.[/dim]")
+    elif is_llm_paused():
         console.print()
         console.print("  [bold yellow]⚠ LLM PAUSED[/bold yellow]  [dim](hive privacy on)[/dim]")
         console.print("  [dim]All API calls blocked. Run `hive privacy off` to resume.[/dim]")
@@ -708,6 +713,7 @@ def cmd_status(args: list[str]) -> None:
                     "data_ok": data_ok,
                     "anthropic_memory": anthropic_mem,
                     "llm": llm_summary,
+                    "disabled": is_disabled(),
                     "llm_paused": is_llm_paused(),
                     "force_cli": is_force_cli(),
                 }

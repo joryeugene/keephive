@@ -17,6 +17,7 @@ from keephive.storage import (
     fts_search,
     get_meaningful_entries,
     guides_dir,
+    is_disabled,
     memory_file,
     open_todos,
     rank_recall,
@@ -25,6 +26,21 @@ from keephive.storage import (
 )
 
 mcp = FastMCP("keephive")
+
+_DISABLED_MSG = "keephive is disabled. Run: hive on"
+
+
+def _gate_disabled(fn):
+    """Decorator: return disabled message if keephive is off."""
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        if is_disabled():
+            return _DISABLED_MSG
+        return fn(*args, **kwargs)
+
+    return wrapper
 
 
 def _track_mcp(tool_name: str) -> None:
@@ -36,6 +52,7 @@ def _track_mcp(tool_name: str) -> None:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_remember(text: str) -> str:
     """Save an insight to today's daily log.
     Prefix with: FACT, DECISION, CORRECTION, TODO, or INSIGHT."""
@@ -58,6 +75,7 @@ def hive_remember(text: str) -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_recall(query: str) -> str:
     """Search all memory tiers: working memory, knowledge, daily logs (30d), archive."""
     _track_mcp("recall")
@@ -90,6 +108,7 @@ def hive_recall(query: str) -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_status() -> str:
     """Status overview: facts, stale warnings, TODOs, recent entries."""
     _track_mcp("status")
@@ -155,6 +174,7 @@ def hive_status() -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_todo() -> str:
     """List all open TODOs with ages."""
     _track_mcp("todo")
@@ -182,6 +202,7 @@ def hive_todo() -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_todo_done(pattern: str) -> str:
     """Mark the first open TODO matching pattern as done."""
     _track_mcp("todo_done")
@@ -209,6 +230,7 @@ def hive_todo_done(pattern: str) -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_knowledge(name: str = "") -> str:
     """List knowledge guides, or view one by name (prefix matching)."""
     _track_mcp("knowledge")
@@ -264,6 +286,7 @@ def hive_knowledge(name: str = "") -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_log(day: str = "") -> str:
     """View daily log. Defaults to today. Pass YYYY-MM-DD, 'yesterday', or N (days ago).
     Entries from PreCompact may include [project:name] tags for cross-project attribution."""
@@ -286,6 +309,7 @@ def hive_log(day: str = "") -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_audit() -> str:
     """Quality audit: three perspectives (Vault, Cleaner, Strategist), LLM synthesis, and score.
 
@@ -382,6 +406,7 @@ def hive_audit() -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_recurring(action: str = "list", freq: str = "", text: str = "") -> str:
     """Manage recurring tasks.
 
@@ -430,6 +455,7 @@ def hive_recurring(action: str = "list", freq: str = "", text: str = "") -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_stats(project: str = "", date: str = "") -> str:
     """Usage stats. Optionally filter by project (prefix match) or date."""
     _track_mcp("stats")
@@ -439,6 +465,7 @@ def hive_stats(project: str = "", date: str = "") -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_knowledge_write(name: str, content: str) -> str:
     """Create or update a knowledge guide. Provide full markdown content.
 
@@ -463,6 +490,7 @@ def hive_knowledge_write(name: str, content: str) -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_prompt_write(name: str, content: str) -> str:
     """Create or update a prompt template. Provide full markdown content.
 
@@ -489,6 +517,7 @@ def hive_prompt_write(name: str, content: str) -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_mem(action: str = "list", text: str = "") -> str:
     """Manage working memory facts.
 
@@ -540,6 +569,7 @@ def hive_mem(action: str = "list", text: str = "") -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_rule(action: str = "list", text: str = "") -> str:
     """Manage behavioral rules.
 
@@ -591,6 +621,7 @@ def hive_rule(action: str = "list", text: str = "") -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_fts_search(query: str, limit: int = 10) -> str:
     """Full-text search over daily logs and archive using SQLite FTS5.
 
@@ -608,6 +639,7 @@ def hive_fts_search(query: str, limit: int = 10) -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_standup(use_llm: bool = True) -> str:
     """Generate standup text from daily logs and GitHub PRs.
 
@@ -622,6 +654,7 @@ def hive_standup(use_llm: bool = True) -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_prompt(name: str) -> str:
     """Get a prompt template by name (prefix/substring matching).
 
@@ -638,6 +671,7 @@ def hive_prompt(name: str) -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_ps() -> str:
     """Show active Claude sessions and recent project activity."""
     _track_mcp("ps")
@@ -667,6 +701,7 @@ def hive_ps() -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_daemon(action: str = "status", task: str = "") -> str:
     """Manage the KingBee background daemon and its tasks.
 
@@ -698,6 +733,7 @@ def hive_daemon(action: str = "status", task: str = "") -> str:
 
 
 @mcp.tool()
+@_gate_disabled
 def hive_improve(action: str = "list", improvement_id: str = "") -> str:
     """Review and apply KingBee self-improvement proposals.
 

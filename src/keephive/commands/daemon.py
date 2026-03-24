@@ -460,6 +460,10 @@ def _is_no_backend_error(exc: Exception) -> bool:
 
 
 def _execute_task(task_name: str) -> bool:
+    from keephive.storage import is_disabled
+
+    if is_disabled():
+        return False
     # Bug fix: prevent double-execution if daemon restarts while a slow task is in flight.
     if task_name in _running_tasks:
         return False

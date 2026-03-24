@@ -93,6 +93,8 @@ HELP: dict[str, str] = {
         "  `off` clears both flags."
     ),
     "growth": "Usage: hive growth [--json]\n  How keephive compounds over time: 30-day trends, week-over-week deltas, impact.\n  --json  Machine-readable output",
+    "off": "Usage: hive off [--force]\n  Disable all keephive hooks, MCP tools, and daemon tasks.\n  --force  Bypass active loop warning",
+    "on": "Usage: hive on\n  Re-enable keephive after hive off.",
 }
 
 # Map aliases to canonical names for help lookup
@@ -469,6 +471,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "pv": ("keephive.commands.privacy", "cmd_privacy"),
     "growth": ("keephive.commands.growth", "cmd_growth"),
     "gr": ("keephive.commands.growth", "cmd_growth"),
+    "off": ("keephive.commands.power", "cmd_off"),
+    "on": ("keephive.commands.power", "cmd_on"),
 }
 
 
@@ -481,6 +485,13 @@ def main(args: list[str] | None = None) -> None:
         args = ["s"]
 
     cmd = args[0]
+
+    # Gate: when disabled, hooks and MCP exit immediately (<5ms)
+    if cmd.startswith("hook-") or cmd == "mcp-serve":
+        from keephive.storage import is_disabled
+
+        if is_disabled():
+            return
 
     if cmd in ("h", "-h", "--help", "help"):
         show_all = "--all" in args[1:] if len(args) > 1 else False

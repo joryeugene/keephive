@@ -3099,6 +3099,26 @@ def set_llm_paused(paused: bool) -> None:
         f.unlink(missing_ok=True)
 
 
+def disabled_file() -> Path:
+    """Path to the .hive-disabled flag file."""
+    return hive_dir() / ".hive-disabled"
+
+
+def is_disabled() -> bool:
+    """Return True if keephive is fully disabled (hive off)."""
+    return disabled_file().exists()
+
+
+def set_disabled(value: bool) -> None:
+    """Create or remove the .hive-disabled flag file."""
+    f = disabled_file()
+    if value:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.touch()
+    else:
+        f.unlink(missing_ok=True)
+
+
 def kb_queue_file() -> Path:
     """Path to the .kb-queue.md file — direct messages to KingBee."""
     return hive_dir() / ".kb-queue.md"

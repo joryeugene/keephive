@@ -22,6 +22,7 @@ from pathlib import Path
 from keephive.output import console
 from keephive.storage import (
     hive_dir,
+    is_disabled,
     is_force_cli,
     is_llm_paused,
     read_daemon_state,
@@ -505,6 +506,7 @@ def _report_json() -> None:
         pass
 
     out = {
+        "disabled": is_disabled(),
         "privacy_paused": privacy_data["paused"],
         "force_cli": privacy_data["force_cli"],
         "hook_pipeline": hook_data,
