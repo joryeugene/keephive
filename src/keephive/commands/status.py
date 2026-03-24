@@ -413,7 +413,9 @@ def _render_status() -> None:
     if is_disabled():
         console.print()
         console.print("  [bold red]⚠ DISABLED[/bold red]  [dim](hive off)[/dim]")
-        console.print("  [dim]All hooks, MCP tools, and daemon tasks are off. Run [bold]hive on[/bold] to re-enable.[/dim]")
+        console.print(
+            "  [dim]All hooks, MCP tools, and daemon tasks are off. Run [bold]hive on[/bold] to re-enable.[/dim]"
+        )
     elif is_llm_paused():
         console.print()
         console.print("  [bold yellow]⚠ LLM PAUSED[/bold yellow]  [dim](hive privacy on)[/dim]")

@@ -21,9 +21,7 @@ def cmd_off(args: list[str]) -> None:
         console.print(
             f"[bold yellow]Warning:[/bold yellow] {len(loop_files)} active loop(s) running."
         )
-        console.print(
-            "  Their stop hooks will go silent, breaking iteration."
-        )
+        console.print("  Their stop hooks will go silent, breaking iteration.")
         console.print("  Run [bold]hive off --force[/bold] to proceed, or cancel loops first.")
         return
 
@@ -50,4 +48,6 @@ def cmd_on(args: list[str]) -> None:
     set_disabled(False)
     console.print("[bold green]keephive is ON[/bold green]")
     console.print("[dim]All hooks and MCP tools are active again.[/dim]")
-    console.print("[dim]Daemon does not auto-restart. Run [bold]hive daemon start[/bold] if needed.[/dim]")
+    console.print(
+        "[dim]Daemon does not auto-restart. Run [bold]hive daemon start[/bold] if needed.[/dim]"
+    )

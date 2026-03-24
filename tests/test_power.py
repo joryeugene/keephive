@@ -93,8 +93,9 @@ class TestCmdOff:
         from keephive.commands.power import cmd_off
 
         stopped = []
-        with patch("keephive.commands.daemon._is_running", return_value=True), patch(
-            "keephive.commands.daemon._stop", side_effect=lambda: stopped.append(True)
+        with (
+            patch("keephive.commands.daemon._is_running", return_value=True),
+            patch("keephive.commands.daemon._stop", side_effect=lambda: stopped.append(True)),
         ):
             cmd_off([])
         assert is_disabled()
