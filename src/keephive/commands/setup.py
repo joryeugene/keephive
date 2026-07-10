@@ -590,7 +590,11 @@ def _configure_gemini_hooks(config_path: Path, script_dir: Path) -> bool:
         }
 
         existing_list = hooks.get(event, [])
-        filtered = [entry for entry in existing_list if str(script) not in json.dumps(entry)]
+        hook_name = f"keephive-{event.lower()}"
+        filtered = [
+            entry for entry in existing_list
+            if not any(h.get("name") == hook_name for h in entry.get("hooks", []))
+        ]
 
         if filtered != existing_list:
             changed = True
