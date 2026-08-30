@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from pathlib import Path
 
 from keephive.storage import _strip_verified_tags, normalize_memory
@@ -187,9 +188,10 @@ def test_pending_facts_strips_existing_tag(hive_env):
 def test_normalize_collapses_double_auto_prefix(tmp_path: Path):
     """Double [auto] prefix from LLM re-extraction cycle is collapsed to one."""
     mem = tmp_path / "memory.md"
+    recent_date = (date.today() - timedelta(days=30)).isoformat()
     mem.write_text(
-        "- [auto] [auto] some fact captured twice [auto:2026-03-01]\n"
-        "- [auto] normal auto fact [auto:2026-03-01]\n"
+        f"- [auto] [auto] some fact captured twice [auto:{recent_date}]\n"
+        f"- [auto] normal auto fact [auto:{recent_date}]\n"
     )
     stats = normalize_memory(mem)
     assert stats["double_tags"] == 1
@@ -202,10 +204,11 @@ def test_normalize_collapses_double_auto_prefix(tmp_path: Path):
 def test_normalize_prunes_stale_unverified_auto(tmp_path: Path):
     """[auto] facts with [auto:DATE] older than 90 days and no [verified:] are removed."""
     mem = tmp_path / "memory.md"
+    recent_date = (date.today() - timedelta(days=30)).isoformat()
     mem.write_text(
         "- [auto] old unverified fact [auto:2020-01-01]\n"
         "- [auto] old but verified [auto:2020-01-01] [verified:2026-01-15]\n"
-        "- [auto] recent auto fact [auto:2026-03-01]\n"
+        f"- [auto] recent auto fact [auto:{recent_date}]\n"
         "- manually written fact\n"
     )
     stats = normalize_memory(mem)
