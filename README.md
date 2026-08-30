@@ -717,6 +717,13 @@ uv run pytest -m llm -v -o "addopts="  # LLM E2E tests (slow, real API calls)
 uv run pytest -x                       # stop on first failure
 ```
 
+Optionally enable the repository's staged secret scan:
+
+```bash
+mise install
+git config core.hooksPath .githooks
+```
+
 See [CLAUDE.md](CLAUDE.md) for architecture details,
 [.claude/CLAUDE.md](.claude/CLAUDE.md) for release workflow and pre-flight checklist,
 and [CHANGELOG.md](CHANGELOG.md) for version history.
