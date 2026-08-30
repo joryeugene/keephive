@@ -47,6 +47,7 @@ def hive_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("HIVE_HOME", str(hive_dir))
     monkeypatch.setenv("HIVE_SKIP_LLM", "1")
     monkeypatch.setenv("HIVE_NO_TMUX_SPAWN", "1")  # Never spawn real Claude processes in unit tests
+    monkeypatch.setenv("TMUX", "test")  # Bypass host tmux discovery when spawning is disabled
     monkeypatch.delenv("HIVE_SESSION_LAUNCHED", raising=False)
     # Isolate CC session-meta reads from host system data
     cc_meta = tmp_path / "cc-session-meta"

@@ -495,7 +495,10 @@ class TestAccumulationWarnings:
         """No warnings for healthy memory."""
         from keephive.hooks.sessionstart import _accumulation_warnings
 
-        content = "# Memory\n\n- Fact 1 [verified:2026-02-17]\n- Fact 2 [verified:2026-02-17]\n"
+        recent_date = date.today().isoformat()
+        content = (
+            f"# Memory\n\n- Fact 1 [verified:{recent_date}]\n- Fact 2 [verified:{recent_date}]\n"
+        )
 
         warnings = _accumulation_warnings(content)
         assert warnings == []
